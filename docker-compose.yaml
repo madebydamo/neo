@@ -8,5 +8,8 @@ services:
       - NET_ADMIN
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./DATA/AppData:/DATA/appdata
+      - ./DATA:/DATA/data
+      - ./DATA/Media:/DATA/media
     command: /init
     restart: unless-stopped

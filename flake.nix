@@ -2,15 +2,18 @@
   description = "Homeserver Docker flake";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
-    nixos-generators.url = "github:nix-community/nixos-generators";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixos-generators = {
+      url = "github:nix-community/nixos-generators";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      nixos-generators,
+    { self
+    , nixpkgs
+    , nixos-generators
+    ,
     }:
     let
       system = "x86_64-linux";
@@ -18,7 +21,7 @@
       homeserver = nixos-generators.nixosGenerate {
         inherit pkgs system;
         format = "docker";
-        modules = [ ./configuration.nix ];
+        modules = [ ./configuration.nix ./settings.nix ];
       };
     in
     {
