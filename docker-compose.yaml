@@ -1,0 +1,8 @@
+version: '3.8'
+
+services:
+  homeserver:
+    image: homeserver:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
