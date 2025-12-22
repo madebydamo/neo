@@ -6,12 +6,26 @@
     nixos-generators.url = "github:nix-community/nixos-generators";
   };
 
-  outputs = { self, nixpkgs, nixos-generators }: {
-    packages.x86_64-linux.homeserver = nixos-generators.nixosGenerate {
-      modules = [ ./configuration.nix ];
-      format = "docker";
+  outputs =
+    {
+      self,
+      nixpkgs,
+      nixos-generators,
+    }:
+    let
+      system = "x86_64-linux";
+      pkgs = nixpkgs.legacyPackages.${system};
+      homeserver = nixos-generators.nixosGenerate {
+        inherit pkgs system;
+        format = "docker";
+        modules = [ ./configuration.nix ];
+      };
+    in
+    {
+      packages.${system} = {
+        inherit homeserver;
+        default = homeserver;
+      };
     };
-
-    packages.x86_64-linux.default = self.packages.x86_64-linux.homeserver;
-  };
 }
+
