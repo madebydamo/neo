@@ -6,7 +6,7 @@ let
   cfg = config.neo.services.filebrowser;
 in
 {
-  imports = [ ./swag.nix ];
+  imports = [ ./option.nix ./swag.nix ];
 
   systemd.tmpfiles.rules = [
     "d ${config.neo.volumes.appdata}/filebrowser 0755 0 0 -"
