@@ -8,10 +8,4 @@ with lib;
     description = lib.mdDoc "Volume mappings from host to container";
   };
 
-  options.neo.services = mkOption {
-    type = types.attrs;
-    default = { };
-    description = lib.mdDoc "Services configuration";
-  };
-
 }
