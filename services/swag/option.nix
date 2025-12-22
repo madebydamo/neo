@@ -7,6 +7,16 @@ with lib;
     type = types.submodule {
       options = {
         enabled = mkEnableOption (lib.mdDoc "swag service");
+        subdomain = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = lib.mdDoc "Subdomain for the service";
+        };
+        proxyConf = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = lib.mdDoc "Nginx proxy conf for swag";
+        };
         domain = mkOption {
           type = types.nullOr types.str;
           default = null;
@@ -21,6 +31,11 @@ with lib;
           type = types.listOf types.str;
           default = [ ];
           description = lib.mdDoc "Extra domains for swag";
+        };
+        additionalMountPoints = mkOption {
+          type = types.attrsOf types.str;
+          default = { };
+          description = lib.mdDoc "Additional volume mounts";
         };
       };
     };

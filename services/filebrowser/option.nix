@@ -22,6 +22,21 @@ with lib;
           default = { };
           description = lib.mdDoc "Additional volume mounts";
         };
+        domain = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = lib.mdDoc "Primary domain for swag";
+        };
+        email = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = lib.mdDoc "LetsEncrypt email for swag";
+        };
+        extraDomains = mkOption {
+          type = types.listOf types.str;
+          default = [ ];
+          description = lib.mdDoc "Extra domains for swag";
+        };
       };
     };
     default = { };
