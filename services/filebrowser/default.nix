@@ -40,5 +40,8 @@ in
         ) cfg.additionalMountPoints
       )
     ));
+    extraOptions = [
+      "--network=internal"
+    ];
   };
 })

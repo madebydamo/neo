@@ -3,7 +3,7 @@
 {
   config.neo.services.filebrowser.proxyConf = lib.mkDefault ''
     server {
-      listen 443 ssl http2;
+      listen 443 ssl;
       server_name filebrowser.*;
       include /config/nginx/ssl.conf;
 
@@ -11,7 +11,7 @@
 
       location / {
         include /config/nginx/proxy.conf;
-        resolver 127.0.0.11 valid=30s;
+        include /config/nginx/resolver.conf;
         set $upstream_app filebrowser;
         set $upstream_port 80;
         set $upstream_proto http;
