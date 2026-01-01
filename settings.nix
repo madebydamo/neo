@@ -15,7 +15,7 @@
     enabled = true;
     domain = "damianmoser.ch";
     email = "damian.d.moser@gmail.com";
-    extraDomains = [ "fortilegends.ch" ];
+    # extraDomains = [ "fortilegends.ch" ];
   };
 
   neo.services.filebrowser = {

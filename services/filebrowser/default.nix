@@ -6,7 +6,10 @@ let
   cfg = config.neo.services.filebrowser;
 in
 {
-  imports = [ ./option.nix ./swag.nix ];
+  imports = [
+    ./option.nix
+    ./swag.nix
+  ];
 
   systemd.tmpfiles.rules = [
     "d ${config.neo.volumes.appdata}/filebrowser 0755 0 0 -"
@@ -27,8 +30,8 @@ in
       "${config.neo.volumes.appdata}/filebrowser/filebrowser.db:/database.db"
     ]
     ++ [
-      "${config.neo.volumes.media}:/srv/Media:Z"
-      "${config.neo.volumes.data}:/srv:Z"
+      "${config.neo.volumes.media}:/srv/Media"
+      "${config.neo.volumes.data}:/srv"
     ]
     ++ (lib.flatten (
       lib.attrValues (

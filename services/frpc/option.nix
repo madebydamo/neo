@@ -17,6 +17,11 @@ with lib;
           default = 7000;
           description = lib.mdDoc "FRP server port";
         };
+        subdomain = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = lib.mdDoc "Subdomain for the service";
+        };
         token = mkOption {
           type = types.str;
           default = "hbIbv8ljuVLqcNPIsowoxx3jZ38AjUjHT5Fvf3QfIpU=";
@@ -38,3 +43,4 @@ with lib;
     description = lib.mdDoc "FRPC service configuration";
   };
 }
+
