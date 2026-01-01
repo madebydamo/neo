@@ -7,8 +7,9 @@
 {
   neo.volumes = {
     appdata = "/home/damo/Documents/projects/homeserver/neo/DATA/AppData";
-    data = "/home/damo/Documents/projects/homeserver/neo/DATA/data";
-    media = "/home/damo/Documents/projects/homeserver/neo/DATA/media";
+    data = "/home/damo/Documents/projects/homeserver/neo/DATA";
+    media = "/home/damo/Documents/projects/homeserver/neo/DATA/Media";
+    documents = "/home/damo/Documents/projects/homeserver/neo/DATA/Documents";
   };
 
   neo.services.swag = {
