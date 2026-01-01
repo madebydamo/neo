@@ -6,9 +6,9 @@
 }:
 {
   neo.volumes = {
-    appdata = "/DATA/appdata";
-    data = "/DATA/data";
-    media = "/DATA/media";
+    appdata = "/home/damo/Documents/projects/homeserver/neo/DATA/AppData";
+    data = "/home/damo/Documents/projects/homeserver/neo/DATA/data";
+    media = "/home/damo/Documents/projects/homeserver/neo/DATA/media";
   };
 
   neo.services.swag = {

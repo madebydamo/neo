@@ -8,8 +8,8 @@ services:
       - NET_ADMIN
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./DATA/AppData:/DATA/appdata
-      - ./DATA:/DATA/data
-      - ./DATA/Media:/DATA/media
+      - /home/damo/Documents/projects/homeserver/neo/DATA/AppData:/home/damo/Documents/projects/homeserver/neo/DATA/AppData
+      - /home/damo/Documents/projects/homeserver/neo/DATA:/home/damo/Documents/projects/homeserver/neo/DATA
+      - /home/damo/Documents/projects/homeserver/neo/DATA/Media:/home/damo/Documents/projects/homeserver/neo/DATA/Media
     command: /init
     restart: unless-stopped

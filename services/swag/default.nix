@@ -20,8 +20,8 @@ with lib;
       tmpfilesRules = flatten (
         attrValues (
           mapAttrs (n: svc: [
-            "d /DATA/appdata/swag/proxy-confs 0755 1000 1000 -"
-            "C /DATA/appdata/swag/proxy-confs/${svc.subdomain}.subdomain.conf - - - - ${pkgs.writeText "${svc.subdomain}.subdomain.conf" svc.proxyConf}"
+            "d ${config.neo.volumes.appdata}/swag/proxy-confs 0755 1000 1000 -"
+            "C ${config.neo.volumes.appdata}/swag/proxy-confs/${svc.subdomain}.subdomain.conf - - - - ${pkgs.writeText "${svc.subdomain}.subdomain.conf" svc.proxyConf}"
           ]) appServices
         )
       );
