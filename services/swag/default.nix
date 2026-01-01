@@ -14,14 +14,14 @@ with lib;
     let
       cfg = config.neo.services.swag;
       appServices = filterAttrs (
-        n: v: v.enabled && v.subdomain != null && n != "swag"
+        n: v: v.enabled && builtins.hasAttr "subdomain" v && v.subdomain != null && n != "swag"
       ) config.neo.services;
       subdomains = catAttrs "subdomain" (attrValues appServices);
       tmpfilesRules = flatten (
         attrValues (
           mapAttrs (n: svc: [
             "d ${config.neo.volumes.appdata}/swag/proxy-confs 0755 1000 1000 -"
-            "C! ${config.neo.volumes.appdata}/swag/proxy-confs/${svc.subdomain}.subdomain.conf - - - - ${pkgs.writeText "${svc.subdomain}.subdomain.conf" svc.proxyConf}"
+            "C+ ${config.neo.volumes.appdata}/swag/proxy-confs/${svc.subdomain}.subdomain.conf - - - - ${pkgs.writeText "${svc.subdomain}.subdomain.conf" svc.proxyConf}"
           ]) appServices
         )
       );
