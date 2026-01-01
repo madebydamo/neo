@@ -21,7 +21,7 @@ with lib;
         attrValues (
           mapAttrs (n: svc: [
             "d ${config.neo.volumes.appdata}/swag/proxy-confs 0755 1000 1000 -"
-            "C ${config.neo.volumes.appdata}/swag/proxy-confs/${svc.subdomain}.subdomain.conf - - - - ${pkgs.writeText "${svc.subdomain}.subdomain.conf" svc.proxyConf}"
+            "C! ${config.neo.volumes.appdata}/swag/proxy-confs/${svc.subdomain}.subdomain.conf - - - - ${pkgs.writeText "${svc.subdomain}.subdomain.conf" svc.proxyConf}"
           ]) appServices
         )
       );
