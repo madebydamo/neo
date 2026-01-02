@@ -9,7 +9,7 @@ with lib;
 
 let
   cfg = config.neo.services.rathole;
-  configFile = pkgs.writeText "rathole.toml" ''
+  configContent = ''
     [client]
     remote_addr = "${cfg.remoteAddr}:${toString cfg.port}"
 
@@ -28,10 +28,13 @@ in
   ];
 
   config = mkIf cfg.enabled {
-    systemd.tmpfiles.rules = [
-      "d ${config.neo.volumes.appdata}/rathole 0755 1000 1000 -"
-      "C+ ${config.neo.volumes.appdata}/rathole/config.toml - - - - ${configFile}"
-    ];
+    system.activationScripts.rathole-config = lib.neo.mkActivationScriptForFile {
+      filePath = "${config.neo.volumes.appdata}/rathole/config.toml";
+      content = configContent;
+      mode = "0644";
+      user = "1000";
+      group = "1000";
+    };
     virtualisation.oci-containers.containers.rathole = {
       image = "rapiz1/rathole:latest";
       autoStart = true;
