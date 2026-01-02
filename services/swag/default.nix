@@ -17,17 +17,19 @@ with lib;
         n: v: v.enabled && builtins.hasAttr "subdomain" v && v.subdomain != null && n != "swag"
       ) config.neo.services;
       subdomains = catAttrs "subdomain" (attrValues appServices);
-      tmpfilesRules = flatten (
-        attrValues (
-          mapAttrs (n: svc: [
-            "d ${config.neo.volumes.appdata}/swag/proxy-confs 0755 1000 1000 -"
-            "C+ ${config.neo.volumes.appdata}/swag/proxy-confs/${svc.subdomain}.subdomain.conf - - - - ${pkgs.writeText "${svc.subdomain}.subdomain.conf" svc.proxyConf}"
-          ]) appServices
-        )
-      );
+      proxyConfScripts = map (
+        svc:
+        lib.neo.mkActivationScriptForFile {
+          filePath = "${config.neo.volumes.appdata}/swag/proxy-confs/${svc.subdomain}.subdomain.conf";
+          content = svc.proxyConf;
+          mode = "0644";
+          user = "1000";
+          group = "1000";
+        }
+      ) (attrValues appServices);
     in
     mkIf cfg.enabled {
-      systemd.tmpfiles.rules = tmpfilesRules;
+      system.activationScripts.swag-proxy-confs = concatStringsSep "\n" proxyConfScripts;
       systemd.services.docker-internal-network = {
         description = "Create docker internal network";
         wantedBy = [ "docker.service" ];
