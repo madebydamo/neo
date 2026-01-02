@@ -12,7 +12,7 @@ in
   ];
 
   systemd.tmpfiles.rules = [
-    "d ${config.neo.volumes.appdata}/filebrowser 0755 0 0 -"
+    "d ${config.neo.volumes.appdata}/filebrowser 0755 1000 1000 -"
   ];
 }
 // (mkIf cfg.enabled {
