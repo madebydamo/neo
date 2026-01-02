@@ -18,9 +18,13 @@
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
+      extendedLib = nixpkgs.lib.extend (self: super: {
+        neo = import ./lib.nix { lib = self; };
+      });
       homeserver = nixos-generators.nixosGenerate {
         inherit pkgs system;
         format = "docker";
+        specialArgs = { lib = extendedLib; };
         modules = [ ./configuration.nix ./settings.nix ];
       };
     in
