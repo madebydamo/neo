@@ -10,22 +10,29 @@
   };
 
   outputs =
-    { self
-    , nixpkgs
-    , nixos-generators
-    ,
+    {
+      self,
+      nixpkgs,
+      nixos-generators,
     }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
-      extendedLib = nixpkgs.lib.extend (self: super: {
-        neo = import ./lib.nix { lib = self; };
-      });
+      extendedLib = nixpkgs.lib.extend (
+        self: super: {
+          neo = import ./lib.nix { lib = self; };
+        }
+      );
       homeserver = nixos-generators.nixosGenerate {
         inherit pkgs system;
         format = "docker";
-        specialArgs = { lib = extendedLib; };
-        modules = [ ./configuration.nix ./settings.nix ];
+        specialArgs = {
+          lib = extendedLib;
+        };
+        modules = [
+          ./configuration.nix
+          ./settings.nix
+        ];
       };
     in
     {
@@ -36,9 +43,14 @@
 
       nixosConfigurations.homeserver = nixpkgs.lib.nixosSystem {
         inherit system;
-        specialArgs = { lib = extendedLib; };
-        modules = [ ./configuration.nix ./settings.nix ];
+        specialArgs = {
+          lib = extendedLib;
+        };
+        modules = [
+          ./configuration.nix
+          ./settings.nix
+        ];
+        services.dbus.enable = extendedLib.mkForce false;
       };
     };
 }
-

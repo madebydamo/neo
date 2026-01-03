@@ -14,7 +14,7 @@
 
   users.allowNoPasswordLogin = true;
 
-  services.dbus.enable = lib.mkForce false;
+  # services.dbus.enable = lib.mkForce false;
 
   users.mutableUsers = false;
 
@@ -25,4 +25,3 @@
   # fileSystems."/".device = "/dev/sda1";
   # fileSystems."/".fsType = "ext4";
 }
-
