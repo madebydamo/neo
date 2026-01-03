@@ -21,7 +21,8 @@
   system.stateVersion = "24.11";
 
   # Minimal boot and filesystem config for hardware/VM deployment
-  boot.loader.grub.device = "/dev/sda";
-  fileSystems."/".device = "/dev/sda1";
-  fileSystems."/".fsType = "ext4";
+  # boot.loader.grub.device = "/dev/sda";
+  # fileSystems."/".device = "/dev/sda1";
+  # fileSystems."/".fsType = "ext4";
 }
+
