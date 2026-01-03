@@ -33,6 +33,12 @@
         inherit homeserver;
         default = homeserver;
       };
+
+      nixosConfigurations.homeserver = nixpkgs.lib.nixosSystem {
+        inherit system;
+        specialArgs = { lib = extendedLib; };
+        modules = [ ./configuration.nix ./settings.nix ];
+      };
     };
 }
 
