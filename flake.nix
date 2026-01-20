@@ -30,7 +30,8 @@
           lib = extendedLib;
         };
         modules = [
-          ./configuration.nix
+          ./core.nix
+          ./device/docker-configuration.nix
           ./settings.nix
         ];
       };
@@ -41,16 +42,21 @@
         default = homeserver;
       };
 
+      nixosModules = {
+        default = ./core.nix;
+        docker = ./docker-configuration.nix;
+      };
+
       nixosConfigurations.homeserver = nixpkgs.lib.nixosSystem {
         inherit system;
         specialArgs = {
           lib = extendedLib;
         };
         modules = [
-          ./configuration.nix
+          ./core.nix
+          ./device/vm-configuration.nix
           ./settings.nix
         ];
-        services.dbus.enable = extendedLib.mkForce false;
       };
     };
 }
