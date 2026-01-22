@@ -11,8 +11,22 @@ in
     ./swag.nix
   ];
 
-  systemd.tmpfiles.rules = [
-    "d ${config.neo.volumes.appdata}/filebrowser 0755 1000 1000 -"
+  system.activationScripts.create-filebrowser-dirs = lib.concatStringsSep "\n" [
+    (lib.neo.mkActivationScriptForDir {
+      dirPath = "${config.neo.volumes.appdata}/filebrowser";
+      user = "1000";
+      group = "1000";
+    })
+    (lib.neo.mkActivationScriptForDir {
+      dirPath = "${config.neo.volumes.appdata}/filebrowser/config";
+      user = "1000";
+      group = "1000";
+    })
+    (lib.neo.mkActivationScriptForDir {
+      dirPath = "${config.neo.volumes.appdata}/filebrowser/database";
+      user = "1000";
+      group = "1000";
+    })
   ];
 }
 // (mkIf cfg.enabled {

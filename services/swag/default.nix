@@ -29,6 +29,19 @@ with lib;
       ) (attrValues appServices);
     in
     mkIf cfg.enabled {
+      system.activationScripts.create-swag-dirs = lib.concatStringsSep "\n" [
+        (lib.neo.mkActivationScriptForDir {
+          dirPath = "${config.neo.volumes.appdata}/swag";
+          user = "1000";
+          group = "1000";
+        })
+        (lib.neo.mkActivationScriptForDir {
+          dirPath = "${config.neo.volumes.appdata}/swag/proxy-confs";
+          user = "1000";
+          group = "1000";
+        })
+      ];
+
       system.activationScripts.swag-proxy-confs = concatStringsSep "\n" proxyConfScripts;
       systemd.services.docker-internal-network = {
         description = "Create docker internal network";
