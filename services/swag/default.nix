@@ -32,8 +32,8 @@ with lib;
       system.activationScripts.swag-proxy-confs = concatStringsSep "\n" proxyConfScripts;
       systemd.services.docker-internal-network = {
         description = "Create docker internal network";
-        wantedBy = [ "docker.service" ];
-        before = [ "docker.service" ];
+        wantedBy = [ "multi-user.target" ];
+        after = [ "docker.service" ];
         serviceConfig = {
           Type = "oneshot";
           ExecStart = "${pkgs.docker}/bin/docker network create internal";
