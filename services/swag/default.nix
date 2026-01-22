@@ -36,7 +36,7 @@ with lib;
         after = [ "docker.service" ];
         serviceConfig = {
           Type = "oneshot";
-          ExecStart = "${pkgs.docker}/bin/docker network create internal";
+          ExecStart = "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'";
           RemainAfterExit = true;
         };
       };
