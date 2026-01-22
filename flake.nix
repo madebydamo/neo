@@ -44,7 +44,7 @@
 
       nixosModules = {
         default = ./core.nix;
-        docker = ./docker-configuration.nix;
+        docker = ./device/docker-configuration.nix;
       };
 
       nixosConfigurations.homeserver = nixpkgs.lib.nixosSystem {
