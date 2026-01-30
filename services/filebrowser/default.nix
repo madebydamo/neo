@@ -14,8 +14,8 @@ in
   system.activationScripts.create-filebrowser-dirs = lib.concatStringsSep "\n" [
     (lib.neo.mkActivationScriptForDir {
       dirPath = "${config.neo.volumes.appdata}/filebrowser";
-      user = "1000";
-      group = "1000";
+      user = "0";
+      group = "0";
     })
     (lib.neo.mkActivationScriptForDir {
       dirPath = "${config.neo.volumes.appdata}/filebrowser/config";
