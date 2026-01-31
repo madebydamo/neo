@@ -19,28 +19,29 @@ in
   system.activationScripts.create-openclaw-dirs = lib.concatStringsSep "\n" [
     (lib.neo.mkActivationScriptForDir {
       dirPath = "${config.neo.volumes.appdata}/openclaw";
-      user = "0";
-      group = "0";
+      user = toString config.neo.uid;
+      group = toString config.neo.gid;
     })
     (lib.neo.mkActivationScriptForDir {
       dirPath = "${config.neo.volumes.appdata}/openclaw/config";
-      user = "1000";
-      group = "1000";
+      user = toString config.neo.uid;
+      group = toString config.neo.gid;
     })
     (lib.neo.mkActivationScriptForDir {
       dirPath = "${config.neo.volumes.appdata}/openclaw/workspace";
-      user = "1000";
-      group = "1000";
+      user = toString config.neo.uid;
+      group = toString config.neo.gid;
     })
   ];
 }
 // (mkIf cfg.enabled {
   virtualisation.oci-containers.containers.openclaw-gateway = {
-    # user = "0:0";
+    user = "0:0";
     environment = {
       HOME = "/home/node";
       TERM = "xterm-256color";
-      OPENCLAW_GATEWAY_TOKEN = gatewayToken;
+      CLAWDBOT_GATEWAY_TOKEN = gatewayToken;
+      OPENCLAW_TRUSTED_PROXY_NETWORK = "172.21.0.0/19";
     }
     // (lib.optionalAttrs (cfg.claudeAiSessionKey != null) {
       CLAUDE_AI_SESSION_KEY = cfg.claudeAiSessionKey;
@@ -54,8 +55,7 @@ in
     image = cfg.image;
     autoStart = true;
     volumes = [
-      "${config.neo.volumes.appdata}/openclaw/config:/home/node/.openclaw"
-      "${config.neo.volumes.appdata}/openclaw/workspace:/home/node/.openclaw/workspace"
+      "${config.neo.volumes.appdata}/openclaw/node:/home/node/"
     ]
     ++ (lib.flatten (
       lib.attrValues (
@@ -70,10 +70,16 @@ in
     ];
     extraOptions = [
       "--network=internal"
+      # "--entrypoint"
+      # "sh"
     ];
-    cmd = [
-      "gateway"
-      "start"
-    ];
+    # cmd = [
+    #   "-c"
+    #   "node /app/dist/index.js gateway start & sleep infinity"
+    # ];
+    # cmd = [
+    #   "gateway"
+    #   "run"
+    # ];
   };
 })

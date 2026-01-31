@@ -1,8 +1,9 @@
-{ config, lib, ... }:
-
-with lib;
-
 {
+  config,
+  lib,
+  ...
+}:
+with lib; {
   options.neo.services.swag = mkOption {
     type = types.submodule {
       options = {
@@ -29,17 +30,17 @@ with lib;
         };
         extraDomains = mkOption {
           type = types.listOf types.str;
-          default = [ ];
+          default = [];
           description = lib.mdDoc "Extra domains for swag";
         };
         additionalMountPoints = mkOption {
           type = types.attrsOf types.str;
-          default = { };
+          default = {};
           description = lib.mdDoc "Additional volume mounts";
         };
       };
     };
-    default = { };
+    default = {};
     description = lib.mdDoc "Swag service configuration";
   };
 }

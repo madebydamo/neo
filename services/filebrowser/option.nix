@@ -1,8 +1,9 @@
-{ config, lib, ... }:
-
-with lib;
-
 {
+  config,
+  lib,
+  ...
+}:
+with lib; {
   options.neo.services.filebrowser = mkOption {
     type = types.submodule {
       options = {
@@ -19,7 +20,7 @@ with lib;
         };
         additionalMountPoints = mkOption {
           type = types.attrsOf types.str;
-          default = { };
+          default = {};
           description = lib.mdDoc "Additional volume mounts";
         };
         domain = mkOption {
@@ -34,12 +35,12 @@ with lib;
         };
         extraDomains = mkOption {
           type = types.listOf types.str;
-          default = [ ];
+          default = [];
           description = lib.mdDoc "Extra domains for swag";
         };
       };
     };
-    default = { };
+    default = {};
     description = lib.mdDoc "Filebrowser service configuration";
   };
 }

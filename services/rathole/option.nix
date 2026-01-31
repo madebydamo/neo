@@ -1,8 +1,9 @@
-{ config, lib, ... }:
-
-with lib;
-
 {
+  config,
+  lib,
+  ...
+}:
+with lib; {
   options.neo.services.rathole = mkOption {
     type = types.submodule {
       options = {
@@ -26,8 +27,7 @@ with lib;
         };
       };
     };
-    default = { };
+    default = {};
     description = lib.mdDoc "Rathole client configuration";
   };
 }
-

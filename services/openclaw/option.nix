@@ -31,7 +31,7 @@ with lib;
         };
         image = mkOption {
           type = types.str;
-          default = "ghcr.io/phioranex/openclaw-docker:latest";
+          default = "moltbot/moltbot:latest";
           description = lib.mdDoc "Docker image for OpenClaw";
         };
         claudeAiSessionKey = mkOption {

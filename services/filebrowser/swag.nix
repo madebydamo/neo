@@ -1,6 +1,8 @@
-{ config, lib, ... }:
-
 {
+  config,
+  lib,
+  ...
+}: {
   config.neo.services.filebrowser.proxyConf = lib.mkDefault ''
     server {
       listen 443 ssl http2;
