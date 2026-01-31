@@ -3,6 +3,7 @@ version: "3.8"
 services:
   homeserver:
     image: homeserver:latest
+    container_name: homeserver
     privileged: true
     cap_add:
       - NET_ADMIN
@@ -11,5 +12,6 @@ services:
       - /home/damo/Documents/projects/homeserver/neo/DATA/AppData:/home/damo/Documents/projects/homeserver/neo/DATA/AppData
       - /home/damo/Documents/projects/homeserver/neo/DATA:/home/damo/Documents/projects/homeserver/neo/DATA
       - /home/damo/Documents/projects/homeserver/neo/DATA/Media:/home/damo/Documents/projects/homeserver/neo/DATA/Media
+      - /home/damo/.docker/config.json:/root/.docker/config.json
     command: /init
     restart: unless-stopped
