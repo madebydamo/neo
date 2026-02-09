@@ -7,4 +7,7 @@
   # boot.loader.grub.device = "/dev/sda";
   # fileSystems."/".device = "/dev/sda1";
   # fileSystems."/".fsType = "ext4";
+  virtualisation = {
+    diskSize = 1024000; # 1TB
+  };
 }

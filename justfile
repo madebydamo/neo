@@ -3,8 +3,8 @@ build:
 	nix build .#nixosConfigurations.homeserver.config.system.build.vm
 
 launch:
+	ssh -o ConnectTimeout=5 -i tools/id_ed25519 -p 2222 -o StrictHostKeyChecking=no root@localhost "shutdown now" && sleep 5 || true
 	just build
-	pkill qemu-system-x86_64 || true
 	QEMU_NET_OPTS="hostfwd=tcp::2222-:22" ./result/bin/run-nixos-vm &
 
 exec COMMAND:
