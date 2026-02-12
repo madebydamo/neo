@@ -41,13 +41,13 @@ with lib; {
       ];
 
       system.activationScripts.swag-proxy-confs = concatStringsSep "\n" proxyConfScripts;
-      systemd.services.docker-internal-network = {
-        description = "Create docker internal network";
+      systemd.services.oci-internal-network = {
+        description = "Create oci internal network";
         wantedBy = ["multi-user.target"];
-        after = ["docker.service"];
+        after = ["podman.service"];
         serviceConfig = {
           Type = "oneshot";
-          ExecStart = "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'";
+          ExecStart = "/bin/sh -c '${pkgs.podman}/bin/podman network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.podman}/bin/podman network create internal'";
           RemainAfterExit = true;
         };
       };

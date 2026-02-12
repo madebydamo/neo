@@ -1,5 +1,8 @@
-{ config, lib, ... }:
 {
+  config,
+  lib,
+  ...
+}: {
   users.allowNoPasswordLogin = true;
   users.mutableUsers = false;
   services.dbus.enable = lib.mkForce false;

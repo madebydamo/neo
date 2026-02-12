@@ -3,8 +3,7 @@
   lib,
   ...
 }:
-with lib;
-{
+with lib; {
   options.neo.services.openclaw = mkOption {
     type = types.submodule {
       options = {
@@ -51,7 +50,7 @@ with lib;
         };
         additionalMountPoints = mkOption {
           type = types.attrsOf (types.listOf types.str);
-          default = { };
+          default = {};
           description = lib.mdDoc "Additional volume mounts";
         };
         subdomain = mkOption {
@@ -66,7 +65,7 @@ with lib;
         };
       };
     };
-    default = { };
+    default = {};
     description = lib.mdDoc "OpenClaw service configuration";
   };
 }

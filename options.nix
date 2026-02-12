@@ -3,11 +3,10 @@
   lib,
   ...
 }:
-with lib;
-{
+with lib; {
   options.neo.volumes = mkOption {
     type = types.attrsOf types.str;
-    default = { };
+    default = {};
     description = lib.mdDoc "Volume mappings from host to container";
   };
 
@@ -25,7 +24,7 @@ with lib;
 
   options.neo.ssh.authorizedKeys = mkOption {
     type = types.listOf types.str;
-    default = [ ];
+    default = [];
     description = lib.mdDoc "SSH authorized keys for root in VM";
   };
 }
