@@ -4,7 +4,7 @@ build:
 
 launch:
   ssh -o ConnectTimeout=5 -i tools/id_ed25519 -p 2222 -o StrictHostKeyChecking=no root@localhost "shutdown now" && sleep 5 || true
-  sleep 1
+  sleep 2
   just build
   QEMU_NET_OPTS="hostfwd=tcp::2222-:22" ./result/bin/run-nixos-vm &
 
