@@ -1,10 +1,10 @@
 {lib}: {
-  mkActivationScriptForFile = {
+  mkActivationScriptForFile = config: {
     filePath,
     content,
-    mode ? "0644",
-    user ? "root",
-    group ? "root",
+    mode ? "0666",
+    user ? toString config.neo.uid,
+    group ? toString config.neo.gid,
   }:
     with lib; ''
       mkdir -p ${dirOf filePath}
@@ -15,11 +15,11 @@
       chmod ${mode} ${filePath}
     '';
 
-  mkActivationScriptForDir = {
+  mkActivationScriptForDir = config: {
     dirPath,
-    mode ? "0755",
-    user ? "root",
-    group ? "root",
+    mode ? "0777",
+    user ? toString config.neo.uid,
+    group ? toString config.neo.gid,
   }: ''
     mkdir -p ${dirPath}
     chown ${user}:${group} ${dirPath}

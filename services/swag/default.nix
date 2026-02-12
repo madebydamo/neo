@@ -17,7 +17,7 @@ with lib; {
     subdomains = catAttrs "subdomain" (attrValues appServices);
     proxyConfScripts = map (
       svc:
-        lib.neo.mkActivationScriptForFile {
+        lib.neo.mkActivationScriptForFile config {
           filePath = "${config.neo.volumes.appdata}/swag/proxy-confs/${svc.subdomain}.subdomain.conf";
           content = svc.proxyConf;
           mode = "0644";
@@ -28,12 +28,12 @@ with lib; {
   in
     mkIf cfg.enabled {
       system.activationScripts.create-swag-dirs = lib.concatStringsSep "\n" [
-        (lib.neo.mkActivationScriptForDir {
+        (lib.neo.mkActivationScriptForDir config {
           dirPath = "${config.neo.volumes.appdata}/swag";
           user = toString config.neo.uid;
           group = toString config.neo.gid;
         })
-        (lib.neo.mkActivationScriptForDir {
+        (lib.neo.mkActivationScriptForDir config {
           dirPath = "${config.neo.volumes.appdata}/swag/proxy-confs";
           user = toString config.neo.uid;
           group = toString config.neo.gid;

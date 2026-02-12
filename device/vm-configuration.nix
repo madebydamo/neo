@@ -2,8 +2,7 @@
   config,
   lib,
   ...
-}:
-{
+}: {
   users.allowNoPasswordLogin = true;
   users.mutableUsers = false;
   # Minimal boot and filesystem config for hardware/VM deployment

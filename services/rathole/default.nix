@@ -24,13 +24,13 @@ in {
   ];
 
   config = mkIf cfg.enabled {
-    system.activationScripts.create-rathole-dirs = lib.neo.mkActivationScriptForDir {
+    system.activationScripts.create-rathole-dirs = lib.neo.mkActivationScriptForDir config {
       dirPath = "${config.neo.volumes.appdata}/rathole";
       user = toString config.neo.uid;
       group = toString config.neo.gid;
     };
 
-    system.activationScripts.rathole-config = lib.neo.mkActivationScriptForFile {
+    system.activationScripts.rathole-config = lib.neo.mkActivationScriptForFile config {
       filePath = "${config.neo.volumes.appdata}/rathole/config.toml";
       content = configContent;
       mode = "0644";

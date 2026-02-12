@@ -13,7 +13,9 @@
     pkgs = nixpkgs.legacyPackages.${system};
     extendedLib = nixpkgs.lib.extend (
       self: super: {
-        neo = import ./lib.nix {lib = self;};
+        neo = import ./lib.nix {
+          lib = self;
+        };
       }
     );
   in {

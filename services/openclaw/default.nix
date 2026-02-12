@@ -18,17 +18,17 @@ in
     ];
 
     system.activationScripts.create-openclaw-dirs = lib.concatStringsSep "\n" [
-      (lib.neo.mkActivationScriptForDir {
+      (lib.neo.mkActivationScriptForDir config {
         dirPath = "${config.neo.volumes.appdata}/openclaw";
         user = toString config.neo.uid;
         group = toString config.neo.gid;
       })
-      (lib.neo.mkActivationScriptForDir {
+      (lib.neo.mkActivationScriptForDir config {
         dirPath = "${config.neo.volumes.appdata}/openclaw/config";
         user = toString config.neo.uid;
         group = toString config.neo.gid;
       })
-      (lib.neo.mkActivationScriptForDir {
+      (lib.neo.mkActivationScriptForDir config {
         dirPath = "${config.neo.volumes.appdata}/openclaw/workspace";
         user = toString config.neo.uid;
         group = toString config.neo.gid;
