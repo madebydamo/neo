@@ -15,3 +15,6 @@ logs SERVICE:
 
 ssh:
 	ssh -i tools/id_ed25519 -p 2222 -o StrictHostKeyChecking=no root@localhost
+
+format:
+	alejandra .
