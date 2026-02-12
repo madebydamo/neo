@@ -2,7 +2,8 @@
   config,
   lib,
   ...
-}: {
+}:
+{
   users.allowNoPasswordLogin = true;
   users.mutableUsers = false;
   # Minimal boot and filesystem config for hardware/VM deployment
@@ -11,5 +12,6 @@
   # fileSystems."/".fsType = "ext4";
   virtualisation = {
     diskSize = 1024000; # 1TB
+    docker.enable = true;
   };
 }
