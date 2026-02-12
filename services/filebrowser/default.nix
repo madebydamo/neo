@@ -15,18 +15,12 @@ in
     system.activationScripts.create-filebrowser-dirs = lib.concatStringsSep "\n" [
       (lib.neo.mkActivationScriptForDir config {
         dirPath = "${config.neo.volumes.appdata}/filebrowser";
-        user = toString config.neo.uid;
-        group = toString config.neo.gid;
-      })
-      (lib.neo.mkActivationScriptForDir config {
-        dirPath = "${config.neo.volumes.appdata}/filebrowser/config";
-        user = toString config.neo.uid;
-        group = toString config.neo.gid;
       })
       (lib.neo.mkActivationScriptForDir config {
         dirPath = "${config.neo.volumes.appdata}/filebrowser/database";
-        user = toString config.neo.uid;
-        group = toString config.neo.gid;
+      })
+      (lib.neo.mkActivationScriptForFile config {
+        dirPath = "${config.neo.volumes.appdata}/filebrowser/config";
       })
     ];
   }
