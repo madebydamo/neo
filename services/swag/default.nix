@@ -44,12 +44,11 @@ with lib; {
         after = ["podman.service"];
         serviceConfig = {
           Type = "oneshot";
-          ExecStart = "/bin/sh -c '${pkgs.podman}/bin/podman network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.podman}/bin/podman network create internal'";
+          ExecStart = "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'";
           RemainAfterExit = true;
         };
       };
       virtualisation.oci-containers.containers.swag = {
-        user = "${toString config.neo.uid}:${toString config.neo.gid}";
         image = "lscr.io/linuxserver/swag:latest";
         autoStart = true;
         environment = {
@@ -70,8 +69,10 @@ with lib; {
           "80:80"
           "443:443"
         ];
+        capabilities = {
+          NET_ADMIN = true;
+        };
         extraOptions = [
-          "--cap-add=NET_ADMIN"
           "--network=internal"
         ];
       };

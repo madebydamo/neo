@@ -12,5 +12,6 @@
   virtualisation = {
     diskSize = 1024000; # 1TB
     docker.enable = true;
+    oci-containers.backend = "docker";
   };
 }
