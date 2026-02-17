@@ -18,29 +18,26 @@ with lib; {
     proxyConfScripts = map (
       svc:
         lib.neo.mkActivationScriptForFile config {
-          filePath = "${config.neo.volumes.appdata}/swag/proxy-confs/${svc.subdomain}.subdomain.conf";
+          filePath = "${config.neo.volumes.appdata}/swag/nginx/proxy-confs/${svc.subdomain}.subdomain.conf";
           content = svc.proxyConf;
-          mode = "0644";
-          user = toString config.neo.uid;
-          group = toString config.neo.gid;
         }
     ) (attrValues appServices);
   in
     mkIf cfg.enabled {
       system.activationScripts.create-swag-dirs = lib.concatStringsSep "\n" [
         (lib.neo.mkActivationScriptForDir config {
-          dirPath = "${config.neo.volumes.appdata}/swag";
-          user = toString config.neo.uid;
-          group = toString config.neo.gid;
+          dirPath = "${config.neo.volumes.appdata}/swag/nginx/proxy-confs";
         })
         (lib.neo.mkActivationScriptForDir config {
-          dirPath = "${config.neo.volumes.appdata}/swag/proxy-confs";
-          user = toString config.neo.uid;
-          group = toString config.neo.gid;
+          dirPath = "${config.neo.volumes.appdata}/swag/nginx";
+        })
+        (lib.neo.mkActivationScriptForDir config {
+          dirPath = "${config.neo.volumes.appdata}/swag";
         })
       ];
 
-      system.activationScripts.swag-proxy-confs = concatStringsSep "\n" proxyConfScripts;
+      system.activationScripts.swag-proxy-confs = lib.concatStringsSep "\n" proxyConfScripts;
+
       systemd.services.oci-internal-network = {
         description = "Create oci internal network";
         wantedBy = ["multi-user.target"];
@@ -68,7 +65,6 @@ with lib; {
         };
         volumes = [
           "${config.neo.volumes.appdata}/swag:/config"
-          "${config.neo.volumes.appdata}/swag/proxy-confs:/config/nginx/proxy-confs"
         ];
         ports = [
           "80:80"
