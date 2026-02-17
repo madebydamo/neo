@@ -25,7 +25,13 @@
     formatter.${system} = pkgs.alejandra;
 
     nixosModules = {
-      default = ./core.nix;
+      default = {
+        imports = [
+          nix-openclaw.nixosModules.openclaw-gateway
+          {nixpkgs.overlays = [nix-openclaw.overlays.default];}
+          ./core.nix
+        ];
+      };
     };
 
     nixosConfigurations.homeserver = nixpkgs.lib.nixosSystem {
@@ -34,9 +40,7 @@
         lib = extendedLib;
       };
       modules = [
-        nix-openclaw.nixosModules.openclaw-gateway
-        {nixpkgs.overlays = [nix-openclaw.overlays.default];}
-        ./core.nix
+        self.nixosModules.default
         ./device/vm-configuration.nix
         ./settings.nix
       ];
