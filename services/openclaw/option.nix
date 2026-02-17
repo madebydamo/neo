@@ -24,7 +24,7 @@ with lib; {
         # Reverse proxy
         subdomain = mkOption {
           type = types.nullOr types.str;
-          default = null;
+          default = "openclaw";
           description = lib.mdDoc "Subdomain for the service (used by swag reverse proxy)";
         };
         proxyConf = mkOption {
