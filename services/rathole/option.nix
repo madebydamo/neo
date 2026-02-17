@@ -17,7 +17,7 @@ with lib; {
           description = lib.mdDoc "Remote server address for rathole";
         };
         port = mkOption {
-          type = types.int;
+          type = types.port;
           default = 2333;
           description = lib.mdDoc "Remote server port for rathole";
         };
