@@ -43,5 +43,7 @@
     })
   ];
 
+  time.timeZone = config.neo.timeZone;
+
   system.stateVersion = "24.11";
 }

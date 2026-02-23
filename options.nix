@@ -27,4 +27,10 @@ with lib; {
     default = [];
     description = lib.mdDoc "SSH authorized keys for root in VM";
   };
+
+  options.neo.timeZone = mkOption {
+    type = types.str;
+    default = "Europe/Zurich";
+    description = lib.mdDoc "System timezone";
+  };
 }
