@@ -34,7 +34,7 @@ shutdown:
 
 launch: shutdown build
   QEMU_NET_OPTS="hostfwd=tcp::2222-:22" \
-  QEMU_OPTS="-monitor tcp:{{qemu_monitor}},server,nowait" \
+  QEMU_OPTS="-smp 4 -m 8G -monitor tcp:{{qemu_monitor}},server,nowait" \
   ./result/bin/run-nixos-vm &
 
 # Show VM status: QEMU process, monitor, SSH, and disk image info.
