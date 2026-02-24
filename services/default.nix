@@ -11,5 +11,6 @@
     ./openclaw/default.nix
     ./rathole/default.nix
     ./swag/default.nix
+    ./tailscale/default.nix
   ];
 }
