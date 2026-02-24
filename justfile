@@ -64,7 +64,7 @@ exec COMMAND:
   ssh {{ssh_opts}} "{{COMMAND}}"
 
 logs SERVICE:
-  ssh {{ssh_opts}} "journalctl -u {{SERVICE}}"
+  ssh {{ssh_opts}} "journalctl -b -u {{SERVICE}}"
 
 ssh:
   ssh {{ssh_opts}}
