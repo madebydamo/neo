@@ -18,11 +18,8 @@ just logs SVC                     # View service logs in VM
 
 ### Nix Code Quality
 ```bash
-nix fmt                          # Format all Nix files
-alejandra --check .              # Check formatting without applying changes
-alejandra .                      # Apply formatting
 just format                      # Apply formatting with alejandra
-nix flake check                  # Check for syntax errors
+just check                  # Check for syntax errors
 ```
 
 ## Test Commands

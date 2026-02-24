@@ -71,3 +71,8 @@ ssh:
 
 format:
   alejandra .
+
+check:
+  git add *.nix
+  nix flake check
+
