@@ -5,7 +5,7 @@ ssh_opts := "-i tools/id_ed25519 -p 2222 -o StrictHostKeyChecking=no root@localh
 disk_image := "nixos.qcow2"
 
 build:
-  git add *.nix
+  git add flake.nix nix/
   nix build .#nixosConfigurations.homeserver.config.system.build.vm
 
 # Shut down the VM via QEMU monitor, falling back to pkill.
@@ -73,6 +73,6 @@ format:
   alejandra .
 
 check:
-  git add *.nix
+  git add flake.nix nix/
   nix flake check
 
