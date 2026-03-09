@@ -1,6 +1,7 @@
 # VM-specific hardware and virtualisation configuration.
+# Stored under devices (not flake.modules.nixos) so it is NOT auto-included.
 {...}: {
-  flake.modules.nixos.device-vm = {
+  devices.vm = {
     config,
     lib,
     ...
