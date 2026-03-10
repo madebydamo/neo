@@ -3,9 +3,11 @@
 # via the upstream Home Manager module from nix-openclaw.
 {inputs, ...}: {
   flake.modules.nixos.openclaw-dependencies = {
-    # import = [
-    #       # Home Manager NixOS integration (provides home-manager.users.<name>)
-    # ];
+    imports = [
+      inputs.nix-openclaw.inputs.home-manager.nixosModules.home-manager
+      inputs.nix-openclaw.nixosModules.openclaw-gateway
+    ];
+    nixpkgs.overlays = [inputs.nix-openclaw.overlays.default];
     home-manager.useGlobalPkgs = true;
     home-manager.useUserPackages = true;
     home-manager.overwriteBackup = true;

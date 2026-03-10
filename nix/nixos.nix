@@ -52,14 +52,7 @@ in {
     # Default NixOS module that bundles all services for external use.
     # Other flakes can: imports = [ neo.nixosModules.default ];
     nixosModules.default = {
-      imports =
-        allNixosModules
-        ++ [
-          inputs.nix-openclaw.inputs.home-manager.nixosModules.home-manager
-          # OpenClaw NixOS module (services.openclaw-gateway, kept for compatibility)
-          inputs.nix-openclaw.nixosModules.openclaw-gateway
-          {nixpkgs.overlays = [inputs.nix-openclaw.overlays.default];}
-        ];
+      imports = allNixosModules;
     };
 
     # Build NixOS configurations, auto-injecting all registered modules.
