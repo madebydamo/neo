@@ -33,22 +33,20 @@
               description = lib.mdDoc "Nginx proxy conf for swag";
             };
 
-            telegramBotTokenFile = mkOption {
+            telegramBotToken = mkOption {
               type = types.nullOr types.str;
               default = null;
               description = lib.mdDoc ''
-                Path to a file containing the Telegram bot token.
+                Telegram bot token string.
                 Create a bot via @BotFather on Telegram.
-                The file should contain only the token string.
               '';
             };
-            telegramAllowFrom = mkOption {
+            telegramAllowedUserId = mkOption {
               type = types.listOf types.int;
               default = [];
               description = lib.mdDoc ''
                 List of Telegram user/chat IDs allowed to interact with the bot.
                 Get your ID from @userinfobot on Telegram.
-                Use negative IDs for group chats.
               '';
             };
             telegramGroups = mkOption {
@@ -69,28 +67,43 @@
               '';
             };
 
-            anthropicApiKeyFile = mkOption {
+            anthropicApiKey = mkOption {
               type = types.nullOr types.str;
               default = null;
               description = lib.mdDoc ''
-                Path to a file containing the Anthropic API key.
-                Used for Claude AI integration.
+                Anthropic (Claude) API key.
+                At least one of anthropicApiKey or openaiApiKey must be set.
               '';
             };
-            openaiApiKeyFile = mkOption {
+            openaiApiKey = mkOption {
               type = types.nullOr types.str;
               default = null;
               description = lib.mdDoc ''
-                Path to a file containing the OpenAI API key (optional).
+                OpenAI API key.
+                At least one of anthropicApiKey or openaiApiKey must be set.
+              '';
+            };
+            xaiApiKey = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = lib.mdDoc "xAI (Grok) API key";
+            };
+
+            defaultModel = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              example = "xai/grok-3";
+              description = lib.mdDoc ''
+                Default LLM model for the agent (e.g. "xai/grok-3",
+                "anthropic/claude-sonnet-4-20250514", "openai/gpt-4o").
+                When null, the gateway picks its own default.
               '';
             };
 
-            discordBotTokenFile = mkOption {
+            discordBotToken = mkOption {
               type = types.nullOr types.str;
               default = null;
-              description = lib.mdDoc ''
-                Path to a file containing the Discord bot token (optional).
-              '';
+              description = lib.mdDoc "Discord bot token (optional)";
             };
 
             documents = mkOption {

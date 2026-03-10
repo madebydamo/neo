@@ -55,6 +55,8 @@ in {
       imports =
         allNixosModules
         ++ [
+          inputs.nix-openclaw.inputs.home-manager.nixosModules.home-manager
+          # OpenClaw NixOS module (services.openclaw-gateway, kept for compatibility)
           inputs.nix-openclaw.nixosModules.openclaw-gateway
           {nixpkgs.overlays = [inputs.nix-openclaw.overlays.default];}
         ];
