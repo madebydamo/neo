@@ -243,6 +243,8 @@
           home.homeDirectory = cfg.stateDir;
           home.stateVersion = "24.11";
 
+          home.packages = [pkgs.chromium];
+
           programs.openclaw = {
             enable = true;
 
@@ -255,6 +257,12 @@
             # Gateway config (schema-typed, maps to openclaw.json)
             config =
               {
+                browser = {
+                  enabled = true;
+                  executablePath = "/etc/profiles/per-user/openclaw/bin/chromium-browser";
+                  headless = true;
+                  noSandbox = true;
+                };
                 gateway = {
                   mode = "local";
                   auth = optionalAttrs (cfg.gatewayToken != null) {
