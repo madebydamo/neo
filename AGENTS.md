@@ -1,195 +1,131 @@
-# AGENTS.md - Development Guidelines for Homeserver Nix Configuration
+# AGENTS.md - Development Guidelines for Neo Homeserver Nix Configuration (Dendritic Pattern)
 
 ## Overview
-Nix-based homeserver configuration that builds VM configurations for various services using flakes for reproducible builds.
+Nix-based homeserver configuration building QEMU VMs for services using flakes. Follows the [Dendritic pattern](https://github.com/mightyiam/dendritic): flake-parts top-level Nixpkgs module system with `import-tree` auto-importing all non-entrypoint Nix files from `./nix/` as modules. Each file implements a single feature across configs (e.g., `nix/services/&lt;name&gt;/*.nix`).
 
-## Build Commands
+Example pattern from dendritic/example:
+- `flake.nix`: flake-parts + import-tree `./modules`
+- Modules dir: auto-imported Nix files as top-level modules
+- Benefits: Known type per file, automatic import, path independence
 
-### Development Build
+## Build Commands (via justfile)
 ```bash
-just build                        # Build VM configuration
-just launch                       # Build and launch VM with QEMU
-just ssh                          # SSH into running VM
-just exec CMD                     # Execute command in VM
-just logs SVC                     # View service logs in VM
+just build     # nix build .#nixosConfigurations.homeserver.config.system.build.vm
+just launch    # Build + QEMU launch (4CPUs/8G RAM)
+just ssh       # SSH to VM
+just exec CMD  # Run CMD in VM
+just logs SVC  # journalctl -u SVC
+just status    # VM/QEMU/SSH status
+just shutdown  # Graceful VM shutdown
 ```
 
-## Lint and Check Commands
-
-### Nix Code Quality
+## Lint and Check
 ```bash
-just format                      # Apply formatting with alejandra
-just check                  # Check for syntax errors
+just format  # alejandra .
+just check   # nix flake check (syntax/types)
 ```
 
 ## Test Commands
-
-### VM Testing with Just
+No unit tests. Use:
 ```bash
-just exec "systemctl status <service-name>"   # Test service status
-just exec "journalctl -u <service-name>"      # Check service logs
-just exec "systemctl list-units --type=service" # List all services
-just exec "journalctl --no-pager -n 50"       # View recent system logs
+nix flake check  # Full typecheck/lint
+just exec 'systemctl status &lt;svc&gt;'  # Single service status (e.g., filebrowser)
+just exec 'journalctl -u &lt;svc&gt;'     # Single service logs
+just exec 'systemctl list-units --type=service'  # All services
+just logs &lt;svc&gt;  # Tail service logs
 ```
 
-## Code Style Guidelines
+## Code Style Guidelines (Nix)
 
-### Nix Language Conventions
+### File Structure (Dendritic)
+- `.nix` for all files
+- `nix/services/&lt;name&gt;/`: `default.nix` (impl), `option.nix` (opts), `swag.nix` (proxy)
+- Keep &lt;200 lines/file
+- Auto-imported via import-tree
 
-#### File Structure
-- Use `.nix` extension for all Nix files
-- Separate concerns: `default.nix` for imports, `option.nix` for options
-- Keep files under 200 lines when possible
-- Directory structure: `services/<name>/default.nix`
+### Naming
+- Vars: camelCase (`additionalMountPoints`)
+- Attrs: snake_case (`neo.services.filebrowser`)
+- Fns: camelCase (`mkActivationScriptForDir`)
+- Opts: `mkEnableOption (mdDoc &quot;...&quot;)`
 
-#### Naming Conventions
-- `camelCase` for variable names: `additionalMountPoints`, `proxyConf`
-- `snake_case` for attribute names: `neo.services.filebrowser`
-- Function names: `mkActivationScriptForDir`, `mkActivationScriptForFile`
-
-#### Option Definitions
+### Option Definitions
 ```nix
 options.neo.services.example = mkOption {
-  type = types.submodule {
-    options = {
-      enabled = mkEnableOption (mdDoc "Enable the example service");
-      port = mkOption {
-        type = types.port;
-        default = 8080;
-        description = mdDoc "Port for the service";
-      };
-    };
-  };
-  default = {};
-  description = mdDoc "Example service configuration";
+  type = types.submodule ({...}: { options = { enabled = mkEnableOption (mdDoc &quot;...&quot;); }; });
+  default = { };
+  description = mdDoc &quot;...&quot;;
 };
 ```
 
-#### Types and Type Safety
+### Types
 ```nix
-port = mkOption {
-  type = types.port;
-  default = 8080;
-};
-
-subdomain = mkOption {
-  type = types.nullOr types.str;
-  default = null;
-};
+port = mkOption { type = types.port; default = 8080; };
+subdomain = mkOption { type = types.nullOr types.str; default = null; };
 ```
 
-#### String Handling
+### Strings/Scripts
 ```nix
 userId = toString config.users.users.${cfg.user}.uid;
-
 script = ''
   mkdir -p ${escapeShellArg dirPath}
   chown ${user}:${group} ${escapeShellArg dirPath}
 '';
 ```
 
-#### Error Handling
+### Errors
 ```nix
-assert assertMsg (cfg.port > 1024) "Port must be > 1024 for non-root";
-
-(mkIf cfg.enabled {
-  # Service configuration
-})
+assert lib.assertMsg (cfg.port &gt; 1024) &quot;Port &gt;1024&quot;;
+mkIf cfg.enabled { ... }
 ```
 
-#### Library Functions (`lib.nix`)
+### Lib Fns (lib.nix)
 ```nix
-mkActivationScriptForDir = {
-  dirPath,
-  mode ? "0755",
-  user ? "root",
-  group ? "root",
-} @ args:
-assert lib.assertMsg (dirOf dirPath == "/") "dirPath must be absolute";
-# Function body
+mkActivationScriptForDir = { dirPath, mode ? &quot;0755&quot;, ... } @ args:
+  assert lib.assertMsg (dirOf dirPath == &quot;/&quot;) &quot;Absolute path&quot;;
+  # impl
 ```
 
-#### Configuration Patterns
-
-##### Service Modules
+### Service Modules
 ```nix
-{ config, lib, ... }:
-
-with lib;
-
-let
-  cfg = config.neo.services.serviceName;
-in {
-  imports = [
-    ./option.nix
-    ./swag.nix
-  ];
-
-  system.activationScripts.create-dirs = mkActivationScriptForDir {
-    dirPath = "${config.neo.volumes.appdata}/service";
-    user = "1000";
-    group = "1000";
-  };
+{ config, lib }: let cfg = config.neo.services.foo; in {
+  imports = [ ./option.nix ./swag.nix ];
+  system.activationScripts.foo-dirs = mkActivationScriptForDir { ... };
+} // mkIf cfg.enabled {
+  virtualisation.oci-containers.containers.foo = { ... };
 }
-// (mkIf cfg.enabled {
-  virtualisation.oci-containers.containers.serviceName = {
-    # Container config
-  };
-})
 ```
 
-##### Volume Management
+### Volumes
 ```nix
-neo.volumes = {
-  appdata = "/path/to/appdata";
-  media = "/path/to/media";
-};
-
-volumes = [
-  "${config.neo.volumes.appdata}/service:/config"
-  "${config.neo.volumes.media}:/srv/Media"
-];
+neo.volumes.appdata = &quot;/path/appdata&quot;;
+volumes = [ &quot;${config.neo.volumes.appdata}/foo:/config&quot; ];
 ```
 
-## Development Workflow
+## Workflow: Add Service
+1. `nix/services/&lt;name&gt;/option.nix`
+2. `default.nix` (above pattern)
+3. `swag.nix` if proxy
+4. `just format && just check`
+5. `just build && just launch`
+6. Test: `just exec 'systemctl status &lt;name&gt;'`
 
-### Adding a New Service
-1. Create `services/<name>/` directory
-2. Add `option.nix` for configuration options
-3. Add `default.nix` for service implementation
-4. Add `swag.nix` for reverse proxy configuration (if needed)
-5. Import in `services/default.nix`
-6. Test with `nix flake check`
-7. Build and deploy with `just build && just launch`
+## Checklist
+- [ ] `just check`
+- [ ] `just format`
+- [ ] Typed/descr opts
+- [ ] Lib fns for scripts
+- [ ] Est. patterns (vols, mounts)
 
-### Code Review Checklist
-- [ ] `nix flake check` passes
-- [ ] `nix fmt` applied to all files
-- [ ] Options have proper types and descriptions
-- [ ] Activation scripts use library functions
-- [ ] Volume mounts follow established patterns
-- [ ] Service follows naming conventions
-
-### Debugging
+## Debug
 ```bash
-just logs <service-name>          # View service logs in VM
-just exec "journalctl -u <service-name> --no-pager"  # Detailed service logs
-just exec "systemctl status <service-name>"         # Check service status
-just exec "journalctl --since '1 hour ago'"         # Recent system logs
+just logs &lt;svc&gt;
+just exec 'journalctl -u &lt;svc&gt; --no-pager'
+just exec 'systemctl status &lt;svc&gt;'
 ```
 
-## Security Considerations
-
-- Never commit secrets or API keys
-- Use environment variables for sensitive configuration
-- Follow principle of least privilege for user IDs
-- Validate all inputs in activation scripts
-- Use absolute paths for volume mounts
-
-## Performance Guidelines
-
-- Keep VM configurations minimal
-- Use appropriate service restart policies
-- Configure resource limits where needed
-- Optimize volume mounts for I/O patterns
-- Use network isolation appropriately
+## Security/Perf
+- No secrets committed (sops-nix)
+- Least priv users/ports &gt;1024
+- Minimal VM, restart=always, limits
+- Abs paths, validated inputs
