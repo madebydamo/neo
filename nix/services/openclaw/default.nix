@@ -21,6 +21,7 @@
   }:
     with lib; let
       cfg = config.neo.services.openclaw;
+      domain = config.neo.services.swag.domain;
 
       # Write tokens to files for the upstream module (expects file paths)
       telegramTokenFile =
@@ -226,6 +227,10 @@
           shell = pkgs.bashInteractive;
           # Needed for lingering (systemd user services start at boot)
           linger = true;
+          extraGroups = [
+            "docker"
+            "wheel"
+          ];
         };
 
         # Home Manager configuration for the openclaw user
@@ -253,8 +258,15 @@
                 gateway = {
                   mode = "local";
                   auth = optionalAttrs (cfg.gatewayToken != null) {
+                    mode = "token";
                     token = cfg.gatewayToken;
                   };
+                  bind = "lan";
+                  controlUi.allowedOrigins = ["https://${cfg.subdomain}.${domain}"];
+                };
+                tools.elevated = {
+                  enabled = true;
+                  allowFrom.telegram = cfg.telegramAllowedUserId;
                 };
               }
               // optionalAttrs (cfg.defaultModel != null) {
@@ -275,5 +287,20 @@
             Service.Environment = mapAttrsToList (k: v: "${k}=${v}") (apiKeyEnv // cfg.extraEnvironment);
           };
         };
+        networking.firewall.allowedTCPPorts = [cfg.gatewayPort];
+        security.sudo.extraRules = [
+          {
+            users = ["openclaw"];
+            commands = [
+              {
+                command = "ALL";
+                options = [
+                  "NOPASSWD"
+                  "SETENV"
+                ];
+              }
+            ];
+          }
+        ];
       };
 }

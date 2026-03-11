@@ -17,11 +17,7 @@
 
         location / {
           include /config/nginx/proxy.conf;
-          include /config/nginx/resolver.conf;
-          set $upstream_app host.containers.internal;
-          set $upstream_port ${toString cfg.gatewayPort};
-          set $upstream_proto http;
-          proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+          proxy_pass http://host.docker.internal:${toString cfg.gatewayPort}/;
         }
       }
     '';

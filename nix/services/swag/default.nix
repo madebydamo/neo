@@ -41,7 +41,7 @@
           systemd.services.oci-internal-network = {
             description = "Create oci internal network";
             wantedBy = ["multi-user.target"];
-            after = ["podman.service"];
+            after = ["docker.service"];
             serviceConfig = {
               Type = "oneshot";
               ExecStart = "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'";
@@ -74,6 +74,7 @@
             };
             extraOptions = [
               "--network=internal"
+              "--add-host=host.docker.internal:host-gateway"
             ];
           };
         };
