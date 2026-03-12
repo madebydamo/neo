@@ -64,6 +64,7 @@
 
           home.packages = [pkgs.chromium];
 
+          programs.home-manager.enable = true;
           programs.openclaw = {
             enable = true;
 
