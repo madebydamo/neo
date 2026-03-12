@@ -12,13 +12,6 @@
 }: let
   system = "x86_64-linux";
   pkgs = inputs.nixpkgs.legacyPackages.${system};
-  extendedLib = inputs.nixpkgs.lib.extend (
-    self: super: {
-      neo = import ./_lib.nix {
-        lib = self;
-      };
-    }
-  );
 
   # Collect all registered NixOS deferred modules
   allNixosModules = lib.attrValues (config.flake.modules.nixos or {});
@@ -55,7 +48,6 @@ in {
       imports = allNixosModules;
     };
 
-    lib = extendedLib;
     # Build NixOS configurations, auto-injecting all registered modules.
     nixosConfigurations =
       lib.mapAttrs (
@@ -63,7 +55,7 @@ in {
           inputs.nixpkgs.lib.nixosSystem {
             inherit system;
             specialArgs = {
-              lib = extendedLib;
+              lib = config.flake.lib;
             };
             modules = [config.flake.nixosModules.default] ++ modules;
           }
