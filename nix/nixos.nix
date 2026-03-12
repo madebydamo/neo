@@ -55,6 +55,7 @@ in {
       imports = allNixosModules;
     };
 
+    lib = extendedLib;
     # Build NixOS configurations, auto-injecting all registered modules.
     nixosConfigurations =
       lib.mapAttrs (
