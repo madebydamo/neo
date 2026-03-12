@@ -36,17 +36,20 @@
               };
             }
             {
-              id = "grok-3";
-              name = "Grok 3";
+              id = "grok-4.20-beta-0309-reasoning";
+              name = "Grok 4.20 Multi Agent";
               reasoning = true;
-              input = ["text"];
-              contextWindow = 131072;
+              input = [
+                "text"
+                "image"
+              ];
+              contextWindow = 2000000;
               maxTokens = 4096;
               cost = {
-                input = 0.2;
-                output = 0.5;
-                cacheRead = 0.05;
-                cacheWrite = 0.05;
+                input = 2;
+                output = 6;
+                cacheRead = 0.2;
+                cacheWrite = 0.2;
               };
             }
           ];
