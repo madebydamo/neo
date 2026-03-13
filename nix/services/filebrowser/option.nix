@@ -35,8 +35,9 @@
             // neo.mkReverseProxyOptions {
               subdomain = "filebrowser";
               auth.publicPaths = [
-                "^\\/api\\/public\\/"
-                "^\\/share\\/"
+                "^/share/"
+                "^/static/"
+                "^/api/public"
               ];
             };
         };

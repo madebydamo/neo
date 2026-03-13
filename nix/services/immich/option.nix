@@ -20,8 +20,9 @@
             // lib.neo.mkReverseProxyOptions {
               subdomain = "immich";
               auth.publicPaths = [
-                "^\\/share\\/"
-                "^\\/api\\/"
+                "^/share/"
+                "^/.well-known/immich"
+                "^/api/"
               ];
             };
         };

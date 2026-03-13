@@ -22,7 +22,7 @@
                 appName = lib.toUpper (replaceStrings ["-"] ["_"] name);
               in
                 optionalAttrs (svc.auth.publicPaths or [] != []) {
-                  "TINYAUTH_APPS_${appName}_PATH_ALLOW" = concatStringsSep "," svc.auth.publicPaths;
+                  "TINYAUTH_APPS_${appName}_PATH_ALLOW" = "(${concatStringsSep "|" svc.auth.publicPaths})";
                 }
                 // optionalAttrs (svc.subdomain or null != null) {
                   "TINYAUTH_APPS_${appName}_CONFIG_DOMAIN" = "${svc.subdomain}.${domain}";
