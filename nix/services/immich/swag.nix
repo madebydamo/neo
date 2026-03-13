@@ -37,7 +37,7 @@
           listen 443 ssl http2;
           listen [::]:443 ssl http2;
 
-          server_name immich.*;
+          server_name ${cfg.subdomain}.*;
 
           include /config/nginx/ssl.conf;
 
