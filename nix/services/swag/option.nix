@@ -10,16 +10,6 @@
         type = types.submodule {
           options = {
             enabled = mkEnableOption (lib.mdDoc "swag service");
-            subdomain = mkOption {
-              type = types.nullOr types.str;
-              default = null;
-              description = lib.mdDoc "Subdomain for the service";
-            };
-            proxyConf = mkOption {
-              type = types.nullOr types.str;
-              default = null;
-              description = lib.mdDoc "Nginx proxy conf for swag";
-            };
             domain = mkOption {
               type = types.nullOr types.str;
               default = null;

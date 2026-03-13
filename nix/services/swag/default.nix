@@ -11,7 +11,7 @@
         cfg = config.neo.services.swag;
         appServices =
           filterAttrs (
-            n: v: v.enabled && builtins.hasAttr "subdomain" v && v.subdomain != null && n != "swag"
+            n: v: v.enabled && v.subdomain or null != null && n != "swag"
           )
           config.neo.services;
         subdomains = catAttrs "subdomain" (attrValues appServices);
