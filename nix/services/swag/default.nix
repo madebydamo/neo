@@ -59,7 +59,7 @@
               SUBDOMAINS = concatStringsSep "," subdomains;
               VALIDATION = "http";
               EMAIL = cfg.email;
-              ONLY_SUBDOMAINS = "true";
+              ONLY_SUBDOMAINS = boolToString cfg.onlySubdomains;
               EXTRA_DOMAINS = concatStringsSep "," cfg.extraDomains;
             };
             volumes = [

@@ -25,6 +25,11 @@
               default = [];
               description = lib.mdDoc "Extra domains for swag";
             };
+            onlySubdomains = mkOption {
+              type = types.bool;
+              default = true;
+              description = lib.mdDoc "Only use subdomains (ONLY_SUBDOMAINS)";
+            };
             additionalMountPoints = mkOption {
               type = types.attrsOf types.str;
               default = {};
