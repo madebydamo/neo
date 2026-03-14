@@ -13,7 +13,7 @@
 
             sourceDir = mkOption {
               type = types.path;
-              default = "/var/lib/neo";
+              default = "/var/neo";
               description = mdDoc "Source directory to backup";
             };
 
