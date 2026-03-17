@@ -22,10 +22,6 @@
               bind = "lan";
               controlUi.allowedOrigins = ["https://${cfg.subdomain}.${domain}"];
             };
-            tools.elevated = {
-              enabled = true;
-              allowFrom.telegram = cfg.telegramAllowedUserId;
-            };
           }
           // optionalAttrs (cfg.defaultModel != null) {
             agents.defaults.model.primary = cfg.defaultModel;
