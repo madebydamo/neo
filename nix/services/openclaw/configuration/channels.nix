@@ -25,11 +25,16 @@
           {
             tokenFile = toString telegramTokenFile;
             allowFrom = cfg.telegramAllowedUserId;
+            execApprovals = {
+              enabled = true;
+              approvers = lists.take 1 cfg.telegramAllowedUserId;
+            };
           }
           // (optionalAttrs (cfg.telegramGroups != {}) {
             groups =
               mapAttrs (_name: group: {
                 inherit (group) requireMention;
+                groupPolicy = "open";
               })
               cfg.telegramGroups;
           });
