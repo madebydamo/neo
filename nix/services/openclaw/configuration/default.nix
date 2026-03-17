@@ -61,6 +61,7 @@
           home.username = "openclaw";
           home.homeDirectory = cfg.stateDir;
           home.stateVersion = "24.11";
+          home.file.".openclaw/openclaw.json".force = true;
 
           home.packages = [pkgs.chromium];
 
