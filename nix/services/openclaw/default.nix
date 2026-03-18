@@ -6,7 +6,6 @@
   flake.modules.nixos.openclaw-dependencies = {
     imports = [
       inputs.nix-openclaw.inputs.home-manager.nixosModules.home-manager
-      inputs.nix-openclaw.nixosModules.openclaw-gateway
     ];
     nixpkgs.overlays = [inputs.nix-openclaw.overlays.default];
     home-manager.useGlobalPkgs = true;

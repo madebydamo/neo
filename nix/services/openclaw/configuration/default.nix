@@ -44,7 +44,6 @@
           home = cfg.stateDir;
           createHome = true;
           shell = pkgs.bashInteractive;
-          # Needed for lingering (systemd user services start at boot)
           linger = true;
           extraGroups = [
             "docker"
@@ -62,21 +61,17 @@
           home.homeDirectory = cfg.stateDir;
           home.stateVersion = "24.11";
           home.file.".openclaw/openclaw.json".force = true;
-
           home.packages = [pkgs.chromium];
 
+          programs.bash.enable = true;
           programs.home-manager.enable = true;
+          xdg.enable = true;
+
           programs.openclaw = {
             enable = true;
-
-            # Documents directory (AGENTS.md, SOUL.md, etc.)
             documents = cfg.documents;
-
-            # Systemd user service (Linux headless)
             systemd.enable = true;
             launchd.enable = false;
-
-            # Extra config merged last
             config = cfg.extraConfig;
           };
 
@@ -88,6 +83,8 @@
             Service.Environment =
               [
                 "RETRIGGER_HASH=${builtins.hashString "sha256" (builtins.toJSON cfg)}"
+                "XDG_RUNTIME_DIR=/run/user/%U"
+                "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus"
               ]
               ++ mapAttrsToList (k: v: "${k}=${v}") (apiKeyEnv // cfg.extraEnvironment);
           };
