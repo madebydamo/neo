@@ -74,6 +74,7 @@
 
             # Systemd user service (Linux headless)
             systemd.enable = true;
+            launchd.enable = false;
 
             # Extra config merged last
             config = cfg.extraConfig;
@@ -84,7 +85,11 @@
           # Also inject API keys as process environment variables.
           systemd.user.services.openclaw-gateway = {
             Install.WantedBy = ["default.target"];
-            Service.Environment = mapAttrsToList (k: v: "${k}=${v}") (apiKeyEnv // cfg.extraEnvironment);
+            Service.Environment =
+              [
+                "RETRIGGER_HASH=${builtins.hashString "sha256" (builtins.toJSON cfg)}"
+              ]
+              ++ mapAttrsToList (k: v: "${k}=${v}") (apiKeyEnv // cfg.extraEnvironment);
           };
         };
 
