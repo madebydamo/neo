@@ -17,7 +17,7 @@
               allowFrom.telegram = cfg.telegramAllowedUserId;
             };
             exec = {
-              host = "node";
+              host = "gateway";
               security = "full";
               ask = "on-miss";
             };
