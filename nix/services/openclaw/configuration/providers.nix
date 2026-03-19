@@ -36,7 +36,7 @@
               };
             }
             {
-              id = "grok-4.20-beta-0309-reasoning";
+              id = "grok-4.20-0309-reasoning";
               name = "Grok 4.20 Multi Agent";
               reasoning = true;
               input = [
