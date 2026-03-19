@@ -90,12 +90,6 @@
                 '';
               };
 
-              discordBotToken = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = lib.mdDoc "Discord bot token (optional)";
-              };
-
               documents = mkOption {
                 type = types.nullOr types.path;
                 default = null;

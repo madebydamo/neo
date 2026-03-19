@@ -1,5 +1,5 @@
 # OpenClaw messaging channel configuration.
-# Handles Telegram and Discord bot token files and channel settings.
+# Handles Telegram bot token files and channel settings.
 {...}: {
   flake.modules.nixos.openclaw-config-channels = {
     config,
@@ -13,11 +13,6 @@
       telegramTokenFile =
         if cfg.telegramBotToken != null
         then pkgs.writeText "openclaw-telegram-token" cfg.telegramBotToken
-        else null;
-
-      discordTokenFile =
-        if cfg.discordBotToken != null
-        then pkgs.writeText "openclaw-discord-token" cfg.discordBotToken
         else null;
 
       telegramConfig = optionalAttrs (telegramTokenFile != null) {
@@ -39,16 +34,8 @@
               cfg.telegramGroups;
           });
       };
-
-      discordConfig = optionalAttrs (discordTokenFile != null) {
-        discord = {
-          tokenFile = toString discordTokenFile;
-        };
-      };
-
-      channelsConfig = telegramConfig // discordConfig;
     in
-      mkIf (cfg.enabled && channelsConfig != {}) {
-        home-manager.users.openclaw.programs.openclaw.config.channels = channelsConfig;
+      mkIf (cfg.enabled && telegramConfig != {}) {
+        home-manager.users.openclaw.programs.openclaw.config.channels = telegramConfig;
       };
 }
