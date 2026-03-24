@@ -6,10 +6,34 @@
     ...
   }:
     with lib; {
-      options.neo.volumes = mkOption {
-        type = types.attrsOf types.str;
-        default = {};
-        description = lib.mdDoc "Volume mappings from host to container";
+      options.neo.volumes.root = mkOption {
+        type = types.str;
+        default = "/var/neo";
+        description = lib.mdDoc "Root volume path";
+      };
+
+      options.neo.volumes.appdata = mkOption {
+        type = types.str;
+        default = "${config.neo.volumes.root}/DATA/AppData";
+        description = lib.mdDoc "AppData volume path";
+      };
+
+      options.neo.volumes.data = mkOption {
+        type = types.str;
+        default = "${config.neo.volumes.root}/DATA";
+        description = lib.mdDoc "Data volume path";
+      };
+
+      options.neo.volumes.media = mkOption {
+        type = types.str;
+        default = "${config.neo.volumes.root}/DATA/Media";
+        description = lib.mdDoc "Media volume path";
+      };
+
+      options.neo.volumes.documents = mkOption {
+        type = types.str;
+        default = "${config.neo.volumes.root}/DATA/Documents";
+        description = lib.mdDoc "Documents volume path";
       };
 
       options.neo.uid = mkOption {
@@ -26,7 +50,9 @@
 
       options.neo.ssh.authorizedKeys = mkOption {
         type = types.listOf types.str;
-        default = [];
+        default = [
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC9fFR8aERyyLjqI0aG08BXmSaMemGXK4WK8bLy7Nzmc development"
+        ];
         description = lib.mdDoc "SSH authorized keys for root in VM";
       };
 
