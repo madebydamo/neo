@@ -18,8 +18,8 @@
           options = {
             enabled = mkEnableOption (mdDoc "Bootstrap homeserver configuration");
             repoUrl = mkOption {
-              type = types.nullOr types.str;
-              default = null;
+              type = types.str;
+              default = "";
               description = mdDoc "Git repository URL for the homeserver configuration";
             };
             configPath = mkOption {
@@ -28,12 +28,35 @@
               description = mdDoc "Path to the homeserver configuration repository";
             };
             bootstrapEnable = mkEnableOption (mdDoc "Bootstrap the git repository if .git is missing");
+            bootstrapMethod = mkOption {
+              type = types.enum [
+                "template"
+                "clone"
+              ];
+              default = "template";
+              description = mdDoc "Bootstrap method: 'template' uses flake init, 'clone' uses git clone from repoUrl";
+            };
             bootstrapUser = mkOption {
               type = types.str;
               default = "root";
               description = mdDoc "User to run the bootstrap service as";
             };
             safeDirectoryEnable = mkEnableOption (mdDoc "Configure git safe.directory for configPath");
+            gitUserName = mkOption {
+              type = types.str;
+              default = "Neo Bootstrap";
+              description = mdDoc "Git user.name used for initial commits";
+            };
+            gitUserEmail = mkOption {
+              type = types.str;
+              default = "neo@local";
+              description = mdDoc "Git user.email used for initial commits";
+            };
+            defaultBranch = mkOption {
+              type = types.str;
+              default = "master";
+              description = mdDoc "Default branch name for git init";
+            };
             pluginGeneratorEnable = mkEnableOption (mdDoc "Generate plugins.toml from Nix config");
             pluginGeneratorPlugins = mkOption {
               type = types.attrs;

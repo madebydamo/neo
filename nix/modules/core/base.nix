@@ -16,11 +16,6 @@
     boot.loader.systemd-boot.enable = true;
     boot.loader.efi.canTouchEfiVariables = true;
 
-    fileSystems."/" = {
-      device = deviceCfg.rootFsDevice;
-      fsType = deviceCfg.rootFsType;
-    };
-
     networking.hostName = deviceCfg.hostname;
 
     i18n = {
@@ -53,5 +48,10 @@
       openssh.authorizedKeys.keys = config.neo.ssh.authorizedKeys;
     };
     time.timeZone = config.neo.timeZone;
+
+    nix.settings.experimental-features = [
+      "nix-command"
+      "flakes"
+    ];
   };
 }
