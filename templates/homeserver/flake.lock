@@ -154,11 +154,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1773830271,
-        "narHash": "sha256-ibaJqnLYcBZqJUsJeCVC8/SyNU+MBH9ODpqSKQB3F3k=",
+        "lastModified": 1774431331,
+        "narHash": "sha256-EVOHf7z/4ktk2ha3BbkEKP4DMouKfH+U0tH8y8LGICw=",
         "owner": "madebydamo",
         "repo": "neo",
-        "rev": "21cd5aff45910b61b15b0b602e14e5f386a1f768",
+        "rev": "e27b4f87d2ced1add57ba26b001b3f77b7847d70",
         "type": "github"
       },
       "original": {
