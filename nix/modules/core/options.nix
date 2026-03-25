@@ -61,5 +61,36 @@
         default = "Europe/Zurich";
         description = lib.mdDoc "System timezone";
       };
+
+      options.neo.device = mkOption {
+        type = types.submodule (
+          {...}: {
+            options = {
+              hostname = mkOption {
+                type = types.str;
+                default = "nixos";
+                description = lib.mdDoc "System hostname";
+              };
+              grubDevice = mkOption {
+                type = types.str;
+                default = "/dev/vda";
+                description = lib.mdDoc "GRUB installation device";
+              };
+              rootFsDevice = mkOption {
+                type = types.str;
+                default = "/dev/vda1";
+                description = lib.mdDoc "Root filesystem device";
+              };
+              rootFsType = mkOption {
+                type = types.str;
+                default = "ext4";
+                description = lib.mdDoc "Root filesystem type";
+              };
+            };
+          }
+        );
+        default = {};
+        description = lib.mdDoc "Device/machine specific settings from settings.toml";
+      };
     };
 }
