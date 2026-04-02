@@ -27,6 +27,11 @@
               default = "${config.neo.volumes.appdata}/configuration";
               description = mdDoc "Path to the homeserver configuration repository";
             };
+            template = mkOption {
+              type = types.str;
+              default = "github:madebydamo/neo#homeserver";
+              description = mdDoc "Base template to use for initializing configuration";
+            };
             bootstrapEnable = mkEnableOption (mdDoc "Bootstrap the git repository if .git is missing");
             bootstrapMethod = mkOption {
               type = types.enum [

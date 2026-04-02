@@ -1,30 +1,39 @@
-{...}: {
-  flake.modules.nixos.cli = {
+{
+  inputs,
+  self,
+  ...
+}: let
+  cfg = self.nixosConfigurations.homeserver.config.neo.homeserverConfig;
+  settingsPath = ../../../../settings.toml;
+  settingsContent =
+    if builtins.pathExists settingsPath
+    then builtins.readFile settingsPath
+    else ''
+      # settings.toml - from current activation
+      # [device]
+      # hostname = "homeserver"
+      # grubDevice = "/dev/sda"
+      # rootFsDevice = "/dev/sda1"
+      # rootFsType = "ext4"
+    '';
+in {
+  perSystem = {
     config,
-    lib,
     pkgs,
     ...
-  }: let
-    cfg = config.neo.homeserverConfig;
-    settingsPath = ../../../../settings.toml;
-    settingsContent =
-      if builtins.pathExists settingsPath
-      then builtins.readFile settingsPath
-      else ''
-        # settings.toml - from current activation
-        # [device]
-        # hostname = "homeserver"
-        # grubDevice = "/dev/sda"
-        # rootFsDevice = "/dev/sda1"
-        # rootFsType = "ext4"
-      '';
-    neo-cli = pkgs.writeShellScriptBin "neo" ''
+  }: {
+    packages.test = pkgs.writeShellScriptBin "test" ''
+      echo CONFIG_PATH="${cfg.configPath}"
+      echo REBUILD_BRANCH_FORMAT="${cfg.rebuildBranchFormat}"
+    '';
+    packages.neo = pkgs.writeShellScriptBin "neo" ''
       set -euo pipefail
       NIX_CMD="${pkgs.nix}/bin/nix"
       COMMAND="''${1:-help}"
       shift || true
       CONFIG_PATH="${cfg.configPath}"
       REBUILD_BRANCH_FORMAT="${cfg.rebuildBranchFormat}"
+      FLAKE_INIT_TEMPLATE="${cfg.template}"
       case "$COMMAND" in
         generate-hardware)
           mkdir -p "''${CONFIG_PATH}"
@@ -38,34 +47,31 @@
           echo "Pasted settings.toml from current activation to configuration folder"
           ;;
 
-      init)
-        mkdir -p "''${CONFIG_PATH}"
-        cd "''${CONFIG_PATH}"
-        ${pkgs.git}/bin/git config --global user.name "${cfg.gitUserName}"
-        ${pkgs.git}/bin/git config --global user.email "${cfg.gitUserEmail}"
-        ${pkgs.git}/bin/git config --global init.defaultBranch "${cfg.defaultBranch}"
-        ${pkgs.git}/bin/git config --global --add safe.directory "''${CONFIG_PATH}" || true
-        if [ -n "${cfg.repoUrl}" ] && [ "${cfg.bootstrapMethod}" = "clone" ]; then
-          ${pkgs.git}/bin/git clone --depth 1 "${cfg.repoUrl}" . || ${pkgs.git}/bin/git clone "${cfg.repoUrl}" .
-        else
-          "$NIX_CMD" --extra-experimental-features 'nix-command flakes' flake init -t github:madebydamo/neo#homeserver
-          ${pkgs.git}/bin/git init
-          if [ -n "${cfg.repoUrl}" ]; then
-            ${pkgs.git}/bin/git remote add origin "${cfg.repoUrl}"
+        init)
+          mkdir -p "''${CONFIG_PATH}"
+          cd "''${CONFIG_PATH}"
+          if [ -n "${cfg.repoUrl}" ] && [ "${cfg.bootstrapMethod}" = "clone" ]; then
+            ${pkgs.git}/bin/git clone "${cfg.repoUrl}" .
+          else
+            "$NIX_CMD" --extra-experimental-features 'nix-command flakes' flake init -t "$FLAKE_INIT_TEMPLATE"
+            ${pkgs.git}/bin/git init
+            if [ -n "${cfg.repoUrl}" ]; then
+              ${pkgs.git}/bin/git remote add origin "${cfg.repoUrl}"
+            fi
           fi
-        fi
+          ${pkgs.git}/bin/git config user.name "${cfg.gitUserName}"
+          ${pkgs.git}/bin/git config user.email "${cfg.gitUserEmail}"
+          ${pkgs.git}/bin/git config init.defaultBranch "${cfg.defaultBranch}"
 
-        neo generate-hardware
-        neo paste-settings
-        ${pkgs.git}/bin/git add .
-        "$NIX_CMD" --extra-experimental-features 'nix-command flakes' run .#write-flake || true
-        ${pkgs.git}/bin/git add .
-        ${pkgs.git}/bin/git commit -m "Initial commit from neo init" || true
-        echo "Repo initialized at ''${CONFIG_PATH}"
-        ;;
-
-
-
+          echo $0
+          "$0" generate-hardware
+          "$0" paste-settings
+          ${pkgs.git}/bin/git add .
+          "$NIX_CMD" --extra-experimental-features 'nix-command flakes' run .#write-flake || true
+          ${pkgs.git}/bin/git add .
+          ${pkgs.git}/bin/git commit -m "Initial commit from neo init" || true
+          echo "Repo initialized at ''${CONFIG_PATH}"
+          ;;
 
         update)
           cd "''${CONFIG_PATH}"
@@ -73,7 +79,6 @@
           "$NIX_CMD" --extra-experimental-features 'nix-command flakes' flake update
           echo "Flake updated"
           ;;
-
 
         activate)
           cd "''${CONFIG_PATH}"
@@ -96,26 +101,31 @@
             echo "Cancelled"
           fi
           ;;
-              help|--help)
-                echo "neo <command>"
-                echo "  generate-hardware"
-                echo "  paste-settings"
-                echo "  init"
-                echo "  update"
-                echo "  activate"
-                echo "  nuke"
-                ;;
-              *)
-                echo "Unknown command ''${COMMAND}. Use neo help"
-                exit 1
-                ;;
-            esac
-
+        help|--help)
+          echo "neo <command>"
+          echo "  generate-hardware"
+          echo "  paste-settings"
+          echo "  init"
+          echo "  update"
+          echo "  activate"
+          echo "  nuke"
+          ;;
+        *)
+          echo "Unknown command ''${COMMAND}. Use neo help"
+          exit 1
+          ;;
+      esac
     '';
+  };
+  flake.modules.nixos.cli = {
+    lib,
+    pkgs,
+    ...
+  }: let
   in {
     config = {
       environment.systemPackages = [
-        neo-cli
+        self.packages.neo
         pkgs.git
         pkgs.nix
         pkgs.nixos-install-tools
