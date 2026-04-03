@@ -1,9 +1,5 @@
 {...}: {
-  flake.modules.nixos.settings = {
-    config,
-    lib,
-    ...
-  }: let
+  flake.modules.nixos.settings = {...}: let
     settingsPath = ../settings.toml;
     tomlSettings =
       if builtins.pathExists settingsPath

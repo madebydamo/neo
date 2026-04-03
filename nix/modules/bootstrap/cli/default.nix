@@ -1,27 +1,27 @@
 {
   inputs,
   self,
+  pkgs,
   ...
 }: let
   cfg = self.nixosConfigurations.homeserver.config.neo.homeserverConfig;
-  settingsPath = ../../../../settings.toml;
-  settingsContent =
-    if builtins.pathExists settingsPath
-    then builtins.readFile settingsPath
-    else ''
-      # settings.toml - from current activation
-      # [device]
-      # hostname = "homeserver"
-      # grubDevice = "/dev/sda"
-      # rootFsDevice = "/dev/sda1"
-      # rootFsType = "ext4"
-    '';
 in {
   perSystem = {
     config,
     pkgs,
     ...
-  }: {
+  }: let
+    settingsPath = ../../../../settings.toml;
+    settingsContent =
+      if builtins.pathExists settingsPath
+      then builtins.readFile settingsPath
+      else ''
+        # settings.toml - from current activation
+        # [device]
+        # hostname = "homeserver"
+      '';
+    defaultSettings = pkgs.writeText "default-settings.toml" settingsContent;
+  in {
     packages.test = pkgs.writeShellScriptBin "test" ''
       echo CONFIG_PATH="${cfg.configPath}"
       echo REBUILD_BRANCH_FORMAT="${cfg.rebuildBranchFormat}"
@@ -43,34 +43,59 @@ in {
           ;;
         paste-settings)
           cd "''${CONFIG_PATH}"
-          cp -f /etc/neo/settings.toml settings.toml 2>/dev/null || true
+          cp -f ${defaultSettings} settings.toml 2>/dev/null || true
           echo "Pasted settings.toml from current activation to configuration folder"
           ;;
 
         init)
           mkdir -p "''${CONFIG_PATH}"
           cd "''${CONFIG_PATH}"
-          if [ -n "${cfg.repoUrl}" ] && [ "${cfg.bootstrapMethod}" = "clone" ]; then
-            ${pkgs.git}/bin/git clone "${cfg.repoUrl}" .
+
+          # ── Smart init: handle existing folder gracefully ─────────────────────
+          if [ -d .git ]; then
+            echo "✓ Git repository already exists at ''${CONFIG_PATH}"
+            echo "  (re-running setup steps — safe even if the worktree is dirty)"
           else
-            "$NIX_CMD" --extra-experimental-features 'nix-command flakes' flake init -t "$FLAKE_INIT_TEMPLATE"
-            ${pkgs.git}/bin/git init
-            if [ -n "${cfg.repoUrl}" ]; then
-              ${pkgs.git}/bin/git remote add origin "${cfg.repoUrl}"
+            # Directory is fresh or empty → do the actual initialization
+            if [ -n "$(ls -A . 2>/dev/null | grep -v '^\.' | head -1)" ]; then
+              echo "❌ Error: ''${CONFIG_PATH} is not empty and is not a git repository."
+              echo "   Please remove the files first or use a different directory."
+              exit 1
+            fi
+
+            echo "→ Initializing new repository at ''${CONFIG_PATH}..."
+
+            if [ -n "${cfg.repoUrl}" ] && [ "${cfg.bootstrapMethod}" = "clone" ]; then
+              ${pkgs.git}/bin/git clone "${cfg.repoUrl}" .
+            else
+              "$NIX_CMD" --extra-experimental-features 'nix-command flakes' flake init -t "$FLAKE_INIT_TEMPLATE"
+              ${pkgs.git}/bin/git init
+              if [ -n "${cfg.repoUrl}" ]; then
+                ${pkgs.git}/bin/git remote add origin "${cfg.repoUrl}"
+              fi
             fi
           fi
+
+          # ── These steps are always safe to run (idempotent) ───────────────────
           ${pkgs.git}/bin/git config user.name "${cfg.gitUserName}"
           ${pkgs.git}/bin/git config user.email "${cfg.gitUserEmail}"
           ${pkgs.git}/bin/git config init.defaultBranch "${cfg.defaultBranch}"
 
-          echo $0
+          echo "→ Generating hardware configuration..."
           "$0" generate-hardware
+
+          echo "→ Pasting settings..."
           "$0" paste-settings
+
+          # ── Commit only if something actually changed ─────────────────────────
           ${pkgs.git}/bin/git add .
-          "$NIX_CMD" --extra-experimental-features 'nix-command flakes' run .#write-flake || true
-          ${pkgs.git}/bin/git add .
-          ${pkgs.git}/bin/git commit -m "Initial commit from neo init" || true
-          echo "Repo initialized at ''${CONFIG_PATH}"
+
+          if ${pkgs.git}/bin/git diff --cached --quiet 2>/dev/null; then
+            echo "✓ No changes to commit (everything is up-to-date)"
+          else
+            ${pkgs.git}/bin/git commit -m "Update from neo init" || true
+          fi
+          echo "Repository ready at ''${CONFIG_PATH}"
           ;;
 
         update)
@@ -121,16 +146,14 @@ in {
     lib,
     pkgs,
     ...
-  }: let
-  in {
+  }: {
     config = {
       environment.systemPackages = [
-        self.packages.neo
+        self.packages."x86_64-linux".neo
         pkgs.git
         pkgs.nix
         pkgs.nixos-install-tools
       ];
-      environment.etc."neo/settings.toml".text = settingsContent;
     };
   };
 }
