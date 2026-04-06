@@ -32,5 +32,18 @@
         ]
         ++ hardwareConfig;
     };
+    nixosConfigurations.vm = inputs.nixpkgs.lib.nixosSystem {
+      inherit system;
+      specialArgs = {
+        lib = inputs.neo.lib;
+      };
+      modules = [
+        inputs.neo.nixosModules.default
+        inputs.neo.nixosModules.base
+        inputs.neo.nixosModules.vm
+        inputs.disko.nixosModules.disko
+        config.flake.modules.nixos.settings
+      ];
+    };
   };
 }

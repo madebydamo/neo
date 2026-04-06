@@ -1,6 +1,6 @@
 # VM-specific hardware and virtualisation configuration.
 # Stored under devices (not flake.modules.nixos) so it is NOT auto-included.
-{...}: {
+{config, ...}: {
   devices.vm = {
     config,
     lib,
@@ -17,4 +17,5 @@
       oci-containers.backend = "docker";
     };
   };
+  flake.nixosModules.vm = config.devices.vm;
 }
