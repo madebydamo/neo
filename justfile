@@ -5,8 +5,9 @@ ssh_opts := "-i tools/id_ed25519 -p 2222 -o StrictHostKeyChecking=no root@localh
 disk_image := "nixos.qcow2"
 
 build:
-  git add flake.nix nix/ templates/
-  nix build .#nixosConfigurations.homeserver.config.system.build.vm
+  nix run .#neo nuke
+  nix run .#neo init
+  nix run .#neo build
 
 # Shut down the VM via QEMU monitor, falling back to pkill.
 # Waits until the qcow2 disk is fully released before returning.
@@ -35,7 +36,7 @@ shutdown:
 launch: shutdown build
   QEMU_NET_OPTS="hostfwd=tcp::2222-:22" \
   QEMU_OPTS="-smp 4 -m 8G -monitor tcp:{{qemu_monitor}},server,nowait" \
-  ./result/bin/run-nixos-vm &
+  ./build/result/bin/run-nixos-vm &
 
 # Show VM status: QEMU process, monitor, SSH, and disk image info.
 status:
@@ -75,4 +76,5 @@ format:
 check:
   git add flake.nix nix/ templates/
   nix flake check
+  (cd build && git add . && nix flake check)
 
