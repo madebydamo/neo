@@ -34,52 +34,49 @@ in {
       CONFIG_PATH="${cfg.configPath}"
       REBUILD_BRANCH_FORMAT="${cfg.rebuildBranchFormat}"
       FLAKE_INIT_TEMPLATE="${cfg.template}"
+
       case "$COMMAND" in
         generate-hardware)
-          mkdir -p "''${CONFIG_PATH}"
-          cd "''${CONFIG_PATH}"
-          ${pkgs.nixos-install-tools}/bin/nixos-generate-config --show-hardware-config > hardware-configuration.nix
-          echo "Generated hardware-configuration.nix"
+          mkdir -p "$CONFIG_PATH"
+          (cd "$CONFIG_PATH" && ${pkgs.nixos-install-tools}/bin/nixos-generate-config --show-hardware-config > hardware-configuration.nix)
+          echo "Generated hardware-configuration.nix in $CONFIG_PATH"
           ;;
         paste-settings)
-          cd "''${CONFIG_PATH}"
-          cp -f ${defaultSettings} settings.toml 2>/dev/null || true
-          echo "Pasted settings.toml from current activation to configuration folder"
+          (cd "$CONFIG_PATH" && cp -f ${defaultSettings} settings.toml 2>/dev/null)
+          echo "Pasted settings.toml from current activation to $CONFIG_PATH"
           ;;
 
         init)
-          mkdir -p "''${CONFIG_PATH}"
-          cd "''${CONFIG_PATH}"
-
-          # ── Smart init: handle existing folder gracefully ─────────────────────
-          if [ -d .git ]; then
-            echo "✓ Git repository already exists at ''${CONFIG_PATH}"
-            echo "  (re-running setup steps — safe even if the worktree is dirty)"
-          else
-            # Directory is fresh or empty → do the actual initialization
-            if [ -n "$(ls -A . 2>/dev/null | grep -v '^\.' | head -1)" ]; then
-              echo "❌ Error: ''${CONFIG_PATH} is not empty and is not a git repository."
-              echo "   Please remove the files first or use a different directory."
-              exit 1
-            fi
-
-            echo "→ Initializing new repository at ''${CONFIG_PATH}..."
-
-            if [ -n "${cfg.repoUrl}" ] && [ "${cfg.bootstrapMethod}" = "clone" ]; then
-              ${pkgs.git}/bin/git clone "${cfg.repoUrl}" .
+          mkdir -p "$CONFIG_PATH"
+          (cd "$CONFIG_PATH" && {
+            # ── Smart init: handle existing folder gracefully ─────────────────────
+            if [ -d .git ]; then
+              echo "✓ Git repository already exists at $CONFIG_PATH"
+              echo "  (re-running setup steps — safe even if the worktree is dirty)"
             else
-              "$NIX_CMD" --extra-experimental-features 'nix-command flakes' flake init -t "$FLAKE_INIT_TEMPLATE"
-              ${pkgs.git}/bin/git init
-              if [ -n "${cfg.repoUrl}" ]; then
-                ${pkgs.git}/bin/git remote add origin "${cfg.repoUrl}"
+              if [ -n "$(ls -A . 2>/dev/null | grep -v '^\.' | head -1)" ]; then
+                echo "❌ Error: $CONFIG_PATH is not empty and is not a git repository."
+                echo "   Please remove the files first or use a different directory."
+                exit 1
+              fi
+
+              echo "→ Initializing new repository at $CONFIG_PATH..."
+
+              if [ -n "${cfg.repoUrl}" ] && [ "${cfg.bootstrapMethod}" = "clone" ]; then
+                ${pkgs.git}/bin/git clone "${cfg.repoUrl}" .
+              else
+                "$NIX_CMD" --extra-experimental-features 'nix-command flakes' flake init -t "$FLAKE_INIT_TEMPLATE"
+                ${pkgs.git}/bin/git init
+                if [ -n "${cfg.repoUrl}" ]; then
+                  ${pkgs.git}/bin/git remote add origin "${cfg.repoUrl}"
+                fi
               fi
             fi
-          fi
 
-          # ── These steps are always safe to run (idempotent) ───────────────────
-          ${pkgs.git}/bin/git config user.name "${cfg.gitUserName}"
-          ${pkgs.git}/bin/git config user.email "${cfg.gitUserEmail}"
-          ${pkgs.git}/bin/git config init.defaultBranch "${cfg.defaultBranch}"
+            ${pkgs.git}/bin/git config user.name "${cfg.gitUserName}"
+            ${pkgs.git}/bin/git config user.email "${cfg.gitUserEmail}"
+            ${pkgs.git}/bin/git config init.defaultBranch "${cfg.defaultBranch}"
+          })
 
           echo "→ Generating hardware configuration..."
           "$0" generate-hardware
@@ -87,41 +84,51 @@ in {
           echo "→ Pasting settings..."
           "$0" paste-settings
 
-          # ── Commit only if something actually changed ─────────────────────────
-          ${pkgs.git}/bin/git add .
+          echo "→ Update inputs..."
+          (cd "$CONFIG_PATH" && ${pkgs.git}/bin/git add .)
+          "$0" update-inputs
 
-          if ${pkgs.git}/bin/git diff --cached --quiet 2>/dev/null; then
-            echo "✓ No changes to commit (everything is up-to-date)"
-          else
-            ${pkgs.git}/bin/git commit -m "Update from neo init" || true
-          fi
-          echo "Repository ready at ''${CONFIG_PATH}"
+          (cd "$CONFIG_PATH" && {
+            ${pkgs.git}/bin/git add .
+
+            if ${pkgs.git}/bin/git diff --cached --quiet 2>/dev/null; then
+              echo "✓ No changes to commit (everything is up-to-date)"
+            else
+              ${pkgs.git}/bin/git commit -m "Update from neo init"
+            fi
+          })
+          echo "Repository ready at $CONFIG_PATH"
           ;;
 
         update)
-          cd "''${CONFIG_PATH}"
-          "$NIX_CMD" --extra-experimental-features 'nix-command flakes' run .#write-flake
-          "$NIX_CMD" --extra-experimental-features 'nix-command flakes' flake update
-          echo "Flake updated"
+          (cd "$CONFIG_PATH" && "$NIX_CMD" --extra-experimental-features 'nix-command flakes' flake update)
+          echo "Flake updated in $CONFIG_PATH"
+          ;;
+
+        update-inputs)
+          (cd "$CONFIG_PATH" && "$NIX_CMD" --extra-experimental-features 'nix-command flakes' run .#write-flake)
+          echo "Flake updated in $CONFIG_PATH"
           ;;
 
         activate)
-          cd "''${CONFIG_PATH}"
-          "$NIX_CMD" --extra-experimental-features 'nix-command flakes' run .#write-flake
-          "$NIX_CMD" --extra-experimental-features 'nix-command flakes' build .#nixosConfigurations.neo.config.system.build.toplevel
-          BRANCH=$(date +"$REBUILD_BRANCH_FORMAT")
-          ${pkgs.git}/bin/git switch -C "$BRANCH" || true
-          ${pkgs.git}/bin/git add .
-          ${pkgs.git}/bin/git diff --staged --quiet || ${pkgs.git}/bin/git commit -m "Rebuild: $BRANCH" || true
-          /run/current-system/sw/bin/nixos-rebuild switch --flake .#neo
-          echo "Activated using branch $BRANCH"
+          (cd "$CONFIG_PATH" && {
+            "$NIX_CMD" --extra-experimental-features 'nix-command flakes' run .#write-flake
+            "$NIX_CMD" --extra-experimental-features 'nix-command flakes' build .#nixosConfigurations.neo.config.system.build.toplevel
+            BRANCH=$(date +"$REBUILD_BRANCH_FORMAT")
+            ${pkgs.git}/bin/git switch -C "$BRANCH" || true
+            ${pkgs.git}/bin/git add .
+            ${pkgs.git}/bin/git diff --staged --quiet || ${pkgs.git}/bin/git commit -m "Rebuild: $BRANCH" || true
+            /run/current-system/sw/bin/nixos-rebuild switch --flake .#neo
+            echo "Activated using branch $BRANCH"
+          })
           ;;
+
         nuke)
-          read -p "Nuke ''${CONFIG_PATH}? This will delete the entire folder (y/N): " -n 1 -r
+          read -p "Nuke $CONFIG_PATH? This will delete the entire folder (y/N): " -n 1 -r
           echo
           if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-            rm -rf "''${CONFIG_PATH}"
-            echo "Nuked ''${CONFIG_PATH}"
+            rm -rf "$CONFIG_PATH"
+            echo "Nuked $CONFIG_PATH"
           else
             echo "Cancelled"
           fi
@@ -132,11 +139,12 @@ in {
           echo "  paste-settings"
           echo "  init"
           echo "  update"
+          echo "  update-inputs"
           echo "  activate"
           echo "  nuke"
           ;;
         *)
-          echo "Unknown command ''${COMMAND}. Use neo help"
+          echo "Unknown command $COMMAND. Use neo help"
           exit 1
           ;;
       esac
@@ -153,6 +161,7 @@ in {
         pkgs.git
         pkgs.nix
         pkgs.nixos-install-tools
+        pkgs.coreutils
       ];
     };
   };
