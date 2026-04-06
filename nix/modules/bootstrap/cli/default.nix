@@ -17,8 +17,11 @@ in {
       then builtins.readFile settingsPath
       else ''
         # settings.toml - from current activation
-        # [device]
-        # hostname = "homeserver"
+        [homeserverConfig]
+        enabled = false
+        configPath = "./build"
+        neoInput = "git+file:.."
+        template = "..#homeserver"
       '';
     defaultSettings = pkgs.writeText "default-settings.toml" settingsContent;
   in {

@@ -5,9 +5,15 @@ ssh_opts := "-i tools/id_ed25519 -p 2222 -o StrictHostKeyChecking=no root@localh
 disk_image := "nixos.qcow2"
 
 build:
-  nix run .#neo nuke
-  nix run .#neo init
-  nix run .#neo build
+  #!/usr/bin/env bash
+  set -euo pipefail
+  if [ ! -f ./settings.toml ]; then
+    printf '[homeserverConfig]\nenabled = false\nconfigPath = "./build"\nneoInput = "git+file:.."\ntemplate = "..#homeserver"\n' > settings.toml
+    git add settings.toml
+  fi
+  nix run '.#neo' nuke
+  nix run '.#neo' init
+  nix run '.#neo' build
 
 # Shut down the VM via QEMU monitor, falling back to pkill.
 # Waits until the qcow2 disk is fully released before returning.

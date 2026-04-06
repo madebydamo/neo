@@ -2,3 +2,4 @@ result
 homeserver.tar
 DATA
 nixos.qcow2
+build/
