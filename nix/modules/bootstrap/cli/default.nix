@@ -100,13 +100,13 @@ in {
           echo "Repository ready at $CONFIG_PATH"
           ;;
 
-        update)
-          (cd "$CONFIG_PATH" && "$NIX_CMD" --extra-experimental-features 'nix-command flakes' flake update)
+        update-inputs)
+          (cd "$CONFIG_PATH" && "$NIX_CMD" --extra-experimental-features 'nix-command flakes' run .#write-flake)
           echo "Flake updated in $CONFIG_PATH"
           ;;
 
-        update-inputs)
-          (cd "$CONFIG_PATH" && "$NIX_CMD" --extra-experimental-features 'nix-command flakes' run .#write-flake)
+        update)
+          (cd "$CONFIG_PATH" && "$NIX_CMD" --extra-experimental-features 'nix-command flakes' flake update)
           echo "Flake updated in $CONFIG_PATH"
           ;;
 
