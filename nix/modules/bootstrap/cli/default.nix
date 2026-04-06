@@ -22,10 +22,6 @@ in {
       '';
     defaultSettings = pkgs.writeText "default-settings.toml" settingsContent;
   in {
-    packages.test = pkgs.writeShellScriptBin "test" ''
-      echo CONFIG_PATH="${cfg.configPath}"
-      echo REBUILD_BRANCH_FORMAT="${cfg.rebuildBranchFormat}"
-    '';
     packages.neo = pkgs.writeShellScriptBin "neo" ''
       set -euo pipefail
       NIX_CMD="${pkgs.nix}/bin/nix"
@@ -61,7 +57,8 @@ in {
               fi
 
               echo "→ Initializing new repository at $CONFIG_PATH..."
-
+            fi
+            if [ ! -f flake.nix ]; then
               if [ -n "${cfg.repoUrl}" ] && [ "${cfg.bootstrapMethod}" = "clone" ]; then
                 ${pkgs.git}/bin/git clone "${cfg.repoUrl}" .
               else
@@ -122,16 +119,20 @@ in {
             echo "Activated using branch $BRANCH"
           })
           ;;
+        build)
+          (cd "$CONFIG_PATH" && {
+            "$NIX_CMD" --extra-experimental-features 'nix-command flakes' run .#write-flake
+            # for switching
+            "$NIX_CMD" --extra-experimental-features 'nix-command flakes' build .#nixosConfigurations.neo.config.system.build.toplevel
+            # for vm
+            "$NIX_CMD" --extra-experimental-features 'nix-command flakes' build .#nixosConfigurations.vm.config.system.build.vm
+            echo "Built configuration"
+          })
+          ;;
 
         nuke)
-          read -p "Nuke $CONFIG_PATH? This will delete the entire folder (y/N): " -n 1 -r
-          echo
-          if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-            rm -rf "$CONFIG_PATH"
-            echo "Nuked $CONFIG_PATH"
-          else
-            echo "Cancelled"
-          fi
+          rm -rf "$CONFIG_PATH"/*
+          echo "Nuked $CONFIG_PATH"
           ;;
         help|--help)
           echo "neo <command>"
@@ -140,6 +141,7 @@ in {
           echo "  init"
           echo "  update"
           echo "  update-inputs"
+          echo "  build"
           echo "  activate"
           echo "  nuke"
           ;;
