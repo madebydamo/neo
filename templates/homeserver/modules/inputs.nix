@@ -8,7 +8,7 @@
     if builtins.pathExists settingsPath
     then builtins.fromTOML (builtins.readFile settingsPath)
     else {};
-  neoInput = neo.homeserverConfig.neoInput or "github:madebydamo/neo";
+  neoInput = neo.nixos.neoInput or "github:madebydamo/neo";
 in {
   flake-file.inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

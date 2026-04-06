@@ -8,7 +8,7 @@ build:
   #!/usr/bin/env bash
   set -euo pipefail
   if [ ! -f ./settings.toml ]; then
-    printf '[homeserverConfig]\nenabled = false\nconfigPath = "./build"\nneoInput = "git+file:.."\ntemplate = "..#homeserver"\n' > settings.toml
+    printf '[nixos]\nenabled = true\nconfigPath = "./build"\nneoInput = "git+file:.."\ntemplate = "..#homeserver"\nbootstrapEnabled = true\nautoUpdateEnabled = false\n' > settings.toml
     git add settings.toml
   fi
   nix run '.#neo' nuke
