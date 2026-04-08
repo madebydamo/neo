@@ -8,15 +8,6 @@
     cfg = config.neo.nixos;
   in
     lib.mkIf cfg.enabled {
-      system.activationScripts.nixos-config-dirs = lib.neo.mkActivationScriptForDir config {
-        dirPath = cfg.configPath;
-        mode = "0755";
-      };
-      # always do safe.directory
-      system.activationScripts.nixos-config-safe-directory = lib.stringAfter ["nixos-config-dirs"] ''
-        ${lib.getBin pkgs.git}/bin/git config --system --add safe.directory ${cfg.configPath}
-      '';
-
       systemd.services.neo-bootstrap = lib.mkIf cfg.bootstrapEnabled {
         description = "Bootstrap nixos config git repo";
         wantedBy = ["multi-user.target"];
@@ -31,6 +22,12 @@
           Type = "oneshot";
           RemainAfterExit = true;
         };
+        preStart = ''
+          ${lib.neo.mkActivationScriptForDir config {
+            dirPath = cfg.configPath;
+            mode = "0755";
+          }}
+          ${lib.getBin pkgs.git}/bin/git config --system --add safe.directory ${cfg.configPath}'';
         script = ''
           set -e
           CONFIG_PATH="${cfg.configPath}"

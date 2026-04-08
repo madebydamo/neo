@@ -24,30 +24,19 @@
         ) (attrValues appServices);
       in
         mkIf cfg.enabled {
-          system.activationScripts.create-swag-dirs = lib.concatStringsSep "\n" [
-            (lib.neo.mkActivationScriptForDir config {
-              dirPath = "${config.neo.volumes.appdata}/swag/nginx/proxy-confs";
-            })
-            (lib.neo.mkActivationScriptForDir config {
-              dirPath = "${config.neo.volumes.appdata}/swag/nginx";
-            })
-            (lib.neo.mkActivationScriptForDir config {
-              dirPath = "${config.neo.volumes.appdata}/swag";
-            })
-          ];
-
-          system.activationScripts.swag-proxy-confs = lib.concatStringsSep "\n" proxyConfScripts;
-
-          systemd.services.oci-internal-network = {
-            description = "Create oci internal network";
-            wantedBy = ["multi-user.target"];
-            after = ["docker.service"];
-            serviceConfig = {
-              Type = "oneshot";
-              ExecStart = "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'";
-              RemainAfterExit = true;
-            };
-          };
+          systemd.services.docker-swag.preStart = lib.concatStringsSep "\n" ([
+              "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'"
+              (lib.neo.mkActivationScriptForDir config {
+                dirPath = "${config.neo.volumes.appdata}/swag/nginx/proxy-confs";
+              })
+              (lib.neo.mkActivationScriptForDir config {
+                dirPath = "${config.neo.volumes.appdata}/swag/nginx";
+              })
+              (lib.neo.mkActivationScriptForDir config {
+                dirPath = "${config.neo.volumes.appdata}/swag";
+              })
+            ]
+            ++ proxyConfScripts);
           virtualisation.oci-containers.containers.swag = {
             image = "lscr.io/linuxserver/swag:latest";
             autoStart = true;

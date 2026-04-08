@@ -9,7 +9,7 @@
       cfg = config.neo.services.immich-drop;
     in {
       config = mkIf cfg.enabled {
-        system.activationScripts.create-immich-drop-dirs = lib.concatStringsSep "\n" [
+        systemd.services.docker-immich-drop.preStart = lib.concatStringsSep "\n" [
           (lib.neo.mkActivationScriptForDir config {
             dirPath = "${config.neo.volumes.appdata}/immich-drop";
           })

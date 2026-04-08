@@ -17,7 +17,7 @@
       };
     in {
       config = mkIf cfg.enabled {
-        system.activationScripts.create-filebrowser-dirs = lib.concatStringsSep "\n" [
+        systemd.services.docker-filebrowser.preStart = lib.concatStringsSep "\n" [
           (lib.neo.mkActivationScriptForDir config {
             dirPath = "${config.neo.volumes.appdata}/filebrowser";
           })
@@ -27,13 +27,12 @@
           (lib.neo.mkActivationScriptForDir config {
             dirPath = "${config.neo.volumes.appdata}/filebrowser/config";
           })
+          (lib.neo.mkActivationScriptForFile config {
+            filePath = "${config.neo.volumes.appdata}/filebrowser/config/settings.json";
+            content = settingsJson;
+            mode = "0644";
+          })
         ];
-
-        system.activationScripts.filebrowser-settings = lib.neo.mkActivationScriptForFile config {
-          filePath = "${config.neo.volumes.appdata}/filebrowser/config/settings.json";
-          content = settingsJson;
-          mode = "0644";
-        };
 
         virtualisation.oci-containers.containers.filebrowser = {
           environment = {

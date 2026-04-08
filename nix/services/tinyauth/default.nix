@@ -39,7 +39,7 @@
           }
         ];
 
-        system.activationScripts.create-tinyauth-dirs = lib.concatStringsSep "\n" [
+        systemd.services.docker-tinyauth.preStart = lib.concatStringsSep "\n" [
           (lib.neo.mkActivationScriptForDir config {
             dirPath = "${config.neo.volumes.appdata}/tinyauth";
           })

@@ -9,20 +9,15 @@
       cfg = config.neo.services.immich;
     in {
       config = mkIf cfg.enabled {
-        system.activationScripts.create-immich-dirs = lib.concatStringsSep "\n" [
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.volumes.appdata}/immich";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.volumes.appdata}/immich/server";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.volumes.appdata}/immich/cache";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.volumes.appdata}/immich/data";
-          })
-        ];
+        systemd.services.docker-immich-server.preStart = lib.neo.mkActivationScriptForDir config {
+          dirPath = "${config.neo.volumes.appdata}/immich/server";
+        };
+        systemd.services.docker-immich-machine-learning.preStart = lib.neo.mkActivationScriptForDir config {
+          dirPath = "${config.neo.volumes.appdata}/immich/cache";
+        };
+        systemd.services.docker-immich-database.preStart = lib.neo.mkActivationScriptForDir config {
+          dirPath = "${config.neo.volumes.appdata}/immich/data";
+        };
 
         virtualisation.oci-containers.containers = {
           immich-server = {
