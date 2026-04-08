@@ -40,9 +40,16 @@ shutdown:
   sleep 2
 
 launch: shutdown build
-  QEMU_NET_OPTS="hostfwd=tcp::2222-:22" \
-  QEMU_OPTS="-smp 4 -m 8G -monitor tcp:{{qemu_monitor}},server,nowait" \
-  ./build/result/bin/run-nixos-vm &
+  #!/usr/bin/env bash
+  if [ -f ./build/result/bin/run-nixos-vm ]; then
+    QEMU_NET_OPTS="hostfwd=tcp::2222-:22" \
+    QEMU_OPTS="-smp 4 -m 8G -monitor tcp:{{qemu_monitor}},server,nowait" \
+    ./build/result/bin/run-nixos-vm &
+  else
+    QEMU_NET_OPTS="hostfwd=tcp::2222-:22" \
+    QEMU_OPTS="-smp 4 -m 8G -monitor tcp:{{qemu_monitor}},server,nowait" \
+    ./build/result/bin/disko-vm &
+  fi
 
 # Show VM status: QEMU process, monitor, SSH, and disk image info.
 status:

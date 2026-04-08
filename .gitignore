@@ -1,5 +1,5 @@
 result
 homeserver.tar
 DATA
-nixos.qcow2
+nixos.qcow2*
 build/

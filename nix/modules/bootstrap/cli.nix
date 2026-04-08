@@ -1,5 +1,5 @@
 {
-  inputs,
+  lib,
   self,
   ...
 }: let
@@ -32,7 +32,7 @@
     case "$COMMAND" in
       generate-hardware)
         mkdir -p "$CONFIG_PATH"
-        (cd "$CONFIG_PATH" && ${pkgs.nixos-install-tools}/bin/nixos-generate-config --show-hardware-config > hardware-configuration.nix)
+        (cd "$CONFIG_PATH" && ${pkgs.nixos-install-tools}/bin/nixos-generate-config ${lib.optionalString cfg.diskoEnabled "--no-filesystems"} --show-hardware-config > hardware-configuration.nix)
         echo "Generated hardware-configuration.nix in $CONFIG_PATH"
         ;;
       paste-settings)
@@ -123,7 +123,12 @@
           # for switching
           "$NIX_CMD" --extra-experimental-features 'nix-command flakes' build .#nixosConfigurations.neo.config.system.build.toplevel
           # for vm
-          "$NIX_CMD" --extra-experimental-features 'nix-command flakes' build .#nixosConfigurations.vm.config.system.build.vm
+          # "$NIX_CMD" --extra-experimental-features 'nix-command flakes' build .#nixosConfigurations.vm.config.system.build.vm
+          "$NIX_CMD" --extra-experimental-features 'nix-command flakes' build .#nixosConfigurations.vm.config.system.build.${
+      if cfg.diskoEnabled
+      then "vmWithDisko"
+      else "vm"
+    }
           echo "Built configuration"
         })
         ;;
@@ -149,7 +154,7 @@
         ;;
     esac
   '');
-  cfgPackage = self.nixosConfigurations.homeserver.config.neo.cli;
+  cfgPackage = self.nixosConfigurations.homeserver.config.neo.cli // {diskoEnabled = self.nixosConfigurations.homeserver.config.neo.disko.enabled;};
 in {
   perSystem = {
     # config,
@@ -165,7 +170,7 @@ in {
     ...
   }: {
     config = let
-      cfg = config.neo.nixos;
+      cfg = config.neo.nixos // {diskoEnabled = config.neo.disko.enabled;};
       neoCli = packageWrapper pkgs cfg;
     in {
       environment.systemPackages = [
