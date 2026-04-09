@@ -3,3 +3,4 @@ homeserver.tar
 DATA
 nixos.qcow2*
 build/
+nixos-efi-vars.fd
