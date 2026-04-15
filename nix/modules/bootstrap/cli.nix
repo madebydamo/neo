@@ -42,7 +42,11 @@
         else "false"
       }
     '';
-    userOverrides = ../../../settings.toml;
+    # userOverrides = ../../../settings.toml;
+    userOverrides =
+      if builtins.pathExists ../../../settings.toml
+      then builtins.readFile ../../../settings.toml
+      else "";
   in
     pkgs.rustPlatform.buildRustPackage {
       pname = "neo";
@@ -52,7 +56,7 @@
         lockFile = src + "/Cargo.lock";
       };
       env.DEFAULT_SETTINGS_TOML = builtins.readFile defaults;
-      env.USER_OVERRIDE_SETTINGS_TOML = builtins.readFile userOverrides;
+      env.USER_OVERRIDE_SETTINGS_TOML = userOverrides;
       meta = {
         description = "Neo CLI - Rust implementation for homeserver bootstrap";
         mainProgram = "neo";

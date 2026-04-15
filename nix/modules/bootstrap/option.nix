@@ -89,7 +89,7 @@
           options = {
             configPath = mkOption {
               type = types.str;
-              default = "${config.neo.volumes.appdata}/configuration";
+              default = "./build";
               description = mdDoc "Path to the nixos configuration repository (for CLI)";
             };
             repoUrl = mkOption {

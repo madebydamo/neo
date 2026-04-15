@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand};
-use std::env;
 use std::path::PathBuf;
+use std::{env, path::Path};
 use toml_edit::DocumentMut;
 
 pub mod commands;
@@ -61,7 +61,7 @@ pub fn load_or_default_settings(path: &PathBuf, section: &str) -> Result<Documen
         DocumentMut::new()
     };
     let override_str = option_env!("USER_OVERRIDE_SETTINGS_TOML").unwrap_or("");
-    if !override_str.is_empty() {
+    if !override_str.is_empty() && Path::new(override_str).exists() {
         let override_doc = override_str.parse().context("parse default TOML")?;
         merge_into(&mut doc, &override_doc);
     }
