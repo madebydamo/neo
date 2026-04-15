@@ -4,3 +4,5 @@ DATA
 nixos.qcow2*
 build/
 nixos-efi-vars.fd
+cli/target
+target/rust-analyzer
