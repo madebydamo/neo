@@ -3,6 +3,7 @@
   flake.modules.nixos.core = {
     config,
     lib,
+    pkgs,
     ...
   }: {
     services.openssh = {
@@ -31,14 +32,32 @@
       isNormalUser = true;
       home = "/home/homeserver";
       createHome = true;
+      extraGroups = [
+        "wheel"
+        "docker"
+      ];
     };
+
+    security.sudo.extraRules = [
+      {
+        users = ["homeserver"];
+        commands = [
+          {
+            command = "/run/current-system/sw/bin/nixos-rebuild";
+            options = ["NOPASSWD"];
+          }
+        ];
+      }
+    ];
 
     system.activationScripts.create-volumes = lib.concatStringsSep "\n" (
       lib.map
-      (dir:
-        lib.neo.mkActivationScriptForDir config {
-          dirPath = "${dir}";
-        })
+      (
+        dir:
+          lib.neo.mkActivationScriptForDir config {
+            dirPath = "${dir}";
+          }
+      )
       [
         config.neo.volumes.root
         config.neo.volumes.data

@@ -59,9 +59,9 @@ pub fn activate(config_path: &str, dry_run: bool) -> Result<()> {
             .status();
     }
 
-    let _ = Command::new("nixos-rebuild")
+    let _ = Command::new("sudo")
         .current_dir(config_path)
-        .args(["switch", "--flake", ".#neo"])
+        .args(["nixos-rebuild", "switch", "--flake", ".#neo"])
         .status();
 
     println!("Activated using branch {}", branch);
