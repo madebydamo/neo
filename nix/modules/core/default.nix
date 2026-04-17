@@ -32,23 +32,9 @@
       isNormalUser = true;
       home = "/home/homeserver";
       createHome = true;
-      extraGroups = [
-        "wheel"
-        "docker"
-      ];
+      extraGroups = ["docker"];
+      openssh.authorizedKeys.keys = config.neo.ssh.authorizedKeys;
     };
-
-    security.sudo.extraRules = [
-      {
-        users = ["homeserver"];
-        commands = [
-          {
-            command = "/run/current-system/sw/bin/nixos-rebuild";
-            options = ["NOPASSWD"];
-          }
-        ];
-      }
-    ];
 
     system.activationScripts.create-volumes = lib.concatStringsSep "\n" (
       lib.map

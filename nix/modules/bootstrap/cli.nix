@@ -57,6 +57,8 @@
       };
       env.DEFAULT_SETTINGS_TOML = builtins.readFile defaults;
       env.USER_OVERRIDE_SETTINGS_TOML = userOverrides;
+      env.NIX_BINARY_PATH = "${pkgs.nix}/bin/nix";
+      env.SUDO_BINARY_PATH = "${pkgs.sudo}/bin/sudo";
       meta = {
         description = "Neo CLI - Rust implementation for homeserver bootstrap";
         mainProgram = "neo";

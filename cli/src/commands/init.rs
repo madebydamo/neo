@@ -5,7 +5,15 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use toml_edit::DocumentMut;
 
-pub fn init(config_path: &str, config: &DocumentMut, section: &str, dry_run: bool) -> Result<()> {
+use crate::commands::execute_command;
+
+pub fn init(
+    config_path: &str,
+    config: &DocumentMut,
+    section: &str,
+    dry_run: bool,
+    nix_cmd: &str,
+) -> Result<()> {
     if dry_run {
         println!("DRY-RUN: smart init at {}", config_path);
         let repo_url = config
@@ -83,10 +91,15 @@ pub fn init(config_path: &str, config: &DocumentMut, section: &str, dry_run: boo
             .unwrap_or("template");
 
         if repo_url.is_some() && bootstrap_method == "clone" {
-            let _ = Command::new("git")
-                .current_dir(config_path)
-                .args(["clone", repo_url.unwrap(), "."])
-                .status();
+            let desc = format!("git clone {} (in {})", repo_url.unwrap(), config_path);
+            execute_command(
+                Command::new("git").current_dir(config_path).args([
+                    "clone",
+                    repo_url.unwrap(),
+                    ".",
+                ]),
+                &desc,
+            )?;
         } else {
             let template = config
                 .get(section)
@@ -94,29 +107,35 @@ pub fn init(config_path: &str, config: &DocumentMut, section: &str, dry_run: boo
                 .and_then(|v| v.as_str())
                 .unwrap_or("github:madebydamo/neo#homeserver");
 
-            let _ = Command::new("nix")
-                .current_dir(config_path)
-                .args([
+            let desc = format!(
+                "{} flake init -t {} (in {})",
+                nix_cmd, template, config_path
+            );
+            execute_command(
+                Command::new(nix_cmd).current_dir(config_path).args([
                     "--extra-experimental-features",
                     "nix-command flakes",
                     "flake",
                     "init",
                     "-t",
                     template,
-                ])
-                .status()
-                .context("flake init failed")?;
+                ]),
+                &desc,
+            )?;
 
-            let _ = Command::new("git")
-                .current_dir(config_path)
-                .arg("init")
-                .status();
+            execute_command(
+                Command::new("git").current_dir(config_path).arg("init"),
+                "git init",
+            )?;
 
             if let Some(url) = repo_url {
-                let _ = Command::new("git")
-                    .current_dir(config_path)
-                    .args(["remote", "add", "origin", url])
-                    .status();
+                let desc = format!("git remote add origin {} (in {})", url, config_path);
+                execute_command(
+                    Command::new("git")
+                        .current_dir(config_path)
+                        .args(["remote", "add", "origin", url]),
+                    &desc,
+                )?;
             }
         }
     }
@@ -153,21 +172,24 @@ pub fn init(config_path: &str, config: &DocumentMut, section: &str, dry_run: boo
             .unwrap_or("master"),
     )?;
 
-    crate::commands::generate_hardware::generate_hardware(config_path, false)?;
+    crate::commands::generate_hardware::generate_hardware(config_path, false, nix_cmd)?;
     crate::commands::paste_settings::paste_settings(
         config_path,
         &PathBuf::from("settings.toml"),
         config,
         false,
+        nix_cmd,
     )?;
-    crate::commands::update_inputs::update_inputs(config_path, false)?;
+    crate::commands::update_inputs::update_inputs(config_path, false, nix_cmd)?;
 
     // Final git add + conditional commit (matches Bash exactly)
-    let _ = Command::new("git")
-        .current_dir(config_path)
-        .arg("add")
-        .arg(".")
-        .status();
+    execute_command(
+        Command::new("git")
+            .current_dir(config_path)
+            .arg("add")
+            .arg("."),
+        &format!("git add (in {})", config_path),
+    )?;
 
     if Command::new("git")
         .current_dir(config_path)
@@ -178,10 +200,14 @@ pub fn init(config_path: &str, config: &DocumentMut, section: &str, dry_run: boo
     {
         println!("✓ No changes to commit (everything is up-to-date)");
     } else {
-        let _ = Command::new("git")
-            .current_dir(config_path)
-            .args(["commit", "-m", "Update from neo init"])
-            .status();
+        execute_command(
+            Command::new("git").current_dir(config_path).args([
+                "commit",
+                "-m",
+                "Update from neo init",
+            ]),
+            &format!("git commit (in {})", config_path),
+        )?;
         println!("Committed initial changes");
     }
     println!("Repository ready at {}", config_path);

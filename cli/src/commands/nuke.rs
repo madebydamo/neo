@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
 
-pub fn nuke(config_path: &str, dry_run: bool) -> Result<()> {
+pub fn nuke(config_path: &str, dry_run: bool, _nix_cmd: &str) -> Result<()> {
     if dry_run {
         println!(
             "DRY-RUN: would remove all non-dot files/directories in {}",

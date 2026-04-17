@@ -8,6 +8,7 @@ pub fn paste_settings(
     settings_source: &PathBuf,
     config: &DocumentMut,
     dry_run: bool,
+    _nix_cmd: &str,
 ) -> Result<()> {
     if dry_run {
         println!(

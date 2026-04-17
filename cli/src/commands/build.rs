@@ -1,8 +1,10 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::process::Command;
 use toml_edit::DocumentMut;
 
-pub fn build(config_path: &str, config: &DocumentMut, dry_run: bool) -> Result<()> {
+use crate::commands::execute_command;
+
+pub fn build(config_path: &str, config: &DocumentMut, dry_run: bool, nix_cmd: &str) -> Result<()> {
     let disko_enabled = config
         .get("disko")
         .and_then(|t| t.get("enabled"))
@@ -20,13 +22,15 @@ pub fn build(config_path: &str, config: &DocumentMut, dry_run: bool) -> Result<(
         return Ok(());
     }
     let run_nix = |args: &[&str]| -> Result<()> {
-        Command::new("nix")
-            .current_dir(config_path)
-            .args(["--extra-experimental-features", "nix-command flakes"])
-            .args(args)
-            .status()
-            .map(|_| ())
-            .context("nix command failed")
+        let desc = format!("{} {:?} (in {})", nix_cmd, args, config_path);
+        execute_command(
+            Command::new(nix_cmd)
+                .current_dir(config_path)
+                .args(["--extra-experimental-features", "nix-command flakes"])
+                .args(args),
+            &desc,
+        )?;
+        Ok(())
     };
     run_nix(&["run", ".#write-flake"])?;
     //TODO

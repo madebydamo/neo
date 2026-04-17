@@ -1,50 +1,65 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::process::Command;
 
-pub fn activate(config_path: &str, dry_run: bool) -> Result<()> {
+use crate::commands::execute_command;
+
+pub fn activate(config_path: &str, dry_run: bool, nix_cmd: &str, sudo_cmd: &str) -> Result<()> {
     if dry_run {
         println!(
             "DRY-RUN: activate sequence (write-flake, build, git branch, nixos-rebuild switch)"
         );
         return Ok(());
     }
-    Command::new("nix")
-        .current_dir(config_path)
-        .args([
+    let desc = format!("{} run .#write-flake (in {})", nix_cmd, config_path);
+    execute_command(
+        Command::new(nix_cmd).current_dir(config_path).args([
             "--extra-experimental-features",
             "nix-command flakes",
             "run",
             ".#write-flake",
-        ])
-        .status()
-        .context("write-flake failed")?;
+        ]),
+        &desc,
+    )?;
 
-    let _ = Command::new("nix")
-        .current_dir(config_path)
-        .args([
+    let desc = format!(
+        "{} build .#nixosConfigurations.neo.config.system.build.toplevel (in {})",
+        nix_cmd, config_path
+    );
+    execute_command(
+        Command::new(nix_cmd).current_dir(config_path).args([
             "--extra-experimental-features",
             "nix-command flakes",
             "build",
             ".#nixosConfigurations.neo.config.system.build.toplevel",
-        ])
-        .status();
+        ]),
+        &desc,
+    )?;
 
     let branch = Command::new("date")
         .arg("+%Y%m%d-%H%M%S")
         .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .map(|o| {
+            std::string::String::from_utf8_lossy(&o.stdout)
+                .trim()
+                .to_string()
+        })
         .unwrap_or_else(|_| "rebuild".to_string());
 
-    let _ = Command::new("git")
-        .current_dir(config_path)
-        .args(["switch", "-C", &branch])
-        .status();
+    let git_desc = |action: &str| format!("git {} (in {})", action, config_path);
+    execute_command(
+        Command::new("git")
+            .current_dir(config_path)
+            .args(["switch", "-C", &branch]),
+        &git_desc("switch -C"),
+    )?;
 
-    let _ = Command::new("git")
-        .current_dir(config_path)
-        .arg("add")
-        .arg(".")
-        .status();
+    execute_command(
+        Command::new("git")
+            .current_dir(config_path)
+            .arg("add")
+            .arg("."),
+        &git_desc("add"),
+    )?;
 
     if Command::new("git")
         .current_dir(config_path)
@@ -53,16 +68,29 @@ pub fn activate(config_path: &str, dry_run: bool) -> Result<()> {
         .map(|s| !s.success())
         .unwrap_or(false)
     {
-        let _ = Command::new("git")
-            .current_dir(config_path)
-            .args(["commit", "-m", &format!("Rebuild: {}", branch)])
-            .status();
+        execute_command(
+            Command::new("git").current_dir(config_path).args([
+                "commit",
+                "-m",
+                &format!("Rebuild: {}", branch),
+            ]),
+            &git_desc("commit"),
+        )?;
     }
 
-    let _ = Command::new("sudo")
-        .current_dir(config_path)
-        .args(["nixos-rebuild", "switch", "--flake", ".#neo"])
-        .status();
+    let desc = format!(
+        "{} nixos-rebuild switch --flake .#neo (in {})",
+        sudo_cmd, config_path
+    );
+    execute_command(
+        Command::new(sudo_cmd).current_dir(config_path).args([
+            "nixos-rebuild",
+            "switch",
+            "--flake",
+            ".#neo",
+        ]),
+        &desc,
+    )?;
 
     println!("Activated using branch {}", branch);
     Ok(())

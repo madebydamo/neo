@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand};
 use std::path::PathBuf;
+use std::process::Command;
 use std::{env, path::Path};
 use toml_edit::DocumentMut;
 
@@ -14,7 +15,7 @@ use crate::commands::{
 #[command(name = "neo", version, about = "Neo Homeserver CLI", long_about = None)]
 struct Cli {
     /// Path to settings.toml. Defaults to ./settings.toml if it exists; falls back to Nix-provided or hardcoded defaults.
-    #[arg(long, value_name = "FILE", default_value_os_t = PathBuf::from("settings.toml"), global = true)]
+    #[arg(long, env = "NEO_SETTINGS", value_name = "FILE", default_value_os_t = PathBuf::from("settings.toml"), global = true)]
     settings: PathBuf,
 
     /// Enable dry-run mode: print actions without making changes or running commands (for safety/validation).
@@ -37,6 +38,14 @@ struct Cli {
     #[arg(long, env = "NEO_SECTION", default_value = "cli", global = true)]
     section: String,
 
+    /// path to nix executable
+    #[arg(long, env = "NIX_BINARY_PATH", global = true)]
+    nix_path: Option<String>,
+
+    /// path to sudo executable
+    #[arg(long, env = "SUDO_BINARY_PATH", global = true)]
+    sudo_path: Option<String>,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -53,7 +62,7 @@ enum Commands {
     Nuke,
 }
 
-pub fn load_or_default_settings(path: &PathBuf, section: &str) -> Result<DocumentMut> {
+pub fn load_or_default_settings(path: &PathBuf, _section: &str) -> Result<DocumentMut> {
     let default_str = option_env!("DEFAULT_SETTINGS_TOML").unwrap_or("");
     let mut doc = if !default_str.is_empty() {
         default_str.parse().context("parse default TOML")?
@@ -112,14 +121,28 @@ fn run(cli: Cli) -> Result<()> {
     let settings_path = if cli.settings.exists() {
         cli.settings.clone()
     } else {
-        PathBuf::from(env::var("NEO_SETTINGS").unwrap_or_else(|_| "settings.toml".into()))
+        PathBuf::from("settings.toml")
     };
 
     let section = if cli.section.is_empty() {
-        env::var("NEO_SECTION").unwrap_or_else(|_| "cli".into())
+        "cli".into()
     } else {
         cli.section.clone()
     };
+
+    if section == "nixos" && env::var("USER").unwrap_or_default() != "homeserver" {
+        let sudo_bin = cli.sudo_path.as_deref().unwrap_or("sudo");
+        let status = Command::new(sudo_bin)
+            .arg("-u")
+            .arg("homeserver")
+            .arg(
+                "--preserve-env=NEO_SETTINGS,NEO_SECTION,NEO_NEO_INPUT,NEO_TEMPLATE,NEO_REMOTE_URL,NIX_BINARY_PATH,SUDO_BINARY_PATH",
+            )
+            .args(env::args())
+            .status()
+            .context("failed to spawn sudo")?;
+        std::process::exit(status.code().unwrap_or(1));
+    }
 
     let mut doc = load_or_default_settings(&settings_path, &section)?;
     // Merge CLI overrides (safe)
@@ -156,18 +179,22 @@ fn run(cli: Cli) -> Result<()> {
         .to_string();
 
     let dry_run = cli.dry_run;
+    let nix_cmd = cli.nix_path.as_deref().unwrap_or("nix");
+    let sudo_cmd = cli.sudo_path.as_deref().unwrap_or("sudo");
     if dry_run {
         println!("=== DRY-RUN ENABLED for {:?} ===", command);
     }
 
     match command {
-        Commands::GenerateHardware => generate_hardware(&config_path, dry_run),
-        Commands::PasteSettings => paste_settings(&config_path, &settings_path, &doc, dry_run),
-        Commands::Init => init(&config_path, &doc, &section, dry_run),
-        Commands::UpdateInputs => update_inputs(&config_path, dry_run),
-        Commands::Update => update(&config_path, dry_run),
-        Commands::Build => build(&config_path, &doc, dry_run),
-        Commands::Activate => activate(&config_path, dry_run),
-        Commands::Nuke => nuke(&config_path, dry_run),
+        Commands::GenerateHardware => generate_hardware(&config_path, dry_run, nix_cmd),
+        Commands::PasteSettings => {
+            paste_settings(&config_path, &settings_path, &doc, dry_run, nix_cmd)
+        }
+        Commands::Init => init(&config_path, &doc, &section, dry_run, nix_cmd),
+        Commands::UpdateInputs => update_inputs(&config_path, dry_run, nix_cmd),
+        Commands::Update => update(&config_path, dry_run, nix_cmd),
+        Commands::Build => build(&config_path, &doc, dry_run, nix_cmd),
+        Commands::Activate => activate(&config_path, dry_run, nix_cmd, sudo_cmd),
+        Commands::Nuke => nuke(&config_path, dry_run, nix_cmd),
     }
 }
