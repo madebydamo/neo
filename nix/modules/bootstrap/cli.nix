@@ -1,10 +1,12 @@
 {
   lib,
   self,
+  inputs,
   ...
 }: let
   packageWrapper = pkgs: cfg: let
-    src = self + "/cli";
+    craneLib = inputs.crane.mkLib pkgs;
+    src = craneLib.cleanCargoSource (self + "/cli");
     defaults = pkgs.writeText "default-settings.toml" ''
       [nixos]
       enabled = ${
@@ -42,34 +44,37 @@
         else "false"
       }
     '';
-    # userOverrides = ../../../settings.toml;
     userOverrides =
       if builtins.pathExists ../../../settings.toml
       then builtins.readFile ../../../settings.toml
       else "";
-  in
-    pkgs.rustPlatform.buildRustPackage {
+    common = {
       pname = "neo";
       version = "0.1.0";
       inherit src;
-      cargoLock = {
-        lockFile = src + "/Cargo.lock";
-      };
-      env.DEFAULT_SETTINGS_TOML = builtins.readFile defaults;
-      env.USER_OVERRIDE_SETTINGS_TOML = userOverrides;
-      env.NIX_BINARY_PATH = "${pkgs.nix}/bin/nix";
-      env.SUDO_BINARY_PATH = "${pkgs.sudo}/bin/sudo";
-      meta = {
-        description = "Neo CLI - Rust implementation for homeserver bootstrap";
-        mainProgram = "neo";
-      };
-      doCheck = false;
       nativeBuildInputs = [
         pkgs.pkg-config
         pkgs.git
       ];
       buildInputs = [pkgs.openssl];
+      env.DEFAULT_SETTINGS_TOML = builtins.readFile defaults;
+      env.USER_OVERRIDE_SETTINGS_TOML = userOverrides;
+      env.NIX_BINARY_PATH = "${pkgs.nix}/bin/nix";
+      env.SUDO_BINARY_PATH = "${pkgs.sudo}/bin/sudo";
+      doCheck = false;
     };
+    deps = craneLib.buildDepsOnly common;
+  in
+    craneLib.buildPackage (
+      common
+      // {
+        cargoArtifacts = deps;
+        meta = {
+          description = "Neo CLI - Rust implementation for homeserver bootstrap";
+          mainProgram = "neo";
+        };
+      }
+    );
   cfgPackage = self.nixosConfigurations.homeserver.config.neo;
 in {
   perSystem = {pkgs, ...}: {
