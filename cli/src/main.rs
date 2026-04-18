@@ -7,8 +7,9 @@ use toml_edit::DocumentMut;
 
 pub mod commands;
 use crate::commands::{
-    activate::activate, build::build, generate_hardware::generate_hardware, init::init, nuke::nuke,
-    paste_settings::paste_settings, update::update, update_inputs::update_inputs,
+    activate::activate, build::build, execute_command, generate_hardware::generate_hardware,
+    init::init, nuke::nuke, paste_settings::paste_settings, update::update,
+    update_inputs::update_inputs,
 };
 
 #[derive(Parser)]
@@ -132,16 +133,13 @@ fn run(cli: Cli) -> Result<()> {
 
     if section == "nixos" && env::var("USER").unwrap_or_default() != "homeserver" {
         let sudo_bin = cli.sudo_path.as_deref().unwrap_or("sudo");
-        let status = Command::new(sudo_bin)
-            .arg("-u")
+        execute_command(Command::new(sudo_bin).arg("-u")
             .arg("homeserver")
             .arg(
                 "--preserve-env=NEO_SETTINGS,NEO_SECTION,NEO_NEO_INPUT,NEO_TEMPLATE,NEO_REMOTE_URL,NIX_BINARY_PATH,SUDO_BINARY_PATH",
             )
-            .args(env::args())
-            .status()
-            .context("failed to spawn sudo")?;
-        std::process::exit(status.code().unwrap_or(1));
+            .args(env::args()), "sudo -u homeserver")?;
+        return Ok(());
     }
 
     let mut doc = load_or_default_settings(&settings_path, &section)?;
