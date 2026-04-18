@@ -11,6 +11,7 @@
       neo
       pkgs.git
       pkgs.nixos-rebuild
+      pkgs.nixos-install-tools
       pkgs.coreutils
       pkgs.bash
     ];
