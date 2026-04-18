@@ -76,6 +76,7 @@
     "home-manager": {
       "inputs": {
         "nixpkgs": [
+          "nix-openclaw",
           "nixpkgs"
         ]
       },
@@ -113,9 +114,7 @@
         "flake-utils": "flake-utils",
         "home-manager": "home-manager",
         "nix-steipete-tools": "nix-steipete-tools",
-        "nixpkgs": [
-          "nixpkgs"
-        ]
+        "nixpkgs": "nixpkgs_2"
       },
       "locked": {
         "lastModified": 1773143118,
@@ -167,6 +166,22 @@
     },
     "nixpkgs_2": {
       "locked": {
+        "lastModified": 1776169885,
+        "narHash": "sha256-l/iNYDZ4bGOAFQY2q8y5OAfBBtrDAaPuRQqWaFHVRXM=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "4bd9165a9165d7b5e33ae57f3eecbcb28fb231c9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
+      "locked": {
         "lastModified": 1775595990,
         "narHash": "sha256-OEf7YqhF9IjJFYZJyuhAypgU+VsRB5lD4DuiMws5Ltc=",
         "owner": "NixOS",
@@ -188,7 +203,7 @@
         "flake-parts": "flake-parts",
         "import-tree": "import-tree",
         "nix-openclaw": "nix-openclaw",
-        "nixpkgs": "nixpkgs_2"
+        "nixpkgs": "nixpkgs_3"
       }
     },
     "systems": {
