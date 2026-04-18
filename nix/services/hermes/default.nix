@@ -10,6 +10,7 @@
 {inputs, ...}: {
   flake.modules.nixos.hermes = {
     config,
+    pkgs,
     lib,
     ...
   }: let
@@ -92,16 +93,18 @@
 
         # Disable ALL sandboxing/hardening (full system access like OpenClaw)
         systemd.services.hermes-agent.serviceConfig = {
+          ReadWritePaths = ["/"];
           NoNewPrivileges = lib.mkForce false;
-          ProtectSystem = lib.mkForce false;
           ProtectHome = lib.mkForce false;
+          ProtectSystem = lib.mkForce false;
           PrivateTmp = lib.mkForce false;
-          ReadWritePaths = lib.mkForce ["/"];
-          CapabilityBoundingSet = lib.mkForce [""];
-          RestrictAddressFamilies = lib.mkForce [""];
           RestrictNamespaces = lib.mkForce false;
-          MemoryDenyWriteExecute = lib.mkForce false;
           LockPersonality = lib.mkForce false;
+          MemoryDenyWriteExecute = lib.mkForce false;
+          UMask = "0007";
+
+          CapabilityBoundingSet = ["CAP_SETUID" "CAP_SETGID" "CAP_AUDIT_WRITE" "CAP_DAC_OVERRIDE" "CAP_SYS_ADMIN"];
+          AmbientCapabilities = ["CAP_SETUID" "CAP_SETGID" "CAP_SYS_ADMIN"];
         };
 
         system.activationScripts.hermes-workspace = lib.neo.mkActivationScriptForDir config {
