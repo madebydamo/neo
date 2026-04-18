@@ -38,13 +38,7 @@
         mode = "0755";
       };
       script = ''
-        CONFIG_PATH="${cfg.configPath}"
-        if [ ! -d "$CONFIG_PATH/.git" ]; then
-          echo "Bootstrapping using neo init at $CONFIG_PATH..."
-          ${neo}/bin/neo init
-        else
-          echo "✓ Git repository already exists at $CONFIG_PATH"
-        fi
+        ${neo}/bin/neo init
       '';
     };
 
@@ -61,7 +55,6 @@
         Group = "homeserver";
       };
       script = ''
-        # cd "${cfg.configPath}"
         ${neo}/bin/neo update && ${neo}/bin/neo activate
       '';
     };
