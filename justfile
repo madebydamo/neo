@@ -7,8 +7,13 @@ disk_image := "nixos.qcow2"
 build:
   #!/usr/bin/env bash
   set -euo pipefail
+  echo $(pwd)
   if [ ! -f ./settings.toml ]; then
-    printf '[nixos]\nenabled = true\nconfigPath = "./build"\nneoInput = "git+file:.."\ntemplate = "..#homeserver"\nbootstrapEnabled = true\nautoUpdateEnabled = false\n' > settings.toml
+    PWD=$(pwd)
+    CONFIG_PATH="${PWD}/build"
+    NEO_INPUT="git+file:${PWD}"
+    printf '[nixos]\nenabled = true\nconfigPath = "%s"\nneoInput = "%s"\ntemplate = "%s#homeserver"\nbootstrapEnabled = true\nautoUpdateEnabled = false\n' \
+      "$CONFIG_PATH" "$NEO_INPUT" "$NEO_INPUT" > settings.toml
     git add settings.toml
   fi
   nix run '.#neo' nuke
