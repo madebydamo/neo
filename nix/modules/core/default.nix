@@ -32,7 +32,7 @@
       isNormalUser = true;
       home = "/home/homeserver";
       createHome = true;
-      extraGroups = ["docker"];
+      extraGroups = ["docker" "wheel"];
       openssh.authorizedKeys.keys = config.neo.ssh.authorizedKeys;
     };
 
