@@ -69,7 +69,7 @@
         users = ["homeserver"];
         commands = [
           {
-            command = "${pkgs.nixos-rebuild}bin/nixos-rebuild";
+            command = "${pkgs.nixos-rebuild}/bin/nixos-rebuild";
             options = [
               "NOPASSWD"
               "SETENV"
