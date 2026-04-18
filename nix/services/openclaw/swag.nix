@@ -17,9 +17,9 @@
 
         location / {
           include /config/nginx/proxy.conf;
-        proxy_pass http://host.docker.internal:${toString cfg.gatewayPort}/;
-        ${lib.neo.authBlock config cfg}
-      }
+          proxy_pass http://host.docker.internal:${toString cfg.gatewayPort}/;
+          ${lib.neo.authBlock config cfg}
+        }
       ${lib.neo.authLocations config cfg}
       }
     '';
