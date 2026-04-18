@@ -16,6 +16,10 @@
       url = "github:vic/import-tree";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    hermes-agent = {
+      url = "github:NousResearch/hermes-agent";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     nix-openclaw.url = "github:openclaw/nix-openclaw";
     crane.url = "github:ipetkov/crane";
