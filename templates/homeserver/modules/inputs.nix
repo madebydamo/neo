@@ -11,9 +11,10 @@
   neoInput = neo.nixos.neoInput or "github:madebydamo/neo";
 in {
   flake-file.inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     flake-file.url = lib.mkDefault "github:vic/flake-file";
     neo.url = neoInput;
+    neo.inputs.nixpkgs.follows = "nixpkgs";
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
   };
