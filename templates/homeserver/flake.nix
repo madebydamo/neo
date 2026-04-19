@@ -15,7 +15,7 @@
     };
     import-tree.url = "github:vic/import-tree";
     neo = {
-      url = "git+file:/home/damo/Documents/projects/homeserver/neo";
+      url = "github:madebydamo/neo";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
