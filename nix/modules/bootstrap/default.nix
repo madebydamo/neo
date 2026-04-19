@@ -49,10 +49,12 @@
       inherit environment;
       serviceConfig = {
         Type = "oneshot";
-        RemainAfterExit = false;
+        RemainAfterExit = true;
         User = "homeserver";
         Group = "homeserver";
       };
+      stopIfChanged = false;
+      restartIfChanged = false;
       script = ''
         ${neo}/bin/neo update && ${neo}/bin/neo activate
       '';
