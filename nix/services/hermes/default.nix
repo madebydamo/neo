@@ -38,6 +38,9 @@
         enabled = true;
         port = cfg.gatewayPort;
       };
+      dashboard = {
+        theme = "default";
+      };
     };
 
     hermesSettings = lib.recursiveUpdate baseSettings cfg.extraConfig;
@@ -50,6 +53,7 @@
         TELEGRAM_BOT_TOKEN = cfg.telegramBotToken;
         HERMES_GATEWAY_TOKEN = cfg.gatewayToken;
         TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," (map toString cfg.telegramAllowedUserId);
+        GATEWAY_HEALTH_URL = "http://127.0.0.1:${toString cfg.gatewayPort}";
       }
       // cfg.extraEnvironment;
   in {
@@ -115,6 +119,35 @@
         };
 
         environment.variables.HERMES_HOME = "${cfg.stateDir}/.hermes";
+
+        # Web dashboard service — runs `hermes dashboard`, uses tinyauth (via SWAG), proper defaults, shares state with gateway
+        systemd.services.hermes-dashboard = {
+          description = "Hermes Agent Web Dashboard";
+          wantedBy = ["multi-user.target"];
+          after = ["hermes-agent.service" "network-online.target"];
+          wants = ["network-online.target"];
+          requires = ["hermes-agent.service"];
+
+          serviceConfig = {
+            User = "hermes";
+            Group = "hermes";
+            WorkingDirectory = cfg.stateDir;
+            ExecStart = let
+              pkg = config.services.hermes-agent.package;
+            in "${pkg}/bin/hermes dashboard --host 0.0.0.0 --port ${toString cfg.dashboardPort} --no-open --insecure";
+            Restart = "always";
+            RestartSec = 5;
+
+            # Relaxed security matching the gateway (dashboard manages configs, API keys, sessions)
+            ReadWritePaths = ["/"];
+            NoNewPrivileges = lib.mkForce false;
+            ProtectHome = lib.mkForce false;
+            ProtectSystem = lib.mkForce false;
+            PrivateTmp = lib.mkForce false;
+          };
+
+          environment = hermesEnv;
+        };
       }
 
       (lib.mkIf (cfg.xaiApiKey == null && cfg.anthropicApiKey == null && cfg.openaiApiKey == null) {

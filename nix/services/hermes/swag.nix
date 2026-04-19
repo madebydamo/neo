@@ -1,4 +1,6 @@
 # Hermes reverse proxy configuration for SWAG.
+# Points to dashboardPort (default 9119) so https://hermes.* serves the web UI.
+# Uses tinyauth for authentication via authBlock + authLocations (enabled by default in mkReverseProxyOptions).
 {...}: {
   flake.modules.nixos.hermes-swag = {
     config,
@@ -17,7 +19,7 @@
 
         location / {
           include /config/nginx/proxy.conf;
-          proxy_pass http://host.docker.internal:${toString cfg.gatewayPort}/;
+          proxy_pass http://host.docker.internal:${toString cfg.dashboardPort}/;
           ${lib.neo.authBlock config cfg}
         }
       ${lib.neo.authLocations config cfg}

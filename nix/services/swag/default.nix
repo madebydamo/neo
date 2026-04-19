@@ -24,6 +24,12 @@
         ) (attrValues appServices);
       in
         mkIf cfg.enabled {
+          networking.firewall.extraCommands = "
+            iptables -I nixos-fw 1 -i br+ -j ACCEPT
+          ";
+          networking.firewall.extraStopCommands = "
+            iptables -D nixos-fw -i br+ -j ACCEPT
+          ";
           systemd.services.docker-swag.preStart = lib.concatStringsSep "\n" ([
               "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'"
               (lib.neo.mkActivationScriptForDir config {

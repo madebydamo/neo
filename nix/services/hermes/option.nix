@@ -19,6 +19,12 @@
                 description = lib.mdDoc "Port for the Hermes gateway/API";
               };
 
+              dashboardPort = mkOption {
+                type = types.port;
+                default = 9119;
+                description = lib.mdDoc "Port for the Hermes web dashboard UI (uses tinyauth via SWAG)";
+              };
+
               gatewayToken = mkOption {
                 type = types.nullOr types.str;
                 default = null;

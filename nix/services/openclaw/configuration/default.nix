@@ -90,7 +90,6 @@
           };
         };
 
-        networking.firewall.allowedTCPPorts = [cfg.gatewayPort];
         security.sudo.extraRules = [
           {
             users = ["openclaw"];
