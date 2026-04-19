@@ -97,10 +97,6 @@ in {
         pkgs.nixos-install-tools
         pkgs.coreutils
       ];
-      environment.variables = {
-        NEO_SETTINGS = "${cfg.nixos.configPath}/settings.toml";
-        NEO_SECTION = "nixos";
-      };
     };
   };
 }

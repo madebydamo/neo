@@ -15,9 +15,12 @@ use crate::commands::{
 #[derive(Parser)]
 #[command(name = "neo", version, about = "Neo Homeserver CLI", long_about = None)]
 struct Cli {
-    /// Path to settings.toml. Defaults to ./settings.toml if it exists; falls back to Nix-provided or hardcoded defaults.
-    #[arg(long, env = "NEO_SETTINGS", value_name = "FILE", default_value_os_t = PathBuf::from("settings.toml"), global = true)]
-    settings: PathBuf,
+    /// Path to settings.toml. If /etc/neo/settings.toml exists it is used as the default
+    /// source (esp. for `paste-settings`, which writes merged config to configPath/settings.toml).
+    /// Falls back to ./settings.toml (if present) or baked Nix defaults. The TOML (or defaults)
+    /// defines configPath per section.
+    #[arg(long, value_name = "FILE", global = true)]
+    settings: Option<PathBuf>,
 
     /// Enable dry-run mode: print actions without making changes or running commands (for safety/validation).
     #[arg(long, default_value_t = false, global = true)]
@@ -35,8 +38,10 @@ struct Cli {
     #[arg(long, env = "NEO_REMOTE_URL", global = true)]
     remote_url: Option<String>,
 
-    /// Which settings section to use as base defaults ("cli" or "nixos"). Default: cli.
-    #[arg(long, env = "NEO_SECTION", default_value = "cli", global = true)]
+    /// Which settings section to use as base defaults ("cli" or "nixos").
+    /// If omitted, defaults to "nixos" if /etc/neo/settings.toml available, else "cli".
+    /// Program arg or NEO_SECTION= still overrides (e.g. to force cli on full install).
+    #[arg(long, env = "NEO_SECTION", default_value = "", global = true)]
     section: String,
 
     /// path to nix executable
@@ -119,16 +124,21 @@ fn run(cli: Cli) -> Result<()> {
         }
     };
 
-    let settings_path = if cli.settings.exists() {
-        cli.settings.clone()
+    let etc_settings = PathBuf::from("/etc/neo/settings.toml");
+    let settings_path = if cli.settings.clone().map_or(false, |s| s.exists()) {
+        cli.settings.unwrap().clone()
+    } else if etc_settings.exists() {
+        etc_settings.clone()
     } else {
         PathBuf::from("settings.toml")
     };
 
-    let section = if cli.section.is_empty() {
-        "cli".into()
-    } else {
+    let section = if !cli.section.is_empty() {
         cli.section.clone()
+    } else if etc_settings.exists() {
+        "nixos".to_string()
+    } else {
+        "cli".to_string()
     };
 
     if section == "nixos" && env::var("USER").unwrap_or_default() != "homeserver" {
@@ -136,7 +146,7 @@ fn run(cli: Cli) -> Result<()> {
         execute_command(Command::new(sudo_bin).arg("-u")
             .arg("homeserver")
             .arg(
-                "--preserve-env=NEO_SETTINGS,NEO_SECTION,NEO_NEO_INPUT,NEO_TEMPLATE,NEO_REMOTE_URL,NIX_BINARY_PATH,SUDO_BINARY_PATH",
+                "--preserve-env=NEO_NEO_INPUT,NEO_TEMPLATE,NEO_REMOTE_URL,NIX_BINARY_PATH,SUDO_BINARY_PATH",
             )
             .args(env::args()), "sudo -u homeserver")?;
         return Ok(());

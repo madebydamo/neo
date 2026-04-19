@@ -16,8 +16,6 @@
       pkgs.bash
     ];
     environment = {
-      NEO_SETTINGS = "${cfg.configPath}/settings.toml";
-      NEO_SECTION = "nixos";
       NIX_BINARY_PATH = "${pkgs.nix}/bin/nix";
       SUDO_BINARY_PATH = "/run/wrappers/bin/sudo";
     };
