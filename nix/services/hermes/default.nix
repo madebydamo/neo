@@ -18,7 +18,7 @@
 
     baseSettings = {
       model = {
-        default = cfg.defaultModel or "xai/grok-4.20-0309-reasoning";
+        default = cfg.defaultModel;
         provider =
           if (cfg.xaiApiKey != null)
           then "xai"
