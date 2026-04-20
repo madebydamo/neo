@@ -1,10 +1,6 @@
 # SWAG reverse proxy service options.
 {...}: {
-  flake.modules.nixos.swag-option = {
-    config,
-    lib,
-    ...
-  }:
+  flake.modules.nixos.swag-option = {lib, ...}:
     with lib; {
       options.neo.services.swag = mkOption {
         type = types.submodule {
@@ -34,6 +30,18 @@
               type = types.attrsOf types.str;
               default = {};
               description = lib.mdDoc "Additional volume mounts";
+            };
+            localHttpPort = mkOption {
+              type = types.port;
+              internal = true;
+              default = 80;
+              description = lib.mdDoc "Local HTTP port for SWAG container (overridden to 9980 with streamproxy)";
+            };
+            localHttpsPort = mkOption {
+              type = types.port;
+              internal = true;
+              default = 443;
+              description = lib.mdDoc "Local HTTPS port for SWAG container (overridden to 9981 with streamproxy)";
             };
           };
         };

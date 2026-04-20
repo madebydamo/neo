@@ -61,8 +61,8 @@
               "${config.neo.volumes.appdata}/swag:/config"
             ];
             ports = [
-              "80:80"
-              "443:443"
+              "${toString cfg.localHttpPort}:80"
+              "${toString cfg.localHttpsPort}:443"
             ];
             capabilities = {
               NET_ADMIN = true;
