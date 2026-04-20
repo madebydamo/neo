@@ -4,11 +4,7 @@
   ...
 }: {
   systems = ["x86_64-linux"];
-  perSystem = {
-    config,
-    pkgs,
-    ...
-  }: {
+  perSystem = {pkgs, ...}: {
     formatter = pkgs.alejandra;
   };
   flake = {...}: let
@@ -27,7 +23,6 @@
         [
           inputs.neo.nixosModules.default
           inputs.neo.nixosModules.base
-          inputs.disko.nixosModules.disko
           config.flake.modules.nixos.settings
         ]
         ++ hardwareConfig;
@@ -41,7 +36,6 @@
         inputs.neo.nixosModules.default
         inputs.neo.nixosModules.base
         inputs.neo.nixosModules.vm
-        inputs.disko.nixosModules.disko
         config.flake.modules.nixos.settings
       ];
     };

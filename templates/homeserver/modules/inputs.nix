@@ -15,7 +15,5 @@ in {
     flake-file.url = lib.mkDefault "github:vic/flake-file";
     neo.url = neoInput;
     neo.inputs.nixpkgs.follows = "nixpkgs";
-    disko.url = "github:nix-community/disko";
-    disko.inputs.nixpkgs.follows = "nixpkgs";
   };
 }
