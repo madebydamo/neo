@@ -180,6 +180,13 @@ pub fn init(
         false,
         nix_cmd,
     )?;
+    execute_command(
+        Command::new("git")
+            .current_dir(config_path)
+            .arg("add")
+            .arg("."),
+        &format!("git add (in {})", config_path),
+    )?;
     crate::commands::update_inputs::update_inputs(config_path, false, nix_cmd)?;
 
     // Final git add + conditional commit (matches Bash exactly)
