@@ -62,8 +62,12 @@
 
     systemd.timers.neo-auto-update = lib.mkIf cfg.autoUpdateEnabled {
       wantedBy = ["timers.target"];
-      timerConfig.OnCalendar = cfg.autoUpdateTimer;
-      timerConfig.Persistent = true;
+      timerConfig = {
+        OnCalendar = cfg.autoUpdateTimer;
+        Persistent = false;
+        RandomizedDelaySec = "5m";
+        AccuracySec = "1m";
+      };
     };
     security.sudo.extraRules = [
       {
