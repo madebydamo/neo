@@ -7,9 +7,17 @@
   }: let
     deviceCfg = config.neo.device;
   in {
-    boot.loader.grub.enable = false;
-    boot.loader.systemd-boot.enable = true;
-    boot.loader.efi.canTouchEfiVariables = true;
+    boot.loader = {
+      grub = {
+        enable = true;
+        efiSupport = true;
+        efiInstallAsRemovable = true;
+        device = "nodev";
+        default = "saved";
+        configurationLimit = 10;
+      };
+      efi.canTouchEfiVariables = false;
+    };
 
     networking.hostName = deviceCfg.hostname;
 
