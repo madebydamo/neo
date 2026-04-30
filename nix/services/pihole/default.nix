@@ -23,7 +23,7 @@
       config = mkIf cfg.enabled {
         systemd.services.docker-pihole.preStart = lib.concatStringsSep "\n" [
           (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${piholeData}/pihole";
+            dirPath = "${piholeData}";
           })
         ];
 
@@ -45,7 +45,7 @@
               FTLCONF_misc_dnsmasq_lines = dnsMasqLines;
             };
           volumes = [
-            "${piholeData}/pihole:/etc/pihole"
+            "${piholeData}:/etc/pihole"
           ];
           ports = [
             "53:53/tcp"
