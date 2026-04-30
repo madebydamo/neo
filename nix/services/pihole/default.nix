@@ -38,6 +38,7 @@
           environment =
             {
               TZ = config.neo.timeZone;
+              FTLCONF_dns_listeningMode = "ALL";
               FTLCONF_webserver_api_password = cfg.webPassword;
               FTLCONF_dns_upstreams = cfg.upstream;
             }
