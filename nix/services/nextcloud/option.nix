@@ -63,19 +63,5 @@
         default = {};
         description = mdDoc "Nextcloud service configuration";
       };
-      options.neo.services.collabora = mkOption {
-        type = types.submodule {
-          options =
-            {
-              enabled = mkEnableOption (mdDoc "Collarbora real time collaboration platform");
-            }
-            // lib.neo.mkReverseProxyOptions {
-              subdomain = "collabora";
-              auth.enabled = false;
-            };
-        };
-        default = {};
-        description = mdDoc "Nextcloud service configuration";
-      };
     };
 }

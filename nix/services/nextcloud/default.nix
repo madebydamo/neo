@@ -8,11 +8,9 @@
   }:
     with lib; let
       cfg = config.neo.services.nextcloud;
-      collaboraCfg = config.neo.services.collabora;
       appdata = "${config.neo.volumes.appdata}/nextcloud";
       domain = config.neo.services.swag.domain;
       nextcloudUrl = "${cfg.subdomain}.${domain}";
-      collaboraUrl = "${collaboraCfg.subdomain}.${domain}";
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-nextcloud-db.preStart = lib.neo.mkActivationScriptForDir config {
@@ -25,7 +23,6 @@
           user = "33";
           group = "33";
         };
-
         virtualisation.oci-containers.containers = {
           nextcloud-db = {
             image = "mariadb:10.6";
@@ -103,31 +100,15 @@
               "--network=internal"
             ];
           };
-
-          nextcloud-collabora = {
-            image = "collabora/code";
-            autoStart = true;
-            environment = {
-              domain = "";
-              aliasgroup1 = "https://${nextcloudUrl}:443,https://${builtins.replaceStrings ["."] ["\\\\."] nextcloudUrl}:443";
-              server_name = collaboraUrl;
-              extra_params = "--o:ssl.enable=false --o:ssl.termination=true";
-            };
-            extraOptions = [
-              "--network=internal"
-              "--cap-add=MKNOD"
-            ];
-          };
         };
 
         # Setup service to configure Nextcloud via occ. Retries every 60s until DB and container are ready.
         systemd.services.nextcloud-setup = {
-          description = "Nextcloud post-install configuration (maintenance window, defaults, collabora)";
+          description = "Nextcloud post-install configuration (maintenance window, defaults)";
           after = [
             "docker-nextcloud-db.service"
             "docker-nextcloud-redis.service"
             "docker-nextcloud.service"
-            "docker-nextcloud-collabora.service"
           ];
           requires = [
             "docker-nextcloud-db.service"
@@ -147,16 +128,6 @@
           script = let
             docker = "${pkgs.docker}/bin/docker";
             occ = "${docker} exec --user www-data nextcloud php occ";
-            collaboraSetup = optionalString collaboraCfg.enabled ''
-              echo "Configuring Collabora integration..."
-              ${occ} app:install richdocuments || true
-              # ${occ} config:app:set richdocuments wopi_url --value 'https://${collaboraUrl}'
-              ${occ} config:app:set richdocuments wopi_url --value 'http://nextcloud-collabora:9980'
-              ${occ} config:app:set richdocuments public_wopi_url --value 'https://${collaboraUrl}'
-              ${occ} config:app:set richdocuments wopi_allowlist --value="0.0.0.0/0"
-              ${occ} app:enable richdocuments
-              ${occ} richdocuments:activate-config
-            '';
           in ''
             echo "Running Nextcloud setup..."
             # Fails (and systemd retries) if DB is not ready or container not running
@@ -165,7 +136,6 @@
             ${occ} config:system:set instanceid --value '${cfg.instanceId}'
             ${occ} config:system:set overwritehost --value '${nextcloudUrl}'
             ${occ} config:system:set trusted_proxies 0 --value '0.0.0.0/0' --type string
-            ${collaboraSetup}
             ${occ} maintenance:repair --include-expensive
             ${occ} db:add-missing-indices
             echo "Nextcloud setup completed."
