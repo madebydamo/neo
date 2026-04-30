@@ -64,7 +64,7 @@
       wantedBy = ["timers.target"];
       timerConfig = {
         OnCalendar = cfg.autoUpdateTimer;
-        Persistent = false;
+        Persistent = true;
         RandomizedDelaySec = "5m";
         AccuracySec = "1m";
       };
