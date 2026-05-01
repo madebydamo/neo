@@ -1,3 +1,4 @@
+# Base system configuration: bootloader, networking, i18n, users (admin), nix settings.
 {...}: {
   flake.nixosModules.base = {
     config,
@@ -49,6 +50,7 @@
         "docker"
       ];
       openssh.authorizedKeys.keys = config.neo.ssh.authorizedKeys;
+      hashedPassword = config.neo.users.hashedPassword;
     };
     time.timeZone = config.neo.timeZone;
 

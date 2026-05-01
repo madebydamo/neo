@@ -34,6 +34,7 @@
       createHome = true;
       extraGroups = ["docker" "wheel"];
       openssh.authorizedKeys.keys = config.neo.ssh.authorizedKeys;
+      hashedPassword = config.neo.users.hashedPassword;
     };
 
     system.activationScripts.create-volumes = lib.concatStringsSep "\n" (

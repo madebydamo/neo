@@ -1,4 +1,4 @@
-# Global neo options (volumes, uid, gid, ssh, timezone).
+# Global neo options (volumes, uid, gid, ssh, timezone, device, users).
 {...}: {
   flake.modules.nixos.options = {
     config,
@@ -76,6 +76,22 @@
         );
         default = {};
         description = lib.mdDoc "Device/machine specific settings from settings.toml";
+      };
+
+      options.neo.users = mkOption {
+        type = types.submodule (
+          {...}: {
+            options = {
+              hashedPassword = mkOption {
+                type = types.str;
+                default = "";
+                description = lib.mdDoc "Generate the hash using `mkpasswd -m sha-512` (from pkgs.mkpasswd) or `openssl passwd -6`. This sets the password for the user without exposing plaintext.";
+              };
+            };
+          }
+        );
+        default = {};
+        description = lib.mdDoc "User settings";
       };
     };
 }
