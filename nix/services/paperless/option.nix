@@ -24,6 +24,16 @@
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "paperless";
+              auth.publicPaths = [
+                "^/api/"
+                "^/static/"
+                "^/media/"
+                "^/favicon.ico$"
+                "^/assets/"
+                "^/logo(?:/.*)?$"
+                "^/share/"
+                "^/fetch/"
+              ];
             };
         };
         default = {};
