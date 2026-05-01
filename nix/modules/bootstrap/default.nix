@@ -49,7 +49,7 @@
       inherit environment;
       serviceConfig = {
         Type = "oneshot";
-        RemainAfterExit = true;
+        RemainAfterExit = false;
         User = "homeserver";
         Group = "homeserver";
       };
