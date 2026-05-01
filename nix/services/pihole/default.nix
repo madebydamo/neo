@@ -7,6 +7,7 @@
   }:
     with lib; let
       cfg = config.neo.services.pihole;
+      onlySubdomains = config.neo.services.swag.onlySubdomains;
       piholeData = "${config.neo.volumes.appdata}/pihole";
       appServices =
         filterAttrs (
@@ -17,7 +18,11 @@
       domain = config.neo.services.swag.domain;
       dnsMasqLines = concatStringsSep ";" (
         map (sub: "address=/${sub}.${domain}/${cfg.localIP}") subdomains
-        ++ ["address=/${domain}/${cfg.localIP}"]
+        ++ (
+          if onlySubdomains
+          then []
+          else ["address=/${domain}/${cfg.localIP}"]
+        )
       );
     in {
       config = mkIf cfg.enabled {
