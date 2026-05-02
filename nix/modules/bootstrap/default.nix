@@ -67,6 +67,7 @@
         Persistent = true;
         RandomizedDelaySec = "5m";
         AccuracySec = "1m";
+        Unit = "neo-auto-update.service";
       };
     };
     security.sudo.extraRules = [

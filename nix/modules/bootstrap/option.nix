@@ -69,7 +69,7 @@
             autoUpdateEnabled = mkEnableOption (mdDoc "Enable auto-update timer and service");
             autoUpdateTimer = mkOption {
               type = types.str;
-              default = "daily";
+              default = "*-*-* 04:00:00";
               description = mdDoc "systemd timer OnCalendar value";
             };
             rebuildBranchFormat = mkOption {
