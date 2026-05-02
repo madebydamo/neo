@@ -91,8 +91,7 @@
 
               defaultModel = mkOption {
                 type = types.nullOr types.str;
-                default = null;
-                example = "grok-4.20-0309-reasoning";
+                default = "grok-4.3";
                 description = lib.mdDoc ''
                   Default LLM model for the agent (e.g. "grok-4.20-0309-reasoning",
                   "claude-sonnet-4", "gpt-4o").
