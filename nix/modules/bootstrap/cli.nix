@@ -44,10 +44,6 @@
         else "false"
       }
     '';
-    userOverrides =
-      if builtins.pathExists ../../../settings.toml
-      then builtins.readFile ../../../settings.toml
-      else "";
     common = {
       pname = "neo";
       version = "0.1.0";
@@ -57,10 +53,6 @@
         pkgs.git
       ];
       buildInputs = [pkgs.openssl];
-      env.DEFAULT_SETTINGS_TOML = builtins.readFile defaults;
-      env.USER_OVERRIDE_SETTINGS_TOML = userOverrides;
-      env.NIX_BINARY_PATH = "${pkgs.nix}/bin/nix";
-      env.SUDO_BINARY_PATH = "${pkgs.sudo}/bin/sudo";
       doCheck = false;
     };
     deps = craneLib.buildDepsOnly common;
@@ -69,6 +61,9 @@
       common
       // {
         cargoArtifacts = deps;
+        env.DEFAULT_SETTINGS_TOML = builtins.readFile defaults;
+        env.NIX_BINARY_PATH = "${pkgs.nix}/bin/nix";
+        env.SUDO_BINARY_PATH = "${pkgs.sudo}/bin/sudo";
         meta = {
           description = "Neo CLI - Rust implementation for homeserver bootstrap";
           mainProgram = "neo";

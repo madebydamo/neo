@@ -75,11 +75,6 @@ pub fn load_or_default_settings(path: &PathBuf, _section: &str) -> Result<Docume
     } else {
         DocumentMut::new()
     };
-    let override_str = option_env!("USER_OVERRIDE_SETTINGS_TOML").unwrap_or("");
-    if !override_str.is_empty() && Path::new(override_str).exists() {
-        let override_doc = override_str.parse().context("parse default TOML")?;
-        merge_into(&mut doc, &override_doc);
-    }
     if path.exists() {
         let user_str = std::fs::read_to_string(path).context("read user settings.toml")?;
         let user_doc: DocumentMut = user_str.parse().context("parse user TOML")?;
