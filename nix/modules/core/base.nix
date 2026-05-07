@@ -44,6 +44,7 @@
     };
 
     users.users.admin = {
+      uid = config.neo.uid + 1;
       isNormalUser = true;
       extraGroups = [
         "wheel"
