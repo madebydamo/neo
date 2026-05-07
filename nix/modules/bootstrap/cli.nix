@@ -6,7 +6,12 @@
 }: let
   packageWrapper = pkgs: cfg: let
     craneLib = inputs.crane.mkLib pkgs;
-    src = craneLib.cleanCargoSource (self + "/cli");
+    src = lib.cleanSourceWith {
+      src = self + "/cli";
+      filter = path: type:
+        (craneLib.filterCargoSources path type)
+        || (lib.hasSuffix ".nix" path);
+    };
     defaults = pkgs.writeText "default-settings.toml" ''
       [nixos]
       enabled = ${
@@ -44,6 +49,7 @@
         else "false"
       }
     '';
+    template_dir = "${self}/cli/templates";
     common = {
       pname = "neo";
       version = "0.1.0";
@@ -64,6 +70,7 @@
         env.DEFAULT_SETTINGS_TOML = builtins.readFile defaults;
         env.NIX_BINARY_PATH = "${pkgs.nix}/bin/nix";
         env.SUDO_BINARY_PATH = "${pkgs.sudo}/bin/sudo";
+        env.TEMPLATE_DIR = template_dir;
         meta = {
           description = "Neo CLI - Rust implementation for homeserver bootstrap";
           mainProgram = "neo";

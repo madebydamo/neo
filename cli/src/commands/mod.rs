@@ -6,6 +6,7 @@ pub mod nuke;
 pub mod paste_settings;
 pub mod update;
 pub mod update_inputs;
+pub mod web;
 
 use anyhow::{Context, Result};
 use std::process::{Command, Stdio};

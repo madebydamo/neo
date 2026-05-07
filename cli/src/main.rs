@@ -1,17 +1,16 @@
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand};
+use std::env;
 use std::path::PathBuf;
 use std::process::Command;
-use std::{env, path::Path};
 use toml_edit::DocumentMut;
 
 pub mod commands;
 use crate::commands::{
     activate::activate, build::build, execute_command, generate_hardware::generate_hardware,
     init::init, nuke::nuke, paste_settings::paste_settings, update::update,
-    update_inputs::update_inputs,
+    update_inputs::update_inputs, web::web,
 };
-
 #[derive(Parser)]
 #[command(name = "neo", version, about = "Neo Homeserver CLI", long_about = None)]
 struct Cli {
@@ -66,6 +65,7 @@ enum Commands {
     Build,
     Activate,
     Nuke,
+    Web,
 }
 
 pub fn load_or_default_settings(path: &PathBuf, _section: &str) -> Result<DocumentMut> {
@@ -199,5 +199,6 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Build => build(&config_path, &doc, dry_run, nix_cmd),
         Commands::Activate => activate(&config_path, dry_run, nix_cmd, sudo_cmd),
         Commands::Nuke => nuke(&config_path, dry_run, nix_cmd),
+        Commands::Web => web(&doc, nix_cmd, &section),
     }
 }

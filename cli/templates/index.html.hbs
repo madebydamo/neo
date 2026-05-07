@@ -1,0 +1,40 @@
+<html>
+  <head>
+    <title>neo web</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  </head>
+  <body class="bg-zinc-900 text-white p-8">
+    <div class="max-w-6xl mx-auto">
+      <h1 class="text-4xl mb-8">Neo Homeserver Services</h1>
+      <div class="flex gap-8">
+        <div class="w-1/2">
+          <table class="w-full border-collapse">
+            <thead>
+              <tr class="bg-zinc-800">
+                <th class="p-4 text-left">Service</th>
+                <th class="p-4 text-left">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y">
+              {{#each services}}
+                <tr class="cursor-pointer hover:bg-zinc-800"
+                    hx-get="/option/{{name}}"
+                    hx-target="#options-pane"
+                    hx-swap="outerHTML">
+                  <td class="font-mono p-4">{{name}}</td>
+                  <td class="p-4">{{#if enabled}}🟢 active{{else}}⚪ inactive{{/if}}</td>
+                </tr>
+              {{/each}}
+            </tbody>
+          </table>
+        </div>
+        <div id="options-pane" class="w-1/2 p-6 border-l border-zinc-700 text-zinc-500">
+          Select a service to view its options.
+        </div>
+      </div>
+      <p class="mt-8 text-xs opacity-50">Served via Rocket.rs + Handlebars +
+        HTMX. Click any service to load its options dynamically from the flake.</p>
+    </div>
+  </body>
+</html>
