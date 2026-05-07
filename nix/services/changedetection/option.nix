@@ -11,11 +11,11 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption (lib.mdDoc "changedetection.io website change detection service");
+              enabled = mkEnableOption ("changedetection.io website change detection service");
               port = mkOption {
                 type = types.port;
                 default = 5000;
-                description = lib.mdDoc "Internal port for changedetection web UI";
+                description = "Internal port for changedetection web UI";
               };
             }
             // lib.neo.mkReverseProxyOptions {
@@ -23,7 +23,7 @@
             };
         };
         default = {};
-        description = lib.mdDoc "Changedetection service configuration";
+        description = "Changedetection service configuration";
       };
     };
 }

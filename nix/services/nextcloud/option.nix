@@ -10,31 +10,31 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption (mdDoc "nextcloud file sharing and collaboration platform");
+              enabled = mkEnableOption ("nextcloud file sharing and collaboration platform");
               port = mkOption {
                 type = types.port;
                 default = 80;
-                description = mdDoc "Internal port for nextcloud apache web server";
+                description = "Internal port for nextcloud apache web server";
               };
               dbPassword = mkOption {
                 type = types.str;
                 default = "your_strong_password_here";
-                description = mdDoc "Password for the nextcloud mysql user (also used for root in db container)";
+                description = "Password for the nextcloud mysql user (also used for root in db container)";
               };
               maintenanceWindowStart = mkOption {
                 type = types.ints.between 0 23;
                 default = 3;
-                description = mdDoc "Hour (0-23) when maintenance window starts (for background jobs)";
+                description = "Hour (0-23) when maintenance window starts (for background jobs)";
               };
               defaultPhoneRegion = mkOption {
                 type = types.str;
                 default = "CH";
-                description = mdDoc "ISO 3166-1 alpha-2 country code for default phone region (e.g. CH, US)";
+                description = "ISO 3166-1 alpha-2 country code for default phone region (e.g. CH, US)";
               };
               instanceId = mkOption {
                 type = types.str;
                 default = "neo-homeserver";
-                description = mdDoc "Unique server/instance identifier (used by Nextcloud for clustering/multi-server setups)";
+                description = "Unique server/instance identifier (used by Nextcloud for clustering/multi-server setups)";
               };
             }
             // lib.neo.mkReverseProxyOptions {
@@ -61,7 +61,7 @@
             };
         };
         default = {};
-        description = mdDoc "Nextcloud service configuration";
+        description = "Nextcloud service configuration";
       };
     };
 }

@@ -10,11 +10,11 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption (lib.mdDoc "immich service");
+              enabled = mkEnableOption ("immich service");
               additionalMountPoints = mkOption {
                 type = types.attrsOf types.str;
                 default = {};
-                description = lib.mdDoc "Additional volume mounts";
+                description = "Additional volume mounts";
               };
             }
             // lib.neo.mkReverseProxyOptions {
@@ -27,7 +27,7 @@
             };
         };
         default = {};
-        description = lib.mdDoc "Immich service configuration";
+        description = "Immich service configuration";
       };
     };
 }

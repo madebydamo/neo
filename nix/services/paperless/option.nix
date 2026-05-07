@@ -10,16 +10,16 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption (lib.mdDoc "paperless document management service");
+              enabled = mkEnableOption ("paperless document management service");
               port = mkOption {
                 type = types.port;
                 default = 8000;
-                description = lib.mdDoc "Internal port for paperless web UI";
+                description = "Internal port for paperless web UI";
               };
               dbPassword = mkOption {
                 type = types.str;
                 default = "your_strong_password_here";
-                description = lib.mdDoc "Password for internal docker connection";
+                description = "Password for internal docker connection";
               };
             }
             // lib.neo.mkReverseProxyOptions {
@@ -37,7 +37,7 @@
             };
         };
         default = {};
-        description = lib.mdDoc "Paperless service configuration";
+        description = "Paperless service configuration";
       };
     };
 }

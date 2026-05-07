@@ -9,28 +9,28 @@
       options.neo.services.rathole = mkOption {
         type = types.submodule {
           options = {
-            enabled = mkEnableOption (lib.mdDoc "rathole client service");
+            enabled = mkEnableOption ("rathole client service");
             token = mkOption {
               type = types.str;
-              description = lib.mdDoc "Authentication token for rathole";
+              description = "Authentication token for rathole";
             };
             remoteAddr = mkOption {
               type = types.str;
-              description = lib.mdDoc "Remote server address for rathole";
+              description = "Remote server address for rathole";
             };
             port = mkOption {
               type = types.port;
               default = 2333;
-              description = lib.mdDoc "Remote server port for rathole";
+              description = "Remote server port for rathole";
             };
             name = mkOption {
               type = types.str;
-              description = lib.mdDoc "Name prefix for rathole services";
+              description = "Name prefix for rathole services";
             };
           };
         };
         default = {};
-        description = lib.mdDoc "Rathole client configuration";
+        description = "Rathole client configuration";
       };
     };
 }

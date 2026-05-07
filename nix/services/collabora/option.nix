@@ -10,7 +10,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption (mdDoc "Collabora real time collaboration platform for Nextcloud. Needs nextcloud to be enabled");
+              enabled = mkEnableOption ("Collabora real time collaboration platform for Nextcloud. Needs nextcloud to be enabled");
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "collabora";
@@ -18,7 +18,7 @@
             };
         };
         default = {};
-        description = mdDoc "Collabora service configuration";
+        description = "Collabora service configuration";
       };
     };
 }

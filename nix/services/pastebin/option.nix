@@ -11,11 +11,11 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption (lib.mdDoc "pastebin (wantguns/bin) service");
+              enabled = mkEnableOption ("pastebin (wantguns/bin) service");
               port = mkOption {
                 type = types.port;
                 default = 6163;
-                description = lib.mdDoc "Internal port the pastebin service listens on";
+                description = "Internal port the pastebin service listens on";
               };
             }
             // lib.neo.mkReverseProxyOptions {
@@ -24,7 +24,7 @@
             };
         };
         default = {};
-        description = lib.mdDoc "Pastebin service configuration";
+        description = "Pastebin service configuration";
       };
     };
 }

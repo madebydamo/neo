@@ -10,21 +10,21 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption (lib.mdDoc "pihole ad-blocking DNS service");
+              enabled = mkEnableOption ("pihole ad-blocking DNS service");
               webPassword = mkOption {
                 type = types.str;
                 default = "";
-                description = lib.mdDoc "Password for Pi-hole web admin interface";
+                description = "Password for Pi-hole web admin interface";
               };
               upstream = mkOption {
                 type = types.str;
                 default = "9.9.9.9;1.1.1.1";
-                description = lib.mdDoc "Semicolon separated list of upstream dns servers";
+                description = "Semicolon separated list of upstream dns servers";
               };
               localIP = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = lib.mdDoc "Local IP address to forward services.swag.domain toward to.";
+                description = "Local IP address to forward services.swag.domain toward to.";
               };
             }
             // lib.neo.mkReverseProxyOptions {
@@ -33,7 +33,7 @@
             };
         };
         default = {};
-        description = lib.mdDoc "Pi-hole service configuration";
+        description = "Pi-hole service configuration";
       };
     };
 }

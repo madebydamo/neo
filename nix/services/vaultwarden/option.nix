@@ -6,16 +6,16 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption (lib.mdDoc "vaultwarden password manager service");
+              enabled = mkEnableOption ("vaultwarden password manager service");
               port = mkOption {
                 type = types.port;
                 default = 8888;
-                description = lib.mdDoc "Internal port vaultwarden listens on (ROCKET_PORT)";
+                description = "Internal port vaultwarden listens on (ROCKET_PORT)";
               };
               adminToken = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = lib.mdDoc "Random auth token to authenticate in admin page";
+                description = "Random auth token to authenticate in admin page";
               };
             }
             // lib.neo.mkReverseProxyOptions {
@@ -29,7 +29,7 @@
             };
         };
         default = {};
-        description = lib.mdDoc "Vaultwarden service configuration";
+        description = "Vaultwarden service configuration";
       };
     };
 }
