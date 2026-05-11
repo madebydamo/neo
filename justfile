@@ -56,6 +56,10 @@ launch: shutdown build
     ./build/result/bin/disko-vm &
   fi
 
+web: build
+  #!/usr/bin/env bash
+  nix run ./build#neo -- web
+
 # Show VM status: QEMU process, monitor, SSH, and disk image info.
 status:
   #!/usr/bin/env bash
