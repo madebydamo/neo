@@ -39,11 +39,19 @@ pub fn extract_service_options(nix_cmd: &str, neo_input: &str, service: &str) ->
         r#"({}) {{ neoFlake = "{}"; service = "{}"; }}"#,
         EXTRACT_OPTIONS, neo_input, service
     );
-    println!("{:?}", &expr);
     let output = Command::new(nix_cmd)
         .args(["eval", "--json", "--impure", "--expr", &expr])
         .output();
-    println!("{:?}", &output);
+    println!(
+        "{:?}",
+        &output
+            .as_ref()
+            .ok()
+            .map(|o| o.stdout.clone())
+            .map(|o| String::from_utf8(o))
+            .and_then(|o| o.ok())
+            .map(|o| o.replace("\\n", "\\r"))
+    );
     output
         .ok()
         .and_then(|o| {
