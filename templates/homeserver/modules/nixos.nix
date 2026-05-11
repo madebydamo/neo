@@ -4,8 +4,13 @@
   ...
 }: {
   systems = ["x86_64-linux"];
-  perSystem = {pkgs, ...}: {
+  perSystem = {
+    pkgs,
+    inputs',
+    ...
+  }: {
     formatter = pkgs.alejandra;
+    packages.neo = inputs'.neo.packages.neo;
   };
   flake = {...}: let
     system = "x86_64-linux";
