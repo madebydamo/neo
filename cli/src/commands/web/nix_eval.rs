@@ -2,11 +2,13 @@ use std::process::Command;
 
 use super::structs::{OptionInfo, Service};
 
-static EXTRACT_SERVICES: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/extract_services.nix"));
+static EXTRACT_SERVICES: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/commands/web/nix/extract_services.nix"
+));
 static EXTRACT_OPTIONS: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/extract_service_options.nix"
+    "/src/commands/web/nix/extract_service_options.nix"
 ));
 
 pub fn extract_services(nix_cmd: &str, neo_input: &str) -> Vec<Service> {
