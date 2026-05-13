@@ -10,7 +10,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption ("nextcloud file sharing and collaboration platform");
+              enabled = mkEnableOption "nextcloud file sharing and collaboration platform";
               port = mkOption {
                 type = types.port;
                 default = 80;

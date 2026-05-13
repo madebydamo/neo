@@ -9,7 +9,7 @@
       options.neo.services.backup = mkOption {
         type = types.submodule {
           options = {
-            enabled = mkEnableOption ("Enable the rsync backup service");
+            enabled = mkEnableOption "Enable the rsync backup service";
 
             sourceDir = mkOption {
               type = types.path;

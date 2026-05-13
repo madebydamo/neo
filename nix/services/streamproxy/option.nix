@@ -22,7 +22,7 @@
             );
           in {
             options = {
-              enabled = mkEnableOption ("streamproxy nginx + rathole server for public IP sharing");
+              enabled = mkEnableOption "streamproxy nginx + rathole server for public IP sharing";
               entries = mkOption {
                 type = types.attrsOf (
                   types.submodule {

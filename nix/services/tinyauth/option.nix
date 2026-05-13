@@ -10,7 +10,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption ("tinyauth forward authentication service");
+              enabled = mkEnableOption "tinyauth forward authentication service";
               port = mkOption {
                 type = types.port;
                 default = 3000;

@@ -6,7 +6,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption ("vaultwarden password manager service");
+              enabled = mkEnableOption "vaultwarden password manager service";
               port = mkOption {
                 type = types.port;
                 default = 8888;

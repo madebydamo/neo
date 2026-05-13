@@ -9,7 +9,7 @@
       options.neo.services.rathole = mkOption {
         type = types.submodule {
           options = {
-            enabled = mkEnableOption ("rathole client service");
+            enabled = mkEnableOption "rathole client service";
             token = mkOption {
               type = types.str;
               description = "Authentication token for rathole";

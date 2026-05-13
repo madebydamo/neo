@@ -10,7 +10,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption ("paperless document management service");
+              enabled = mkEnableOption "paperless document management service";
               port = mkOption {
                 type = types.port;
                 default = 8000;

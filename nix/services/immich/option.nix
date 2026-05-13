@@ -10,7 +10,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption ("immich service");
+              enabled = mkEnableOption "immich service";
               additionalMountPoints = mkOption {
                 type = types.attrsOf types.str;
                 default = {};

@@ -26,7 +26,7 @@
           auth = mkOption {
             type = types.submodule {
               options = {
-                enabled = mkEnableOption ("tinyauth forward auth");
+                enabled = mkEnableOption "tinyauth forward auth";
                 publicPaths = mkOption {
                   type = types.listOf types.str;
                   default = auth.publicPaths;

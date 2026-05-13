@@ -9,7 +9,7 @@
       options.neo.services.tailscale = mkOption {
         type = types.submodule {
           options = {
-            enabled = mkEnableOption ("Tailscale service");
+            enabled = mkEnableOption "Tailscale service";
             authKey = mkOption {
               type = types.nullOr types.str;
               default = null;

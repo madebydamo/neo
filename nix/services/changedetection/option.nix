@@ -11,7 +11,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption ("changedetection.io website change detection service");
+              enabled = mkEnableOption "changedetection.io website change detection service";
               port = mkOption {
                 type = types.port;
                 default = 5000;

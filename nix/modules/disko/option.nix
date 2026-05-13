@@ -12,7 +12,7 @@
       options.neo.disko = mkOption {
         type = types.submodule {
           options = {
-            enabled = mkEnableOption ("Disko declarative partitioning with ZFS root (single disk)");
+            enabled = mkEnableOption "Disko declarative partitioning with ZFS root (single disk)";
 
             mainDisk = mkOption {
               type = types.str;

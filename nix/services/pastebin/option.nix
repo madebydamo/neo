@@ -11,7 +11,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption ("pastebin (wantguns/bin) service");
+              enabled = mkEnableOption "pastebin (wantguns/bin) service";
               port = mkOption {
                 type = types.port;
                 default = 6163;

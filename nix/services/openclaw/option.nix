@@ -10,7 +10,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption ("OpenClaw service");
+              enabled = mkEnableOption "OpenClaw service";
 
               gatewayPort = mkOption {
                 type = types.port;

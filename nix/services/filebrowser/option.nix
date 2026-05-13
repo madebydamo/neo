@@ -10,7 +10,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption ("filebrowser service");
+              enabled = mkEnableOption "filebrowser service";
               additionalMountPoints = mkOption {
                 type = types.attrsOf types.str;
                 default = {};

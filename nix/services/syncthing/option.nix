@@ -10,7 +10,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption ("syncthing service");
+              enabled = mkEnableOption "syncthing service";
               additionalMountPoints = mkOption {
                 type = types.attrsOf types.str;
                 default = {};

@@ -11,7 +11,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption ("Hermes Agent service (replaces OpenClaw)");
+              enabled = mkEnableOption "Hermes Agent service (replaces OpenClaw)";
 
               gatewayPort = mkOption {
                 type = types.port;

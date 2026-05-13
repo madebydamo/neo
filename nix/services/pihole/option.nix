@@ -10,7 +10,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption ("pihole ad-blocking DNS service");
+              enabled = mkEnableOption "pihole ad-blocking DNS service";
               webPassword = mkOption {
                 type = types.str;
                 default = "";

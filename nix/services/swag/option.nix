@@ -5,7 +5,7 @@
       options.neo.services.swag = mkOption {
         type = types.submodule {
           options = {
-            enabled = mkEnableOption ("swag service");
+            enabled = mkEnableOption "swag service";
             domain = mkOption {
               type = types.nullOr types.str;
               default = null;
