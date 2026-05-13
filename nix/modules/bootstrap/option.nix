@@ -60,10 +60,10 @@
               default = "master";
               description = "Default branch name for git init";
             };
-            pluginGeneratorPlugins = mkOption {
+            plugins = mkOption {
               type = types.listOf types.str;
               default = [];
-              description = "List of plugins (kept for future use)";
+              description = "List of plugins";
             };
             autoUpdateEnabled = mkEnableOption "Enable auto-update timer and service";
             autoUpdateTimer = mkOption {
