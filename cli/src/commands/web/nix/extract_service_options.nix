@@ -28,17 +28,16 @@
 
   getType = t:
     if builtins.hasAttr "name" t
-    then
-      let n = t.name;
-      in
+    then let
+      n = t.name;
+    in
       if n == "nullOr"
-      then
-        let
-          inner = builtins.tryEval (t.nestedTypes.elemType or {});
-        in
-          if inner.success && builtins.hasAttr "name" inner.value
-          then "nullOr ${inner.value.name}"
-          else "nullOr"
+      then let
+        inner = builtins.tryEval (t.nestedTypes.elemType or {});
+      in
+        if inner.success && builtins.hasAttr "name" inner.value
+        then "nullOr ${inner.value.name}"
+        else "nullOr"
       else n
     else if builtins.hasAttr "description" t
     then t.description
@@ -74,7 +73,10 @@
       then o.description
       else null
     );
-    pathList = if path == "" then [] else builtins.filter builtins.isString (builtins.split "\\." path);
+    pathList =
+      if path == ""
+      then []
+      else builtins.filter builtins.isString (builtins.split "\\." path);
     currentVal = tryOr null (
       if pathList == []
       then null
