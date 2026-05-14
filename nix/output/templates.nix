@@ -6,7 +6,7 @@
     };
     plugin = {
       path = ../../templates/plugin;
-      description = "Example pluginf or homeserver";
+      description = "Example plugin or homeserver";
     };
   };
 }
