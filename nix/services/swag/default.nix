@@ -31,6 +31,7 @@
             iptables -D nixos-fw -i br+ -j ACCEPT
           ";
           systemd.services.docker-swag.preStart = lib.concatStringsSep "\n" ([
+              "rm -r ${config.neo.volumes.appdata}/swag/nginx/proxy-confs"
               "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'"
               (lib.neo.mkActivationScriptForDir config {
                 dirPath = "${config.neo.volumes.appdata}/swag/nginx/proxy-confs";
