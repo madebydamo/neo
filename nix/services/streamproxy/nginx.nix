@@ -2,6 +2,7 @@
   flake.modules.nixos.streamproxy-nginx = {
     config,
     lib,
+    pkgs,
     ...
   }:
     with lib; let
@@ -46,7 +47,9 @@
               sendfile on;
               tcp_nopush on;
               types_hash_max_size 2048;
+
               default_type application/octet-stream;
+              include ${pkgs.nginx}/conf/mime.types;
 
               ssl_protocols TLSv1.2 TLSv1.3;
               ssl_prefer_server_ciphers on;
@@ -58,6 +61,8 @@
               add_header X-Content-Type-Options "nosniff" always;
               add_header X-Frame-Options "SAMEORIGIN" always;
               add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+              include /etc/nginx/conf.d/*.conf;
 
               ${concatStringsSep "\n" (
               mapAttrsToList (name: entry: ''
