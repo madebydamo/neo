@@ -22,11 +22,13 @@
           environment =
             {
               TZ = "Europe/Zurich";
-              TRUSTED_AUTH_HEADER = "X-Tinyauth-User";
+              SHARE_ALL_SYSTEMS = "true";
               APP_URL = "https://${cfg.subdomain}.${config.neo.services.swag.domain}";
             }
             // optionalAttrs cfg.enableSingleUserSystem {
-              DISABLE_PASSWORD_AUTH = "true";
+              AUTO_LOGIN = "not-that-important@example.com";
+              USER_EMAIL = "not-that-important@example.com";
+              USER_PASSWORD = "whatever";
             };
           extraOptions = [
             "--network=internal"
