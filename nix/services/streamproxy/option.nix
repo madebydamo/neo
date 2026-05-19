@@ -45,6 +45,11 @@
                         default = true;
                         description = "Whether to route the top-level domain (url) to this ingress";
                       };
+                      customDomains = mkOption {
+                        type = types.listOf types.str;
+                        default = [];
+                        description = "Additional custom domains that should be routed to this entry (certificates + forwarding)";
+                      };
                     };
                   }
                 );

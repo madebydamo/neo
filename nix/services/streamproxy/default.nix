@@ -34,6 +34,21 @@
         *.${swagDomain} ${localIp}:${toString swagHttps};
       '';
       nonSwagEntries = filterAttrs (n: _: n != "swag-local") cfg.entries;
+
+      entryServerNames = name: entry:
+        concatStringsSep " " (
+          optional entry.includeTopLevel entry.url
+          ++ optional entry.wildcard "*.${entry.url}"
+          ++ (entry.customDomains or [])
+        );
+
+      entryStreamMapEntries = name: entry:
+        concatStringsSep "\n                    " (
+          (optional (entry.wildcard or false) "~^(?<sub>.+\\.)?${escapeRegex entry.url}$ 127.0.0.1:${toString (cfg.ports.${name}.https)};")
+          ++ (optional (entry.includeTopLevel or true) "${entry.url} 127.0.0.1:${toString (cfg.ports.${name}.https)};")
+          ++ (map (d: "${d} 127.0.0.1:${toString (cfg.ports.${name}.https)};") (entry.customDomains or []))
+        );
+
       configFile = pkgs.writeText "rathole-server.toml" ''
         [server]
         bind_addr = "0.0.0.0:2223"
@@ -144,11 +159,7 @@
                   mapAttrsToList (name: entry: ''
                     server {
                       listen 80;
-                      server_name ${
-                      concatStringsSep " " (
-                        optional entry.wildcard "*.${entry.url}" ++ optional entry.includeTopLevel entry.url
-                      )
-                    };
+                      server_name ${entryServerNames name entry};
 
                       location / {
                         proxy_pass http://127.0.0.1:${toString (cfg.ports.${name}.http or 9999)};
@@ -181,15 +192,8 @@
                 stream {
                   map $ssl_preread_server_name $backend {
                     hostnames;
-                    ${concatStringsSep "\n" (
-                  mapAttrsToList (name: entry: ''
-                    ${optionalString entry.wildcard "~^(?<sub>.+\\.)?${escapeRegex entry.url}$ 127.0.0.1:${
-                      toString (cfg.ports.${name}.https)
-                    };"}
-                    ${optionalString entry.includeTopLevel "${entry.url} 127.0.0.1:${
-                      toString (cfg.ports.${name}.https)
-                    };"}
-                  '')
+                    ${concatStringsSep "\n                    " (
+                  mapAttrsToList (name: entry: entryStreamMapEntries name entry)
                   cfg.entries
                 )}
                     ${streamSwagMap}
