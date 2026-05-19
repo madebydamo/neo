@@ -16,6 +16,34 @@
           config.neo.services;
         subdomains = catAttrs "subdomain" (attrValues appServices);
         customDomains = concatLists (catAttrs "customDomains" (attrValues appServices));
+        domain = cfg.domain;
+        customProxyConfScripts = flatten (map (
+          svc:
+            map (
+              customDomain:
+                lib.neo.mkActivationScriptForFile config {
+                  filePath = "${config.neo.volumes.appdata}/swag/nginx/proxy-confs/custom-${customDomain}.conf";
+                  content = ''
+                    server {
+                      listen 443 ssl http2;
+                      server_name ${customDomain};
+                      include /config/nginx/ssl.conf;
+
+                      location / {
+                        proxy_pass https://${svc.subdomain}.${domain};
+                        proxy_set_header Host ${svc.subdomain}.${domain};
+                        proxy_set_header X-Real-IP $remote_addr;
+                        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                        proxy_set_header X-Forwarded-Proto $scheme;
+                        proxy_set_header X-Forwarded-Host $host;
+                        proxy_ssl_server_name on;
+                        proxy_ssl_verify off;
+                      }
+                    }
+                  '';
+                }
+            ) (svc.customDomains or [])
+        ) (attrValues appServices));
         proxyConfScripts = map (
           svc:
             lib.neo.mkActivationScriptForFile config {
@@ -44,7 +72,8 @@
                 dirPath = "${config.neo.volumes.appdata}/swag";
               })
             ]
-            ++ proxyConfScripts);
+            ++ proxyConfScripts
+            ++ customProxyConfScripts);
           virtualisation.oci-containers.containers.swag = {
             image = "lscr.io/linuxserver/swag:latest";
             autoStart = true;
