@@ -26,11 +26,6 @@
               default = true;
               description = "Only use subdomains (ONLY_SUBDOMAINS)";
             };
-            additionalMountPoints = mkOption {
-              type = types.attrsOf types.str;
-              default = {};
-              description = "Additional volume mounts";
-            };
             localHttpPort = mkOption {
               type = types.port;
               internal = true;
