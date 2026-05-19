@@ -24,7 +24,7 @@
             onlySubdomains = mkOption {
               type = types.bool;
               default = true;
-              description = "Only use subdomains (ONLY_SUBDOMAINS)";
+              description = "Only use subdomains";
             };
             localHttpPort = mkOption {
               type = types.port;
