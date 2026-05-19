@@ -15,6 +15,7 @@
           )
           config.neo.services;
         subdomains = catAttrs "subdomain" (attrValues appServices);
+        customDomains = concatLists (catAttrs "customDomains" (attrValues appServices));
         proxyConfScripts = map (
           svc:
             lib.neo.mkActivationScriptForFile config {
@@ -56,7 +57,7 @@
               VALIDATION = "http";
               EMAIL = cfg.email;
               ONLY_SUBDOMAINS = boolToString cfg.onlySubdomains;
-              EXTRA_DOMAINS = concatStringsSep "," cfg.extraDomains;
+              EXTRA_DOMAINS = concatStringsSep "," (cfg.extraDomains ++ customDomains);
             };
             volumes = [
               "${config.neo.volumes.appdata}/swag:/config"

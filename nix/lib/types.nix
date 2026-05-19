@@ -5,6 +5,7 @@
       mkReverseProxyOptions = {
         subdomain ? null,
         auth ? null,
+        customDomains ? [],
       } @ args: let
         defaultAuth = {
           enabled = true;
@@ -22,6 +23,11 @@
             type = types.nullOr types.str;
             default = null;
             description = "Nginx proxy conf for swag";
+          };
+          customDomains = mkOption {
+            type = types.listOf types.str;
+            default = customDomains;
+            description = "Custom domains (one domain per string, e.g. example.com or www.example.com) that should resolve to this service; automatically added to SWAG for certificates and to Pi-hole for local DNS";
           };
           auth = mkOption {
             type = types.submodule {

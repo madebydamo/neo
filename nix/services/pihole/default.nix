@@ -15,9 +15,11 @@
         )
         config.neo.services;
       subdomains = catAttrs "subdomain" (attrValues appServices);
+      customDomains = concatLists (catAttrs "customDomains" (attrValues appServices));
       domain = config.neo.services.swag.domain;
       dnsMasqLines = concatStringsSep ";" (
         map (sub: "address=/${sub}.${domain}/${cfg.localIP}") subdomains
+        ++ map (cd: "address=/${cd}/${cfg.localIP}") customDomains
         ++ (
           if onlySubdomains
           then []
