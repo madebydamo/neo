@@ -21,7 +21,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nix-openclaw.url = "github:openclaw/nix-openclaw";
+    nix-openclaw.url = "github:openclaw/nix-openclaw?rev=97b539d4f426121a642b7016e211d3cefcb821c7";
     crane.url = "github:ipetkov/crane";
   };
 
