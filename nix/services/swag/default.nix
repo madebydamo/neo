@@ -9,11 +9,7 @@
     with lib; {
       config = let
         cfg = config.neo.services.swag;
-        appServices =
-          filterAttrs (
-            n: v: v.enabled && v.subdomain or null != null && n != "swag"
-          )
-          config.neo.services;
+        appServices = lib.neo.getProxiedServices config;
         subdomains = catAttrs "subdomain" (attrValues appServices);
         customDomains = concatLists (catAttrs "customDomains" (attrValues appServices));
         domain = cfg.domain;
@@ -22,22 +18,41 @@
             map (
               customDomain:
                 lib.neo.mkActivationScriptForFile config {
-                  filePath = "${config.neo.volumes.appdata}/swag/nginx/proxy-confs/custom-${customDomain}.conf";
+                  filePath = "${config.neo.volumes.appdata}/swag/nginx/site-confs/${customDomain}.conf";
                   content = ''
+                    server {
+                      listen 80;
+                      listen [::]:80;
+                      server_name ${customDomain};
+
+                      # Redirect HTTP to HTTPS
+                      return 301 https://$server_name$request_uri;
+                    }
+
                     server {
                       listen 443 ssl http2;
                       server_name ${customDomain};
+
                       include /config/nginx/ssl.conf;
+                      client_max_body_size 0;
 
                       location / {
-                        proxy_pass https://${svc.subdomain}.${domain};
-                        proxy_set_header Host ${svc.subdomain}.${domain};
+                        # include /config/nginx/proxy.conf;
+                        include /config/nginx/resolver.conf;
+
+                        proxy_pass https://${svc.subdomain}.${domain}:443;
+
+                        proxy_set_header Host $proxy_host;
                         proxy_set_header X-Real-IP $remote_addr;
                         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
                         proxy_set_header X-Forwarded-Proto $scheme;
                         proxy_set_header X-Forwarded-Host $host;
+
                         proxy_ssl_server_name on;
                         proxy_ssl_verify off;
+
+                        proxy_http_version 1.1;
+                        proxy_set_header Connection "";
                       }
                     }
                   '';
@@ -61,6 +76,7 @@
           ";
           systemd.services.docker-swag.preStart = lib.concatStringsSep "\n" ([
               "rm -r ${config.neo.volumes.appdata}/swag/nginx/proxy-confs"
+              "rm -r ${config.neo.volumes.appdata}/swag/nginx/site-confs"
               "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'"
               (lib.neo.mkActivationScriptForDir config {
                 dirPath = "${config.neo.volumes.appdata}/swag/nginx/proxy-confs";
