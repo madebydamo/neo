@@ -8,7 +8,7 @@
   }:
     with lib; let
       cfg = config.neo.services.streamproxy;
-      appServices = lib.neo.getProxiedServices config;
+      appServices = neo.getProxiedServices config;
       swagCfg = config.neo.services.swag;
       swagEnabled = swagCfg.enabled;
       swagHttp = swagCfg.localHttpPort;
@@ -30,29 +30,48 @@
           }
         }
       '';
+      entryDomains = name: entry:
+        (optional (entry.includeTopLevel) entry.url)
+        ++ (optional (entry.wildcard) "*.${entry.url}")
+        ++ (entry.customDomains);
+
       customDomains = concatLists (catAttrs "customDomains" (attrValues appServices));
       allSwagDomains = customDomains ++ [swagDomain "*.${swagDomain}"];
 
-      httpSwagBlockContent = lib.concatStringsSep "\n" (map (domain: "${httpServerBlock domain "${localIp}:${toString swagHttp}"}") allSwagDomains);
-      httpSwagBlock = optionalString swagEnabled httpSwagBlockContent;
+      httpSwagBlock = flatten (optional swagEnabled (map (domain: "${httpServerBlock domain "${localIp}:${toString swagHttp}"}") allSwagDomains));
+      httpConfigBlock = flatten (mapAttrsToList (
+          name: entry: let
+            domains = entryDomains name entry;
+            port = cfg.ports.${name}.http;
+          in
+            map (domain: (httpServerBlock domain "127.0.0.1:${toString port}")) domains
+        )
+        cfg.entries);
 
-      streamSwagMapContent = lib.concatStringsSep "\n" (map (domain: "${domain} ${localIp}:${toString swagHttps};") allSwagDomains);
-      streamSwagMap = optionalString swagEnabled streamSwagMapContent;
+      httpBlock = concatStringsSep "\n" (
+        httpSwagBlock ++ httpConfigBlock
+      );
+
+      streamSwagMap = flatten (optional swagEnabled (map (domain: "${domain} ${localIp}:${toString swagHttps};") allSwagDomains));
+      streamConfigMap = flatten (mapAttrsToList (
+          name: entry: let
+            wildcard = entry.wildcard;
+            includeTopLevel = entry.includeTopLevel;
+            url = entry.url;
+            customDomains = entry.customDomains;
+            httpsPort = cfg.ports.${name}.https;
+          in (
+            (optional wildcard "~^(?<sub>.+\\.)?${escapeRegex url}$ 127.0.0.1:${toString httpsPort};")
+            ++ (optional includeTopLevel "${url} 127.0.0.1:${toString httpsPort};")
+            ++ (map (domain: "${domain} 127.0.0.1:${toString httpsPort};") customDomains)
+          )
+        )
+        cfg.entries);
+      streamMap = concatStringsSep "\n" (
+        streamSwagMap ++ streamConfigMap
+      );
 
       nonSwagEntries = filterAttrs (n: _: n != "swag-local") cfg.entries;
-
-      entryDomains = name: entry:
-        (optional (entry.includeTopLevel or true) entry.url)
-        ++ (optional (entry.wildcard or false) "*.${entry.url}")
-        ++ (entry.customDomains or []);
-
-      entryStreamMapEntries = name: entry:
-        concatStringsSep "\n                    " (
-          (optional (entry.wildcard or false) "~^(?<sub>.+\\.)?${escapeRegex entry.url}$ 127.0.0.1:${toString (cfg.ports.${name}.https)};")
-          ++ (optional (entry.includeTopLevel or true) "${entry.url} 127.0.0.1:${toString (cfg.ports.${name}.https)};")
-          ++ (map (d: "${d} 127.0.0.1:${toString (cfg.ports.${name}.https)};") (entry.customDomains or []))
-        );
-
       configFile = pkgs.writeText "rathole-server.toml" ''
         [server]
         bind_addr = "0.0.0.0:2223"
@@ -159,19 +178,7 @@
 
                   include /etc/nginx/conf.d/*.conf;
 
-                  ${concatStringsSep "\n" (flatten (mapAttrsToList (
-                    name: entry: let
-                      domains = entryDomains name entry;
-                      port = cfg.ports.${name}.http;
-                    in
-                      map (
-                        domain: (httpServerBlock domain "127.0.0.1:${toString port}")
-                      )
-                      domains
-                  )
-                  cfg.entries))}
-
-                  ${httpSwagBlock}
+                  ${httpBlock}
 
                   server {
                     listen 80 default_server;
@@ -190,11 +197,7 @@
                 stream {
                   map $ssl_preread_server_name $backend {
                     hostnames;
-                    ${concatStringsSep "\n                    " (
-                  mapAttrsToList (name: entry: entryStreamMapEntries name entry)
-                  cfg.entries
-                )}
-                    ${streamSwagMap}
+                    ${streamMap}
                     default 127.0.0.1:1;
                   }
 
