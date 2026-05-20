@@ -15,13 +15,13 @@
       swagDomain = swagCfg.domain;
       streamproxyIp = "192.168.100.11";
       localIp = "192.168.100.10";
-      httpSwagBlock = optionalString swagEnabled ''
+      httpServerBlock = serverName: proxyPass: ''
         server {
           listen 80;
-          server_name ${swagDomain} *.${swagDomain};
+          server_name ${serverName};
 
           location / {
-            proxy_pass http://${localIp}:${toString swagHttp};
+            proxy_pass http://${proxyPass};
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -29,18 +29,20 @@
           }
         }
       '';
+      httpSwagBlock = optionalString swagEnabled ''
+        ${httpServerBlock swagDomain "${localIp}:${toString swagHttp}"}
+        ${httpServerBlock "*.${swagDomain}" "${localIp}:${toString swagHttp}"}
+      '';
       streamSwagMap = optionalString swagEnabled ''
         ${swagDomain} ${localIp}:${toString swagHttps};
         *.${swagDomain} ${localIp}:${toString swagHttps};
       '';
       nonSwagEntries = filterAttrs (n: _: n != "swag-local") cfg.entries;
 
-      entryServerNames = name: entry:
-        concatStringsSep " " (
-          optional entry.includeTopLevel entry.url
-          ++ optional entry.wildcard "*.${entry.url}"
-          ++ (entry.customDomains or [])
-        );
+      entryDomains = name: entry:
+        (optional (entry.includeTopLevel or true) entry.url)
+        ++ (optional (entry.wildcard or false) "*.${entry.url}")
+        ++ (entry.customDomains or []);
 
       entryStreamMapEntries = name: entry:
         concatStringsSep "\n                    " (
@@ -155,23 +157,17 @@
 
                   include /etc/nginx/conf.d/*.conf;
 
-                  ${concatStringsSep "\n" (
-                  mapAttrsToList (name: entry: ''
-                    server {
-                      listen 80;
-                      server_name ${entryServerNames name entry};
-
-                      location / {
-                        proxy_pass http://127.0.0.1:${toString (cfg.ports.${name}.http or 9999)};
-                        proxy_set_header Host $host;
-                        proxy_set_header X-Real-IP $remote_addr;
-                        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                        proxy_set_header X-Forwarded-Proto $scheme;
-                      }
-                    }
-                  '')
-                  cfg.entries
-                )}
+                  ${concatStringsSep "\n" (flatten (mapAttrsToList (
+                    name: entry: let
+                      domains = entryDomains name entry;
+                      port = cfg.ports.${name}.http;
+                    in
+                      map (
+                        domain: (httpServerBlock domain "127.0.0.1:${toString port}")
+                      )
+                      domains
+                  )
+                  cfg.entries))}
 
                   ${httpSwagBlock}
 
