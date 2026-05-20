@@ -44,6 +44,11 @@
             description = "Tinyauth forward authentication settings";
           };
         };
+      getProxiedServices = config:
+        lib.filterAttrs (
+          n: v: v.enabled && v.subdomain or null != null && n != "swag"
+        )
+        config.neo.services;
     };
   };
 }

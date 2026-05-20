@@ -8,6 +8,7 @@
   }:
     with lib; let
       cfg = config.neo.services.streamproxy;
+      appServices = lib.neo.getProxiedServices config;
       swagCfg = config.neo.services.swag;
       swagEnabled = swagCfg.enabled;
       swagHttp = swagCfg.localHttpPort;
@@ -29,14 +30,15 @@
           }
         }
       '';
-      httpSwagBlock = optionalString swagEnabled ''
-        ${httpServerBlock swagDomain "${localIp}:${toString swagHttp}"}
-        ${httpServerBlock "*.${swagDomain}" "${localIp}:${toString swagHttp}"}
-      '';
-      streamSwagMap = optionalString swagEnabled ''
-        ${swagDomain} ${localIp}:${toString swagHttps};
-        *.${swagDomain} ${localIp}:${toString swagHttps};
-      '';
+      customDomains = concatLists (catAttrs "customDomains" (attrValues appServices));
+      allSwagDomains = customDomains ++ [swagDomain "*.${swagDomain}"];
+
+      httpSwagBlockContent = lib.concatStringsSep "\n" (map (domain: "${httpServerBlock domain "${localIp}:${toString swagHttp}"}") allSwagDomains);
+      httpSwagBlock = optionalString swagEnabled httpSwagBlockContent;
+
+      streamSwagMapContent = lib.concatStringsSep "\n" (map (domain: "${domain} ${localIp}:${toString swagHttps};") allSwagDomains);
+      streamSwagMap = optionalString swagEnabled streamSwagMapContent;
+
       nonSwagEntries = filterAttrs (n: _: n != "swag-local") cfg.entries;
 
       entryDomains = name: entry:
