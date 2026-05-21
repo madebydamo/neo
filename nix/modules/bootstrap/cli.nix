@@ -98,6 +98,8 @@ in {
         pkgs.nix
         pkgs.nixos-install-tools
         pkgs.coreutils
+        pkgs.lazygit
+        pkgs.vim
       ];
     };
   };

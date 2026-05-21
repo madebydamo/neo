@@ -1,6 +1,8 @@
 pub mod activate;
 pub mod build;
+pub mod edit;
 pub mod generate_hardware;
+pub mod git;
 pub mod init;
 pub mod nuke;
 pub mod paste_settings;

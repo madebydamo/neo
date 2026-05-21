@@ -7,8 +7,8 @@ use toml_edit::DocumentMut;
 
 pub mod commands;
 use crate::commands::{
-    activate::activate, build::build, execute_command, generate_hardware::generate_hardware,
-    init::init, nuke::nuke, paste_settings::paste_settings, update::update,
+    activate::activate, build::build, edit::edit, execute_command, generate_hardware::generate_hardware,
+    git::git, init::init, nuke::nuke, paste_settings::paste_settings, update::update,
     update_inputs::update_inputs, web::web,
 };
 #[derive(Parser)]
@@ -66,6 +66,9 @@ enum Commands {
     Activate,
     Nuke,
     Web,
+    Edit,
+    Git,
+    Lg,
 }
 
 pub fn load_or_default_settings(path: &PathBuf, _section: &str) -> Result<DocumentMut> {
@@ -200,5 +203,8 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Activate => activate(&config_path, dry_run, nix_cmd, sudo_cmd),
         Commands::Nuke => nuke(&config_path, dry_run, nix_cmd),
         Commands::Web => web(&doc, nix_cmd, &section),
+        Commands::Edit => edit(&config_path, dry_run),
+        Commands::Git => git(&config_path, dry_run),
+        Commands::Lg => git(&config_path, dry_run),
     }
 }
