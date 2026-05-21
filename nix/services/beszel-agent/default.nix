@@ -21,9 +21,7 @@
             "/var/run/docker.sock:/var/run/docker.sock:ro"
             "/var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro"
           ];
-          extraOptions = [
-            "--network=host"
-          ];
+          networks = [ "host" ];
           environment =
             {
               TZ = "Europe/Zurich";

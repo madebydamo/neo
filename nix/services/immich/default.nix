@@ -31,9 +31,7 @@
               "${config.neo.volumes.appdata}/immich/server:/data"
               "/etc/localtime:/etc/localtime:ro"
             ];
-            extraOptions = [
-              "--network=internal"
-            ];
+            networks = [ "internal" ];
           };
 
           immich-machine-learning = {
@@ -42,21 +40,19 @@
             volumes = [
               "${config.neo.volumes.appdata}/immich/cache:/cache"
             ];
-            extraOptions = [
-              "--network=internal"
-            ];
+            networks = [ "internal" ];
           };
 
           immich-redis = {
             image = "docker.io/valkey/valkey:8@sha256:81db6d39e1bba3b3ff32bd3a1b19a6d69690f94a3954ec131277b9a26b95b3aa";
             autoStart = true;
             extraOptions = [
-              "--network=internal"
               "--health-cmd=redis-cli ping"
               "--health-interval=10s"
               "--health-timeout=3s"
               "--health-retries=3"
             ];
+            networks = [ "internal" ];
           };
 
           immich-database = {
@@ -72,9 +68,9 @@
               "${config.neo.volumes.appdata}/immich/data:/var/lib/postgresql/data"
             ];
             extraOptions = [
-              "--network=internal"
               "--shm-size=128mb"
             ];
+            networks = [ "internal" ];
           };
         };
       };

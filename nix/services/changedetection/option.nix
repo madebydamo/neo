@@ -20,6 +20,11 @@
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "changedetection";
+            }
+            // lib.neo.mkVpnOptions {
+              containers = ["changedetection" "changedetection-webengine"];
+              networks = ["internal"];
+              ports = [5000 4444];
             };
         };
         default = {};
@@ -27,3 +32,4 @@
       };
     };
 }
+

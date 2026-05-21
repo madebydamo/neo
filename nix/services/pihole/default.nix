@@ -60,12 +60,12 @@
             "53:53/udp"
           ];
           extraOptions = [
-            "--network=internal"
             "--health-cmd=dig +short +norecurse +retry=0 @127.0.0.1 pi.hole || exit 1"
             "--health-interval=30s"
             "--health-timeout=5s"
             "--health-retries=3"
           ];
+          networks = [ "internal" ];
         };
       };
     };

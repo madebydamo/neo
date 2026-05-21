@@ -1,4 +1,4 @@
-# Beszel hub (server) implementation - tinyauth forwarded auth + optional single-user mode
+# Beszel monitoring service implementation.
 {...}: {
   flake.modules.nixos.beszel = {
     config,
@@ -30,10 +30,9 @@
               USER_EMAIL = "not-that-important@example.com";
               USER_PASSWORD = "whatever";
             };
-          extraOptions = [
-            "--network=internal"
-          ];
+          networks = ["internal"];
         };
       };
     };
 }
+

@@ -1,6 +1,6 @@
-# Nextcloud service implementation (db, redis, cron, app, collabora). Web UI is behind tinyauth via swag proxy.
+# Collabora Online service implementation (requires nextcloud).
 {...}: {
-  flake.modules.nixos.nextcloud = {
+  flake.modules.nixos.collabora = {
     config,
     lib,
     pkgs,
@@ -20,6 +20,7 @@
             message = "neo.services.collabora: can only be enabled if neo.services.nextcloud is also enabled.";
           }
         ];
+
         virtualisation.oci-containers.containers.collabora = {
           image = "collabora/code";
           autoStart = true;
@@ -30,9 +31,9 @@
             extra_params = "--o:ssl.enable=false --o:ssl.termination=true";
           };
           extraOptions = [
-            "--network=internal"
             "--cap-add=MKNOD"
           ];
+          networks = [ "internal" ];
         };
 
         systemd.services.collabora-setup = {

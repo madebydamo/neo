@@ -28,9 +28,7 @@
             volumes = [
               "${appdata}:/datastore"
             ];
-            extraOptions = [
-              "--network=internal"
-            ];
+            networks = [ "internal" ];
           };
 
           changedetection-webengine = {
@@ -41,9 +39,9 @@
               PGID = toString config.neo.gid;
             };
             extraOptions = [
-              "--network=internal"
               "--shm-size=2gb"
             ];
+            networks = [ "internal" ];
           };
         };
       };

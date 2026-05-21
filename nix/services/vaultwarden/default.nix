@@ -29,9 +29,7 @@
           volumes = [
             "${config.neo.volumes.appdata}/vaultwarden:/data"
           ];
-          extraOptions = [
-            "--network=internal"
-          ];
+          networks = ["internal"];
         };
       };
     };

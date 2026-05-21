@@ -51,9 +51,7 @@
                 hostVol: containerPath: "${config.neo.volumes.${hostVol}}:${containerPath}"
               )
               cfg.additionalMountPoints);
-          extraOptions = [
-            "--network=internal"
-          ];
+          networks = ["internal"];
         };
       };
     };

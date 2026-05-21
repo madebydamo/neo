@@ -38,9 +38,7 @@
             "22000:22000/udp"
             "21027:21027/udp"
           ];
-          extraOptions = [
-            "--network=internal"
-          ];
+          networks = [ "internal" ];
         };
       };
     };

@@ -33,13 +33,13 @@
               "${config.neo.volumes.appdata}/immich-drop:/data"
             ];
             extraOptions = [
-              "--network=internal"
               "--health-cmd=python - <<'PY'\nimport os,urllib.request,sys; url=f\"http://127.0.0.1:{os.getenv('PORT','8080')}/\";\ntry: urllib.request.urlopen(url, timeout=3); sys.exit(0)\nexcept Exception: sys.exit(1)\nPY"
               "--health-interval=30s"
               "--health-timeout=5s"
               "--health-retries=3"
               "--health-start-period=10s"
             ];
+            networks = [ "internal" ];
           };
         };
       };

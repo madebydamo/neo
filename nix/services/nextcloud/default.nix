@@ -41,17 +41,13 @@
             volumes = [
               "${appdata}/db:/var/lib/mysql"
             ];
-            extraOptions = [
-              "--network=internal"
-            ];
+            networks = [ "internal" ];
           };
 
           nextcloud-redis = {
             image = "redis:alpine";
             autoStart = true;
-            extraOptions = [
-              "--network=internal"
-            ];
+            networks = [ "internal" ];
           };
 
           nextcloud = {
@@ -72,9 +68,7 @@
             volumes = [
               "${appdata}/html:/var/www/html"
             ];
-            extraOptions = [
-              "--network=internal"
-            ];
+            networks = [ "internal" ];
           };
 
           nextcloud-cron = {
@@ -96,9 +90,7 @@
             volumes = [
               "${appdata}/html:/var/www/html"
             ];
-            extraOptions = [
-              "--network=internal"
-            ];
+            networks = [ "internal" ];
           };
         };
 
