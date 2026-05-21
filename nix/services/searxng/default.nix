@@ -46,9 +46,6 @@
             volumes = [
               "${appdata}/redis:/data"
             ];
-            extraOptions = [
-              "--network=internal"
-            ];
           };
 
           searxng = {
@@ -62,12 +59,8 @@
               "${appdata}/searxng:/etc/searxng:rw"
               "${appdata}/cache:/var/cache/searxng:rw"
             ];
-            extraOptions = [
-              "--network=internal"
-            ];
           };
         };
       };
     };
 }
-

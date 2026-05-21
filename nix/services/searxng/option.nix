@@ -17,6 +17,12 @@
               auth = {
                 enabled = false;
               };
+            }
+            // neo.mkVpnOptions {
+              containers = ["searxng"];
+              internalContainers = ["searxng-redis"];
+              networks = ["internal"];
+              ports = [8080];
             };
         };
         default = {};
@@ -24,4 +30,3 @@
       };
     };
 }
-
