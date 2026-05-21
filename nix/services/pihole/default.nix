@@ -65,7 +65,7 @@
             "--health-timeout=5s"
             "--health-retries=3"
           ];
-          networks = [ "internal" ];
+          networks = ["internal"];
         };
       };
     };

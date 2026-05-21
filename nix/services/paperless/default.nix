@@ -39,7 +39,7 @@
             volumes = [
               "${appdata}/redisdata:/data"
             ];
-            networks = [ "internal" ];
+            networks = ["internal"];
           };
 
           paperless-db = {
@@ -53,7 +53,7 @@
             volumes = [
               "${appdata}/pgdata:/var/lib/postgresql/data"
             ];
-            networks = [ "internal" ];
+            networks = ["internal"];
           };
 
           paperless = {
@@ -75,7 +75,7 @@
               "${appdata}/export:/usr/src/paperless/export"
               "${appdata}/consume:/usr/src/paperless/consume"
             ];
-            networks = [ "internal" ];
+            networks = ["internal"];
           };
         };
       };

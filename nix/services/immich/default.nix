@@ -31,7 +31,7 @@
               "${config.neo.volumes.appdata}/immich/server:/data"
               "/etc/localtime:/etc/localtime:ro"
             ];
-            networks = [ "internal" ];
+            networks = ["internal"];
           };
 
           immich-machine-learning = {
@@ -40,7 +40,7 @@
             volumes = [
               "${config.neo.volumes.appdata}/immich/cache:/cache"
             ];
-            networks = [ "internal" ];
+            networks = ["internal"];
           };
 
           immich-redis = {
@@ -52,7 +52,7 @@
               "--health-timeout=3s"
               "--health-retries=3"
             ];
-            networks = [ "internal" ];
+            networks = ["internal"];
           };
 
           immich-database = {
@@ -70,7 +70,7 @@
             extraOptions = [
               "--shm-size=128mb"
             ];
-            networks = [ "internal" ];
+            networks = ["internal"];
           };
         };
       };

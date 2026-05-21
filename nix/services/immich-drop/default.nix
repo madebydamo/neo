@@ -39,7 +39,7 @@
               "--health-retries=3"
               "--health-start-period=10s"
             ];
-            networks = [ "internal" ];
+            networks = ["internal"];
           };
         };
       };

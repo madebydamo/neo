@@ -28,7 +28,7 @@
             volumes = [
               "${appdata}:/datastore"
             ];
-            networks = [ "internal" ];
+            networks = ["internal"];
           };
 
           changedetection-webengine = {
@@ -41,7 +41,7 @@
             extraOptions = [
               "--shm-size=2gb"
             ];
-            networks = [ "internal" ];
+            networks = ["internal"];
           };
         };
       };

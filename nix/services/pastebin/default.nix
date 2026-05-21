@@ -25,7 +25,7 @@
           volumes = [
             "${appdata}:/upload"
           ];
-          networks = [ "internal" ];
+          networks = ["internal"];
         };
       };
     };

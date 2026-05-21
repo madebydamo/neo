@@ -33,7 +33,7 @@
           extraOptions = [
             "--cap-add=MKNOD"
           ];
-          networks = [ "internal" ];
+          networks = ["internal"];
         };
 
         systemd.services.collabora-setup = {

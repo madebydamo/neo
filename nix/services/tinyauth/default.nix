@@ -61,7 +61,7 @@
           volumes = [
             "${config.neo.volumes.appdata}/tinyauth:/data"
           ];
-          networks = [ "internal" ];
+          networks = ["internal"];
         };
       };
     };
