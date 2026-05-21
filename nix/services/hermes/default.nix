@@ -82,7 +82,7 @@
           workingDirectory = "${cfg.stateDir}/workspace";
           addToSystemPackages = true;
           settings = hermesSettings;
-          extraDependencyGroups = ["all" "messaging" "homeassistant" "youtube"];
+          extraDependencyGroups = ["all" "messaging" "homeassistant" "youtube" "voice"];
           environment = hermesEnv;
           environmentFiles = cfg.environmentFiles;
           # Documents: map common ones. Expand as needed.
