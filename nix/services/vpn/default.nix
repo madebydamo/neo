@@ -37,7 +37,7 @@
               FIREWALL_VPN_INPUT_PORTS = cfg.firewallVpnInputPorts;
             };
           extraOptions = [
-            "--network=default"
+            "--network=internal"
           ];
         };
       };
