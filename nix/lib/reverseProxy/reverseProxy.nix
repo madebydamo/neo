@@ -1,6 +1,6 @@
 # Shared option types for services.
 {lib, ...}: {
-  libExtensions.types = {
+  libExtensions.reverseProxy = {
     neo = {
       mkReverseProxyOptions = {
         subdomain ? null,
