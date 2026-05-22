@@ -9,7 +9,8 @@
   in {
     config.neo.services.tinyauth.proxyConf = lib.mkDefault ''
       server {
-        listen 443 ssl http2;
+        listen 443 ssl;
+        http2 on;
         server_name ${cfg.subdomain}.*;
         include /config/nginx/ssl.conf;
 

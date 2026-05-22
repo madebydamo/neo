@@ -10,7 +10,8 @@
   in {
     config.neo.services.collabora.proxyConf = lib.mkDefault ''
       server {
-        listen 443 ssl http2;
+        listen 443 ssl;
+        http2 on;
         server_name ${collaboraSubdomain}.*;
         include /config/nginx/ssl.conf;
 
