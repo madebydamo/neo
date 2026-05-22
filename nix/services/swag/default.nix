@@ -103,6 +103,8 @@
               EMAIL = cfg.email;
               ONLY_SUBDOMAINS = boolToString cfg.onlySubdomains;
               EXTRA_DOMAINS = concatStringsSep "," (cfg.extraDomains ++ customDomains);
+              SWAG_AUTORELOAD = "true";
+              SWAG_AUTORELOAD_WATCHLIST = "/config/etc/letsencrypt";
             };
             volumes = [
               "${config.neo.volumes.appdata}/swag:/config"
