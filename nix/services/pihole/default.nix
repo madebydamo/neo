@@ -3,6 +3,7 @@
   flake.modules.nixos.pihole = {
     config,
     lib,
+    pkgs,
     ...
   }:
     with lib; let
@@ -66,6 +67,22 @@
             "--health-retries=3"
           ];
           networks = ["internal"];
+        };
+
+        systemd.services."pihole-update-gravity" = {
+          description = "Update Pi-hole gravity lists";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${pkgs.docker}/bin/docker exec pihole pihole updateGravity";
+          };
+        };
+
+        systemd.timers."pihole-update-gravity" = {
+          wantedBy = ["timers.target"];
+          timerConfig = {
+            OnCalendar = "03:00";
+            Persistent = true;
+          };
         };
       };
     };
