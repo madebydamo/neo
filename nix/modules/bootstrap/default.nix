@@ -22,6 +22,8 @@
   in {
     systemd.services.neo-bootstrap = lib.mkIf cfg.bootstrapEnabled {
       description = "Bootstrap nixos config git repo";
+      after = ["network-online.target"];
+      wants = ["network-online.target"];
       wantedBy = ["multi-user.target"];
       before = ["multi-user.target"];
       inherit path;
