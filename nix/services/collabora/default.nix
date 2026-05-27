@@ -25,7 +25,7 @@
           image = "collabora/code";
           autoStart = true;
           environment = {
-            domain = "";
+            domain = nextcloudUrl;
             aliasgroup1 = "https://${nextcloudUrl}:443,https://${builtins.replaceStrings ["."] ["\\\\."] nextcloudUrl}:443";
             server_name = collaboraUrl;
             extra_params = "--o:ssl.enable=false --o:ssl.termination=true";
@@ -45,13 +45,12 @@
             "docker-collabora.service"
             "nextcloud-setup.service"
           ];
-          requires = [
+          wants = [
             "docker-nextcloud-db.service"
             "docker-nextcloud-redis.service"
             "docker-nextcloud.service"
             "nextcloud-setup.service"
           ];
-          wants = ["docker-nextcloud.service"];
           wantedBy = ["multi-user.target"];
           serviceConfig = {
             Type = "oneshot";
@@ -67,10 +66,13 @@
           in ''
             echo "Configuring Collabora integration..."
             ${occ} app:install richdocuments || true
-            ${occ} config:app:set richdocuments wopi_url --value 'http://collabora:9980'
-            ${occ} config:app:set richdocuments public_wopi_url --value 'https://${collaboraUrl}'
-            ${occ} config:app:set richdocuments wopi_allowlist --value="0.0.0.0/0"
+            ${occ} app:disable richdocuments
+            ${occ} app:disable richdocumentscode
             ${occ} app:enable richdocuments
+            ${occ} config:app:set richdocuments wopi_url --value 'http://collabora:9980'
+            ${occ} config:app:set richdocuments public_wopi_url --value "https://${collaboraUrl}"
+            ${occ} config:app:set richdocuments wopi_callback_url --value "https://${nextcloudUrl}"
+            ${occ} config:app:set richdocuments wopi_allowlist --value "0.0.0.0/0"
             ${occ} richdocuments:activate-config
             echo "Collabora setup completed."
           '';
