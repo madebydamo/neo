@@ -30,9 +30,10 @@
             server_name = collaboraUrl;
             extra_params = "--o:ssl.enable=false --o:ssl.termination=true";
           };
-          extraOptions = [
-            "--cap-add=MKNOD"
-          ];
+          capabilities = {
+            MKNOD = true;
+            SYS_ADMIN = true;
+          };
           networks = ["internal"];
         };
 
