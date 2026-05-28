@@ -14,38 +14,38 @@
     {{#if options}}
       <div class="space-y-4">
         {{#each options}}
-          {{#if (eq type.kind "submodule")}}
-            {{! Submodule rendered as section header + collapsible control (children are later siblings) }}
-            <div class="mt-5 first:mt-2 border-t border-base-300 pt-3 first:border-t-0 first:pt-0">
-              <div class="flex items-center gap-3 cursor-pointer select-none hover:bg-base-200/60 -mx-1 px-1 py-1 rounded"
-                   @click="toggleSubmodule('{{name}}')">
-                <span class="font-semibold font-mono text-base">{{name}}</span>
-                <span class="badge badge-primary badge-sm">submodule</span>
-                {{#if readOnly}}<span class="badge badge-warning badge-xs">readOnly</span>{{/if}}
-                <span class="flex-1"></span>
-                <span class="text-xl leading-none opacity-60 tabular-nums" x-text="isOpen['{{name}}'] ? '−' : '+'"></span>
-                <button @click.stop="resetSubtree('{{name}}'); $event.target.blur();" class="btn btn-ghost btn-xs">↺ section</button>
-              </div>
-              {{#if description}}
-                <div class="text-xs text-base-content/60 mt-0.5 pl-1">{{description}}</div>
-              {{/if}}
-            </div>
-          {{else}}
-            {{! Normal scalar / list / attrs field - existing card, hidden when its parent submodule section is collapsed }}
-            <div class="border border-base-300 rounded-lg p-3 bg-base-200/40"
-                 x-show="shouldShowField('{{name}}')">
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="font-mono text-sm break-all">{{name}}</span>
-                    {{#if readOnly}}<span class="badge badge-warning badge-xs">readOnly</span>{{/if}}
-                    <span class="badge badge-ghost badge-xs">{{typeLabel}}</span>
-                    {{#if description}}
-                      <div class="tooltip tooltip-right" data-tip="{{description}}">
-                        <span class="cursor-help text-base-content/40 hover:text-primary text-[13px] leading-none select-none">ⓘ</span>
+          {{! Submodule records are purely structural and are omitted (children with dotted names are shown flat) }}
+          {{#unless (eq type.kind "submodule")}}
+            <div class="border border-base-300 rounded-lg p-3 bg-base-200/40">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 flex-wrap min-w-0">
+                  <span class="font-mono text-sm break-all">{{name}}</span>
+                  {{#if readOnly}}<span class="badge badge-warning badge-xs">readOnly</span>{{/if}}
+                  <details class="dropdown dropdown-right">
+                    <summary class="cursor-pointer list-none">
+                      <span class="cursor-help text-base-content/40 hover:text-primary text-[13px] leading-none select-none">ⓘ</span>
+                    </summary>
+                    <div class="dropdown-content card card-sm bg-base-100 shadow-sm z-10 w-72 text-left">
+                      <div class="card-body text-sm">
+                        {{#if description}}
+                          <div>{{description}}</div>
+                          <div class="divider my-1"></div>
+                        {{/if}}
+                        <div><span class="font-semibold">type:</span> <span class="font-mono text-xs">{{typeLabel}}</span></div>
+                        <div><span class="font-semibold">default:</span> <span class="font-mono text-xs">{{defaultDisplay}}</span></div>
                       </div>
-                    {{/if}}
-                  </div>
+                    </div>
+                  </details>
+                </div>
+
+                <div class="flex items-center gap-1 flex-shrink-0">
+                  <span x-show="sourceLabel('{{name}}') === 'modified'"
+                        class="badge badge-warning badge-xs">modified</span>
+                  <button @click="revertField('{{name}}')"
+                          class="btn btn-ghost btn-xs"
+                          :class="{ 'opacity-40': isAtOriginal('{{name}}') }"
+                          :disabled="isAtOriginal('{{name}}')"
+                          title="Revert this field to loaded value">↺</button>
                 </div>
               </div>
 
@@ -127,27 +127,8 @@
                 </div>
               {{/if}}
 
-              <div class="text-[10px] mt-1.5 flex items-center gap-2 text-base-content/60">
-                <span x-text="sourceLabel('{{name}}')"
-                      :class="{
-                        'text-warning': sourceLabel('{{name}}') === 'modified',
-                        'opacity-70': sourceLabel('{{name}}') === 'default'
-                      }"></span>
-
-                <span x-show="isExplicitEmpty('{{name}}')" class="badge badge-warning badge-xs">explicit empty</span>
-
-                <span class="opacity-50">·</span>
-                <span>default:</span>
-                <span class="font-mono text-base-content/50">{{defaultDisplay}}</span>
-
-                <button @click="revertField('{{name}}')"
-                        class="btn btn-ghost btn-xs ml-auto"
-                        :class="{ 'opacity-40': isAtOriginal('{{name}}') }"
-                        :disabled="isAtOriginal('{{name}}')"
-                        title="Revert this field to loaded value">↺</button>
-              </div>
             </div>
-          {{/if}}
+          {{/unless}}
         {{/each}}
       </div>
 

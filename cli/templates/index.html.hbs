@@ -18,49 +18,75 @@
         </div>
       </div>
 
-      <div class="flex gap-6">
-        <div class="w-5/12">
+      <div class="flex flex-col lg:flex-row gap-4 lg:gap-6">
+
+        <!-- Mobile: collapsible services menu (auto-closes on selection) -->
+        <div class="lg:hidden" x-data="{ menuOpen: false }">
+          <details
+            class="collapse bg-base-200 rounded-box"
+            :open="menuOpen"
+            @toggle="menuOpen = $event.target.open">
+            <summary class="collapse-title text-sm font-medium">Services</summary>
+            <div class="collapse-content p-0">
+              <ul class="menu w-full text-sm">
+                {{#each services}}
+                  <li>
+                    <a hx-get="/option/{{name}}"
+                       hx-target="#options-pane"
+                       hx-swap="outerHTML"
+                       class="font-mono"
+                       @click="menuOpen = false">
+                      {{#if enabled}}
+                        <span class="inline-block w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+                      {{else}}
+                        <span class="inline-block w-2 h-2 rounded-full bg-base-300 flex-shrink-0"></span>
+                      {{/if}}
+                      {{name}}
+                    </a>
+                  </li>
+                {{/each}}
+              </ul>
+            </div>
+          </details>
+        </div>
+
+        <!-- Desktop: narrow sidebar menu -->
+        <div class="hidden lg:block w-60 flex-shrink-0">
           <div class="card bg-base-100 shadow">
-            <div class="card-body p-0">
-              <div class="overflow-x-auto">
-                <table class="table table-sm">
-                  <thead>
-                    <tr>
-                      <th>Service</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {{#each services}}
-                      <tr class="hover cursor-pointer"
-                          hx-get="/option/{{name}}"
-                          hx-target="#options-pane"
-                          hx-swap="outerHTML">
-                        <td class="font-mono">{{name}}</td>
-                        <td>
-                          {{#if enabled}}
-                            <span class="badge badge-success badge-sm">enabled</span>
-                          {{else}}
-                            <span class="badge badge-ghost badge-sm">disabled</span>
-                          {{/if}}
-                        </td>
-                      </tr>
-                    {{/each}}
-                  </tbody>
-                </table>
+            <div class="card-body p-2">
+              <ul class="menu w-full text-sm">
+                {{#each services}}
+                  <li>
+                    <a hx-get="/option/{{name}}"
+                       hx-target="#options-pane"
+                       hx-swap="outerHTML"
+                       class="font-mono">
+                      {{#if enabled}}
+                        <span class="inline-block w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+                      {{else}}
+                        <span class="inline-block w-2 h-2 rounded-full bg-base-300 flex-shrink-0"></span>
+                      {{/if}}
+                      {{name}}
+                    </a>
+                  </li>
+                {{/each}}
+              </ul>
+            </div>
+          </div>
+          <p class="text-xs opacity-40 mt-2 px-1">Click a service to load its options.</p>
+        </div>
+
+        <!-- Main content -->
+        <div class="flex-1 min-w-0">
+          <div id="options-pane">
+            <div class="card bg-base-100 shadow h-full">
+              <div class="card-body text-base-content/60">
+                Select a service to edit its configuration.
               </div>
             </div>
           </div>
-          <p class="text-xs opacity-40 mt-2 px-1">Click a service to load its typed options.</p>
         </div>
 
-        <div id="options-pane" class="w-7/12">
-          <div class="card bg-base-100 shadow h-full">
-            <div class="card-body text-base-content/60">
-              Select a service on the left to edit its configuration.
-            </div>
-          </div>
-        </div>
       </div>
 
       <p class="mt-6 text-[10px] opacity-30">
@@ -79,7 +105,6 @@
           defaults: {},
           originals: {},
           hadCurrent: {},
-          isOpen: {},
 
           initForm() {
             const raw = document.getElementById('options-seed')?.textContent || '[]';
@@ -95,13 +120,6 @@
               this.defaults[o.name] = o.default;
               this.originals[o.name] = (Array.isArray(v) ? [...v] : (v && typeof v === 'object' ? {...v} : v));
               this.hadCurrent[o.name] = hasCurrent;
-            });
-
-            // Discover direct submodule sections for collapsible headers
-            opts.forEach(o => {
-              if (o.type && o.type.kind === 'submodule') {
-                this.isOpen[o.name] = true;
-              }
             });
           },
 
@@ -130,30 +148,6 @@
             });
           },
 
-          toggleSubmodule(name) {
-            if (name in this.isOpen) this.isOpen[name] = !this.isOpen[name];
-          },
-
-          shouldShowField(name) {
-            if (!name || !name.includes('.')) return true;
-            for (const p in this.isOpen) {
-              if ((name === p || name.startsWith(p + '.')) && !this.isOpen[p]) {
-                return false;
-              }
-            }
-            return true;
-          },
-
-          resetSubtree(prefix) {
-            Object.keys(this.defaults).forEach(k => {
-              if (k === prefix || k.startsWith(prefix + '.')) {
-                this.values[k] = this.defaults[k];
-                if (Array.isArray(this.values[k])) this.values[k] = [...this.values[k]];
-                else if (this.values[k] && typeof this.values[k] === 'object') this.values[k] = {...this.values[k]};
-              }
-            });
-          },
-
           deepEqual(a, b) {
             try { return JSON.stringify(a) === JSON.stringify(b); } catch (_) { return false; }
           },
@@ -177,16 +171,6 @@
             // Show "default" when the value equals the declared default (whether it came via current or not).
             // Show "modified" when it differs from the default.
             return this.isAtDefault(name) ? 'default' : 'modified';
-          },
-
-          isExplicitEmpty(name) {
-            if (!name) return false;
-            const vals = this.values || {};
-            const v = vals[name];
-            if (v === '') return true;
-            if (Array.isArray(v)) return v.length === 0;
-            if (v && typeof v === 'object' && v !== null) return Object.keys(v).length === 0;
-            return false;
           },
 
           addListItem(name) {
