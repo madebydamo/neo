@@ -77,6 +77,9 @@
         return {
           values: {},
           defaults: {},
+          originals: {},
+          hadCurrent: {},
+          isOpen: {},
 
           initForm() {
             const raw = document.getElementById('options-seed')?.textContent || '[]';
@@ -84,11 +87,21 @@
             try { opts = JSON.parse(raw); } catch (e) { opts = []; }
 
             opts.forEach(o => {
-              let v = (o.current !== undefined && o.current !== null) ? o.current : o.default;
+              const hasCurrent = (o.current !== undefined && o.current !== null);
+              let v = hasCurrent ? o.current : o.default;
               if (Array.isArray(v)) v = [...v];
               else if (v && typeof v === 'object') v = {...v};
               this.values[o.name] = v;
               this.defaults[o.name] = o.default;
+              this.originals[o.name] = (Array.isArray(v) ? [...v] : (v && typeof v === 'object' ? {...v} : v));
+              this.hadCurrent[o.name] = hasCurrent;
+            });
+
+            // Discover direct submodule sections for collapsible headers
+            opts.forEach(o => {
+              if (o.type && o.type.kind === 'submodule') {
+                this.isOpen[o.name] = true;
+              }
             });
           },
 
@@ -98,12 +111,82 @@
             else if (this.values[name] && typeof this.values[name] === 'object') this.values[name] = {...this.values[name]};
           },
 
+          revertField(name) {
+            if (!name) return;
+            const origs = this.originals || {};
+            if (!origs[name]) return;
+            let v = origs[name];
+            if (Array.isArray(v)) v = [...v];
+            else if (v && typeof v === 'object' && v !== null) v = {...v};
+            const vals = this.values || {};
+            vals[name] = v;
+          },
+
           resetAll() {
             Object.keys(this.defaults).forEach(k => {
               this.values[k] = this.defaults[k];
               if (Array.isArray(this.values[k])) this.values[k] = [...this.values[k]];
               else if (this.values[k] && typeof this.values[k] === 'object') this.values[k] = {...this.values[k]};
             });
+          },
+
+          toggleSubmodule(name) {
+            if (name in this.isOpen) this.isOpen[name] = !this.isOpen[name];
+          },
+
+          shouldShowField(name) {
+            if (!name || !name.includes('.')) return true;
+            for (const p in this.isOpen) {
+              if ((name === p || name.startsWith(p + '.')) && !this.isOpen[p]) {
+                return false;
+              }
+            }
+            return true;
+          },
+
+          resetSubtree(prefix) {
+            Object.keys(this.defaults).forEach(k => {
+              if (k === prefix || k.startsWith(prefix + '.')) {
+                this.values[k] = this.defaults[k];
+                if (Array.isArray(this.values[k])) this.values[k] = [...this.values[k]];
+                else if (this.values[k] && typeof this.values[k] === 'object') this.values[k] = {...this.values[k]};
+              }
+            });
+          },
+
+          deepEqual(a, b) {
+            try { return JSON.stringify(a) === JSON.stringify(b); } catch (_) { return false; }
+          },
+
+          isAtDefault(name) {
+            if (!name) return true;
+            const vals = this.values || {};
+            const defs = this.defaults || {};
+            return this.deepEqual(vals[name], defs[name]);
+          },
+
+          isAtOriginal(name) {
+            if (!name) return true;
+            const vals = this.values || {};
+            const origs = this.originals || {};
+            return this.deepEqual(vals[name], origs[name]);
+          },
+
+          sourceLabel(name) {
+            if (!name) return '';
+            // Show "default" when the value equals the declared default (whether it came via current or not).
+            // Show "modified" when it differs from the default.
+            return this.isAtDefault(name) ? 'default' : 'modified';
+          },
+
+          isExplicitEmpty(name) {
+            if (!name) return false;
+            const vals = this.values || {};
+            const v = vals[name];
+            if (v === '') return true;
+            if (Array.isArray(v)) return v.length === 0;
+            if (v && typeof v === 'object' && v !== null) return Object.keys(v).length === 0;
+            return false;
           },
 
           addListItem(name) {

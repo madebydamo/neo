@@ -1,111 +1,155 @@
 <div id="options-pane" class="card bg-base-100 shadow" data-service="{{service}}" x-data="optionForm()" x-init="initForm()">
+  <!-- Seed script moved to top so it is available immediately when x-init runs -->
+  <script id="options-seed" type="application/json">{{{options_json}}}</script>
+
   <div class="card-body">
     <div class="flex items-center justify-between mb-2">
       <h2 class="card-title font-mono">{{service}}</h2>
       <button @click="resetAll()" class="btn btn-ghost btn-xs">Reset all to defaults</button>
     </div>
+    <div class="text-[10px] text-base-content/50 -mt-1 mb-2">
+      Values loaded from flake evaluation (current where set in your nixosConfiguration).
+    </div>
 
     {{#if options}}
       <div class="space-y-4">
         {{#each options}}
-          <div class="border border-base-300 rounded-lg p-3 bg-base-200/40">
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="font-mono text-sm break-all">{{name}}</span>
-                  {{#if internal}}<span class="badge badge-neutral badge-xs">internal</span>{{/if}}
-                  {{#if readOnly}}<span class="badge badge-warning badge-xs">readOnly</span>{{/if}}
-                  <span class="badge badge-ghost badge-xs">{{typeLabel}}</span>
-                </div>
-                {{#if description}}
-                  <div class="text-xs text-base-content/60 mt-1">{{description}}</div>
-                {{/if}}
+          {{#if (eq type.kind "submodule")}}
+            {{! Submodule rendered as section header + collapsible control (children are later siblings) }}
+            <div class="mt-5 first:mt-2 border-t border-base-300 pt-3 first:border-t-0 first:pt-0">
+              <div class="flex items-center gap-3 cursor-pointer select-none hover:bg-base-200/60 -mx-1 px-1 py-1 rounded"
+                   @click="toggleSubmodule('{{name}}')">
+                <span class="font-semibold font-mono text-base">{{name}}</span>
+                <span class="badge badge-primary badge-sm">submodule</span>
+                {{#if internal}}<span class="badge badge-neutral badge-xs">internal</span>{{/if}}
+                {{#if readOnly}}<span class="badge badge-warning badge-xs">readOnly</span>{{/if}}
+                <span class="flex-1"></span>
+                <span class="text-xl leading-none opacity-60 tabular-nums" x-text="isOpen['{{name}}'] ? '−' : '+'"></span>
+                <button @click.stop="resetSubtree('{{name}}'); $event.target.blur();" class="btn btn-ghost btn-xs">↺ section</button>
               </div>
-              <button @click="resetField('{{name}}')" class="btn btn-ghost btn-xs shrink-0">↺</button>
+              {{#if description}}
+                <div class="text-xs text-base-content/60 mt-0.5 pl-1">{{description}}</div>
+              {{/if}}
             </div>
-
-            {{! Scalar inputs }}
-            {{#if (eq type.kind "bool")}}
-              <div class="form-control mt-2">
-                <label class="label cursor-pointer justify-start gap-3">
-                  <input type="checkbox" class="toggle toggle-primary" x-model="values['{{name}}']">
-                  <span class="label-text text-xs">enabled</span>
-                </label>
+          {{else}}
+            {{! Normal scalar / list / attrs field - existing card, hidden when its parent submodule section is collapsed }}
+            <div class="border border-base-300 rounded-lg p-3 bg-base-200/40"
+                 x-show="shouldShowField('{{name}}')">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-mono text-sm break-all">{{name}}</span>
+                    {{#if internal}}<span class="badge badge-neutral badge-xs">internal</span>{{/if}}
+                    {{#if readOnly}}<span class="badge badge-warning badge-xs">readOnly</span>{{/if}}
+                    <span class="badge badge-ghost badge-xs">{{typeLabel}}</span>
+                    {{#if description}}
+                      <div class="tooltip tooltip-right" data-tip="{{description}}">
+                        <span class="cursor-help text-base-content/40 hover:text-primary text-[13px] leading-none select-none">ⓘ</span>
+                      </div>
+                    {{/if}}
+                  </div>
+                </div>
               </div>
-            {{/if}}
 
-            {{#if (eq type.kind "str")}}
-              <div class="mt-2">
-                <input type="text" class="input input-bordered input-sm w-full font-mono"
-                       x-model="values['{{name}}']"
-                       placeholder="{{defaultDisplay}}">
-              </div>
-            {{/if}}
-
-            {{#if (eq type.kind "nullOr")}}
-              {{#if (eq type.elem.kind "str")}}
-                <div class="mt-2 flex gap-2">
-                  <input type="text" class="input input-bordered input-sm flex-1 font-mono"
-                         x-model="values['{{name}}']"
-                         placeholder="null (use default)">
-                  <button @click="values['{{name}}'] = null" class="btn btn-ghost btn-xs">clear</button>
+              {{! Scalar inputs }}
+              {{#if (eq type.kind "bool")}}
+                <div class="form-control mt-2">
+                  <label class="label cursor-pointer justify-start gap-3">
+                    <input type="checkbox" class="toggle toggle-primary" x-model="values['{{name}}']">
+                    <span class="label-text text-xs">enabled</span>
+                  </label>
                 </div>
               {{/if}}
-              {{#if (eq type.elem.kind "path")}}
-                <div class="mt-2 flex gap-2">
-                  <input type="text" class="input input-bordered input-sm flex-1 font-mono"
+
+              {{#if (eq type.kind "str")}}
+                <div class="mt-2">
+                  <input type="text" class="input input-bordered input-sm w-full font-mono"
                          x-model="values['{{name}}']"
-                         placeholder="null (use default)">
-                  <button @click="values['{{name}}'] = null" class="btn btn-ghost btn-xs">clear</button>
+                         placeholder="{{defaultDisplay}}">
                 </div>
               {{/if}}
-            {{/if}}
 
-            {{#if (or (eq type.kind "int") (eq type.kind "port"))}}
-              <div class="mt-2">
-                <input type="number"
-                       class="input input-bordered input-sm w-full font-mono"
-                       x-model.number="values['{{name}}']"
-                       {{#if type.min}}min="{{type.min}}"{{/if}}
-                       {{#if type.max}}max="{{type.max}}"{{/if}}>
-              </div>
-            {{/if}}
-
-            {{! listOf (repeatable rows via Alpine) }}
-            {{#if (eq type.kind "listOf")}}
-              <div class="mt-2">
-                <template x-for="(item, idx) in (values['{{name}}'] || [])" :key="idx">
-                  <div class="flex gap-2 mb-1.5">
+              {{#if (eq type.kind "nullOr")}}
+                {{#if (eq type.elem.kind "str")}}
+                  <div class="mt-2 flex gap-2">
                     <input type="text" class="input input-bordered input-sm flex-1 font-mono"
-                           x-model="values['{{name}}'][idx]">
-                    <button @click="removeListItem('{{name}}', idx)" class="btn btn-ghost btn-xs">✕</button>
+                           x-model="values['{{name}}']"
+                           placeholder="null (use default)">
+                    <button @click="values['{{name}}'] = null" class="btn btn-ghost btn-xs">clear</button>
                   </div>
-                </template>
-                <button @click="addListItem('{{name}}')" class="btn btn-outline btn-xs mt-1">+ add</button>
-              </div>
-            {{/if}}
+                {{/if}}
+                {{#if (eq type.elem.kind "path")}}
+                  <div class="mt-2 flex gap-2">
+                    <input type="text" class="input input-bordered input-sm flex-1 font-mono"
+                           x-model="values['{{name}}']"
+                           placeholder="null (use default)">
+                    <button @click="values['{{name}}'] = null" class="btn btn-ghost btn-xs">clear</button>
+                  </div>
+                {{/if}}
+              {{/if}}
 
-            {{! attrsOf str (simple key-value) }}
-            {{#if (eq type.kind "attrsOf")}}
-              <div class="mt-2 space-y-1">
-                <template x-for="(val, key) in (values['{{name}}'] || {})" :key="key">
-                  <div class="flex gap-2">
-                    <input class="input input-bordered input-sm w-40 font-mono" :value="key" disabled>
-                    <input class="input input-bordered input-sm flex-1 font-mono" x-model="values['{{name}}'][key]">
-                    <button @click="removeAttrItem('{{name}}', key)" class="btn btn-ghost btn-xs">✕</button>
-                  </div>
-                </template>
-                <div class="flex gap-2">
-                  <input class="input input-bordered input-sm w-40" placeholder="key" x-ref="newkey_{{name}}">
-                  <button @click="addAttrItem('{{name}}', $refs['newkey_{{name}}'])" class="btn btn-outline btn-xs">+ add</button>
+              {{#if (or (eq type.kind "int") (eq type.kind "port"))}}
+                <div class="mt-2">
+                  <input type="number"
+                         class="input input-bordered input-sm w-full font-mono"
+                         x-model.number="values['{{name}}']"
+                         {{#if type.min}}min="{{type.min}}"{{/if}}
+                         {{#if type.max}}max="{{type.max}}"{{/if}}>
                 </div>
-              </div>
-            {{/if}}
+              {{/if}}
 
-            <div class="text-[10px] text-base-content/50 mt-1.5">
-              default: <span class="font-mono">{{defaultDisplay}}</span>
+              {{! listOf (repeatable rows via Alpine) }}
+              {{#if (eq type.kind "listOf")}}
+                <div class="mt-2">
+                  <template x-for="(item, idx) in (values['{{name}}'] || [])" :key="idx">
+                    <div class="flex gap-2 mb-1.5">
+                      <input type="text" class="input input-bordered input-sm flex-1 font-mono"
+                             x-model="values['{{name}}'][idx]">
+                      <button @click="removeListItem('{{name}}', idx)" class="btn btn-ghost btn-xs">✕</button>
+                    </div>
+                  </template>
+                  <button @click="addListItem('{{name}}')" class="btn btn-outline btn-xs mt-1">+ add</button>
+                </div>
+              {{/if}}
+
+              {{! attrsOf str (simple key-value) }}
+              {{#if (eq type.kind "attrsOf")}}
+                <div class="mt-2 space-y-1">
+                  <template x-for="(val, key) in (values['{{name}}'] || {})" :key="key">
+                    <div class="flex gap-2">
+                      <input class="input input-bordered input-sm w-40 font-mono" :value="key" disabled>
+                      <input class="input input-bordered input-sm flex-1 font-mono" x-model="values['{{name}}'][key]">
+                      <button @click="removeAttrItem('{{name}}', key)" class="btn btn-ghost btn-xs">✕</button>
+                    </div>
+                  </template>
+                  <div class="flex gap-2">
+                    <input class="input input-bordered input-sm w-40" placeholder="key" x-ref="newkey_{{name}}">
+                    <button @click="addAttrItem('{{name}}', $refs['newkey_{{name}}'])" class="btn btn-outline btn-xs">+ add</button>
+                  </div>
+                </div>
+              {{/if}}
+
+              <div class="text-[10px] mt-1.5 flex items-center gap-2 text-base-content/60">
+                <span x-text="sourceLabel('{{name}}')"
+                      :class="{
+                        'text-warning': sourceLabel('{{name}}') === 'modified',
+                        'opacity-70': sourceLabel('{{name}}') === 'default'
+                      }"></span>
+
+                <span x-show="isExplicitEmpty('{{name}}')" class="badge badge-warning badge-xs">explicit empty</span>
+
+                <span class="opacity-50">·</span>
+                <span>default:</span>
+                <span class="font-mono text-base-content/50">{{defaultDisplay}}</span>
+
+                <button @click="revertField('{{name}}')"
+                        class="btn btn-ghost btn-xs ml-auto"
+                        :class="{ 'opacity-40': isAtOriginal('{{name}}') }"
+                        :disabled="isAtOriginal('{{name}}')"
+                        title="Revert this field to loaded value">↺</button>
+              </div>
             </div>
-          </div>
+          {{/if}}
         {{/each}}
       </div>
 
@@ -117,7 +161,4 @@
       <p class="text-base-content/60">No options found or service does not exist.</p>
     {{/if}}
   </div>
-
-  <!-- Hidden seed for Alpine (populated by server) -->
-  <script id="options-seed" type="application/json">{{options_json}}</script>
 </div>
