@@ -21,7 +21,6 @@
                    @click="toggleSubmodule('{{name}}')">
                 <span class="font-semibold font-mono text-base">{{name}}</span>
                 <span class="badge badge-primary badge-sm">submodule</span>
-                {{#if internal}}<span class="badge badge-neutral badge-xs">internal</span>{{/if}}
                 {{#if readOnly}}<span class="badge badge-warning badge-xs">readOnly</span>{{/if}}
                 <span class="flex-1"></span>
                 <span class="text-xl leading-none opacity-60 tabular-nums" x-text="isOpen['{{name}}'] ? '−' : '+'"></span>
@@ -39,7 +38,6 @@
                 <div class="min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="font-mono text-sm break-all">{{name}}</span>
-                    {{#if internal}}<span class="badge badge-neutral badge-xs">internal</span>{{/if}}
                     {{#if readOnly}}<span class="badge badge-warning badge-xs">readOnly</span>{{/if}}
                     <span class="badge badge-ghost badge-xs">{{typeLabel}}</span>
                     {{#if description}}

@@ -251,15 +251,17 @@
 
   raw = walk [] root;
 
+  visible = builtins.filter (r: !(r.internal or false)) raw;
+
   sortKey = r: let
     n = r.name or "";
   in
     if n == "enabled"
     then "0\u0000" + n
-    else if (r.internal or false) || (r.readOnly or false)
+    else if (r.readOnly or false)
     then "2\u0000" + n
     else "1\u0000" + n;
 
-  sorted = builtins.sort (a: b: (sortKey a) < (sortKey b)) raw;
+  sorted = builtins.sort (a: b: (sortKey a) < (sortKey b)) visible;
 in
   sorted
