@@ -17,16 +17,50 @@ pub struct AppConfig {
     pub neo_input: String,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct OptionInfo {
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct OptionType {
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub elem: Option<Box<OptionType>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub values: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pattern: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct OptionSchema {
     pub name: String,
-    pub r#type: String,
-    pub default: String,
+    #[serde(rename = "type")]
+    pub r#type: OptionType,
+    pub typeLabel: String,
+    #[serde(default)]
+    pub default: serde_json::Value,
+    #[serde(default)]
     pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub example: Option<serde_json::Value>,
+    #[serde(default)]
+    pub internal: bool,
+    #[serde(default, rename = "readOnly")]
+    pub read_only: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current: Option<serde_json::Value>,
+    #[serde(default)]
+    pub defaultDisplay: String,
+    #[serde(default)]
+    pub currentDisplay: String,
 }
 
 #[derive(Serialize)]
 pub struct OptionContext {
     pub service: String,
-    pub options: Vec<OptionInfo>,
+    pub options: Vec<OptionSchema>,
+    /// Pre-serialized JSON for client-side (Alpine) form state.
+    /// Contains the rich type info + initial values so the interactive form can be fully client-driven.
+    pub options_json: String,
 }

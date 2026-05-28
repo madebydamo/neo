@@ -2,39 +2,157 @@
   <head>
     <title>neo web</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" />
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://unpkg.com/alpinejs" defer></script>
   </head>
-  <body class="bg-zinc-900 text-white p-8">
-    <div class="max-w-6xl mx-auto">
-      <h1 class="text-4xl mb-8">Neo Homeserver Services</h1>
-      <div class="flex gap-8">
-        <div class="w-1/2">
-          <table class="w-full border-collapse">
-            <thead>
-              <tr class="bg-zinc-800">
-                <th class="p-4 text-left">Service</th>
-                <th class="p-4 text-left">Status</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y">
-              {{#each services}}
-                <tr class="cursor-pointer hover:bg-zinc-800"
-                    hx-get="/option/{{name}}"
-                    hx-target="#options-pane"
-                    hx-swap="outerHTML">
-                  <td class="font-mono p-4">{{name}}</td>
-                  <td class="p-4">{{#if enabled}}🟢 active{{else}}⚪ inactive{{/if}}</td>
-                </tr>
-              {{/each}}
-            </tbody>
-          </table>
+  <body class="bg-base-300 text-base-content p-6" data-theme="dark">
+    <div class="max-w-7xl mx-auto">
+      <div class="navbar bg-base-100 rounded-box mb-6 shadow">
+        <div class="flex-1">
+          <span class="text-2xl font-bold px-4">neo</span>
+          <span class="text-sm opacity-60">homeserver config</span>
         </div>
-        <div id="options-pane" class="w-1/2 p-6 border-l border-zinc-700 text-zinc-500">
-          Select a service to view its options.
+        <div class="flex-none text-xs opacity-50 pr-4">
+          DaisyUI + Tailwind + HTMX + Alpine (dev CDNs)
         </div>
       </div>
-      <p class="mt-8 text-xs opacity-50">Served via Rocket.rs + Handlebars +
-        HTMX. Click any service to load its options dynamically from the flake.</p>
+
+      <div class="flex gap-6">
+        <div class="w-5/12">
+          <div class="card bg-base-100 shadow">
+            <div class="card-body p-0">
+              <div class="overflow-x-auto">
+                <table class="table table-sm">
+                  <thead>
+                    <tr>
+                      <th>Service</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {{#each services}}
+                      <tr class="hover cursor-pointer"
+                          hx-get="/option/{{name}}"
+                          hx-target="#options-pane"
+                          hx-swap="outerHTML">
+                        <td class="font-mono">{{name}}</td>
+                        <td>
+                          {{#if enabled}}
+                            <span class="badge badge-success badge-sm">enabled</span>
+                          {{else}}
+                            <span class="badge badge-ghost badge-sm">disabled</span>
+                          {{/if}}
+                        </td>
+                      </tr>
+                    {{/each}}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <p class="text-xs opacity-40 mt-2 px-1">Click a service to load its typed options.</p>
+        </div>
+
+        <div id="options-pane" class="w-7/12">
+          <div class="card bg-base-100 shadow h-full">
+            <div class="card-body text-base-content/60">
+              Select a service on the left to edit its configuration.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="mt-6 text-[10px] opacity-30">
+        Rocket + Handlebars + HTMX + Alpine + DaisyUI (CDN). Phase 2 forms (type-driven inputs + reset-to-default).
+      </p>
     </div>
+
+    <script>
+      document.documentElement.setAttribute('data-theme', 'dark');
+    </script>
+
+    <script>
+      function optionForm() {
+        return {
+          values: {},
+          defaults: {},
+
+          initForm() {
+            const raw = document.getElementById('options-seed')?.textContent || '[]';
+            let opts = [];
+            try { opts = JSON.parse(raw); } catch (e) { opts = []; }
+
+            opts.forEach(o => {
+              let v = (o.current !== undefined && o.current !== null) ? o.current : o.default;
+              if (Array.isArray(v)) v = [...v];
+              else if (v && typeof v === 'object') v = {...v};
+              this.values[o.name] = v;
+              this.defaults[o.name] = o.default;
+            });
+          },
+
+          resetField(name) {
+            this.values[name] = this.defaults[name];
+            if (Array.isArray(this.values[name])) this.values[name] = [...this.values[name]];
+            else if (this.values[name] && typeof this.values[name] === 'object') this.values[name] = {...this.values[name]};
+          },
+
+          resetAll() {
+            Object.keys(this.defaults).forEach(k => {
+              this.values[k] = this.defaults[k];
+              if (Array.isArray(this.values[k])) this.values[k] = [...this.values[k]];
+              else if (this.values[k] && typeof this.values[k] === 'object') this.values[k] = {...this.values[k]};
+            });
+          },
+
+          addListItem(name) {
+            if (!Array.isArray(this.values[name])) this.values[name] = [];
+            this.values[name].push('');
+          },
+
+          removeListItem(name, idx) {
+            if (Array.isArray(this.values[name])) this.values[name].splice(idx, 1);
+          },
+
+          addAttrItem(name, inputEl) {
+            if (!this.values[name] || typeof this.values[name] !== 'object') this.values[name] = {};
+            const key = inputEl?.value?.trim();
+            if (key && !this.values[name].hasOwnProperty(key)) {
+              this.values[name][key] = '';
+              if (inputEl) inputEl.value = '';
+            }
+          },
+
+          removeAttrItem(name, key) {
+            if (this.values[name] && typeof this.values[name] === 'object') {
+              delete this.values[name][key];
+            }
+          },
+
+          logState() {
+            const svc = this.$el?.dataset?.service || this.$el?.querySelector('h2')?.textContent?.trim() || 'service';
+            console.log('Current edited state for ' + svc, this.values);
+          },
+
+          copyJson() {
+            const txt = JSON.stringify(this.values, null, 2);
+            navigator.clipboard?.writeText(txt).then(() => {
+              const orig = event?.target?.innerText;
+              if (event?.target) event.target.innerText = 'Copied!';
+              setTimeout(() => { if (event?.target) event.target.innerText = orig || 'Copy JSON'; }, 1200);
+            }).catch(() => alert(txt));
+          }
+        }
+      }
+
+      // Ensure Alpine picks up x-data etc. after HTMX outerHTML swaps of the options pane.
+      document.addEventListener('htmx:afterSettle', () => {
+        const pane = document.getElementById('options-pane');
+        if (pane && pane.hasAttribute('x-data') && typeof Alpine !== 'undefined') {
+          Alpine.initTree(pane);
+        }
+      });
+    </script>
   </body>
 </html>
