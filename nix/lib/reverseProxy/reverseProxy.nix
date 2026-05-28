@@ -21,6 +21,7 @@
           };
           proxyConf = mkOption {
             type = types.nullOr types.str;
+            internal = true;
             default = null;
             description = "Nginx proxy conf for swag";
           };
@@ -32,7 +33,11 @@
           auth = mkOption {
             type = types.submodule {
               options = {
-                enabled = mkEnableOption "tinyauth forward auth";
+                enabled = mkOption {
+                  type = types.bool;
+                  default = auth.enabled;
+                  description = "tinyauth forward auth";
+                };
                 publicPaths = mkOption {
                   type = types.listOf types.str;
                   default = auth.publicPaths;
