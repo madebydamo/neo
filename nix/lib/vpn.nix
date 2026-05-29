@@ -44,7 +44,9 @@
                 };
               };
             };
-            default = {};
+            default = {
+              inherit enabled containers internalContainers ports networks;
+            };
             description = "VPN routing options for this service";
           };
         };
