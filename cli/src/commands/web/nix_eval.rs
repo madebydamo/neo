@@ -78,11 +78,7 @@ pub fn extract_service_options(nix_cmd: &str, neo_input: &str, service: &str) ->
         .unwrap_or_default();
     for o in &mut opts {
         o.defaultDisplay = value_to_display(&o.default);
-        o.currentDisplay = o
-            .current
-            .as_ref()
-            .map(value_to_display)
-            .unwrap_or_default();
+        o.currentDisplay = o.current.as_ref().map(value_to_display).unwrap_or_default();
     }
     opts
 }

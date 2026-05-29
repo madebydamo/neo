@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
@@ -12,7 +13,7 @@ mod structs;
 use server::routes;
 use structs::AppConfig;
 
-pub fn web(doc: &DocumentMut, nix_cmd: &str, section: &str) -> Result<()> {
+pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &str) -> Result<()> {
     let neo_input = doc
         .get(&section)
         .and_then(|t| t.get("configPath"))
@@ -24,6 +25,7 @@ pub fn web(doc: &DocumentMut, nix_cmd: &str, section: &str) -> Result<()> {
     let app_config = Arc::new(AppConfig {
         nix_cmd: nix_cmd.to_string(),
         neo_input,
+        settings_path,
     });
     println!("{:?}", app_config);
     let rt = Runtime::new().context("create runtime")?;

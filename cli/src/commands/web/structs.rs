@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Service {
@@ -15,6 +16,7 @@ pub struct IndexContext {
 pub struct AppConfig {
     pub nix_cmd: String,
     pub neo_input: String,
+    pub settings_path: PathBuf,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

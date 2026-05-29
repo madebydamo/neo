@@ -105,6 +105,7 @@
           defaults: {},
           originals: {},
           hadCurrent: {},
+          serviceName: '',
 
           initForm() {
             const raw = document.getElementById('options-seed')?.textContent || '[]';
@@ -121,6 +122,13 @@
               this.originals[o.name] = (Array.isArray(v) ? [...v] : (v && typeof v === 'object' ? {...v} : v));
               this.hadCurrent[o.name] = hasCurrent;
             });
+
+            // Capture the service name at init time (right after HTMX outerHTML swap).
+            // This is much more reliable than reading this.$el inside async handlers later.
+            const pane = document.getElementById('options-pane');
+            this.serviceName = (pane?.dataset?.service)
+              || (pane?.querySelector?.('h2')?.textContent?.trim())
+              || '';
           },
 
           resetField(name) {
@@ -198,7 +206,7 @@
           },
 
           logState() {
-            const svc = this.$el?.dataset?.service || this.$el?.querySelector('h2')?.textContent?.trim() || 'service';
+            const svc = this.serviceName || 'service';
             console.log('Current edited state for ' + svc, this.values);
           },
 
@@ -209,6 +217,51 @@
               if (event?.target) event.target.innerText = 'Copied!';
               setTimeout(() => { if (event?.target) event.target.innerText = orig || 'Copy JSON'; }, 1200);
             }).catch(() => alert(txt));
+          },
+
+          revertAll() {
+            const origs = this.originals || {};
+            Object.keys(origs).forEach(k => {
+              this.revertField(k);
+            });
+          },
+
+          async save() {
+            const svc = this.serviceName || 'service';
+            const toSave = {};
+            Object.keys(this.values || {}).forEach(k => {
+              if (!this.isAtDefault(k)) {
+                toSave[k] = this.values[k];
+              }
+            });
+            try {
+              const res = await fetch(`/save/${encodeURIComponent(svc)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(toSave)
+              });
+              if (res.ok) {
+                // Sync originals so revert buttons disable and UI reflects the persisted state
+                this.originals = {};
+                Object.keys(this.values || {}).forEach(k => {
+                  let v = this.values[k];
+                  if (Array.isArray(v)) v = [...v];
+                  else if (v && typeof v === 'object' && v !== null) v = { ...v };
+                  this.originals[k] = v;
+                });
+                // Brief button feedback (uses implicit event from click context)
+                const orig = event?.target?.innerText;
+                if (event?.target) event.target.innerText = 'Saved!';
+                setTimeout(() => {
+                  if (event?.target) event.target.innerText = orig || 'Save';
+                }, 1200);
+              } else {
+                const txt = await res.text().catch(() => '');
+                alert('Save failed: ' + (txt || res.status));
+              }
+            } catch (e) {
+              alert('Save error: ' + e);
+            }
           }
         }
       }

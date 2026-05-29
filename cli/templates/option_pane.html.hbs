@@ -133,8 +133,8 @@
       </div>
 
       <div class="mt-4 flex gap-2">
-        <button @click="logState()" class="btn btn-sm">Log current state (console)</button>
-        <button @click="copyJson()" class="btn btn-sm btn-outline">Copy JSON</button>
+        <button @click="save()" class="btn btn-sm btn-primary">Save</button>
+        <button @click="revertAll()" class="btn btn-sm btn-ghost">Discard changes</button>
       </div>
     {{else}}
       <p class="text-base-content/60">No options found or service does not exist.</p>

@@ -7,9 +7,9 @@ use toml_edit::DocumentMut;
 
 pub mod commands;
 use crate::commands::{
-    activate::activate, build::build, edit::edit, execute_command, generate_hardware::generate_hardware,
-    git::git, init::init, nuke::nuke, paste_settings::paste_settings, update::update,
-    update_inputs::update_inputs, web::web,
+    activate::activate, build::build, edit::edit, execute_command,
+    generate_hardware::generate_hardware, git::git, init::init, nuke::nuke,
+    paste_settings::paste_settings, update::update, update_inputs::update_inputs, web::web,
 };
 #[derive(Parser)]
 #[command(name = "neo", version, about = "Neo Homeserver CLI", long_about = None)]
@@ -184,6 +184,10 @@ fn run(cli: Cli) -> Result<()> {
         .unwrap_or("./build")
         .to_string();
 
+    // The writable settings file lives under configPath (same as `neo edit` uses).
+    // The original CLI --settings (or /etc/neo/settings.toml) is only the source we loaded from.
+    let web_settings_path: PathBuf = PathBuf::from(format!("{}/settings.toml", config_path));
+
     let dry_run = cli.dry_run;
     let nix_cmd = cli.nix_path.as_deref().unwrap_or("nix");
     let sudo_cmd = cli.sudo_path.as_deref().unwrap_or("sudo");
@@ -202,7 +206,7 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Build => build(&config_path, &doc, dry_run, nix_cmd),
         Commands::Activate => activate(&config_path, dry_run, nix_cmd, sudo_cmd),
         Commands::Nuke => nuke(&config_path, dry_run, nix_cmd),
-        Commands::Web => web(&doc, nix_cmd, &section),
+        Commands::Web => web(&doc, web_settings_path, nix_cmd, &section),
         Commands::Edit => edit(&config_path, dry_run),
         Commands::Git => git(&config_path, dry_run),
         Commands::Lg => git(&config_path, dry_run),
