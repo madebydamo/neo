@@ -21,11 +21,12 @@
                 <div class="flex items-center gap-2 flex-wrap min-w-0">
                   <span class="font-mono text-sm break-all">{{name}}</span>
                   {{#if readOnly}}<span class="badge badge-warning badge-xs">readOnly</span>{{/if}}
-                  <details class="dropdown dropdown-right">
-                    <summary class="cursor-pointer list-none">
-                      <span class="cursor-help text-base-content/40 hover:text-primary text-[13px] leading-none select-none">ⓘ</span>
-                    </summary>
-                    <div class="dropdown-content card card-sm bg-base-100 shadow-sm z-10 w-72 text-left">
+                  <div class="dropdown dropdown-right dropdown-hover">
+                    <span tabindex="0" role="button"
+                          class="cursor-help text-base-content/40 hover:text-primary text-[13px] leading-none select-none">
+                      ⓘ
+                    </span>
+                    <div tabindex="0" class="dropdown-content card card-sm bg-base-100 shadow-sm z-10 w-72 text-left">
                       <div class="card-body text-sm">
                         {{#if description}}
                           <div>{{description}}</div>
@@ -35,7 +36,7 @@
                         <div><span class="font-semibold">default:</span> <span class="font-mono text-xs">{{defaultDisplay}}</span></div>
                       </div>
                     </div>
-                  </details>
+                  </div>
                 </div>
 
                 <div class="flex items-center gap-1 flex-shrink-0">
