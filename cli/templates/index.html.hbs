@@ -13,8 +13,10 @@
           <span class="text-2xl font-bold px-4">neo</span>
           <span class="text-sm opacity-60">homeserver config</span>
         </div>
-        <div class="flex-none text-xs opacity-50 pr-4">
-          DaisyUI + Tailwind + HTMX + Alpine (dev CDNs)
+        <div class="flex-none flex items-center gap-2 pr-2">
+          <div id="pending-changes" hx-get="/changes/indicator" hx-trigger="load, every 20s" hx-swap="outerHTML"></div>
+          <button hx-post="/flake/update" hx-target="#update-log" hx-swap="innerHTML" class="btn btn-xs btn-ghost">Update</button>
+          <span id="update-log" class="text-[10px] opacity-60"></span>
         </div>
       </div>
 
@@ -255,6 +257,8 @@
                 setTimeout(() => {
                   if (event?.target) event.target.innerText = orig || 'Save';
                 }, 1200);
+                const ind = document.getElementById('pending-changes');
+                if (ind) htmx.ajax('GET', '/changes/indicator', {target: '#pending-changes', swap: 'outerHTML'});
               } else {
                 const txt = await res.text().catch(() => '');
                 alert('Save failed: ' + (txt || res.status));
@@ -274,5 +278,14 @@
         }
       });
     </script>
+    <dialog id="changes-modal" class="modal">
+      <div class="modal-box max-w-4xl">
+        <h3 class="font-bold text-lg mb-2">Pending changes summary</h3>
+        <div id="changes-body" class="max-h-[60vh] overflow-auto"></div>
+        <div class="modal-action">
+          <form method="dialog"><button class="btn btn-ghost btn-sm">Close</button></form>
+        </div>
+      </div>
+    </dialog>
   </body>
 </html>

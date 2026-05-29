@@ -37,6 +37,7 @@
         path = [
           pkgs.nix
           pkgs.git
+          pkgs.coreutils
         ];
       };
     };
