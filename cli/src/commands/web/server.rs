@@ -10,7 +10,7 @@ use rocket_dyn_templates::Template;
 use toml_edit::{DocumentMut, Item, Table, Value};
 
 use super::nix_eval::{extract_proxied_services, extract_service_options, extract_services};
-use super::structs::{AppConfig, IndexContext, OptionContext};
+use super::structs::{AppConfig, IndexContext, OptionPaneContext};
 
 use crate::commands::activate::activate;
 use crate::commands::paste_settings::paste_settings;
@@ -30,16 +30,8 @@ pub fn configuration(config: &State<Arc<AppConfig>>) -> Template {
 
 #[get("/option/<service>")]
 pub fn option_pane(config: &State<Arc<AppConfig>>, service: &str) -> Template {
-    let opts = extract_service_options(&config.nix_cmd, &config.neo_input, service);
-    let options_json = serde_json::to_string(&opts).unwrap_or_else(|_| "[]".to_string());
-    Template::render(
-        "option_pane",
-        OptionContext {
-            service: service.to_string(),
-            options: opts,
-            options_json,
-        },
-    )
+    let pane = extract_service_options(&config.nix_cmd, &config.neo_input, service);
+    Template::render("option_pane", pane)
 }
 
 fn json_to_toml_value(v: &serde_json::Value) -> Option<Value> {

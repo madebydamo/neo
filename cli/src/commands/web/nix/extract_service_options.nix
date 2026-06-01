@@ -215,32 +215,40 @@
   in
     if builtins.isAttrs o && builtins.hasAttr "_type" o && o._type == "option"
     then let
-      record = mkOptionRecord path o;
-      t = tryOr null (o.type or null);
-      subSet = tryOr {} (
-        if builtins.isAttrs t && builtins.hasAttr "getSubOptions" t
-        then t.getSubOptions pathList
-        else {}
-      );
-      subs =
-        if subSet == {}
-        then []
-        else let
-          tn = tryOr "" (
-            if builtins.isAttrs t && builtins.hasAttr "name" t
-            then t.name
-            else ""
-          );
-          ph =
-            if tn == "listOf"
-            then ["*"]
-            else if tn == "attrsOf" || tn == "lazyAttrsOf"
-            then ["<name>"]
-            else [];
-        in
-          walk (pathList ++ ph) subSet;
+      internal = tryOr false (o.internal or false);
+      # Completely skip internal options and everything nested under them
+      # (e.g. the `meta` submodule we declare via mkServiceMeta).
+      # This prevents leaking meta.icon / meta.description etc. into the form fields.
     in
-      [record] ++ subs
+      if internal
+      then []
+      else let
+        record = mkOptionRecord path o;
+        t = tryOr null (o.type or null);
+        subSet = tryOr {} (
+          if builtins.isAttrs t && builtins.hasAttr "getSubOptions" t
+          then t.getSubOptions pathList
+          else {}
+        );
+        subs =
+          if subSet == {}
+          then []
+          else let
+            tn = tryOr "" (
+              if builtins.isAttrs t && builtins.hasAttr "name" t
+              then t.name
+              else ""
+            );
+            ph =
+              if tn == "listOf"
+              then ["*"]
+              else if tn == "attrsOf" || tn == "lazyAttrsOf"
+              then ["<name>"]
+              else [];
+          in
+            walk (pathList ++ ph) subSet;
+      in
+        [record] ++ subs
     else if builtins.isAttrs o
     then let
       ns = builtins.attrNames o;
@@ -256,6 +264,8 @@
       r:
         !(r.internal or false)
         && (r.type.kind or null) != "submodule"
+        # Belt-and-suspenders: never expose anything under an internal meta block
+        && !(builtins.match "^meta(\\..*)?$" (r.name or "") != null)
     )
     raw;
 
@@ -269,5 +279,12 @@
     else "1\u0000" + n;
 
   sorted = builtins.sort (a: b: (sortKey a) < (sortKey b)) visible;
-in
-  sorted
+
+  meta = tryOr {} (configRoot.meta or {});
+in {
+  meta =
+    if meta == {}
+    then null
+    else meta;
+  options = sorted;
+}

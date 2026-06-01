@@ -30,9 +30,13 @@
 in {
   domain = domain;
   services =
-    map (n: {
+    map (n: let
+      svc = services.${n};
+      meta = svc.meta or {};
+    in {
       name = n;
-      subdomain = services.${n}.subdomain or "";
+      subdomain = svc.subdomain or "";
+      icon = meta.icon or null;
     })
     proxiedNames;
 }

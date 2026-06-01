@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use super::structs::{NavigatorContext, OptionSchema, Service};
+use super::structs::{NavigatorContext, OptionPaneContext, OptionSchema, Service, ServiceMeta};
 
 static EXTRACT_SERVICES: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -51,7 +51,7 @@ fn value_to_display(v: &serde_json::Value) -> String {
     }
 }
 
-pub fn extract_service_options(nix_cmd: &str, neo_input: &str, service: &str) -> Vec<OptionSchema> {
+pub fn extract_service_options(nix_cmd: &str, neo_input: &str, service: &str) -> OptionPaneContext {
     let expr = format!(
         r#"({}) {{ neoFlake = "{}"; service = "{}"; }}"#,
         EXTRACT_OPTIONS, neo_input, service
@@ -69,7 +69,14 @@ pub fn extract_service_options(nix_cmd: &str, neo_input: &str, service: &str) ->
             .and_then(|o| o.ok())
             .map(|o| o.replace("\\n", "\\r"))
     );
-    let mut opts: Vec<OptionSchema> = output
+
+    #[derive(serde::Deserialize)]
+    struct RawPane {
+        meta: Option<ServiceMeta>,
+        options: Vec<OptionSchema>,
+    }
+
+    let raw: RawPane = output
         .ok()
         .and_then(|o| {
             if o.status.success() {
@@ -79,12 +86,24 @@ pub fn extract_service_options(nix_cmd: &str, neo_input: &str, service: &str) ->
             }
         })
         .and_then(|stdout| serde_json::from_slice(&stdout).ok())
-        .unwrap_or_default();
+        .unwrap_or(RawPane {
+            meta: None,
+            options: vec![],
+        });
+
+    let mut opts = raw.options;
     for o in &mut opts {
         o.defaultDisplay = value_to_display(&o.default);
         o.currentDisplay = o.current.as_ref().map(value_to_display).unwrap_or_default();
     }
-    opts
+
+    let options_json = serde_json::to_string(&opts).unwrap_or_else(|_| "[]".to_string());
+    OptionPaneContext {
+        service: service.to_string(),
+        meta: raw.meta,
+        options: opts,
+        options_json,
+    }
 }
 
 pub fn extract_proxied_services(nix_cmd: &str, neo_input: &str) -> NavigatorContext {
@@ -107,6 +126,9 @@ pub fn extract_proxied_services(nix_cmd: &str, neo_input: &str) -> NavigatorCont
     let dom = ctx.domain.clone();
     for s in &mut ctx.services {
         s.domain = dom.clone();
+        if s.initials.is_empty() {
+            s.initials = s.name.chars().take(2).collect::<String>().to_uppercase();
+        }
     }
     ctx
 }

@@ -19,12 +19,23 @@
         <!-- Proxied services -->
         {{#each services}}
           <button
-            class="nav-btn svc-btn w-12 h-10 rounded-xl flex flex-col items-center justify-center text-base-content/80 hover:text-base-content"
+            class="nav-btn svc-btn w-12 h-10 rounded-xl flex items-center justify-center text-base-content/80 hover:text-base-content"
             title="{{name}} (https://{{subdomain}}.{{domain}})"
             data-sub="{{subdomain}}"
             data-name="{{name}}"
             onclick="handleSidebarClick(event, '{{subdomain}}', '{{domain}}', this)">
-            <span class="font-mono text-[10px] font-semibold leading-none">{{subdomain}}</span>
+            <div class="relative w-8 h-8 flex items-center justify-center">
+              {{#if icon}}
+                <img src="{{icon}}" class="w-8 h-8 object-contain" alt=""
+                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+                <span class="hidden text-3xl leading-none">⚙</span>
+              {{else}}
+                <span class="text-3xl leading-none">⚙</span>
+              {{/if}}
+              <span class="absolute -bottom-px -right-px text-[7px] font-black bg-base-100 text-base-content px-0.5 leading-none rounded-sm ring-1 ring-base-300/70 font-mono">
+                {{initials}}
+              </span>
+            </div>
           </button>
         {{/each}}
 

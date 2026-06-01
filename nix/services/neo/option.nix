@@ -12,19 +12,19 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption (lib.mdDoc "Neo web UI service (config editor launched via `neo web`)");
+              enabled = mkEnableOption "Neo web UI service (config editor launched via `neo web`)";
 
               port = mkOption {
                 type = types.port;
                 internal = true;
                 default = 8091;
-                description = lib.mdDoc "Internal port for the Neo web UI (binds to 0.0.0.0 on host; proxied via SWAG)";
+                description = "Internal port for the Neo web UI (binds to 0.0.0.0 on host; proxied via SWAG)";
               };
 
               iframeCookieSupport = mkOption {
                 type = types.bool;
                 default = true;
-                description = lib.mdDoc ''
+                description = ''
                   When enabled (default), automatically writes a global nginx configuration file
                   into SWAG's conf.d that relaxes SameSite cookies (SameSite=None + Secure) and
                   sets a broad Domain (based on the main domain). This makes authenticated services
@@ -33,10 +33,19 @@
                 '';
               };
             }
-            // lib.neo.mkReverseProxyOptions {subdomain = "neo";};
+            // lib.neo.mkReverseProxyOptions {subdomain = "neo";}
+            // lib.neo.mkServiceMeta {
+              icon = "⚙";
+              description = ''
+                The neo web UI gives you a live, in-browser editor for all your homeserver services.
+                Changes are written to settings.toml and can be reviewed/applied with a single click.
+                Use the sidebar on the left (in the main navigator) to quickly jump between your self-hosted apps.
+              '';
+              githubUrl = "https://github.com/madebydamo/neo";
+            };
         };
         default = {};
-        description = lib.mdDoc "Neo web UI configuration";
+        description = "Neo web UI configuration";
       };
     };
 }

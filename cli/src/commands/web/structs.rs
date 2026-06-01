@@ -58,25 +58,55 @@ pub struct OptionSchema {
     pub currentDisplay: String,
 }
 
-#[derive(Serialize)]
-pub struct OptionContext {
-    pub service: String,
-    pub options: Vec<OptionSchema>,
-    /// Pre-serialized JSON for client-side (Alpine) form state.
-    /// Contains the rich type info + initial values so the interactive form can be fully client-driven.
-    pub options_json: String,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProxiedService {
     pub name: String,
     pub subdomain: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    /// First two letters of the service name, for overlay on icons.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub initials: String,
 }
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct NavigatorContext {
     pub domain: Option<String>,
     pub services: Vec<ProxiedService>,
+}
+
+/// Rich presentation metadata for a service (shown in the option pane header).
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ServiceMeta {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub projectUrl: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub githubUrl: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub releaseUrl: Option<String>,
+    #[serde(default)]
+    pub screenshots: Vec<ServiceScreenshot>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ServiceScreenshot {
+    pub url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption: Option<String>,
+}
+
+/// Context for the per-service option pane (includes both the form fields and rich intro metadata).
+#[derive(Serialize)]
+pub struct OptionPaneContext {
+    pub service: String,
+    pub meta: Option<ServiceMeta>,
+    pub options: Vec<OptionSchema>,
+    /// Pre-serialized JSON for the Alpine form (the options array only).
+    pub options_json: String,
 }
