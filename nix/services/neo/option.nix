@@ -20,6 +20,18 @@
                 default = 8091;
                 description = lib.mdDoc "Internal port for the Neo web UI (binds to 0.0.0.0 on host; proxied via SWAG)";
               };
+
+              iframeCookieSupport = mkOption {
+                type = types.bool;
+                default = true;
+                description = lib.mdDoc ''
+                  When enabled (default), automatically writes a global nginx configuration file
+                  into SWAG's conf.d that relaxes SameSite cookies (SameSite=None + Secure) and
+                  sets a broad Domain (based on the main domain). This makes authenticated services
+                  work correctly when loaded inside the neo web UI iframes.
+                  Set to false to opt out completely.
+                '';
+              };
             }
             // lib.neo.mkReverseProxyOptions {subdomain = "neo";};
         };

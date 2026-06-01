@@ -251,7 +251,13 @@
 
   raw = walk [] root;
 
-  visible = builtins.filter (r: !(r.internal or false)) raw;
+  visible =
+    builtins.filter (
+      r:
+        !(r.internal or false)
+        && (r.type.kind or null) != "submodule"
+    )
+    raw;
 
   sortKey = r: let
     n = r.name or "";

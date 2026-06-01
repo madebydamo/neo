@@ -66,3 +66,17 @@ pub struct OptionContext {
     /// Contains the rich type info + initial values so the interactive form can be fully client-driven.
     pub options_json: String,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ProxiedService {
+    pub name: String,
+    pub subdomain: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub domain: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct NavigatorContext {
+    pub domain: Option<String>,
+    pub services: Vec<ProxiedService>,
+}

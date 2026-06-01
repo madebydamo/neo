@@ -88,6 +88,9 @@
               (lib.neo.mkActivationScriptForDir config {
                 dirPath = "${config.neo.volumes.appdata}/swag";
               })
+              (lib.neo.mkActivationScriptForDir config {
+                dirPath = "${config.neo.volumes.appdata}/swag/nginx/conf.d";
+              })
             ]
             ++ proxyConfScripts
             ++ customProxyConfScripts);

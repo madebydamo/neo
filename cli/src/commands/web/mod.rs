@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
+use rocket::fs::FileServer;
 use rocket_dyn_templates::Template;
 use toml_edit::DocumentMut;
 
@@ -32,11 +33,13 @@ pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &s
     let template_dir = option_env!("TEMPLATE_DIR")
         .unwrap_or("templates")
         .to_string();
+    let static_dir = option_env!("STATIC_DIR").unwrap_or("static").to_string();
     rt.block_on(async move {
         let _ = rocket::build()
             .manage(app_config)
             .attach(Template::fairing())
             .configure(rocket::Config::figment().merge(("template_dir", template_dir)))
+            .mount("/static", FileServer::from(static_dir))
             .mount("/", routes())
             .launch()
             .await;

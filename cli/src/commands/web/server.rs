@@ -9,7 +9,7 @@ use rocket::{get, http::Status, post, routes, State};
 use rocket_dyn_templates::Template;
 use toml_edit::{DocumentMut, Item, Table, Value};
 
-use super::nix_eval::{extract_service_options, extract_services};
+use super::nix_eval::{extract_proxied_services, extract_service_options, extract_services};
 use super::structs::{AppConfig, IndexContext, OptionContext};
 
 use crate::commands::activate::activate;
@@ -18,8 +18,14 @@ use crate::commands::update::update;
 
 #[get("/")]
 pub fn index(config: &State<Arc<AppConfig>>) -> Template {
+    let data = extract_proxied_services(&config.nix_cmd, &config.neo_input);
+    Template::render("index", data)
+}
+
+#[get("/configuration")]
+pub fn configuration(config: &State<Arc<AppConfig>>) -> Template {
     let svcs = extract_services(&config.nix_cmd, &config.neo_input);
-    Template::render("index", IndexContext { services: svcs })
+    Template::render("configuration", IndexContext { services: svcs })
 }
 
 #[get("/option/<service>")]
@@ -125,7 +131,10 @@ fn insert_dotted(table: &mut Table, dotted_key: &str, value: Value) {
 }
 
 fn config_dir(cfg: &AppConfig) -> PathBuf {
-    cfg.settings_path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."))
+    cfg.settings_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 fn settings_changed_and_diff(cfg: &AppConfig) -> (bool, String) {
@@ -246,23 +255,26 @@ pub fn save_service(
 #[get("/changes/indicator")]
 pub fn changes_indicator(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     let (changed, _) = settings_changed_and_diff(&config);
-    let inner = if changed {
+    let content = if changed {
         "<button class=\"btn btn-warning btn-sm\" onclick=\"document.getElementById('changes-modal').showModal();htmx.ajax('GET','/changes/summary',{target:'#changes-body',swap:'innerHTML'})\">Settings changed — review &amp; apply</button>"
     } else {
         "<span class=\"text-xs opacity-50\">Settings in sync with applied</span>"
     };
-    let full = format!("<div id=\"pending-changes\" hx-get=\"/changes/indicator\" hx-trigger=\"load, every 20s\" hx-swap=\"outerHTML\">{}</div>", inner);
-    RawHtml(full)
+    RawHtml(content.to_string())
 }
 
 #[get("/changes/summary")]
 pub fn changes_summary(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     let (changed, diff) = settings_changed_and_diff(&config);
     let body = if changed {
-        let esc = diff.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+        let esc = diff
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;");
         format!("<div class=\"mb-2 text-warning text-sm\">Pending changes to settings.toml (git diff)</div><pre class=\"text-xs overflow-auto max-h-[50vh] bg-base-300 p-2 rounded whitespace-pre\">{}</pre><div class=\"flex gap-2 mt-3\"><button hx-post=\"/changes/revert\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" class=\"btn btn-sm btn-ghost\">Revert (paste-settings)</button><button hx-post=\"/changes/apply\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" hx-confirm=\"Run full activation (write-flake + nixos-rebuild)? This can take several minutes.\" class=\"btn btn-sm btn-error\">Apply (activate)</button></div>", esc)
     } else {
-        "<div class=\"text-sm\">Settings match the last applied version. No pending changes.</div>".to_string()
+        "<div class=\"text-sm\">Settings match the last applied version. No pending changes.</div>"
+            .to_string()
     };
     RawHtml(body)
 }
@@ -295,11 +307,27 @@ pub fn flake_update(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     let dir = config_dir(&config);
     let dir_str = dir.to_str().unwrap_or(".");
     match update(dir_str, false, &config.nix_cmd) {
-        Ok(()) => RawHtml("<span class=\"text-success text-[10px]\">flake update done (direct)</span>".to_string()),
-        Err(e) => RawHtml(format!("<span class=\"text-error text-[10px]\">update failed: {}</span>", e))
+        Ok(()) => RawHtml(
+            "<span class=\"text-success text-[10px]\">flake update done (direct)</span>"
+                .to_string(),
+        ),
+        Err(e) => RawHtml(format!(
+            "<span class=\"text-error text-[10px]\">update failed: {}</span>",
+            e
+        )),
     }
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-    routes![index, option_pane, save_service, changes_indicator, changes_summary, revert_settings, apply_settings, flake_update]
+    routes![
+        index,
+        configuration,
+        option_pane,
+        save_service,
+        changes_indicator,
+        changes_summary,
+        revert_settings,
+        apply_settings,
+        flake_update
+    ]
 }

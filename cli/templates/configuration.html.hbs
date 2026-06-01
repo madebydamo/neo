@@ -1,0 +1,110 @@
+<html>
+  <head>
+    <title>neo config</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" />
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://unpkg.com/alpinejs" defer></script>
+    <script src="/static/option_form.js"></script>
+  </head>
+  <body class="bg-base-300 text-base-content p-6" data-theme="dark">
+    <div class="max-w-7xl mx-auto">
+      <div class="navbar bg-base-100 rounded-box mb-6 shadow">
+        <div class="flex-1">
+          <span class="text-2xl font-bold px-4">neo</span>
+          <span class="text-sm opacity-60">homeserver config</span>
+        </div>
+        <div class="flex-none flex items-center gap-2 pr-2">
+          <div id="pending-changes" hx-get="/changes/indicator" hx-trigger="load, every 20s" hx-swap="innerHTML"></div>
+          <button hx-post="/flake/update" hx-target="#update-log" hx-swap="innerHTML" class="btn btn-xs btn-ghost">Update</button>
+          <span id="update-log" class="text-[10px] opacity-60"></span>
+        </div>
+      </div>
+
+      <div class="flex flex-col lg:flex-row gap-4 lg:gap-6">
+
+        <!-- Mobile: collapsible services menu (auto-closes on selection) -->
+        <div class="lg:hidden" x-data="{ menuOpen: false }">
+          <details
+            class="collapse bg-base-200 rounded-box"
+            :open="menuOpen"
+            @toggle="menuOpen = $event.target.open">
+            <summary class="collapse-title text-sm font-medium">Services</summary>
+            <div class="collapse-content p-0">
+              <ul class="menu w-full text-sm">
+                {{#each services}}
+                  <li>
+                    <a hx-get="/option/{{name}}"
+                       hx-target="#options-pane"
+                       hx-swap="outerHTML"
+                       class="font-mono"
+                       @click="menuOpen = false">
+                      {{#if enabled}}
+                        <span class="inline-block w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+                      {{else}}
+                        <span class="inline-block w-2 h-2 rounded-full bg-base-300 flex-shrink-0"></span>
+                      {{/if}}
+                      {{name}}
+                    </a>
+                  </li>
+                {{/each}}
+              </ul>
+            </div>
+          </details>
+        </div>
+
+        <!-- Desktop: narrow sidebar menu -->
+        <div class="hidden lg:block w-60 flex-shrink-0">
+          <div class="card bg-base-100 shadow">
+            <div class="card-body p-2">
+              <ul class="menu w-full text-sm">
+                {{#each services}}
+                  <li>
+                    <a hx-get="/option/{{name}}"
+                       hx-target="#options-pane"
+                       hx-swap="outerHTML"
+                       class="font-mono">
+                      {{#if enabled}}
+                        <span class="inline-block w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+                      {{else}}
+                        <span class="inline-block w-2 h-2 rounded-full bg-base-300 flex-shrink-0"></span>
+                      {{/if}}
+                      {{name}}
+                    </a>
+                  </li>
+                {{/each}}
+              </ul>
+            </div>
+          </div>
+          <p class="text-xs opacity-40 mt-2 px-1">Click a service to load its options.</p>
+        </div>
+
+        <!-- Main content -->
+        <div class="flex-1 min-w-0">
+          <div id="options-pane">
+            <div class="card bg-base-100 shadow h-full">
+              <div class="card-body text-base-content/60">
+                Select a service to edit its configuration.
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <p class="mt-6 text-[10px] opacity-30">
+        Rocket + Handlebars + HTMX + Alpine + DaisyUI (CDN). Phase 2 forms (type-driven inputs + reset-to-default).
+      </p>
+    </div>
+
+    <dialog id="changes-modal" class="modal">
+      <div class="modal-box max-w-4xl">
+        <h3 class="font-bold text-lg mb-2">Pending changes summary</h3>
+        <div id="changes-body" class="max-h-[60vh] overflow-auto"></div>
+        <div class="modal-action">
+          <form method="dialog"><button class="btn btn-ghost btn-sm">Close</button></form>
+        </div>
+      </div>
+    </dialog>
+  </body>
+</html>

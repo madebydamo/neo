@@ -50,6 +50,7 @@
       }
     '';
     template_dir = "${self}/cli/templates";
+    static_dir = "${self}/cli/static";
     common = {
       pname = "neo";
       version = "0.1.0";
@@ -71,6 +72,7 @@
         env.NIX_BINARY_PATH = "${pkgs.nix}/bin/nix";
         env.SUDO_BINARY_PATH = "${pkgs.sudo}/bin/sudo";
         env.TEMPLATE_DIR = template_dir;
+        env.STATIC_DIR = static_dir;
         meta = {
           description = "Neo CLI - Rust implementation for homeserver bootstrap";
           mainProgram = "neo";

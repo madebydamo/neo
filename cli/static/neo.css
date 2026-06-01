@@ -1,0 +1,26 @@
+/* neo navigator styles (extracted from index.html.hbs) */
+.nav-btn { transition: all 0.1s ease; }
+.nav-btn:hover { background-color: #2a2f3a; }
+.nav-btn.active { background-color: #3b82f6; color: white; }
+.svc-label { font-size: 9px; line-height: 10px; word-break: break-all; text-align: center; }
+
+/* Ensure the green "warm" dot (::after) is positioned inside the sidebar button */
+.svc-btn, #config-btn {
+  position: relative;
+}
+
+/* Warm (already loaded) indicator on sidebar items */
+.svc-btn.warm::after,
+#config-btn.warm::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  background-color: #4ade80;
+  border-radius: 9999px;
+  box-shadow: 0 0 0 1px #111827;
+  pointer-events: none;
+  z-index: 10;
+}

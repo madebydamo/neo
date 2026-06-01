@@ -1,291 +1,108 @@
 <html>
   <head>
-    <title>neo web</title>
+    <title>neo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" />
-    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-    <script src="https://unpkg.com/alpinejs" defer></script>
+    <link rel="stylesheet" href="/static/neo.css" />
   </head>
-  <body class="bg-base-300 text-base-content p-6" data-theme="dark">
-    <div class="max-w-7xl mx-auto">
-      <div class="navbar bg-base-100 rounded-box mb-6 shadow">
-        <div class="flex-1">
-          <span class="text-2xl font-bold px-4">neo</span>
-          <span class="text-sm opacity-60">homeserver config</span>
+  <body class="bg-base-300 text-base-content h-screen overflow-hidden" data-theme="dark">
+    <div class="flex h-full">
+      <!-- Slim icon sidebar (icon-bar style) -->
+      <div class="w-16 bg-base-200 border-r border-base-300 flex flex-col items-center py-2 gap-y-1 overflow-y-auto flex-shrink-0">
+        <!-- Logo / home -->
+        <div class="w-12 h-10 flex items-center justify-center mb-1" title="neo homeserver">
+          <span class="text-xl font-bold text-primary">N</span>
         </div>
-        <div class="flex-none flex items-center gap-2 pr-2">
-          <div id="pending-changes" hx-get="/changes/indicator" hx-trigger="load, every 20s" hx-swap="outerHTML"></div>
-          <button hx-post="/flake/update" hx-target="#update-log" hx-swap="innerHTML" class="btn btn-xs btn-ghost">Update</button>
-          <span id="update-log" class="text-[10px] opacity-60"></span>
-        </div>
+
+        <div class="w-8 border-t border-base-300 my-1"></div>
+
+        <!-- Proxied services -->
+        {{#each services}}
+          <button
+            class="nav-btn svc-btn w-12 h-10 rounded-xl flex flex-col items-center justify-center text-base-content/80 hover:text-base-content"
+            title="{{name}} (https://{{subdomain}}.{{domain}})"
+            data-sub="{{subdomain}}"
+            data-name="{{name}}"
+            onclick="handleSidebarClick(event, '{{subdomain}}', '{{domain}}', this)">
+            <span class="font-mono text-[10px] font-semibold leading-none">{{subdomain}}</span>
+          </button>
+        {{/each}}
+
+        {{#unless services}}
+          <div class="text-[10px] opacity-40 text-center px-1 mt-2">No<br>proxied<br>services</div>
+        {{/unless}}
+
+        <!-- Config editor (loads inside this view, keeps the navigator visible) -->
+        <div class="w-8 border-t border-base-300 my-1"></div>
+        <button
+          id="config-btn"
+          class="nav-btn w-12 h-10 rounded-xl flex flex-col items-center justify-center text-base-content/80 hover:text-base-content"
+          title="Configuration editor (loads inside the viewer pane)"
+          onclick="handleSidebarClick(event, '__config', '', this)">
+          <span class="text-lg leading-none">⚙</span>
+          <span class="font-mono text-[8px] leading-none opacity-70">cfg</span>
+        </button>
       </div>
 
-      <div class="flex flex-col lg:flex-row gap-4 lg:gap-6">
-
-        <!-- Mobile: collapsible services menu (auto-closes on selection) -->
-        <div class="lg:hidden" x-data="{ menuOpen: false }">
-          <details
-            class="collapse bg-base-200 rounded-box"
-            :open="menuOpen"
-            @toggle="menuOpen = $event.target.open">
-            <summary class="collapse-title text-sm font-medium">Services</summary>
-            <div class="collapse-content p-0">
-              <ul class="menu w-full text-sm">
-                {{#each services}}
-                  <li>
-                    <a hx-get="/option/{{name}}"
-                       hx-target="#options-pane"
-                       hx-swap="outerHTML"
-                       class="font-mono"
-                       @click="menuOpen = false">
-                      {{#if enabled}}
-                        <span class="inline-block w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
-                      {{else}}
-                        <span class="inline-block w-2 h-2 rounded-full bg-base-300 flex-shrink-0"></span>
-                      {{/if}}
-                      {{name}}
-                    </a>
-                  </li>
-                {{/each}}
-              </ul>
-            </div>
-          </details>
+      <!-- Main viewer area -->
+      <div class="flex-1 flex flex-col min-w-0">
+        <!-- Top bar -->
+        <div class="h-8 bg-base-100 border-b border-base-300 flex items-center px-3 text-xs flex-shrink-0">
+          <span class="font-semibold">neo</span>
+          <span class="ml-1.5 opacity-50">navigator</span>
+          <div class="ml-auto flex items-center gap-2 text-[10px]">
+            <span id="current-url" class="opacity-60 font-mono truncate max-w-[50vw]"></span>
+            <button onclick="reloadFrame()" class="btn btn-ghost btn-xs px-2" title="Soft reload current app">↻</button>
+            <button onclick="hardResetCurrent()" class="btn btn-ghost btn-xs px-2" title="Hard reset this app (unload from memory + fresh load)">⟲</button>
+            <button onclick="openInNewTab()" class="btn btn-ghost btn-xs px-2" title="Open in new tab">↗</button>
+          </div>
         </div>
 
-        <!-- Desktop: narrow sidebar menu -->
-        <div class="hidden lg:block w-60 flex-shrink-0">
-          <div class="card bg-base-100 shadow">
-            <div class="card-body p-2">
-              <ul class="menu w-full text-sm">
-                {{#each services}}
-                  <li>
-                    <a hx-get="/option/{{name}}"
-                       hx-target="#options-pane"
-                       hx-swap="outerHTML"
-                       class="font-mono">
-                      {{#if enabled}}
-                        <span class="inline-block w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
-                      {{else}}
-                        <span class="inline-block w-2 h-2 rounded-full bg-base-300 flex-shrink-0"></span>
-                      {{/if}}
-                      {{name}}
-                    </a>
-                  </li>
-                {{/each}}
-              </ul>
+        <!-- Multi-iframe host (one iframe per service, shown/hidden to avoid reloads on switch) -->
+        <div class="flex-1 relative bg-base-300" id="viewer-wrap">
+          <!-- Dynamically populated with per-service <iframe> elements (absolute, inset-0) -->
+          <div id="viewer-host" class="absolute inset-0"></div>
+
+          <!-- Welcome / empty state overlay (hidden when any service is shown) -->
+          <div id="welcome" class="absolute inset-0 flex items-center justify-center bg-base-300/95">
+            <div class="text-center max-w-xs px-4">
+              <div class="text-4xl mb-3 opacity-30">N</div>
+              <div class="font-semibold mb-1">Select a service</div>
+              <p class="text-xs opacity-60">Click an icon on the left to load its web UI in this view. The ⚙ cfg button loads the full configuration editor inside the pane (navigator stays visible).</p>
+              {{#if domain}}
+                <p class="text-[10px] opacity-40 mt-3 font-mono">Base domain: {{domain}}</p>
+              {{else}}
+                <p class="text-[10px] text-warning mt-3">No swag.domain configured — set it to enable links.</p>
+              {{/if}}
             </div>
           </div>
-          <p class="text-xs opacity-40 mt-2 px-1">Click a service to load its options.</p>
-        </div>
 
-        <!-- Main content -->
-        <div class="flex-1 min-w-0">
-          <div id="options-pane">
-            <div class="card bg-base-100 shadow h-full">
-              <div class="card-body text-base-content/60">
-                Select a service to edit its configuration.
+          <!-- Embedding blocked state (for services with X-Frame-Options / frame-ancestors, e.g. the "neo" admin UI itself) -->
+          <div id="embedding-blocked" class="absolute inset-0 hidden flex items-center justify-center bg-base-300/95 p-4">
+            <div class="card bg-base-100 shadow max-w-md w-full">
+              <div class="card-body">
+                <h3 class="card-title text-warning text-base">Embedding blocked by the service</h3>
+                <p class="text-sm">This service sets <span class="font-mono">X-Frame-Options</span> or <span class="font-mono">CSP frame-ancestors</span> to protect against clickjacking.</p>
+                <p class="text-xs opacity-70 mt-1">Common for admin/sensitive interfaces (including neo itself).</p>
+
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <button onclick="openBlockedInNewTab()" class="btn btn-primary btn-sm flex-1">Open in new tab ↗</button>
+                  <button onclick="copyBlockedUrl()" class="btn btn-ghost btn-sm">Copy URL</button>
+                </div>
+                <div class="text-[10px] opacity-50 mt-2 font-mono break-all" id="blocked-url"></div>
               </div>
             </div>
           </div>
         </div>
 
-      </div>
-
-      <p class="mt-6 text-[10px] opacity-30">
-        Rocket + Handlebars + HTMX + Alpine + DaisyUI (CDN). Phase 2 forms (type-driven inputs + reset-to-default).
-      </p>
-    </div>
-
-    <script>
-      document.documentElement.setAttribute('data-theme', 'dark');
-    </script>
-
-    <script>
-      function optionForm() {
-        return {
-          values: {},
-          defaults: {},
-          originals: {},
-          hadCurrent: {},
-          serviceName: '',
-
-          initForm() {
-            const raw = document.getElementById('options-seed')?.textContent || '[]';
-            let opts = [];
-            try { opts = JSON.parse(raw); } catch (e) { opts = []; }
-
-            opts.forEach(o => {
-              const hasCurrent = (o.current !== undefined && o.current !== null);
-              let v = hasCurrent ? o.current : o.default;
-              if (Array.isArray(v)) v = [...v];
-              else if (v && typeof v === 'object') v = {...v};
-              this.values[o.name] = v;
-              this.defaults[o.name] = o.default;
-              this.originals[o.name] = (Array.isArray(v) ? [...v] : (v && typeof v === 'object' ? {...v} : v));
-              this.hadCurrent[o.name] = hasCurrent;
-            });
-
-            // Capture the service name at init time (right after HTMX outerHTML swap).
-            // This is much more reliable than reading this.$el inside async handlers later.
-            const pane = document.getElementById('options-pane');
-            this.serviceName = (pane?.dataset?.service)
-              || (pane?.querySelector?.('h2')?.textContent?.trim())
-              || '';
-          },
-
-          resetField(name) {
-            this.values[name] = this.defaults[name];
-            if (Array.isArray(this.values[name])) this.values[name] = [...this.values[name]];
-            else if (this.values[name] && typeof this.values[name] === 'object') this.values[name] = {...this.values[name]};
-          },
-
-          revertField(name) {
-            if (!name) return;
-            const origs = this.originals || {};
-            if (!origs[name]) return;
-            let v = origs[name];
-            if (Array.isArray(v)) v = [...v];
-            else if (v && typeof v === 'object' && v !== null) v = {...v};
-            const vals = this.values || {};
-            vals[name] = v;
-          },
-
-          resetAll() {
-            Object.keys(this.defaults).forEach(k => {
-              this.values[k] = this.defaults[k];
-              if (Array.isArray(this.values[k])) this.values[k] = [...this.values[k]];
-              else if (this.values[k] && typeof this.values[k] === 'object') this.values[k] = {...this.values[k]};
-            });
-          },
-
-          deepEqual(a, b) {
-            try { return JSON.stringify(a) === JSON.stringify(b); } catch (_) { return false; }
-          },
-
-          isAtDefault(name) {
-            if (!name) return true;
-            const vals = this.values || {};
-            const defs = this.defaults || {};
-            return this.deepEqual(vals[name], defs[name]);
-          },
-
-          isAtOriginal(name) {
-            if (!name) return true;
-            const vals = this.values || {};
-            const origs = this.originals || {};
-            return this.deepEqual(vals[name], origs[name]);
-          },
-
-          sourceLabel(name) {
-            if (!name) return '';
-            // Show "default" when the value equals the declared default (whether it came via current or not).
-            // Show "modified" when it differs from the default.
-            return this.isAtDefault(name) ? 'default' : 'modified';
-          },
-
-          addListItem(name) {
-            if (!Array.isArray(this.values[name])) this.values[name] = [];
-            this.values[name].push('');
-          },
-
-          removeListItem(name, idx) {
-            if (Array.isArray(this.values[name])) this.values[name].splice(idx, 1);
-          },
-
-          addAttrItem(name, inputEl) {
-            if (!this.values[name] || typeof this.values[name] !== 'object') this.values[name] = {};
-            const key = inputEl?.value?.trim();
-            if (key && !this.values[name].hasOwnProperty(key)) {
-              this.values[name][key] = '';
-              if (inputEl) inputEl.value = '';
-            }
-          },
-
-          removeAttrItem(name, key) {
-            if (this.values[name] && typeof this.values[name] === 'object') {
-              delete this.values[name][key];
-            }
-          },
-
-          logState() {
-            const svc = this.serviceName || 'service';
-            console.log('Current edited state for ' + svc, this.values);
-          },
-
-          copyJson() {
-            const txt = JSON.stringify(this.values, null, 2);
-            navigator.clipboard?.writeText(txt).then(() => {
-              const orig = event?.target?.innerText;
-              if (event?.target) event.target.innerText = 'Copied!';
-              setTimeout(() => { if (event?.target) event.target.innerText = orig || 'Copy JSON'; }, 1200);
-            }).catch(() => alert(txt));
-          },
-
-          revertAll() {
-            const origs = this.originals || {};
-            Object.keys(origs).forEach(k => {
-              this.revertField(k);
-            });
-          },
-
-          async save() {
-            const svc = this.serviceName || 'service';
-            const toSave = {};
-            Object.keys(this.values || {}).forEach(k => {
-              if (!this.isAtDefault(k)) {
-                toSave[k] = this.values[k];
-              }
-            });
-            try {
-              const res = await fetch(`/save/${encodeURIComponent(svc)}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(toSave)
-              });
-              if (res.ok) {
-                // Sync originals so revert buttons disable and UI reflects the persisted state
-                this.originals = {};
-                Object.keys(this.values || {}).forEach(k => {
-                  let v = this.values[k];
-                  if (Array.isArray(v)) v = [...v];
-                  else if (v && typeof v === 'object' && v !== null) v = { ...v };
-                  this.originals[k] = v;
-                });
-                // Brief button feedback (uses implicit event from click context)
-                const orig = event?.target?.innerText;
-                if (event?.target) event.target.innerText = 'Saved!';
-                setTimeout(() => {
-                  if (event?.target) event.target.innerText = orig || 'Save';
-                }, 1200);
-                const ind = document.getElementById('pending-changes');
-                if (ind) htmx.ajax('GET', '/changes/indicator', {target: '#pending-changes', swap: 'outerHTML'});
-              } else {
-                const txt = await res.text().catch(() => '');
-                alert('Save failed: ' + (txt || res.status));
-              }
-            } catch (e) {
-              alert('Save error: ' + e);
-            }
-          }
-        }
-      }
-
-      // Ensure Alpine picks up x-data etc. after HTMX outerHTML swaps of the options pane.
-      document.addEventListener('htmx:afterSettle', () => {
-        const pane = document.getElementById('options-pane');
-        if (pane && pane.hasAttribute('x-data') && typeof Alpine !== 'undefined') {
-          Alpine.initTree(pane);
-        }
-      });
-    </script>
-    <dialog id="changes-modal" class="modal">
-      <div class="modal-box max-w-4xl">
-        <h3 class="font-bold text-lg mb-2">Pending changes summary</h3>
-        <div id="changes-body" class="max-h-[60vh] overflow-auto"></div>
-        <div class="modal-action">
-          <form method="dialog"><button class="btn btn-ghost btn-sm">Close</button></form>
+        <!-- Bottom status -->
+        <div class="h-5 bg-base-100 border-t border-base-300 text-[10px] px-2 flex items-center text-base-content/50 flex-shrink-0">
+          <span id="status">Ready</span>
+          <span class="ml-auto opacity-30">iframe · https only</span>
         </div>
       </div>
-    </dialog>
+    </div>
+
+    <script src="/static/neo.js"></script>
   </body>
 </html>

@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use super::structs::{OptionSchema, Service};
+use super::structs::{NavigatorContext, OptionSchema, Service};
 
 static EXTRACT_SERVICES: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -9,6 +9,10 @@ static EXTRACT_SERVICES: &str = include_str!(concat!(
 static EXTRACT_OPTIONS: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/src/commands/web/nix/extract_service_options.nix"
+));
+static EXTRACT_PROXIED: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/commands/web/nix/extract_proxied_services.nix"
 ));
 
 pub fn extract_services(nix_cmd: &str, neo_input: &str) -> Vec<Service> {
@@ -81,4 +85,28 @@ pub fn extract_service_options(nix_cmd: &str, neo_input: &str, service: &str) ->
         o.currentDisplay = o.current.as_ref().map(value_to_display).unwrap_or_default();
     }
     opts
+}
+
+pub fn extract_proxied_services(nix_cmd: &str, neo_input: &str) -> NavigatorContext {
+    let expr = format!(r#"({}) {{ neoFlake = "{}"; }}"#, EXTRACT_PROXIED, neo_input);
+    let output = Command::new(nix_cmd)
+        .args(["eval", "--json", "--impure", "--expr", &expr])
+        .output();
+    let mut ctx: NavigatorContext = output
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(o.stdout)
+            } else {
+                None
+            }
+        })
+        .and_then(|stdout| serde_json::from_slice(&stdout).ok())
+        .unwrap_or_default();
+    ctx.services.sort_by_key(|s| s.name.clone());
+    let dom = ctx.domain.clone();
+    for s in &mut ctx.services {
+        s.domain = dom.clone();
+    }
+    ctx
 }
