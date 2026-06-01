@@ -21,6 +21,16 @@
             // lib.neo.mkReverseProxyOptions {
               subdomain = "pastebin";
               auth.enabled = false;
+            }
+            // lib.neo.mkServiceMeta {
+              icon = "https://raw.githubusercontent.com/wantguns/bin/master/static/media/android-chrome-512x512.png";
+              description = ''
+                Bin (wantguns/bin) is a highly opinionated, minimal self-hosted pastebin that accepts both textual pastes and binary files such as images and PDFs.
+                It requires no SQL database or external services; all data is stored as flat files, and the server is distributed as a tiny statically linked binary (Docker image is based on scratch) for the simplest possible deployment.
+                The web UI supports pasting plain text, images via clipboard, and files via drag-and-drop; it also provides a CLI client, (Neo)Vim integration, server-side syntax highlighting, and a minimal REST API.
+              '';
+              githubUrl = "https://github.com/wantguns/bin";
+              releaseUrl = "https://github.com/wantguns/bin/releases";
             };
         };
         default = {};

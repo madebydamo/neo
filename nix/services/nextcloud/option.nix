@@ -58,6 +58,17 @@
                 "^/cron.php"
                 "^/ocs/v2.php/"
               ];
+            }
+            // lib.neo.mkServiceMeta {
+              icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nextcloud.svg";
+              description = ''
+                Nextcloud is an open source, self-hosted content collaboration platform that gives you a safe home for all your data.
+                Access, sync, and share your files, calendars, contacts, mail, and more from web, desktop, and mobile clients on your own terms.
+                It features Nextcloud Office for collaborative document editing, Talk for private video calls and chat, Groupware tools, and an integrated AI assistant — all without relying on third-party clouds.
+              '';
+              projectUrl = "https://nextcloud.com/";
+              githubUrl = "https://github.com/nextcloud/server";
+              releaseUrl = "https://nextcloud.com/changelog/";
             };
         };
         default = {};

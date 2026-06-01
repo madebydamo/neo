@@ -130,7 +130,19 @@
                 '';
               };
             }
-            // lib.neo.mkReverseProxyOptions {subdomain = "openclaw";};
+            // lib.neo.mkReverseProxyOptions {subdomain = "openclaw";}
+            // lib.neo.mkServiceMeta {
+              icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/openclaw.svg";
+              description = ''
+                OpenClaw is a self-hosted personal AI assistant and multi-channel gateway you run on your own devices.
+                It bridges messaging platforms (Telegram, WhatsApp, Discord, Slack, Signal, iMessage, and 20+ more) to autonomous LLM agents with persistent memory, tool use, browser control, shell access, and extensible skills/plugins.
+                Message your lobster (🦞) from any connected chat app and watch it take real actions on the host while keeping all data and execution private under your control.
+                Supports Anthropic, OpenAI, xAI/Grok and local models; includes a web Control UI, companion apps, and mobile nodes for an always-on agent experience.
+              '';
+              projectUrl = "https://openclaw.ai/";
+              githubUrl = "https://github.com/openclaw/openclaw";
+              releaseUrl = "https://github.com/openclaw/openclaw/releases";
+            };
         };
         default = {};
         description = "OpenClaw service configuration";

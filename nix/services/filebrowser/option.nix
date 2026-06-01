@@ -39,6 +39,16 @@
                 "^/static/"
                 "^/api/public"
               ];
+            }
+            // lib.neo.mkServiceMeta {
+              icon = "https://filebrowser.damianmoser.ch/static/img/icons/favicon.svg";
+              description = ''
+                Filebrowser provides a file management interface.
+                It lets you upload, delete, preview, rename and edit your files in the browser.
+                Mount additional host paths via additionalMountPoints.
+              '';
+              projectUrl = "https://filebrowser.org/";
+              githubUrl = "https://github.com/filebrowser/filebrowser";
             };
         };
         default = {};

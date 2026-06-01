@@ -30,6 +30,19 @@
             // lib.neo.mkReverseProxyOptions {
               subdomain = "pihole";
               auth.enabled = true;
+            }
+            // lib.neo.mkServiceMeta {
+              icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/pi-hole.svg";
+              description = ''
+                Pi-hole is a powerful network-wide ad blocker that acts as a DNS sinkhole, protecting all devices on your network from unwanted advertisements, trackers, and malware.
+                It requires no client software on individual devices and blocks content even in mobile apps, smart TVs, and other non-browser locations.
+                By filtering at the DNS level before downloads occur, Pi-hole speeds up browsing, reduces bandwidth usage, and provides detailed statistics, query logs, and an intuitive web dashboard for managing lists and settings.
+                It supports regex blocking, can function as a DHCP server, and offers easy integration with VPNs for protection on the go.
+                Completely free and open source, Pi-hole puts you in control of your network's privacy and performance.
+              '';
+              projectUrl = "https://pi-hole.net/";
+              githubUrl = "https://github.com/pi-hole/pi-hole";
+              releaseUrl = "https://github.com/pi-hole/pi-hole/releases";
             };
         };
         default = {};

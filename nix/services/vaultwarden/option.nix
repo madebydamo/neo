@@ -26,6 +26,17 @@
                 "^/notifications/"
                 "^/icons/"
               ];
+            }
+            // lib.neo.mkServiceMeta {
+              icon = "https://raw.githubusercontent.com/dani-garcia/vaultwarden/main/resources/vaultwarden-icon.svg";
+              description = ''
+                Vaultwarden is a lightweight alternative server implementation of the Bitwarden password manager API, written entirely in Rust for efficiency and security.
+                It delivers full compatibility with official Bitwarden clients, browser extensions, desktop apps, and mobile apps, enabling complete self-hosted password management including logins, secure notes, cards, identities, attachments, and Send for temporary shares.
+                The project supports organizations with advanced sharing, collections, policies, multiple 2FA options (including hardware keys and WebAuthn), emergency access, website favicons, and includes a bundled admin backend and modified web vault.
+                Perfect for privacy-conscious users and small teams who want a resource-light, private Bitwarden-compatible vault without relying on the official hosted or heavy server software.
+              '';
+              githubUrl = "https://github.com/dani-garcia/vaultwarden";
+              releaseUrl = "https://github.com/dani-garcia/vaultwarden/releases";
             };
         };
         default = {};

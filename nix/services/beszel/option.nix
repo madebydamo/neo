@@ -22,6 +22,18 @@
               auth.publicPaths = [
                 "^/api"
               ];
+            }
+            // lib.neo.mkServiceMeta {
+              icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/beszel.svg";
+              description = ''
+                Beszel is a simple, lightweight server monitoring platform that provides Docker and Podman stats, historical metrics, and configurable alerts for CPU, memory, disk, bandwidth, temperature and more.
+                It uses a central hub (web UI built on PocketBase) paired with tiny agents that report metrics from your servers and containers over websocket.
+                Beszel is designed for ease of use with no requirement for public ports on monitored hosts, support for multi-user and admin sharing, OAuth / OIDC authentication, automatic backups, S.M.A.R.T. disk monitoring, and a REST API.
+                It serves as a friendly, low-overhead alternative for homelab and self-hosted infrastructure visibility.
+              '';
+              projectUrl = "https://beszel.dev/";
+              githubUrl = "https://github.com/henrygd/beszel";
+              releaseUrl = "https://github.com/henrygd/beszel/releases";
             };
         };
         default = {};

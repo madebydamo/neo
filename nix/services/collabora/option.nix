@@ -15,6 +15,18 @@
             // lib.neo.mkReverseProxyOptions {
               subdomain = "collabora";
               auth.enabled = false;
+            }
+            // lib.neo.mkServiceMeta {
+              icon = "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/collaboraonline.svg";
+              description = ''
+                Collabora Online is a collaborative online office suite based on LibreOffice technology.
+                It provides real-time document, spreadsheet, and presentation editing in any modern browser with no plugins required.
+                Self-hosted via the official CODE Docker image, it delivers frequent updates with cutting-edge features perfect for home users and small teams.
+                Seamlessly integrates with Nextcloud (and other WOPI clients) for secure, private collaborative editing under your full control.
+              '';
+              projectUrl = "https://www.collaboraonline.com/code/";
+              githubUrl = "https://github.com/CollaboraOnline/online";
+              releaseUrl = "https://github.com/CollaboraOnline/online/releases";
             };
         };
         default = {};
