@@ -75,53 +75,39 @@
           networking.firewall.extraStopCommands = "
             iptables -D nixos-fw -i br+ -j ACCEPT
           ";
-          systemd.services.docker-swag.preStart = lib.concatStringsSep "\n" ([
-              "rm -r ${config.neo.volumes.appdata}/swag/nginx/proxy-confs"
-              "rm -r ${config.neo.volumes.appdata}/swag/nginx/site-confs"
-              "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'"
-              (lib.neo.mkActivationScriptForDir config {
-                dirPath = "${config.neo.volumes.appdata}/swag/nginx/proxy-confs";
-              })
-              (lib.neo.mkActivationScriptForDir config {
-                dirPath = "${config.neo.volumes.appdata}/swag/nginx";
-              })
-              (lib.neo.mkActivationScriptForDir config {
-                dirPath = "${config.neo.volumes.appdata}/swag";
-              })
-              (lib.neo.mkActivationScriptForDir config {
-                dirPath = "${config.neo.volumes.appdata}/swag/nginx/conf.d";
-              })
-              ''
-                set +u
-                # Ensure custom http snippets in conf.d are included (needed for neo cookie support).
-                NGINX_CONF="${config.neo.volumes.appdata}/swag/nginx/nginx.conf"
-                if [ -f "$NGINX_CONF" ] && ! grep -q 'include /config/nginx/conf.d/*.conf;' "$NGINX_CONF"; then
-                  sed -i '/include \/config\/nginx\/resolver.conf;/a \    include /config/nginx/conf.d/*.conf;' "$NGINX_CONF"
-                fi
-                # Ensure the iframe embed support headers are properly set (or removed) in proxy.conf
-                # based on neo.services.neo.iframeCookieSupport. This is the single central script
-                # that ensures the desired state for cross-origin iframe support in the neo dashboard.
-                PROXY_CONF="${config.neo.volumes.appdata}/swag/nginx/proxy.conf"
-                touch "$PROXY_CONF"
-                chown ${toString config.neo.uid}:${toString config.neo.gid} "$PROXY_CONF" || true
-                chmod 0664 "$PROXY_CONF" || true
-                MARKER="# neo-iframe-embed-support"
-                NEO_SUPPORT=${lib.boolToString ((config.neo.services.neo.iframeCookieSupport) && (config.neo.services.neo.enabled))}
-                if [ -f "$PROXY_CONF" ]; then
-                  if $NEO_SUPPORT; then
-                    if ! grep -q "$MARKER" "$PROXY_CONF"; then
-                      printf '%s\n' "$MARKER" "proxy_hide_header X-Frame-Options;" "proxy_hide_header Content-Security-Policy;" >> "$PROXY_CONF"
-                    fi
-                  else
-                    sed -i "/$MARKER/d" "$PROXY_CONF" || true
-                    sed -i '/proxy_hide_header X-Frame-Options/d' "$PROXY_CONF" || true
-                    sed -i '/proxy_hide_header Content-Security-Policy/d' "$PROXY_CONF" || true
+          systemd.services.docker-swag = {
+            preStart = lib.concatStringsSep "\n" ([
+                "rm -r ${config.neo.volumes.appdata}/swag/nginx/proxy-confs"
+                "rm -r ${config.neo.volumes.appdata}/swag/nginx/site-confs"
+                "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'"
+                (lib.neo.mkActivationScriptForDir config {
+                  dirPath = "${config.neo.volumes.appdata}/swag/nginx/proxy-confs";
+                })
+                (lib.neo.mkActivationScriptForDir config {
+                  dirPath = "${config.neo.volumes.appdata}/swag/nginx";
+                })
+                (lib.neo.mkActivationScriptForDir config {
+                  dirPath = "${config.neo.volumes.appdata}/swag";
+                })
+                (lib.neo.mkActivationScriptForDir config {
+                  dirPath = "${config.neo.volumes.appdata}/swag/nginx/conf.d";
+                })
+                ''
+                  set +u
+                  NGINX_CONF="${config.neo.volumes.appdata}/swag/nginx/nginx.conf"
+                  if [ -f "$NGINX_CONF" ] && ! grep -q 'include /config/nginx/conf.d/*.conf;' "$NGINX_CONF"; then
+                    sed -i '/include \/config\/nginx\/resolver.conf;/a \    include /config/nginx/conf.d/*.conf;' "$NGINX_CONF"
                   fi
-                fi
-              ''
-            ]
-            ++ proxyConfScripts
-            ++ customProxyConfScripts);
+                ''
+              ]
+              ++ proxyConfScripts
+              ++ customProxyConfScripts);
+            postStop = ''
+              rm -f ${config.neo.volumes.appdata}/swag/nginx/proxy.conf || true
+            '';
+            wants = ["swag-proxy-conf-patcher.service"];
+          };
+
           virtualisation.oci-containers.containers.swag = {
             image = "lscr.io/linuxserver/swag:latest";
             autoStart = true;
@@ -175,6 +161,43 @@
                 sleep 5
                 ${pkgs.docker}/bin/docker exec swag nginx -s reload || true
               done
+            '';
+          };
+
+          systemd.services."swag-proxy-conf-patcher" = {
+            after = ["docker-swag.service"];
+            serviceConfig = {
+              Type = "oneshot";
+            };
+            script = ''
+              set -uo pipefail
+              PROXY_CONF="${config.neo.volumes.appdata}/swag/nginx/proxy.conf"
+              for i in $(seq 1 120); do
+                if [ -f "$PROXY_CONF" ]; then
+                  break
+                fi
+                sleep 1
+              done
+              if [ ! -f "$PROXY_CONF" ]; then
+                exit 0
+              fi
+              touch "$PROXY_CONF"
+              chown ${toString config.neo.uid}:${toString config.neo.gid} "$PROXY_CONF" || true
+              chmod 0664 "$PROXY_CONF" || true
+              MARKER="# neo-iframe-embed-support"
+              NEO_SUPPORT=${lib.boolToString ((config.neo.services.neo.iframeCookieSupport) && (config.neo.services.neo.enabled))}
+              if [ -f "$PROXY_CONF" ]; then
+                if $NEO_SUPPORT; then
+                  if ! grep -q "$MARKER" "$PROXY_CONF"; then
+                    printf '%s\n' "$MARKER" "proxy_hide_header X-Frame-Options;" "proxy_hide_header Content-Security-Policy;" >> "$PROXY_CONF"
+                  fi
+                else
+                  sed -i "/$MARKER/d" "$PROXY_CONF" || true
+                  sed -i '/proxy_hide_header X-Frame-Options/d' "$PROXY_CONF" || true
+                  sed -i '/proxy_hide_header Content-Security-Policy/d' "$PROXY_CONF" || true
+                fi
+              fi
+              ${pkgs.docker}/bin/docker exec swag nginx -s reload || true
             '';
           };
         };
