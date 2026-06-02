@@ -153,6 +153,30 @@
               "--add-host=host.docker.internal:host-gateway"
             ];
           };
+
+          systemd.services."swag-cert-reloader" = {
+            wantedBy = ["multi-user.target"];
+            after = ["docker.service" "docker-swag.service"];
+            wants = ["docker-swag.service"];
+            serviceConfig = {
+              Type = "simple";
+              Restart = "always";
+              RestartSec = "10";
+            };
+            script = ''
+              set -uo pipefail
+              WATCH_DIR="${config.neo.volumes.appdata}/swag/etc/letsencrypt/live"
+              while true; do
+                if [ ! -d "$WATCH_DIR" ]; then
+                  sleep 30
+                  continue
+                fi
+                ${pkgs.inotify-tools}/bin/inotifywait -r -e close_write,create,delete,moved_to,move -q "$WATCH_DIR" || true
+                sleep 5
+                ${pkgs.docker}/bin/docker exec swag nginx -s reload || true
+              done
+            '';
+          };
         };
     };
 }
