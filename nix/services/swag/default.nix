@@ -92,13 +92,6 @@
                 (lib.neo.mkActivationScriptForDir config {
                   dirPath = "${config.neo.volumes.appdata}/swag/nginx/conf.d";
                 })
-                ''
-                  set +u
-                  NGINX_CONF="${config.neo.volumes.appdata}/swag/nginx/nginx.conf"
-                  if [ -f "$NGINX_CONF" ] && ! grep -q 'include /config/nginx/conf.d/*.conf;' "$NGINX_CONF"; then
-                    sed -i '/include \/config\/nginx\/resolver.conf;/a \    include /config/nginx/conf.d/*.conf;' "$NGINX_CONF"
-                  fi
-                ''
               ]
               ++ proxyConfScripts
               ++ customProxyConfScripts);
@@ -157,9 +150,12 @@
                   sleep 30
                   continue
                 fi
-                ${pkgs.inotify-tools}/bin/inotifywait -r -e close_write,create,delete,moved_to,move -q "$WATCH_DIR" || true
+                ${pkgs.inotify-tools}/bin/inotifywait -r -e close_write,create,move -q "$WATCH_DIR" || true
                 sleep 5
-                ${pkgs.docker}/bin/docker exec swag nginx -s reload || true
+                echo "reload nginx"
+                ${pkgs.docker}/bin/docker exec swag nginx -c /config/nginx/nginx.conf -s reload || true
+                echo "reloaded"
+                sleep 1
               done
             '';
           };
@@ -197,7 +193,6 @@
                   sed -i '/proxy_hide_header Content-Security-Policy/d' "$PROXY_CONF" || true
                 fi
               fi
-              ${pkgs.docker}/bin/docker exec swag nginx -s reload || true
             '';
           };
         };
