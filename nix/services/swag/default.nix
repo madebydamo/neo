@@ -91,6 +91,34 @@
               (lib.neo.mkActivationScriptForDir config {
                 dirPath = "${config.neo.volumes.appdata}/swag/nginx/conf.d";
               })
+              ''
+                set +u
+                # Ensure custom http snippets in conf.d are included (needed for neo cookie support).
+                NGINX_CONF="${config.neo.volumes.appdata}/swag/nginx/nginx.conf"
+                if [ -f "$NGINX_CONF" ] && ! grep -q 'include /config/nginx/conf.d/*.conf;' "$NGINX_CONF"; then
+                  sed -i '/include \/config\/nginx\/resolver.conf;/a \    include /config/nginx/conf.d/*.conf;' "$NGINX_CONF"
+                fi
+                # Ensure the iframe embed support headers are properly set (or removed) in proxy.conf
+                # based on neo.services.neo.iframeCookieSupport. This is the single central script
+                # that ensures the desired state for cross-origin iframe support in the neo dashboard.
+                PROXY_CONF="${config.neo.volumes.appdata}/swag/nginx/proxy.conf"
+                touch "$PROXY_CONF"
+                chown ${toString config.neo.uid}:${toString config.neo.gid} "$PROXY_CONF" || true
+                chmod 0664 "$PROXY_CONF" || true
+                MARKER="# neo-iframe-embed-support"
+                NEO_SUPPORT=${lib.boolToString ((config.neo.services.neo.iframeCookieSupport) && (config.neo.services.neo.enabled))}
+                if [ -f "$PROXY_CONF" ]; then
+                  if $NEO_SUPPORT; then
+                    if ! grep -q "$MARKER" "$PROXY_CONF"; then
+                      printf '%s\n' "$MARKER" "proxy_hide_header X-Frame-Options;" "proxy_hide_header Content-Security-Policy;" >> "$PROXY_CONF"
+                    fi
+                  else
+                    sed -i "/$MARKER/d" "$PROXY_CONF" || true
+                    sed -i '/proxy_hide_header X-Frame-Options/d' "$PROXY_CONF" || true
+                    sed -i '/proxy_hide_header Content-Security-Policy/d' "$PROXY_CONF" || true
+                  fi
+                fi
+              ''
             ]
             ++ proxyConfScripts
             ++ customProxyConfScripts);

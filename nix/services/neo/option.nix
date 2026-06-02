@@ -25,11 +25,14 @@
                 type = types.bool;
                 default = true;
                 description = ''
-                  When enabled (default), automatically writes a global nginx configuration file
-                  into SWAG's conf.d that relaxes SameSite cookies (SameSite=None + Secure) and
-                  sets a broad Domain (based on the main domain). This makes authenticated services
-                  work correctly when loaded inside the neo web UI iframes.
-                  Set to false to opt out completely.
+                  When enabled (default), configures support for loading other services inside
+                  the neo web UI iframes (neo.* embeds sub.domain pages):
+                  - writes conf.d snippet (relaxed cookies for auth across subdomains; requires
+                    include added to nginx.conf)
+                  - ensures (via a single script in swag preStart) that proxy.conf has
+                    proxy_hide_header for X-Frame-Options and Content-Security-Policy.
+                  This resolves cross-origin frame blocking centrally without edits to per-service
+                  swag.nix (e.g. pastebin). Set to false to opt out.
                 '';
               };
             }

@@ -19,7 +19,6 @@
         client_max_body_size 0;
 
         add_header X-Content-Type-Options "nosniff" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
         add_header X-Robots-Tag "noindex,nofollow" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Strict-Transport-Security "max-age=15552000; includeSubDomains" always;

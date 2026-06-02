@@ -23,7 +23,6 @@
           set $upstream_port 80;
           set $upstream_proto http;
           proxy_pass $upstream_proto://$upstream_app:$upstream_port;
-          proxy_hide_header X-Frame-Options;
           ${lib.neo.authBlock config cfg}
         }
 
@@ -34,7 +33,6 @@
           set $upstream_port 80;
           set $upstream_proto http;
           proxy_pass $upstream_proto://$upstream_app:$upstream_port;
-          proxy_hide_header X-Frame-Options;
           ${lib.neo.authBlock config cfg}
         }
         ${lib.neo.authLocations config cfg}
