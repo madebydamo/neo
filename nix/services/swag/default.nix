@@ -184,76 +184,10 @@
               RestartSec = "10";
             };
             script = ''
-              set -uo pipefail
-
               WATCH_DIR="${config.neo.volumes.appdata}/swag/etc/letsencrypt/live"
               CONTAINER_NAME="swag"
               NGINX_RELOAD_CMD="nginx -c /config/nginx/nginx.conf -s reload"
-
-              log() { echo "$(date '+%F %T') [swag-cert] $*"; }
-
-              get_latest_mtime() {
-                local m
-                m=$(find "$WATCH_DIR" -name fullchain.pem -exec stat -c %Y {} + 2>/dev/null | sort -rn | head -1)
-                echo "''${m:-0}"
-              }
-
-              reload_nginx() {
-                  log "Triggering nginx reload in container '$CONTAINER_NAME'..."
-                  if docker exec "$CONTAINER_NAME" $NGINX_RELOAD_CMD; then
-                      log "nginx reload successful"
-                  else
-                      log "ERROR: nginx reload failed (container may not be running or nginx config error)"
-                  fi
-              }
-
-              wait_for_watch_dir() {
-                  if [ -d "$WATCH_DIR" ]; then
-                      log "Watch directory ready: $WATCH_DIR"
-                      return
-                  fi
-                  log "Directory does not exist yet: $WATCH_DIR — waiting..."
-                  while [ ! -d "$WATCH_DIR" ]; do
-                      sleep 5
-                  done
-                  sleep 2
-                  log "Watch directory ready: $WATCH_DIR"
-              }
-
-              main() {
-                  log "Starting SWAG certificate reloader (watching $WATCH_DIR)"
-                  last_mtime=0
-                  while true; do
-                      wait_for_watch_dir
-
-                      current=$(get_latest_mtime)
-                      if [ "$current" -gt "$last_mtime" ]; then
-                          if [ "$last_mtime" -ne 0 ]; then
-                              log "Detected updated certificate (mtime $current > $last_mtime) — reloading"
-                              reload_nginx
-                          fi
-                          last_mtime=$current
-                      elif [ "$last_mtime" -eq 0 ] && [ "$current" -gt 0 ]; then
-                          last_mtime=$current
-                      fi
-                      log "Monitoring certificate mtimes (baseline $last_mtime)..."
-
-                      while [ -d "$WATCH_DIR" ]; do
-                          sleep 30
-                          current=$(get_latest_mtime)
-                          if [ "$current" -gt "$last_mtime" ]; then
-                              log "Detected updated certificate (mtime $current > $last_mtime)"
-                              reload_nginx
-                              last_mtime=$current
-                          fi
-                      done
-
-                      log "Watch directory disappeared — re-watching"
-                      sleep 2
-                  done
-              }
-
-              main "$@"
+              ${builtins.readFile ./swag-cert-reloader.sh}
             '';
           };
 
@@ -265,71 +199,11 @@
               RemainAfterExit = true;
             };
             script = ''
-              set -uo pipefail
-
               APPDATA="${config.neo.volumes.appdata}/swag"
-
-              # ====================
-              # 1. nginx.conf patcher (conf.d include)
-              # ====================
-              NGINX_CONF="$APPDATA/nginx/nginx.conf"
-              echo "=== Patching nginx.conf ==="
-
-              for i in $(seq 1 60); do
-                if [ -f "$NGINX_CONF" ]; then
-                  break
-                fi
-                sleep 1
-              done
-
-              if [ -f "$NGINX_CONF" ]; then
-                if ! grep -qE '^[[:space:]]*include[[:space:]]+/config/nginx/conf\.d/\*\.conf;' "$NGINX_CONF"; then
-                  sed -i '/include \/config\/nginx\/resolver\.conf;/a \    include /config/nginx/conf.d/*.conf;' "$NGINX_CONF"
-                  echo "→ Added conf.d include to nginx.conf"
-                else
-                  echo "→ conf.d include already present"
-                fi
-              else
-                echo "⚠ nginx.conf not found after waiting"
-              fi
-
-              # ====================
-              # 2. proxy.conf patcher (iframe/embed support)
-              # ====================
-              PROXY_CONF="$APPDATA/nginx/proxy.conf"
-              echo "=== Patching proxy.conf ==="
-
-              for i in $(seq 1 120); do
-                if [ -f "$PROXY_CONF" ]; then
-                  break
-                fi
-                sleep 1
-              done
-
-              if [ ! -f "$PROXY_CONF" ]; then
-                echo "⚠ proxy.conf not found after waiting"
-              else
-                touch "$PROXY_CONF"
-                chown ${toString config.neo.uid}:${toString config.neo.gid} "$PROXY_CONF" || true
-                chmod 0664 "$PROXY_CONF" || true
-
-                MARKER="# neo-iframe-embed-support"
-                NEO_SUPPORT=${lib.boolToString ((config.neo.services.neo.iframeCookieSupport) && (config.neo.services.neo.enabled))}
-
-                if $NEO_SUPPORT; then
-                  if ! grep -q "$MARKER" "$PROXY_CONF"; then
-                    printf '%s\n' "$MARKER" "proxy_hide_header X-Frame-Options;" "proxy_hide_header Content-Security-Policy;" >> "$PROXY_CONF"
-                    echo "→ Added iframe/embed headers to proxy.conf"
-                  else
-                    echo "→ iframe/embed support already present"
-                  fi
-                else
-                  sed -i "/$MARKER/d" "$PROXY_CONF" || true
-                  sed -i '/proxy_hide_header X-Frame-Options/d' "$PROXY_CONF" || true
-                  sed -i '/proxy_hide_header Content-Security-Policy/d' "$PROXY_CONF" || true
-                  echo "→ Removed iframe/embed headers from proxy.conf"
-                fi
-              fi
+              NEO_UID="${toString config.neo.uid}"
+              NEO_GID="${toString config.neo.gid}"
+              NEO_SUPPORT=${lib.boolToString ((config.neo.services.neo.iframeCookieSupport) && (config.neo.services.neo.enabled))}
+              ${builtins.readFile ./swag-patcher.sh}
             '';
           };
         };
