@@ -12,6 +12,8 @@
         appServices = lib.neo.getProxiedServices config;
         subdomains = catAttrs "subdomain" (attrValues appServices);
         customDomains = concatLists (catAttrs "customDomains" (attrValues appServices));
+        proxyPass = cfg.proxyPass;
+        proxyPassDomains = attrNames proxyPass;
         domain = cfg.domain;
         customProxyConfScripts = flatten (map (
           svc:
@@ -67,6 +69,44 @@
               content = svc.proxyConf;
             }
         ) (attrValues appServices);
+        proxyPassConfScripts =
+          mapAttrsToList (
+            domain: upstream:
+              lib.neo.mkActivationScriptForFile config {
+                filePath = "${config.neo.volumes.appdata}/swag/nginx/site-confs/${domain}.conf";
+                content = ''
+                  server {
+                    listen 80;
+                    listen [::]:80;
+                    server_name ${domain};
+
+                    return 301 https://$server_name$request_uri;
+                  }
+
+                  server {
+                    listen 443 ssl;
+                    http2 on;
+                    server_name ${domain};
+
+                    include /config/nginx/ssl.conf;
+                    client_max_body_size 0;
+
+                    location / {
+                      include /config/nginx/proxy.conf;
+                      include /config/nginx/resolver.conf;
+                      proxy_pass ${upstream};
+
+                      proxy_set_header Host $host;
+                      proxy_set_header X-Real-IP $remote_addr;
+                      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                      proxy_set_header X-Forwarded-Proto $scheme;
+                      proxy_set_header X-Forwarded-Host $host;
+                    }
+                  }
+                '';
+              }
+          )
+          proxyPass;
       in
         mkIf cfg.enabled {
           networking.firewall.extraCommands = "
@@ -94,11 +134,12 @@
                 })
               ]
               ++ proxyConfScripts
-              ++ customProxyConfScripts);
             postStop = ''
               rm -f ${config.neo.volumes.appdata}/swag/nginx/proxy.conf || true
             '';
             wants = ["swag-proxy-conf-patcher.service"];
+              ++ customProxyConfScripts
+              ++ proxyPassConfScripts);
           };
 
           virtualisation.oci-containers.containers.swag = {
@@ -113,7 +154,7 @@
               VALIDATION = "http";
               EMAIL = cfg.email;
               ONLY_SUBDOMAINS = boolToString cfg.onlySubdomains;
-              EXTRA_DOMAINS = concatStringsSep "," (cfg.extraDomains ++ customDomains);
+              EXTRA_DOMAINS = concatStringsSep "," (proxyPassDomains ++ customDomains);
               SWAG_AUTORELOAD = "true";
               SWAG_AUTORELOAD_WATCHLIST = "/config/etc/letsencrypt";
             };
