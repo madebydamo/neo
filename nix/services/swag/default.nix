@@ -117,8 +117,10 @@
           ";
           systemd.services.docker-swag = {
             preStart = lib.concatStringsSep "\n" ([
-                "rm -r ${config.neo.volumes.appdata}/swag/nginx/proxy-confs"
-                "rm -r ${config.neo.volumes.appdata}/swag/nginx/site-confs"
+                "rm -r ${config.neo.volumes.appdata}/swag/nginx/proxy-confs || true"
+                "rm -r ${config.neo.volumes.appdata}/swag/nginx/site-confs || true"
+                "rm -f ${config.neo.volumes.appdata}/swag/nginx/proxy.conf || true"
+                "rm -f ${config.neo.volumes.appdata}/swag/nginx/nginx.conf || true"
                 "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'"
                 (lib.neo.mkActivationScriptForDir config {
                   dirPath = "${config.neo.volumes.appdata}/swag/nginx/proxy-confs";
@@ -134,12 +136,9 @@
                 })
               ]
               ++ proxyConfScripts
-            postStop = ''
-              rm -f ${config.neo.volumes.appdata}/swag/nginx/proxy.conf || true
-            '';
-            wants = ["swag-proxy-conf-patcher.service"];
               ++ customProxyConfScripts
               ++ proxyPassConfScripts);
+            wants = ["swag-patcher.service"];
           };
 
           virtualisation.oci-containers.containers.swag = {
@@ -201,37 +200,77 @@
             '';
           };
 
-          systemd.services."swag-proxy-conf-patcher" = {
+          systemd.services."swag-patcher" = {
             after = ["docker-swag.service"];
+            requires = ["docker-swag.service"];
             serviceConfig = {
               Type = "oneshot";
+              RemainAfterExit = true;
             };
             script = ''
               set -uo pipefail
-              PROXY_CONF="${config.neo.volumes.appdata}/swag/nginx/proxy.conf"
+
+              APPDATA="${config.neo.volumes.appdata}/swag"
+
+              # ====================
+              # 1. nginx.conf patcher (conf.d include)
+              # ====================
+              NGINX_CONF="$APPDATA/nginx/nginx.conf"
+              echo "=== Patching nginx.conf ==="
+
+              for i in $(seq 1 60); do
+                if [ -f "$NGINX_CONF" ]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              if [ -f "$NGINX_CONF" ]; then
+                if ! grep -qE '^[[:space:]]*include[[:space:]]+/config/nginx/conf\.d/\*\.conf;' "$NGINX_CONF"; then
+                  sed -i '/include \/config\/nginx\/resolver\.conf;/a \    include /config/nginx/conf.d/*.conf;' "$NGINX_CONF"
+                  echo "→ Added conf.d include to nginx.conf"
+                else
+                  echo "→ conf.d include already present"
+                fi
+              else
+                echo "⚠ nginx.conf not found after waiting"
+              fi
+
+              # ====================
+              # 2. proxy.conf patcher (iframe/embed support)
+              # ====================
+              PROXY_CONF="$APPDATA/nginx/proxy.conf"
+              echo "=== Patching proxy.conf ==="
+
               for i in $(seq 1 120); do
                 if [ -f "$PROXY_CONF" ]; then
                   break
                 fi
                 sleep 1
               done
+
               if [ ! -f "$PROXY_CONF" ]; then
-                exit 0
-              fi
-              touch "$PROXY_CONF"
-              chown ${toString config.neo.uid}:${toString config.neo.gid} "$PROXY_CONF" || true
-              chmod 0664 "$PROXY_CONF" || true
-              MARKER="# neo-iframe-embed-support"
-              NEO_SUPPORT=${lib.boolToString ((config.neo.services.neo.iframeCookieSupport) && (config.neo.services.neo.enabled))}
-              if [ -f "$PROXY_CONF" ]; then
+                echo "⚠ proxy.conf not found after waiting"
+              else
+                touch "$PROXY_CONF"
+                chown ${toString config.neo.uid}:${toString config.neo.gid} "$PROXY_CONF" || true
+                chmod 0664 "$PROXY_CONF" || true
+
+                MARKER="# neo-iframe-embed-support"
+                NEO_SUPPORT=${lib.boolToString ((config.neo.services.neo.iframeCookieSupport) && (config.neo.services.neo.enabled))}
+
                 if $NEO_SUPPORT; then
                   if ! grep -q "$MARKER" "$PROXY_CONF"; then
                     printf '%s\n' "$MARKER" "proxy_hide_header X-Frame-Options;" "proxy_hide_header Content-Security-Policy;" >> "$PROXY_CONF"
+                    echo "→ Added iframe/embed headers to proxy.conf"
+                  else
+                    echo "→ iframe/embed support already present"
                   fi
                 else
                   sed -i "/$MARKER/d" "$PROXY_CONF" || true
                   sed -i '/proxy_hide_header X-Frame-Options/d' "$PROXY_CONF" || true
                   sed -i '/proxy_hide_header Content-Security-Policy/d' "$PROXY_CONF" || true
+                  echo "→ Removed iframe/embed headers from proxy.conf"
                 fi
               fi
             '';

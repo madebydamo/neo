@@ -17,10 +17,10 @@
                 default = null;
                 description = "LetsEncrypt email for swag";
               };
-              extraDomains = mkOption {
-                type = types.listOf types.str;
-                default = [];
-                description = "Extra domains for swag";
+              proxyPass = mkOption {
+                type = types.attrsOf types.str;
+                default = {};
+                description = "Map of extra domains to http upstream URLs (plain http backends) to create direct proxy server blocks for (e.g. { \"octo.example.com\" = \"http://192.168.178.42:8123\"; }). SWAG handles TLS termination; no need if the target already speaks HTTPS.";
               };
               onlySubdomains = mkOption {
                 type = types.bool;
@@ -44,7 +44,7 @@
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nginx.svg";
               description = ''
                 SWAG (Secure Web Application Gateway) is the foundational reverse proxy and SSL termination layer for the Neo homeserver.
-                Built on Nginx with integrated Certbot, it automatically provisions and renews trusted SSL certificates from Let's Encrypt or ZeroSSL for the primary domain and all configured subdomains.
+                Built on Nginx with integrated Certbot, it automatically provisions and renews trusted SSL certificates from Let's Encrypt or ZeroSSL for the primary domain, all configured subdomains, and domains listed in proxyPass.
                 Every other service's public web interface is routed exclusively through SWAG using its extensive library of reverse proxy configurations, enabling centralized HTTPS, optional auth, fail2ban protection, and keeping backends isolated on the internal Docker network.
                 As the entry point for all external traffic, SWAG must be configured with your domain and email before other proxied services can be reached securely from the internet. It uses the container image lscr.io/linuxserver/swag:latest.
               '';

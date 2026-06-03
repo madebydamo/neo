@@ -17,10 +17,13 @@
         config.neo.services;
       subdomains = catAttrs "subdomain" (attrValues appServices);
       customDomains = concatLists (catAttrs "customDomains" (attrValues appServices));
+      swagCfg = config.neo.services.swag;
+      proxyPassDomains = attrNames (swagCfg.proxyPass or {});
       domain = config.neo.services.swag.domain;
       dnsMasqLines = concatStringsSep ";" (
         map (sub: "address=/${sub}.${domain}/${cfg.localIP}") subdomains
         ++ map (cd: "address=/${cd}/${cfg.localIP}") customDomains
+        ++ map (pp: "address=/${pp}/${cfg.localIP}") proxyPassDomains
         ++ (
           if onlySubdomains
           then []
