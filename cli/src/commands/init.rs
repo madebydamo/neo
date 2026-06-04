@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use toml_edit::DocumentMut;
 
-use crate::commands::execute_command;
+use crate::commands::{execute_command, git_cmd, has_staged_changes, run_nix};
 
 pub fn init(
     config_path: &str,
@@ -107,21 +107,7 @@ pub fn init(
                 .and_then(|v| v.as_str())
                 .unwrap_or("github:madebydamo/neo#homeserver");
 
-            let desc = format!(
-                "{} flake init -t {} (in {})",
-                nix_cmd, template, config_path
-            );
-            execute_command(
-                Command::new(nix_cmd).current_dir(config_path).args([
-                    "--extra-experimental-features",
-                    "nix-command flakes",
-                    "flake",
-                    "init",
-                    "-t",
-                    template,
-                ]),
-                &desc,
-            )?;
+            run_nix(config_path, nix_cmd, &["flake", "init", "-t", template])?;
 
             execute_command(
                 Command::new("git").current_dir(config_path).arg("init"),
@@ -180,42 +166,19 @@ pub fn init(
         false,
         nix_cmd,
     )?;
-    execute_command(
-        Command::new("git")
-            .current_dir(config_path)
-            .arg("add")
-            .arg("."),
-        &format!("git add (in {})", config_path),
-    )?;
+
+    git_cmd(config_path, &["add", "."])?;
+
     crate::commands::update_inputs::update_inputs(config_path, false, nix_cmd)?;
 
     // Final git add + conditional commit (matches Bash exactly)
-    execute_command(
-        Command::new("git")
-            .current_dir(config_path)
-            .arg("add")
-            .arg("."),
-        &format!("git add (in {})", config_path),
-    )?;
+    git_cmd(config_path, &["add", "."])?;
 
-    if Command::new("git")
-        .current_dir(config_path)
-        .args(["diff", "--cached", "--quiet"])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-    {
-        println!("✓ No changes to commit (everything is up-to-date)");
-    } else {
-        execute_command(
-            Command::new("git").current_dir(config_path).args([
-                "commit",
-                "-m",
-                "Update from neo init",
-            ]),
-            &format!("git commit (in {})", config_path),
-        )?;
+    if has_staged_changes(config_path) {
+        git_cmd(config_path, &["commit", "-m", "Update from neo init"])?;
         println!("Committed initial changes");
+    } else {
+        println!("✓ No changes to commit (everything is up-to-date)");
     }
     println!("Repository ready at {}", config_path);
     Ok(())

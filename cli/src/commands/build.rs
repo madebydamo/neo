@@ -1,8 +1,7 @@
 use anyhow::Result;
-use std::process::Command;
 use toml_edit::DocumentMut;
 
-use crate::commands::execute_command;
+use crate::commands::{get_timestamp, git_cmd, has_staged_changes, run_nix};
 
 pub fn build(config_path: &str, config: &DocumentMut, dry_run: bool, nix_cmd: &str) -> Result<()> {
     let disko_enabled = config
@@ -16,29 +15,26 @@ pub fn build(config_path: &str, config: &DocumentMut, dry_run: bool, nix_cmd: &s
     );
     if dry_run {
         println!(
-            "DRY-RUN: nix build .#nixosConfigurations.neo.config.system.build.toplevel + {}) in {}",
+            "DRY-RUN: nix build .#nixosConfigurations.neo.config.system.build.toplevel + {} + git commit-if-changes (in {})",
             &vm, config_path
         );
         return Ok(());
     }
-    let run_nix = |args: &[&str]| -> Result<()> {
-        let desc = format!("{} {:?} (in {})", nix_cmd, args, config_path);
-        execute_command(
-            Command::new(nix_cmd)
-                .current_dir(config_path)
-                .args(["--extra-experimental-features", "nix-command flakes"])
-                .args(args),
-            &desc,
-        )?;
-        Ok(())
-    };
-    run_nix(&["run", ".#write-flake"])?;
-    //TODO
-    run_nix(&[
-        "build",
-        ".#nixosConfigurations.neo.config.system.build.toplevel",
-    ])?;
-    run_nix(&["build", &vm])?;
+    run_nix(config_path, nix_cmd, &["run", ".#write-flake"])?;
+    run_nix(
+        config_path,
+        nix_cmd,
+        &[
+            "build",
+            ".#nixosConfigurations.neo.config.system.build.toplevel",
+        ],
+    )?;
+    run_nix(config_path, nix_cmd, &["build", &vm])?;
+    git_cmd(config_path, &["add", "."])?;
+    if has_staged_changes(config_path) {
+        let ts = get_timestamp();
+        git_cmd(config_path, &["commit", "-m", &format!("Build: {}", ts)])?;
+    }
     println!("Built configuration");
     Ok(())
 }
