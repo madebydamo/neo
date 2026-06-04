@@ -61,7 +61,7 @@
             customDomains = entry.customDomains;
             httpsPort = cfg.ports.${name}.https;
           in (
-            (optional wildcard "~^(?<sub>.+\\.)?${escapeRegex url}$ 127.0.0.1:${toString httpsPort};")
+            (optional wildcard "~^(?<sub>.+\\.)${escapeRegex url}$ 127.0.0.1:${toString httpsPort};")
             ++ (optional includeTopLevel "${url} 127.0.0.1:${toString httpsPort};")
             ++ (map (domain: "${domain} 127.0.0.1:${toString httpsPort};") customDomains)
           )
