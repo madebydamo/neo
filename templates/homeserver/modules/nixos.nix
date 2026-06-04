@@ -13,7 +13,7 @@
     packages.neo = inputs'.neo.packages.neo;
   };
   flake = {lib, ...}: let
-    system = "x86_64-linux";
+    system = lib.head (config.systems or ["x86_64-linux"]);
     hardwareConfig =
       if builtins.pathExists ../hardware-configuration.nix
       then [../hardware-configuration.nix]

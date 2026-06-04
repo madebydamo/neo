@@ -10,7 +10,7 @@
     ...
   }: let
     cfg = config.neo.services.neo;
-    neoPkg = self.packages.${pkgs.system}.neo;
+    neoPkg = self.packages.${pkgs.stdenv.hostPlatform.system}.neo;
     cookieDomain = ".${config.neo.services.swag.domain}";
   in {
     config = lib.mkIf cfg.enabled {

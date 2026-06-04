@@ -3,18 +3,17 @@
 # - Auto-injects all flake.modules.nixos.* into every NixOS configuration
 # - Exports nixosModules.default so other flakes can import all services
 # - devices option for device-specific modules (not auto-included)
-# - Exports the formatter
 {
   lib,
   config,
   inputs,
   ...
 }: let
-  system = "x86_64-linux";
-  pkgs = inputs.nixpkgs.legacyPackages.${system};
-
-  # Collect all registered NixOS deferred modules
   allNixosModules = lib.attrValues (config.flake.modules.nixos or {});
+  nixosModulesDefault = {
+    imports = allNixosModules;
+  };
+  system = "x86_64-linux";
 in {
   options = {
     configurations.nixos = lib.mkOption {
@@ -40,15 +39,8 @@ in {
   };
 
   config.flake = {
-    formatter.${system} = pkgs.alejandra;
+    nixosModules.default = nixosModulesDefault;
 
-    # Default NixOS module that bundles all services for external use.
-    # Other flakes can: imports = [ neo.nixosModules.default ];
-    nixosModules.default = {
-      imports = allNixosModules;
-    };
-
-    # Build NixOS configurations, auto-injecting all registered modules.
     nixosConfigurations =
       lib.mapAttrs (
         name: {modules}:
@@ -57,7 +49,7 @@ in {
             specialArgs = {
               lib = config.flake.lib;
             };
-            modules = [config.flake.nixosModules.default] ++ modules;
+            modules = [nixosModulesDefault] ++ modules;
           }
       )
       config.configurations.nixos;

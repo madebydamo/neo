@@ -6,7 +6,7 @@
     ...
   }: let
     cfg = config.neo.nixos;
-    neo = self.packages.${pkgs.system}.neo;
+    neo = self.packages.${pkgs.stdenv.hostPlatform.system}.neo;
     path = [
       neo
       pkgs.git
