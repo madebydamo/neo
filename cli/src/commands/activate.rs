@@ -71,13 +71,17 @@ pub fn activate(config_path: &str, dry_run: bool, nix_cmd: &str, sudo_cmd: &str)
         ]),
         &desc,
     ) {
-        let _ = git_cmd(config_path, &["branch", "-D", &build_branch]);
+        if has_changes {
+            let _ = git_cmd(config_path, &["branch", "-D", &build_branch]);
+        }
         let _ = git_cmd(config_path, &["switch", &orig_branch]);
         let _ = git_cmd(config_path, &["branch", "-D", &activation_branch]);
         return Err(e);
     }
 
-    let _ = git_cmd(config_path, &["branch", "-D", &build_branch]);
+    if has_changes {
+        let _ = git_cmd(config_path, &["branch", "-D", &build_branch]);
+    }
     println!("Activated using branch {}", activation_branch);
     Ok(())
 }
