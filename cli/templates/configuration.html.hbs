@@ -106,5 +106,38 @@
         </div>
       </div>
     </dialog>
+
+    <dialog id="activation-success" class="modal">
+      <div class="modal-box max-w-3xl">
+        <h3 class="font-bold text-lg mb-2 text-success">Activation complete</h3>
+        <div id="activation-success-body" class="max-h-[50vh] overflow-auto text-sm"></div>
+        <div class="modal-action">
+          <button onclick="localStorage.removeItem('neo.pendingActivation'); document.getElementById('activation-success').close(); document.getElementById('changes-modal').close(); window.location.reload();" class="btn btn-success btn-sm">Confirm & reload config</button>
+          <form method="dialog"><button class="btn btn-ghost btn-sm">Close</button></form>
+        </div>
+      </div>
+    </dialog>
+
+    <script>
+      (function(){
+        function resume() {
+          try {
+            const raw = localStorage.getItem('neo.pendingActivation');
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            if (data && data.id) {
+              const modal = document.getElementById('changes-modal');
+              if (modal) modal.showModal();
+              htmx.ajax('GET', '/activation/monitor/' + encodeURIComponent(data.id), {target: '#changes-body', swap: 'innerHTML'});
+            }
+          } catch(e){}
+        }
+        document.addEventListener('DOMContentLoaded', resume);
+        document.addEventListener('htmx:afterSettle', resume);
+        var m=document.getElementById('changes-modal');if(m){m.addEventListener('close',function(){var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{target:'#pending-changes',swap:'innerHTML'});});}
+        var s=document.getElementById('activation-success');if(s){s.addEventListener('close',function(){var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{target:'#pending-changes',swap:'innerHTML'});});}
+        document.body.addEventListener('htmx:afterSwap',function(e){var l=document.getElementById('act-log');if(l&&e.detail.target===l){l.scrollTop=l.scrollHeight;}});
+      })();
+    </script>
   </body>
 </html>

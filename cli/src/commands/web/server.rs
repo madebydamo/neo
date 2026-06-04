@@ -12,9 +12,10 @@ use toml_edit::{DocumentMut, Item, Table, Value};
 use super::nix_eval::{extract_proxied_services, extract_service_options, extract_services};
 use super::structs::{AppConfig, IndexContext, OptionPaneContext};
 
-use crate::commands::activate::activate;
 use crate::commands::paste_settings::paste_settings;
 use crate::commands::update::update;
+
+use super::activation;
 
 #[get("/")]
 pub fn index(config: &State<Arc<AppConfig>>) -> Template {
@@ -246,6 +247,14 @@ pub fn save_service(
 
 #[get("/changes/indicator")]
 pub fn changes_indicator(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
+    activation::gc_old_activations();
+    if let Some(id) = activation::find_recent_in_progress_activation() {
+        let btn = format!(
+            "<button class=\"btn btn-warning btn-sm animate-pulse\" onclick=\"document.getElementById('changes-modal').showModal();htmx.ajax('GET','/activation/monitor/{}',{{target:'#changes-body',swap:'innerHTML'}})\">Activation {} in progress — view</button>",
+            id, id
+        );
+        return RawHtml(btn);
+    }
     let (changed, _) = settings_changed_and_diff(&config);
     let content = if changed {
         "<button class=\"btn btn-warning btn-sm\" onclick=\"document.getElementById('changes-modal').showModal();htmx.ajax('GET','/changes/summary',{target:'#changes-body',swap:'innerHTML'})\">Settings changed — review &amp; apply</button>"
@@ -263,7 +272,7 @@ pub fn changes_summary(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
             .replace('&', "&amp;")
             .replace('<', "&lt;")
             .replace('>', "&gt;");
-        format!("<div class=\"mb-2 text-warning text-sm\">Pending changes to settings.toml (git diff)</div><pre class=\"text-xs overflow-auto max-h-[50vh] bg-base-300 p-2 rounded whitespace-pre\">{}</pre><div class=\"flex gap-2 mt-3\"><button hx-post=\"/changes/revert\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" class=\"btn btn-sm btn-ghost\">Revert (paste-settings)</button><button hx-post=\"/changes/apply\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" hx-confirm=\"Run full activation (write-flake + nixos-rebuild)? This can take several minutes.\" class=\"btn btn-sm btn-error\">Apply (activate)</button></div>", esc)
+        format!("<div class=\"mb-2 text-warning text-sm\">Pending changes to settings.toml (git diff)</div><pre class=\"text-xs overflow-auto max-h-[50vh] bg-base-300 p-2 rounded whitespace-pre\">{}</pre><div class=\"flex gap-2 mt-3\"><button hx-post=\"/changes/revert\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" class=\"btn btn-sm btn-ghost\">Revert (paste-settings)</button><button hx-post=\"/changes/apply\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" hx-confirm=\"Run full activation (write-flake + nixos-rebuild)? This can take several minutes.\" hx-on::after-request=\"var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{{target:'#pending-changes',swap:'innerHTML'}})\" class=\"btn btn-sm btn-error\">Apply (activate)</button></div>", esc)
     } else {
         "<div class=\"text-sm\">Settings match the last applied version. No pending changes.</div>"
             .to_string()
@@ -286,12 +295,36 @@ pub fn revert_settings(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
 #[post("/changes/apply")]
 pub fn apply_settings(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     let dir = config_dir(&config);
-    let dir_str = dir.to_str().unwrap_or(".");
+    let _dir_str = dir.to_str().unwrap_or(".");
     let sudo_cmd = std::env::var("SUDO_BINARY_PATH").unwrap_or_else(|_| "sudo".to_string());
-    match activate(dir_str, false, &config.nix_cmd, &sudo_cmd) {
-        Ok(()) => RawHtml("<div class=\"alert alert-success text-sm\">Activate completed (direct call). Check journalctl -u neo-web for full log. System should be updated.</div><div class=\"mt-2\"><button onclick=\"document.getElementById('changes-modal').close()\" class=\"btn btn-sm\">Close</button></div>".to_string()),
-        Err(e) => RawHtml(format!("<div class=\"alert alert-error text-sm\">Activate failed: {}</div><div class=\"mt-2\"><button onclick=\"document.getElementById('changes-modal').close()\" class=\"btn btn-sm\">Close</button></div>", e))
+    let ts = crate::commands::get_timestamp();
+    let id = format!("activation_{}", ts);
+    let act_dir = activation::activation_dir();
+    let _ = fs::create_dir_all(&act_dir);
+    let state_path = act_dir.join(format!("{}.json", id));
+    let log_path = act_dir.join(format!("{}.log", id));
+    let initial = serde_json::json!({
+        "id": id,
+        "status": "in_progress",
+        "phase": "triggered",
+        "started_at": ts,
+        "log_path": log_path.to_string_lossy(),
+    });
+    let _ = fs::write(&state_path, serde_json::to_string_pretty(&initial).unwrap_or_default());
+    let _ = fs::write(&log_path, format!("activation {} triggered via web at {}\n", id, ts));
+    if let Some(other) = activation::find_recent_in_progress_activation() {
+        if other != id {
+            return RawHtml(format!("<div class=\"alert alert-error text-sm\">Another activation {} in progress (or auto-update). Wait.</div>", other));
+        }
     }
+    let systemctl_bin = "/run/current-system/sw/bin/systemctl";
+    let svc = format!("neo-activate@{}.service", ts);
+    let desc = format!("{} {} start --no-block {} ", sudo_cmd, systemctl_bin, svc);
+    let _ = crate::commands::execute_command(
+        &mut Command::new(&sudo_cmd).args([systemctl_bin, "start", "--no-block", &svc]),
+        &desc,
+    );
+    RawHtml(activation::build_monitor_fragment(&id))
 }
 
 #[post("/flake/update")]
@@ -310,6 +343,30 @@ pub fn flake_update(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     }
 }
 
+#[get("/activation/monitor/<id>")]
+pub fn activation_monitor(id: &str) -> RawHtml<String> {
+    RawHtml(activation::build_monitor_fragment(id))
+}
+
+#[get("/activation/log/<id>")]
+pub fn activation_log(id: &str) -> RawHtml<String> {
+    RawHtml(activation::build_log_fragment(id))
+}
+
+#[get("/activation/status/<id>")]
+pub fn activation_status(id: &str) -> RawHtml<String> {
+    RawHtml(activation::build_status_fragment(id))
+}
+
+#[get("/activation/current")]
+pub fn activation_current() -> RawHtml<String> {
+    if let Some(id) = activation::find_recent_in_progress_activation() {
+        RawHtml(activation::build_monitor_fragment(&id))
+    } else {
+        RawHtml("<div class=\"text-xs\">no active activation</div>".to_string())
+    }
+}
+
 pub fn routes() -> Vec<rocket::Route> {
     routes![
         index,
@@ -320,6 +377,10 @@ pub fn routes() -> Vec<rocket::Route> {
         changes_summary,
         revert_settings,
         apply_settings,
-        flake_update
+        flake_update,
+        activation_monitor,
+        activation_log,
+        activation_status,
+        activation_current
     ]
 }

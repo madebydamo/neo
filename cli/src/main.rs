@@ -63,7 +63,10 @@ enum Commands {
     UpdateInputs,
     Update,
     Build,
-    Activate,
+    Activate {
+        #[arg(long, env = "NEO_ACTIVATION_SUFFIX")]
+        activation_suffix: Option<String>,
+    },
     Nuke,
     Web,
     Edit,
@@ -204,7 +207,7 @@ fn run(cli: Cli) -> Result<()> {
         Commands::UpdateInputs => update_inputs(&config_path, dry_run, nix_cmd),
         Commands::Update => update(&config_path, dry_run, nix_cmd),
         Commands::Build => build(&config_path, &doc, dry_run, nix_cmd),
-        Commands::Activate => activate(&config_path, dry_run, nix_cmd, sudo_cmd),
+        Commands::Activate { activation_suffix } => activate(&config_path, dry_run, nix_cmd, sudo_cmd, activation_suffix.as_deref()),
         Commands::Nuke => nuke(&config_path, dry_run, nix_cmd),
         Commands::Web => web(&doc, web_settings_path, nix_cmd, &section),
         Commands::Edit => edit(&config_path, dry_run),

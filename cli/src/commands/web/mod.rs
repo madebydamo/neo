@@ -7,6 +7,7 @@ use rocket::fs::FileServer;
 use rocket_dyn_templates::Template;
 use toml_edit::DocumentMut;
 
+mod activation;
 mod nix_eval;
 mod server;
 mod structs;

@@ -90,6 +90,13 @@
               "SETENV"
             ];
           }
+          {
+            command = "/run/current-system/sw/bin/systemctl";
+            options = [
+              "NOPASSWD"
+              "SETENV"
+            ];
+          }
         ];
       }
     ];
