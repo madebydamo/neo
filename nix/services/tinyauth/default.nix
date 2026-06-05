@@ -41,7 +41,7 @@
 
         systemd.services.docker-tinyauth.preStart = lib.concatStringsSep "\n" [
           (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.volumes.appdata}/tinyauth";
+            dirPath = "${config.neo.core.volumes.appdata}/tinyauth";
           })
         ];
 
@@ -59,7 +59,7 @@
             }
             // appAclEnvVars;
           volumes = [
-            "${config.neo.volumes.appdata}/tinyauth:/data"
+            "${config.neo.core.volumes.appdata}/tinyauth:/data"
           ];
           networks = ["internal"];
         };

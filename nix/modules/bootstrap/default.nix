@@ -5,7 +5,7 @@
     pkgs,
     ...
   }: let
-    cfg = config.neo.nixos;
+    cfg = config.neo."neo-service";
     neo = self.packages.${pkgs.stdenv.hostPlatform.system}.neo;
     path = [
       neo

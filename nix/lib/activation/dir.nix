@@ -4,8 +4,8 @@
       mkActivationScriptForDir = config: {
         dirPath,
         mode ? "0755",
-        user ? toString config.neo.uid,
-        group ? toString config.neo.gid,
+        user ? toString config.neo.core.uid,
+        group ? toString config.neo.core.gid,
       }: ''
         if [ ! -e ${dirPath} ]; then
           mkdir -p ${dirPath}

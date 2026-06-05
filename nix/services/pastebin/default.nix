@@ -7,7 +7,7 @@
   }:
     with lib; let
       cfg = config.neo.services.pastebin;
-      appdata = "${config.neo.volumes.appdata}/pastebin";
+      appdata = "${config.neo.core.volumes.appdata}/pastebin";
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-pastebin.preStart = lib.neo.mkActivationScriptForDir config {

@@ -24,17 +24,17 @@
 
     systemd.services.NetworkManager-wait-online.enable = false;
 
-    users.groups.homeserver.gid = config.neo.gid;
+    users.groups.homeserver.gid = config.neo.core.gid;
 
     users.users.homeserver = {
-      uid = config.neo.uid;
+      uid = config.neo.core.uid;
       group = "homeserver";
       isNormalUser = true;
       home = "/home/homeserver";
       createHome = true;
       extraGroups = ["docker" "wheel"];
-      openssh.authorizedKeys.keys = config.neo.ssh.authorizedKeys;
-      hashedPassword = config.neo.users.hashedPassword;
+      openssh.authorizedKeys.keys = config.neo.core.ssh.authorizedKeys;
+      hashedPassword = config.neo.core.hashedLinuxPassword;
     };
 
     system.activationScripts.create-volumes = lib.concatStringsSep "\n" (
@@ -46,11 +46,11 @@
           }
       )
       [
-        config.neo.volumes.root
-        config.neo.volumes.data
-        config.neo.volumes.appdata
-        config.neo.volumes.media
-        config.neo.volumes.documents
+        config.neo.core.volumes.root
+        config.neo.core.volumes.data
+        config.neo.core.volumes.appdata
+        config.neo.core.volumes.media
+        config.neo.core.volumes.documents
       ]
     );
 

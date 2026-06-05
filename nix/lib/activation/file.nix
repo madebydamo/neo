@@ -5,8 +5,8 @@
         filePath,
         content,
         mode ? "0644",
-        user ? toString config.neo.uid,
-        group ? toString config.neo.gid,
+        user ? toString config.neo.core.uid,
+        group ? toString config.neo.core.gid,
       }: ''
         mkdir -p ${dirOf filePath}
         cat > ${filePath} << 'ACTEOF'

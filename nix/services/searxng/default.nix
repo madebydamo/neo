@@ -7,7 +7,7 @@
   }:
     with lib; let
       cfg = config.neo.services.searxng;
-      appdata = "${config.neo.volumes.appdata}/searxng";
+      appdata = "${config.neo.core.volumes.appdata}/searxng";
       domain = config.neo.services.swag.domain;
     in {
       config = mkIf cfg.enabled {
@@ -53,7 +53,7 @@
             autoStart = true;
             environment = {
               SEARXNG_BASE_URL = "https://${cfg.subdomain}.${domain}";
-              TZ = config.neo.timeZone;
+              TZ = config.neo.core.timeZone;
             };
             volumes = [
               "${appdata}/searxng:/etc/searxng:rw"

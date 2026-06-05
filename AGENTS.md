@@ -85,7 +85,7 @@ in {
 
 ### Naming Conventions (Nix)
 - Variables: camelCase (`additionalMountPoints`)
-- Nix attrs/options: snake_case (`neo.services.filebrowser`, `neo.volumes.appdata`)
+- Nix attrs/options: snake_case (`neo.services.filebrowser`, `neo.core.volumes.appdata`, `neo.neo-service`)
 - Functions: camelCase (`mkActivationScriptForDir`, `mkReverseProxyOptions`)
 - Options: `enabled = mkEnableOption (lib.mdDoc "description");`
 - Use `lib.mdDoc` for all descriptions (not plain strings).
@@ -109,13 +109,13 @@ See `nix/services/filebrowser/option.nix:9` and `nix/services/hermes/option.nix:
 ### Types and Options
 - `types.port`, `types.str`, `types.nullOr`, `types.listOf`, `types.attrsOf types.str`
 - For reverse proxies: `// neo.mkReverseProxyOptions { subdomain = "..."; auth.publicPaths = [...]; }`
-- Volumes: define in core, reference via `config.neo.volumes.*`
+- Volumes: define in core, reference via `config.neo.core.volumes.*`
 
 ### Strings, Scripts, and Activation
 Use lib helpers (preferred):
 ```nix
 systemd.services.docker-foo.preStart = lib.concatStringsSep "\n" [
-  (lib.neo.mkActivationScriptForDir config { dirPath = "${config.neo.volumes.appdata}/foo"; })
+  (lib.neo.mkActivationScriptForDir config { dirPath = "${config.neo.core.volumes.appdata}/foo"; })
   (lib.neo.mkActivationScriptForFile config {
     filePath = "...";
     content = builtins.toJSON { ... };
@@ -148,11 +148,11 @@ See `nix/lib/authorization.nix` for `authBlock`, `authLocations`, `mkReverseProx
 
 ### Volumes and OCI Containers
 ```nix
-neo.volumes.appdata = "/var/neo/AppData";
+neo.core.volumes.appdata = "/var/neo/AppData";
 volumes = [
-  "${config.neo.volumes.appdata}/foo:/config"
-  "${config.neo.volumes.media}:/srv/Media"
-] ++ (lib.mapAttrsToList (h: c: "${config.neo.volumes.${h}}:${c}") cfg.additionalMountPoints);
+  "${config.neo.core.volumes.appdata}/foo:/config"
+  "${config.neo.core.volumes.media}:/srv/Media"
+] ++ (lib.mapAttrsToList (h: c: "${config.neo.core.volumes.${h}}:${c}") cfg.additionalMountPoints);
 ```
 Always use `extraOptions = ["--network=internal"]` for internal services. `restartPolicy = "always"`, resource limits where possible.
 
@@ -205,7 +205,7 @@ fn run(cli: Cli) -> Result<()> { ... }
 - [ ] All options typed with `lib.mdDoc` descriptions
 - [ ] Uses `lib.neo` helpers for dirs/files/activation/proxy
 - [ ] Follows dendritic: separate option/impl/swag
-- [ ] Volumes/mounts use `neo.volumes.*` pattern
+- [ ] Volumes/mounts use `neo.core.volumes.*` pattern
 - [ ] Rust changes (if any): cargo fmt/clippy, Result handling
 - [ ] Security: no secrets, proper users, network=internal
 - [ ] Tested in VM with `just launch` + `just exec`

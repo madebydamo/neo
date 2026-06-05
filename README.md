@@ -60,12 +60,12 @@ neo activate # changes will apply, on errors you see a message.
 ## Example `settings.toml`
 
 ```toml
-[nixos]
+[neo-service]
 enabled = true
 bootstrapEnabled = true
 autoUpdateEnabled = true
 
-[ssh]
+[core.ssh]
 authorizedKeys = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."]
 
 [services.swag]

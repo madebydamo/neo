@@ -9,7 +9,7 @@
     with lib; let
       cfg = config.neo.services.pihole;
       onlySubdomains = config.neo.services.swag.onlySubdomains;
-      piholeData = "${config.neo.volumes.appdata}/pihole";
+      piholeData = "${config.neo.core.volumes.appdata}/pihole";
       appServices =
         filterAttrs (
           n: v: v.enabled && v.subdomain or null != null && n != "swag"
@@ -48,7 +48,7 @@
           autoStart = true;
           environment =
             {
-              TZ = config.neo.timeZone;
+              TZ = config.neo.core.timeZone;
               FTLCONF_dns_listeningMode = "ALL";
               FTLCONF_webserver_api_password = cfg.webPassword;
               FTLCONF_dns_upstreams = cfg.upstream;

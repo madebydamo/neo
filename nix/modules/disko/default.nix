@@ -77,7 +77,7 @@
               };
               neo = {
                 type = "zfs_fs";
-                mountpoint = config.neo.volumes.root;
+                mountpoint = config.neo.core.volumes.root;
                 options."com.sun:auto-snapshot" = "true";
               };
             };
@@ -135,10 +135,10 @@
             dirPath = "${dir}";
           })
         [
-          config.neo.volumes.data
-          config.neo.volumes.appdata
-          config.neo.volumes.media
-          config.neo.volumes.documents
+          config.neo.core.volumes.data
+          config.neo.core.volumes.appdata
+          config.neo.core.volumes.media
+          config.neo.core.volumes.documents
         ]
       )
     );

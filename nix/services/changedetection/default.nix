@@ -8,7 +8,7 @@
   }:
     with lib; let
       cfg = config.neo.services.changedetection;
-      appdata = "${config.neo.volumes.appdata}/changedetection";
+      appdata = "${config.neo.core.volumes.appdata}/changedetection";
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-changedetection.preStart = lib.neo.mkActivationScriptForDir config {
@@ -20,9 +20,9 @@
             image = "dgtlmoon/changedetection.io";
             autoStart = true;
             environment = {
-              PUID = toString config.neo.uid;
-              PGID = toString config.neo.gid;
-              TZ = config.neo.timeZone;
+              PUID = toString config.neo.core.uid;
+              PGID = toString config.neo.core.gid;
+              TZ = config.neo.core.timeZone;
               WEBDRIVER_URL = "http://changedetection-webengine:4444/wd/hub";
             };
             volumes = [
@@ -35,8 +35,8 @@
             image = "selenium/standalone-chrome-debug:3.141.59";
             autoStart = true;
             environment = {
-              PUID = toString config.neo.uid;
-              PGID = toString config.neo.gid;
+              PUID = toString config.neo.core.uid;
+              PGID = toString config.neo.core.gid;
             };
             extraOptions = [
               "--shm-size=2gb"

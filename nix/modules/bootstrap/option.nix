@@ -11,7 +11,7 @@
       mkEnableOption
       ;
   in {
-    options.neo.nixos = mkOption {
+    options.neo.neo-service = mkOption {
       type = types.submodule (
         {...}: {
           options = {
@@ -23,7 +23,7 @@
             };
             configPath = mkOption {
               type = types.str;
-              default = "${config.neo.volumes.appdata}/configuration";
+              default = "${config.neo.core.volumes.appdata}/configuration";
               description = "Path to the nixos configuration repository";
             };
             neoInput = mkOption {
@@ -82,7 +82,7 @@
       default = {};
       description = "Nixos bootstrap configuration";
     };
-    options.neo.cli = mkOption {
+    options.neo.neo-cli = mkOption {
       type = types.submodule (
         {...}: {
           options = {

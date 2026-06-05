@@ -10,13 +10,13 @@
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-immich-server.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${config.neo.volumes.appdata}/immich/server";
+          dirPath = "${config.neo.core.volumes.appdata}/immich/server";
         };
         systemd.services.docker-immich-machine-learning.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${config.neo.volumes.appdata}/immich/cache";
+          dirPath = "${config.neo.core.volumes.appdata}/immich/cache";
         };
         systemd.services.docker-immich-database.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${config.neo.volumes.appdata}/immich/data";
+          dirPath = "${config.neo.core.volumes.appdata}/immich/data";
         };
 
         virtualisation.oci-containers.containers = {
@@ -28,7 +28,7 @@
               REDIS_HOSTNAME = "immich-redis";
             };
             volumes = [
-              "${config.neo.volumes.appdata}/immich/server:/data"
+              "${config.neo.core.volumes.appdata}/immich/server:/data"
               "/etc/localtime:/etc/localtime:ro"
             ];
             networks = ["internal"];
@@ -38,7 +38,7 @@
             image = "ghcr.io/immich-app/immich-machine-learning:release";
             autoStart = true;
             volumes = [
-              "${config.neo.volumes.appdata}/immich/cache:/cache"
+              "${config.neo.core.volumes.appdata}/immich/cache:/cache"
             ];
             networks = ["internal"];
           };
@@ -65,7 +65,7 @@
               POSTGRES_INITDB_ARGS = "--data-checksums";
             };
             volumes = [
-              "${config.neo.volumes.appdata}/immich/data:/var/lib/postgresql/data"
+              "${config.neo.core.volumes.appdata}/immich/data:/var/lib/postgresql/data"
             ];
             extraOptions = [
               "--shm-size=128mb"

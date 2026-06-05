@@ -1,9 +1,9 @@
 # Disko options for declarative disk setup.
 # Single mainDisk is fully ZFS (EFI boot partition + ZFS root partition).
-# Root dataset (/) has no snapshots; neo dataset at neo.volumes.root has snapshots.
+# Root dataset (/) has no snapshots; neo dataset at neo.core.volumes.root has snapshots.
 # Additional disks get independent ZFS pools (snapshots disabled).
 {...}: {
-  flake.modules.nixos.options = {
+  flake.modules.nixos.disko-options = {
     config,
     lib,
     ...

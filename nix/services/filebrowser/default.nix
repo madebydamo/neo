@@ -19,16 +19,16 @@
       config = mkIf cfg.enabled {
         systemd.services.docker-filebrowser.preStart = lib.concatStringsSep "\n" [
           (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.volumes.appdata}/filebrowser";
+            dirPath = "${config.neo.core.volumes.appdata}/filebrowser";
           })
           (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.volumes.appdata}/filebrowser/database";
+            dirPath = "${config.neo.core.volumes.appdata}/filebrowser/database";
           })
           (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.volumes.appdata}/filebrowser/config";
+            dirPath = "${config.neo.core.volumes.appdata}/filebrowser/config";
           })
           (lib.neo.mkActivationScriptForFile config {
-            filePath = "${config.neo.volumes.appdata}/filebrowser/config/settings.json";
+            filePath = "${config.neo.core.volumes.appdata}/filebrowser/config/settings.json";
             content = settingsJson;
             mode = "0644";
           })
@@ -42,13 +42,13 @@
           autoStart = true;
           volumes =
             [
-              "${config.neo.volumes.appdata}/filebrowser/config:/config"
-              "${config.neo.volumes.appdata}/filebrowser/database:/database"
-              "${config.neo.volumes.media}:/srv/Media"
-              "${config.neo.volumes.documents}:/srv/Documents"
+              "${config.neo.core.volumes.appdata}/filebrowser/config:/config"
+              "${config.neo.core.volumes.appdata}/filebrowser/database:/database"
+              "${config.neo.core.volumes.media}:/srv/Media"
+              "${config.neo.core.volumes.documents}:/srv/Documents"
             ]
             ++ (lib.mapAttrsToList (
-                hostVol: containerPath: "${config.neo.volumes.${hostVol}}:${containerPath}"
+                hostVol: containerPath: "${config.neo.core.volumes.${hostVol}}:${containerPath}"
               )
               cfg.additionalMountPoints);
           networks = ["internal"];

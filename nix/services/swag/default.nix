@@ -20,7 +20,7 @@
             map (
               customDomain:
                 lib.neo.mkActivationScriptForFile config {
-                  filePath = "${config.neo.volumes.appdata}/swag/nginx/site-confs/${customDomain}.conf";
+                  filePath = "${config.neo.core.volumes.appdata}/swag/nginx/site-confs/${customDomain}.conf";
                   content = ''
                     server {
                       listen 80;
@@ -65,7 +65,7 @@
         proxyConfScripts = map (
           svc:
             lib.neo.mkActivationScriptForFile config {
-              filePath = "${config.neo.volumes.appdata}/swag/nginx/proxy-confs/${svc.subdomain}.subdomain.conf";
+              filePath = "${config.neo.core.volumes.appdata}/swag/nginx/proxy-confs/${svc.subdomain}.subdomain.conf";
               content = svc.proxyConf;
             }
         ) (attrValues appServices);
@@ -73,7 +73,7 @@
           mapAttrsToList (
             domain: upstream:
               lib.neo.mkActivationScriptForFile config {
-                filePath = "${config.neo.volumes.appdata}/swag/nginx/site-confs/${domain}.conf";
+                filePath = "${config.neo.core.volumes.appdata}/swag/nginx/site-confs/${domain}.conf";
                 content = ''
                   server {
                     listen 80;
@@ -117,22 +117,22 @@
           ";
           systemd.services.docker-swag = {
             preStart = lib.concatStringsSep "\n" ([
-                "rm -r ${config.neo.volumes.appdata}/swag/nginx/proxy-confs || true"
-                "rm -r ${config.neo.volumes.appdata}/swag/nginx/site-confs || true"
-                "rm -f ${config.neo.volumes.appdata}/swag/nginx/proxy.conf || true"
-                "rm -f ${config.neo.volumes.appdata}/swag/nginx/nginx.conf || true"
+                "rm -r ${config.neo.core.volumes.appdata}/swag/nginx/proxy-confs || true"
+                "rm -r ${config.neo.core.volumes.appdata}/swag/nginx/site-confs || true"
+                "rm -f ${config.neo.core.volumes.appdata}/swag/nginx/proxy.conf || true"
+                "rm -f ${config.neo.core.volumes.appdata}/swag/nginx/nginx.conf || true"
                 "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'"
                 (lib.neo.mkActivationScriptForDir config {
-                  dirPath = "${config.neo.volumes.appdata}/swag/nginx/proxy-confs";
+                  dirPath = "${config.neo.core.volumes.appdata}/swag/nginx/proxy-confs";
                 })
                 (lib.neo.mkActivationScriptForDir config {
-                  dirPath = "${config.neo.volumes.appdata}/swag/nginx";
+                  dirPath = "${config.neo.core.volumes.appdata}/swag/nginx";
                 })
                 (lib.neo.mkActivationScriptForDir config {
-                  dirPath = "${config.neo.volumes.appdata}/swag";
+                  dirPath = "${config.neo.core.volumes.appdata}/swag";
                 })
                 (lib.neo.mkActivationScriptForDir config {
-                  dirPath = "${config.neo.volumes.appdata}/swag/nginx/conf.d";
+                  dirPath = "${config.neo.core.volumes.appdata}/swag/nginx/conf.d";
                 })
               ]
               ++ proxyConfScripts
@@ -145,8 +145,8 @@
             image = "lscr.io/linuxserver/swag:latest";
             autoStart = true;
             environment = {
-              PUID = toString config.neo.uid;
-              PGID = toString config.neo.gid;
+              PUID = toString config.neo.core.uid;
+              PGID = toString config.neo.core.gid;
               TZ = "Europe/Zurich";
               URL = cfg.domain;
               SUBDOMAINS = concatStringsSep "," subdomains;
@@ -158,7 +158,7 @@
               SWAG_AUTORELOAD_WATCHLIST = "/config/etc/letsencrypt";
             };
             volumes = [
-              "${config.neo.volumes.appdata}/swag:/config"
+              "${config.neo.core.volumes.appdata}/swag:/config"
             ];
             ports = [
               "${toString cfg.localHttpPort}:80"
@@ -184,7 +184,7 @@
               RestartSec = "10";
             };
             script = ''
-              WATCH_DIR="${config.neo.volumes.appdata}/swag/etc/letsencrypt/live"
+              WATCH_DIR="${config.neo.core.volumes.appdata}/swag/etc/letsencrypt/live"
               CONTAINER_NAME="swag"
               NGINX_RELOAD_CMD="nginx -c /config/nginx/nginx.conf -s reload"
               ${builtins.readFile ./swag-cert-reloader.sh}
@@ -199,9 +199,9 @@
               RemainAfterExit = true;
             };
             script = ''
-              APPDATA="${config.neo.volumes.appdata}/swag"
-              NEO_UID="${toString config.neo.uid}"
-              NEO_GID="${toString config.neo.gid}"
+              APPDATA="${config.neo.core.volumes.appdata}/swag"
+              NEO_UID="${toString config.neo.core.uid}"
+              NEO_GID="${toString config.neo.core.gid}"
               NEO_SUPPORT=${lib.boolToString ((config.neo.services.neo.iframeCookieSupport) && (config.neo.services.neo.enabled))}
               ${builtins.readFile ./swag-patcher.sh}
             '';

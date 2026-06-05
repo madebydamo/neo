@@ -8,7 +8,7 @@
   }:
     with lib; let
       cfg = config.neo.services.nextcloud;
-      appdata = "${config.neo.volumes.appdata}/nextcloud";
+      appdata = "${config.neo.core.volumes.appdata}/nextcloud";
       domain = config.neo.services.swag.domain;
       nextcloudUrl = "${cfg.subdomain}.${domain}";
     in {
@@ -63,7 +63,7 @@
               OVERWRITEHOST = nextcloudUrl;
               TRUSTED_PROXIES = "0.0.0.0/32";
               NEXTCLOUD_DEFAULT_GROUP = "all_users";
-              TZ = config.neo.timeZone;
+              TZ = config.neo.core.timeZone;
             };
             volumes = [
               "${appdata}/html:/var/www/html"
@@ -85,7 +85,7 @@
               OVERWRITEHOST = nextcloudUrl;
               TRUSTED_PROXIES = "0.0.0.0/32";
               NEXTCLOUD_DEFAULT_GROUP = "all_users";
-              TZ = config.neo.timeZone;
+              TZ = config.neo.core.timeZone;
             };
             volumes = [
               "${appdata}/html:/var/www/html"

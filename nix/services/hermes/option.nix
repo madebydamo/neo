@@ -125,7 +125,7 @@
 
               stateDir = mkOption {
                 type = types.str;
-                default = "${config.neo.volumes.appdata}/hermes";
+                default = "${config.neo.core.volumes.appdata}/hermes";
                 description = "State directory for Hermes data (HERMES_HOME inside)";
               };
 

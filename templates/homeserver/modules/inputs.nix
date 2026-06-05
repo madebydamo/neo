@@ -8,8 +8,8 @@
     if builtins.pathExists settingsPath
     then builtins.fromTOML (builtins.readFile settingsPath)
     else {};
-  neoInput = neo.nixos.neoInput or "github:madebydamo/neo";
-  plugins = neo.nixos.plugins or [];
+  neoInput = neo."neo-service".neoInput or "github:madebydamo/neo";
+  plugins = neo."neo-service".plugins or [];
 in {
   flake-file.inputs =
     {

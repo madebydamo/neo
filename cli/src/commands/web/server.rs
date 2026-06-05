@@ -377,25 +377,100 @@ pub fn save_core_section(
             Err(_) => return Status::InternalServerError,
         }
     };
-    doc.remove(section);
-    let payload_map = match payload.as_object() {
-        Some(m) if !m.is_empty() => m,
-        _ => {
-            if let Err(_) = fs::write(settings_path, doc.to_string()) {
-                return Status::InternalServerError;
-            }
-            return Status::Ok;
+    let core_sections = [
+        "ssh",
+        "volumes",
+        "timeZone",
+        "uid",
+        "gid",
+        "hostname",
+        "hashedLinuxPassword",
+        "core",
+    ];
+    let is_core = core_sections.contains(&section);
+    // Remove possible old top-level location (for renames/migrations).
+    // For the aggregate "core" we merge deltas instead of replacing/removing.
+    if section != "core" {
+        doc.remove(section);
+    }
+    if is_core {
+        // Ensure [core] table
+        if !doc.contains_key("core") || !doc.get("core").map_or(false, |c| c.is_table()) {
+            doc.insert("core", Item::Table(Table::new()));
         }
-    };
-    // Scalar core options (timeZone, uid, gid) are bare keys at toml root, not [section] tables.
-    // The extract renames the single field name to the section for them, so payload has the section as key.
-    if payload_map.len() == 1 && payload_map.contains_key(section) {
-        if let Some(v) = payload_map.get(section) {
-            if let Some(tval) = json_to_toml_value(v) {
-                doc.insert(section, Item::Value(tval));
+        let core_table = doc.get_mut("core").unwrap().as_table_mut().unwrap();
+        if section != "core" {
+            core_table.remove(section);
+        }
+        let payload_map = match payload.as_object() {
+            Some(m) if !m.is_empty() => m,
+            _ => {
+                if section == "core" {
+                    // No deltas sent for aggregate core (e.g. all at defaults). Leave existing [core] intact.
+                    // If we just ensured an empty one, clean it up.
+                    if let Some(t) = doc.get("core").and_then(|c| c.as_table()) {
+                        if t.is_empty() {
+                            doc.remove("core");
+                        }
+                    }
+                    if let Err(_) = fs::write(settings_path, doc.to_string()) {
+                        return Status::InternalServerError;
+                    }
+                    return Status::Ok;
+                }
+                core_table.remove(section);
+                if let Err(_) = fs::write(settings_path, doc.to_string()) {
+                    return Status::InternalServerError;
+                }
+                return Status::Ok;
+            }
+        };
+        // Scalars under core (timeZone, uid, gid, hostname, hashedLinuxPassword) are values under [core]
+        // not bare at root. The extract renames the single field name to the section for them.
+        // The aggregate "core" (for the cleaned grid) merges all its fields (scalars + dotted subs) without clearing siblings.
+        if payload_map.len() == 1 && payload_map.contains_key(section) {
+            if let Some(v) = payload_map.get(section) {
+                if let Some(tval) = json_to_toml_value(v) {
+                    if section != "core" {
+                        core_table.insert(section, Item::Value(tval));
+                    }
+                }
+            }
+        } else {
+            let mut tbl = Table::new();
+            for (k, v) in payload_map.iter() {
+                if k.contains('.') {
+                    if let Some(tval) = json_to_toml_value(v) {
+                        insert_dotted(&mut tbl, k, tval);
+                    }
+                } else if let Some(titem) = json_to_toml_item(v) {
+                    tbl.insert(k, titem);
+                }
+            }
+            if !tbl.is_empty() {
+                if section == "core" {
+                    // Merge deltas (scalars + dotted sub keys like "volumes.root", "ssh.authorizedKeys")
+                    // directly into the core table. This supports editing all core options in one pane
+                    // without losing unsent (default) siblings.
+                    for (k, item) in tbl.iter() {
+                        core_table.insert(k, item.clone());
+                    }
+                } else {
+                    core_table.insert(section, Item::Table(tbl));
+                }
             }
         }
     } else {
+        // Top-level sections: neo-service, neo-cli, disko (and the aggregate "core" is handled in is_core branch)
+        let payload_map = match payload.as_object() {
+            Some(m) if !m.is_empty() => m,
+            _ => {
+                if let Err(_) = fs::write(settings_path, doc.to_string()) {
+                    return Status::InternalServerError;
+                }
+                return Status::Ok;
+            }
+        };
         let mut tbl = Table::new();
         for (k, v) in payload_map.iter() {
             if k.contains('.') {
@@ -515,9 +590,9 @@ pub fn actions_hard_reset(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     let content = fs::read_to_string(&config.settings_path).unwrap_or_default();
     let doc: DocumentMut = content.parse().unwrap_or_else(|_| DocumentMut::new());
     let section = if PathBuf::from("/etc/neo/settings.toml").exists() {
-        "nixos"
+        "neo-service"
     } else {
-        "cli"
+        "neo-cli"
     };
     let nuke_res = nuke(dir_str, false, nix_cmd);
     let init_res = init(dir_str, &doc, section, false, nix_cmd);

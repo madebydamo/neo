@@ -11,13 +11,13 @@
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-beszel-agent.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${config.neo.volumes.appdata}/beszel-agent";
+          dirPath = "${config.neo.core.volumes.appdata}/beszel-agent";
         };
         virtualisation.oci-containers.containers.beszel-agent = {
           image = "henrygd/beszel-agent:latest";
           autoStart = true;
           volumes = [
-            "${config.neo.volumes.appdata}/beszel-agent:/var/lib/beszel-agent"
+            "${config.neo.core.volumes.appdata}/beszel-agent:/var/lib/beszel-agent"
             "/var/run/docker.sock:/var/run/docker.sock:ro"
             "/var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro"
           ];

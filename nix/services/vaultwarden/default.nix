@@ -11,7 +11,7 @@
       config = mkIf cfg.enabled {
         systemd.services.docker-vaultwarden.preStart = lib.concatStringsSep "\n" [
           (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.volumes.appdata}/vaultwarden";
+            dirPath = "${config.neo.core.volumes.appdata}/vaultwarden";
           })
         ];
 
@@ -27,7 +27,7 @@
               ADMIN_TOKEN = cfg.adminToken;
             };
           volumes = [
-            "${config.neo.volumes.appdata}/vaultwarden:/data"
+            "${config.neo.core.volumes.appdata}/vaultwarden:/data"
           ];
           networks = ["internal"];
         };

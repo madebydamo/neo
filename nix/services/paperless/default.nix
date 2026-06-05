@@ -7,7 +7,7 @@
   }:
     with lib; let
       cfg = config.neo.services.paperless;
-      appdata = "${config.neo.volumes.appdata}/paperless";
+      appdata = "${config.neo.core.volumes.appdata}/paperless";
       domain = config.neo.services.swag.domain;
     in {
       config = mkIf cfg.enabled {
@@ -65,7 +65,7 @@
               PAPERLESS_DBNAME = "paperless";
               PAPERLESS_DBUSER = "paperless_user";
               PAPERLESS_DBPASS = cfg.dbPassword;
-              PAPERLESS_TIME_ZONE = config.neo.timeZone;
+              PAPERLESS_TIME_ZONE = config.neo.core.timeZone;
               PAPERLESS_OCR_LANGUAGE = "deu+eng";
               PAPERLESS_CSRF_TRUSTED_ORIGINS = "https://${cfg.subdomain}.${domain}";
             };

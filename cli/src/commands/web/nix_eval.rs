@@ -153,9 +153,9 @@ pub fn extract_neo_section(nix_cmd: &str, neo_input: &str, section: &str) -> Opt
         o.currentDisplay = o.current.as_ref().map(value_to_display).unwrap_or_default();
     }
 
-    // For scalar core options (timeZone, uid, gid) the walk produces name="", rename to the section
-    // so the form labels/saves it correctly as the bare key at toml root.
-    let scalar_sections = ["timeZone", "uid", "gid"];
+    // For scalar core options (timeZone, uid, gid, hostname, hashedLinuxPassword) the walk produces name="", rename to the section
+    // so the form labels/saves it correctly (under [core] in toml). This only applies for the legacy individual /core/xxx cards (now removed in favor of aggregate /core/core).
+    let scalar_sections = ["timeZone", "uid", "gid", "hostname", "hashedLinuxPassword"];
     if scalar_sections.contains(&section) && opts.len() == 1 && opts[0].name == "" {
         opts[0].name = section.to_string();
     }

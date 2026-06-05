@@ -37,9 +37,9 @@ struct Cli {
     #[arg(long, env = "NEO_REMOTE_URL", global = true)]
     remote_url: Option<String>,
 
-    /// Which settings section to use as base defaults ("cli" or "nixos").
-    /// If omitted, defaults to "nixos" if /etc/neo/settings.toml available, else "cli".
-    /// Program arg or NEO_SECTION= still overrides (e.g. to force cli on full install).
+    /// Which settings section to use as base defaults ("neo-cli" or "neo-service").
+    /// If omitted, defaults to "neo-service" if /etc/neo/settings.toml available, else "neo-cli".
+    /// Program arg or NEO_SECTION= still overrides (e.g. to force neo-cli on full install).
     #[arg(long, env = "NEO_SECTION", default_value = "", global = true)]
     section: String,
 
@@ -137,12 +137,12 @@ fn run(cli: Cli) -> Result<()> {
     let section = if !cli.section.is_empty() {
         cli.section.clone()
     } else if etc_settings.exists() {
-        "nixos".to_string()
+        "neo-service".to_string()
     } else {
-        "cli".to_string()
+        "neo-cli".to_string()
     };
 
-    if section == "nixos" && env::var("USER").unwrap_or_default() != "homeserver" {
+    if section == "neo-service" && env::var("USER").unwrap_or_default() != "homeserver" {
         let sudo_bin = cli.sudo_path.as_deref().unwrap_or("sudo");
         execute_command(Command::new(sudo_bin).arg("-u")
             .arg("homeserver")
@@ -156,26 +156,26 @@ fn run(cli: Cli) -> Result<()> {
     let mut doc = load_or_default_settings(&settings_path, &section)?;
     // Merge CLI overrides (safe)
     if let Some(v) = cli.neo_input {
-        if let Some(table) = doc.get_mut("nixos").and_then(|t| t.as_table_mut()) {
+        if let Some(table) = doc.get_mut("neo-service").and_then(|t| t.as_table_mut()) {
             table.insert("neoInput", toml_edit::value(v.clone()));
         }
-        if let Some(table) = doc.get_mut("cli").and_then(|t| t.as_table_mut()) {
+        if let Some(table) = doc.get_mut("neo-cli").and_then(|t| t.as_table_mut()) {
             table.insert("neoInput", toml_edit::value(v.clone()));
         }
     }
     if let Some(v) = cli.template {
-        if let Some(table) = doc.get_mut("nixos").and_then(|t| t.as_table_mut()) {
+        if let Some(table) = doc.get_mut("neo-service").and_then(|t| t.as_table_mut()) {
             table.insert("template", toml_edit::value(v.clone()));
         }
-        if let Some(table) = doc.get_mut("cli").and_then(|t| t.as_table_mut()) {
+        if let Some(table) = doc.get_mut("neo-cli").and_then(|t| t.as_table_mut()) {
             table.insert("template", toml_edit::value(v.clone()));
         }
     }
     if let Some(v) = cli.remote_url {
-        if let Some(table) = doc.get_mut("nixos").and_then(|t| t.as_table_mut()) {
+        if let Some(table) = doc.get_mut("neo-service").and_then(|t| t.as_table_mut()) {
             table.insert("repoUrl", toml_edit::value(v.clone()));
         }
-        if let Some(table) = doc.get_mut("cli").and_then(|t| t.as_table_mut()) {
+        if let Some(table) = doc.get_mut("neo-cli").and_then(|t| t.as_table_mut()) {
             table.insert("repoUrl", toml_edit::value(v.clone()));
         }
     }

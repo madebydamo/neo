@@ -11,25 +11,25 @@
       config = mkIf cfg.enabled {
         systemd.services.docker-syncthing.preStart = lib.concatStringsSep "\n" [
           (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.volumes.appdata}/syncthing";
+            dirPath = "${config.neo.core.volumes.appdata}/syncthing";
           })
         ];
 
         virtualisation.oci-containers.containers.syncthing = {
           environment = {
-            PUID = toString config.neo.uid;
-            PGID = toString config.neo.gid;
+            PUID = toString config.neo.core.uid;
+            PGID = toString config.neo.core.gid;
             TZ = "Europe/Zurich";
           };
           image = "linuxserver/syncthing:latest";
           autoStart = true;
           volumes =
             [
-              "${config.neo.volumes.appdata}/syncthing:/config"
-              "${config.neo.volumes.data}:/DATA"
+              "${config.neo.core.volumes.appdata}/syncthing:/config"
+              "${config.neo.core.volumes.data}:/DATA"
             ]
             ++ (lib.mapAttrsToList (
-                hostVol: containerPath: "${config.neo.volumes.${hostVol}}:${containerPath}"
+                hostVol: containerPath: "${config.neo.core.volumes.${hostVol}}:${containerPath}"
               )
               cfg.additionalMountPoints);
           ports = [

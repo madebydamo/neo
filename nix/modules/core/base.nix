@@ -6,7 +6,7 @@
     pkgs,
     ...
   }: let
-    deviceCfg = config.neo.device;
+    deviceCfg = config.neo.core;
   in {
     boot.loader = {
       grub = {
@@ -40,20 +40,20 @@
     ];
 
     users.users.root = {
-      openssh.authorizedKeys.keys = config.neo.ssh.authorizedKeys;
+      openssh.authorizedKeys.keys = config.neo.core.ssh.authorizedKeys;
     };
 
     users.users.admin = {
-      uid = config.neo.uid + 1;
+      uid = config.neo.core.uid + 1;
       isNormalUser = true;
       extraGroups = [
         "wheel"
         "docker"
       ];
-      openssh.authorizedKeys.keys = config.neo.ssh.authorizedKeys;
-      hashedPassword = config.neo.users.hashedPassword;
+      openssh.authorizedKeys.keys = config.neo.core.ssh.authorizedKeys;
+      hashedPassword = config.neo.core.hashedLinuxPassword;
     };
-    time.timeZone = config.neo.timeZone;
+    time.timeZone = config.neo.core.timeZone;
 
     nix.settings.experimental-features = [
       "nix-command"

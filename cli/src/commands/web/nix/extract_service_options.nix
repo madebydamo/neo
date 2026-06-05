@@ -18,18 +18,29 @@
     then "neo"
     else builtins.head cfgNames;
   servicesOpt = f.nixosConfigurations.${cfg}.options.neo.services or {};
+  coreSections = ["ssh" "volumes" "timeZone" "uid" "gid" "hostname" "hashedLinuxPassword"];
+  # These are the leaf sections that live under neo.core.* (for individual panes or dotted names in aggregate "core" pane).
+  # The aggregate "core" itself is looked up as neo.core (falls to the else branch).
+  getNeoOpt = s:
+    if builtins.elem s coreSections
+    then f.nixosConfigurations.${cfg}.options.neo.core.${s} or {}
+    else f.nixosConfigurations.${cfg}.options.neo.${s} or {};
+  getNeoConf = s:
+    if builtins.elem s coreSections
+    then f.nixosConfigurations.${cfg}.config.neo.core.${s} or {}
+    else f.nixosConfigurations.${cfg}.config.neo.${s} or {};
   root =
     if service != null
     then servicesOpt.${service} or {}
     else if section != null
-    then f.nixosConfigurations.${cfg}.options.neo.${section} or {}
+    then getNeoOpt section
     else {};
   configServices = f.nixosConfigurations.${cfg}.config.neo.services or {};
   configRoot =
     if service != null
     then configServices.${service} or {}
     else if section != null
-    then f.nixosConfigurations.${cfg}.config.neo.${section} or {}
+    then getNeoConf section
     else {};
 
   tryOr = def: x: let

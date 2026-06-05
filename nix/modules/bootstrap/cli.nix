@@ -13,35 +13,35 @@
         || (lib.hasSuffix ".nix" path);
     };
     defaults = pkgs.writeText "default-settings.toml" ''
-      [nixos]
+      [neo-service]
       enabled = ${
-        if cfg.nixos.enabled or false
+        if (cfg."neo-service" or {}).enabled or false
         then "true"
         else "false"
       }
-      configPath = "${cfg.nixos.configPath or "/var/neo/DATA/AppData/configuration"}"
-      neoInput = "${cfg.nixos.neoInput or "github:madebydamo/neo"}"
-      template = "${cfg.nixos.template or "github:madebydamo/neo#homeserver"}"
+      configPath = "${(cfg."neo-service" or {}).configPath or "/var/neo/DATA/AppData/configuration"}"
+      neoInput = "${(cfg."neo-service" or {}).neoInput or "github:madebydamo/neo"}"
+      template = "${(cfg."neo-service" or {}).template or "github:madebydamo/neo#homeserver"}"
       bootstrapEnabled = ${
-        if cfg.nixos.bootstrapEnabled or false
+        if (cfg."neo-service" or {}).bootstrapEnabled or false
         then "true"
         else "false"
       }
       autoUpdateEnabled = ${
-        if cfg.nixos.autoUpdateEnabled or false
+        if (cfg."neo-service" or {}).autoUpdateEnabled or false
         then "true"
         else "false"
       }
-      bootstrapMethod = "${cfg.nixos.bootstrapMethod or "template"}"
-      repoUrl = "${cfg.nixos.repoUrl or ""}"
-      gitUserName = "${cfg.nixos.gitUserName or "Neo Bootstrap"}"
-      gitUserEmail = "${cfg.nixos.gitUserEmail or "neo@local"}"
-      defaultBranch = "${cfg.nixos.defaultBranch or "master"}"
-      [cli]
-      configPath = "${cfg.cli.configPath or "./build"}"
-      template = "${cfg.cli.template or "..#homeserver"}"
-      bootstrapMethod = "${cfg.cli.bootstrapMethod or "template"}"
-      repoUrl = "${cfg.cli.repoUrl or ""}"
+      bootstrapMethod = "${(cfg."neo-service" or {}).bootstrapMethod or "template"}"
+      repoUrl = "${(cfg."neo-service" or {}).repoUrl or ""}"
+      gitUserName = "${(cfg."neo-service" or {}).gitUserName or "Neo Bootstrap"}"
+      gitUserEmail = "${(cfg."neo-service" or {}).gitUserEmail or "neo@local"}"
+      defaultBranch = "${(cfg."neo-service" or {}).defaultBranch or "master"}"
+      [neo-cli]
+      configPath = "${(cfg."neo-cli" or {}).configPath or "./build"}"
+      template = "${(cfg."neo-cli" or {}).template or "..#homeserver"}"
+      bootstrapMethod = "${(cfg."neo-cli" or {}).bootstrapMethod or "template"}"
+      repoUrl = "${(cfg."neo-cli" or {}).repoUrl or ""}"
       [disko]
       enabled = ${
         if cfg.disko.enabled or false
