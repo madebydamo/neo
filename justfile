@@ -93,7 +93,7 @@ ssh:
   ssh {{ssh_opts}}
 
 format:
-  alejandra -e build/ .
+  alejandra -e ./build/ .
 
 check:
   git add flake.nix nix/ templates/
