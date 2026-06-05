@@ -45,8 +45,14 @@ pub fn find_recent_in_progress_activation() -> Option<String> {
             if name.ends_with(".json") && name.starts_with("activation_") {
                 if let Ok(meta) = e.metadata() {
                     if let Ok(mtime) = meta.modified() {
-                        let t = mtime.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-                        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+                        let t = mtime
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs();
+                        let now = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs();
                         if now > t + 3600 {
                             continue;
                         }
@@ -73,13 +79,19 @@ pub fn gc_old_activations() {
     if !dir.exists() {
         return;
     }
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
     if let Ok(rd) = fs::read_dir(&dir) {
         for e in rd.flatten() {
             let p = e.path();
             if let Ok(meta) = e.metadata() {
                 if let Ok(mtime) = meta.modified() {
-                    let t = mtime.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+                    let t = mtime
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
                     if now > t + 7 * 86400 {
                         let _ = fs::remove_file(&p);
                     }
@@ -87,10 +99,16 @@ pub fn gc_old_activations() {
             }
         }
     }
-    let mut files: Vec<_> = fs::read_dir(&dir).unwrap_or_else(|_| fs::read_dir(&dir).unwrap()).flatten().collect();
+    let mut files: Vec<_> = fs::read_dir(&dir)
+        .unwrap_or_else(|_| fs::read_dir(&dir).unwrap())
+        .flatten()
+        .collect();
     if files.len() > 10 {
         files.sort_by_key(|e| {
-            e.metadata().ok().and_then(|m| m.modified().ok()).unwrap_or(SystemTime::UNIX_EPOCH)
+            e.metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .unwrap_or(SystemTime::UNIX_EPOCH)
         });
         for old in files.iter().take(files.len() - 10) {
             let _ = fs::remove_file(old.path());
@@ -101,10 +119,22 @@ pub fn gc_old_activations() {
 pub fn build_monitor_fragment(id: &str) -> String {
     gc_old_activations();
     let st = load_activation_state(id);
-    let status = st.as_ref().and_then(|v| v.get("status").and_then(|s| s.as_str())).unwrap_or("unknown");
-    let phase = st.as_ref().and_then(|v| v.get("phase").and_then(|s| s.as_str())).unwrap_or("");
-    let branch = st.as_ref().and_then(|v| v.get("branch").and_then(|s| s.as_str())).unwrap_or("");
-    let err = st.as_ref().and_then(|v| v.get("error").and_then(|s| s.as_str())).unwrap_or("");
+    let status = st
+        .as_ref()
+        .and_then(|v| v.get("status").and_then(|s| s.as_str()))
+        .unwrap_or("unknown");
+    let phase = st
+        .as_ref()
+        .and_then(|v| v.get("phase").and_then(|s| s.as_str()))
+        .unwrap_or("");
+    let branch = st
+        .as_ref()
+        .and_then(|v| v.get("branch").and_then(|s| s.as_str()))
+        .unwrap_or("");
+    let err = st
+        .as_ref()
+        .and_then(|v| v.get("error").and_then(|s| s.as_str()))
+        .unwrap_or("");
     let log_url = format!("/activation/log/{}", id);
     let status_url = format!("/activation/status/{}", id);
     let mut html = String::new();
@@ -121,7 +151,10 @@ pub fn build_monitor_fragment(id: &str) -> String {
             branch
         ));
     } else if status == "failed" {
-        html.push_str(&format!(r#"<div class="alert alert-error text-sm">Failed: {}</div>"#, err));
+        html.push_str(&format!(
+            r#"<div class="alert alert-error text-sm">Failed: {}</div>"#,
+            err
+        ));
     }
     html.push_str(&format!(
         r#"<pre id="act-log" class="text-[10px] bg-base-300 p-1 mt-1 max-h-64 overflow-auto" hx-get="{}" hx-trigger="load, every 1s" hx-swap="innerHTML"></pre>"#,
@@ -140,26 +173,59 @@ pub fn build_monitor_fragment(id: &str) -> String {
 
 pub fn build_status_fragment(id: &str) -> String {
     let st = load_activation_state(id);
-    let status = st.as_ref().and_then(|v| v.get("status").and_then(|s| s.as_str())).unwrap_or("unknown");
-    let phase = st.as_ref().and_then(|v| v.get("phase").and_then(|s| s.as_str())).unwrap_or("");
-    let branch = st.as_ref().and_then(|v| v.get("branch").and_then(|s| s.as_str())).unwrap_or(id);
+    let status = st
+        .as_ref()
+        .and_then(|v| v.get("status").and_then(|s| s.as_str()))
+        .unwrap_or("unknown");
+    let phase = st
+        .as_ref()
+        .and_then(|v| v.get("phase").and_then(|s| s.as_str()))
+        .unwrap_or("");
+    let branch = st
+        .as_ref()
+        .and_then(|v| v.get("branch").and_then(|s| s.as_str()))
+        .unwrap_or(id);
     if status == "success" {
-        format!(r#"<div class="text-success text-xs">complete: {}</div>"#, branch)
+        format!(
+            r#"<div class="text-success text-xs">complete: {}</div>"#,
+            branch
+        )
     } else if status == "failed" {
-        format!(r#"<div class="text-error text-xs">failed in {}</div>"#, phase)
+        format!(
+            r#"<div class="text-error text-xs">failed in {}</div>"#,
+            phase
+        )
     } else if status == "in_progress" {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-        let started = st.as_ref().and_then(|v| v.get("started_at").and_then(|s| s.as_str())).unwrap_or("");
-        format!(r#"<div class="text-warning text-xs">in progress: {}</div>"#, phase)
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let started = st
+            .as_ref()
+            .and_then(|v| v.get("started_at").and_then(|s| s.as_str()))
+            .unwrap_or("");
+        format!(
+            r#"<div class="text-warning text-xs">in progress: {}</div>"#,
+            phase
+        )
     } else {
-        format!(r#"<div class="text-xs opacity-60">status: {}</div>"#, status)
+        format!(
+            r#"<div class="text-xs opacity-60">status: {}</div>"#,
+            status
+        )
     }
 }
 
 pub fn build_log_fragment(id: &str) -> String {
     let tail = load_log_tail(id, 60);
-    let esc = tail.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
-    format!("<pre class=\"text-[10px] whitespace-pre-wrap\">{}</pre>", esc)
+    let esc = tail
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    format!(
+        "<pre class=\"text-[10px] whitespace-pre-wrap\">{}</pre>",
+        esc
+    )
 }
 
 pub fn is_activation_in_progress() -> bool {

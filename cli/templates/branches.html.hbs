@@ -1,0 +1,31 @@
+<div id="branches-section" class="mt-3 border border-base-300 rounded overflow-hidden">
+  <div class="bg-base-200 px-2 py-1 text-xs font-semibold flex items-center gap-2">
+    <span>Versioning (activation branches)</span>
+    {{#if graph}}
+      <span class="opacity-40">· tree</span>
+    {{/if}}
+  </div>
+  {{#if graph}}
+    <pre class="text-[8px] font-mono leading-[1.05] overflow-auto max-h-20 bg-base-300 p-1 border-b border-base-300">{{graph}}</pre>
+  {{/if}}
+  <div class="divide-y divide-base-300 text-sm">
+    {{#each branches}}
+      <div
+        class="flex items-center justify-between px-2 py-1 hover:bg-base-100 cursor-pointer {{ #if is_current }}bg-success/10{{/if}}"
+        hx-post="/git/switch/{{name}}"
+        hx-target="#branch-status"
+        hx-swap="innerHTML"
+        hx-confirm="Switch working tree to {{name}} (affects visible settings and future actions until next switch)?"
+        hx-on::after-request="htmx.ajax('GET','/branches',{target:'#config-content',swap:'innerHTML'})">
+        <div class="font-mono flex items-center gap-2 truncate">
+          <span>{{name}}</span>
+          {{#if is_current}}
+            <span class="badge badge-success badge-xs flex-shrink-0">current</span>
+          {{/if}}
+        </div>
+        <span class="text-[10px] opacity-50 flex-shrink-0">switch →</span>
+      </div>
+    {{/each}}
+  </div>
+  <div id="branch-status" class="px-2 py-0.5 text-[10px] text-base-content/60 bg-base-200"></div>
+</div>

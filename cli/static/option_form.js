@@ -131,6 +131,8 @@ function optionForm() {
 
     async save() {
       const svc = this.serviceName || 'service';
+      const pane = document.getElementById('options-pane');
+      const ep = (pane && pane.dataset && pane.dataset.saveEndpoint) || `/save/${encodeURIComponent(svc)}`;
       const toSave = {};
       Object.keys(this.values || {}).forEach(k => {
         if (!this.isAtDefault(k)) {
@@ -138,7 +140,7 @@ function optionForm() {
         }
       });
       try {
-        const res = await fetch(`/save/${encodeURIComponent(svc)}`, {
+        const res = await fetch(ep, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(toSave)

@@ -47,7 +47,6 @@ fn value_to_display(v: &serde_json::Value) -> String {
         serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
             serde_json::to_string_pretty(v).unwrap_or_else(|_| v.to_string())
         }
-        _ => v.to_string(),
     }
 }
 
@@ -103,6 +102,72 @@ pub fn extract_service_options(nix_cmd: &str, neo_input: &str, service: &str) ->
         meta: raw.meta,
         options: opts,
         options_json,
+        save_endpoint: format!("/save/{}", service),
+        is_core: false,
+    }
+}
+
+pub fn extract_neo_section(nix_cmd: &str, neo_input: &str, section: &str) -> OptionPaneContext {
+    let expr = format!(
+        r#"({}) {{ neoFlake = "{}"; section = "{}"; }}"#,
+        EXTRACT_OPTIONS, neo_input, section
+    );
+    let output = Command::new(nix_cmd)
+        .args(["eval", "--json", "--impure", "--expr", &expr])
+        .output();
+    println!(
+        "{:?}",
+        &output
+            .as_ref()
+            .ok()
+            .map(|o| o.stdout.clone())
+            .map(|o| String::from_utf8(o))
+            .and_then(|o| o.ok())
+            .map(|o| o.replace("\\n", "\\r"))
+    );
+
+    #[derive(serde::Deserialize)]
+    struct RawPane {
+        meta: Option<ServiceMeta>,
+        options: Vec<OptionSchema>,
+    }
+
+    let raw: RawPane = output
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(o.stdout)
+            } else {
+                None
+            }
+        })
+        .and_then(|stdout| serde_json::from_slice(&stdout).ok())
+        .unwrap_or(RawPane {
+            meta: None,
+            options: vec![],
+        });
+
+    let mut opts = raw.options;
+    for o in &mut opts {
+        o.defaultDisplay = value_to_display(&o.default);
+        o.currentDisplay = o.current.as_ref().map(value_to_display).unwrap_or_default();
+    }
+
+    // For scalar core options (timeZone, uid, gid) the walk produces name="", rename to the section
+    // so the form labels/saves it correctly as the bare key at toml root.
+    let scalar_sections = ["timeZone", "uid", "gid"];
+    if scalar_sections.contains(&section) && opts.len() == 1 && opts[0].name == "" {
+        opts[0].name = section.to_string();
+    }
+
+    let options_json = serde_json::to_string(&opts).unwrap_or_else(|_| "[]".to_string());
+    OptionPaneContext {
+        service: section.to_string(),
+        meta: raw.meta,
+        options: opts,
+        options_json,
+        save_endpoint: format!("/save-core/{}", section),
+        is_core: true,
     }
 }
 

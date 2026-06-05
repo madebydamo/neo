@@ -14,8 +14,12 @@
 
   names = builtins.attrNames (f.nixosConfigurations.${cfg}.config.neo.services or {});
 in
-  map (n: {
+  map (n: let
+    svc = f.nixosConfigurations.${cfg}.config.neo.services.${n} or {};
+    meta = svc.meta or {};
+  in {
     name = n;
-    enabled = f.nixosConfigurations.${cfg}.config.neo.services.${n}.enabled or false;
+    enabled = svc.enabled or false;
+    icon = meta.icon or null;
   })
   names

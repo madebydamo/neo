@@ -1,8 +1,13 @@
-<div id="options-pane" class="card bg-base-100 shadow" data-service="{{service}}" x-data="optionForm()" x-init="initForm()">
+<div id="options-pane" class="card bg-base-100 shadow" data-service="{{service}}" data-save-endpoint="{{save_endpoint}}" x-data="optionForm()" x-init="initForm()">
   <!-- Seed script moved to top so it is available immediately when x-init runs -->
   <script id="options-seed" type="application/json">{{{options_json}}}</script>
 
   <div class="card-body">
+    {{#if is_core}}
+      <button class="btn btn-ghost btn-xs mb-2" hx-get="/core-grid" hx-target="#config-content" hx-swap="innerHTML">← Back to core grid</button>
+    {{else}}
+      <button class="btn btn-ghost btn-xs mb-2" hx-get="/services-grid" hx-target="#config-content" hx-swap="innerHTML">← Back to services grid</button>
+    {{/if}}
     {{#if meta}}
       <!-- Rich service introduction header -->
       <div class="mb-4 pb-3 border-b border-base-300">

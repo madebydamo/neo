@@ -1,6 +1,7 @@
 {
   neoFlake,
-  service,
+  service ? null,
+  section ? null,
   configName ? null,
 }: let
   f =
@@ -16,8 +17,20 @@
     else if builtins.elem "neo" cfgNames
     then "neo"
     else builtins.head cfgNames;
-  root = f.nixosConfigurations.${cfg}.options.neo.services.${service} or {};
-  configRoot = f.nixosConfigurations.${cfg}.config.neo.services.${service} or {};
+  servicesOpt = f.nixosConfigurations.${cfg}.options.neo.services or {};
+  root =
+    if service != null
+    then servicesOpt.${service} or {}
+    else if section != null
+    then f.nixosConfigurations.${cfg}.options.neo.${section} or {}
+    else {};
+  configServices = f.nixosConfigurations.${cfg}.config.neo.services or {};
+  configRoot =
+    if service != null
+    then configServices.${service} or {}
+    else if section != null
+    then f.nixosConfigurations.${cfg}.config.neo.${section} or {}
+    else {};
 
   tryOr = def: x: let
     r = builtins.tryEval x;

@@ -7,7 +7,13 @@ use crate::commands::{
     execute_command, get_current_branch, get_timestamp, git_cmd, has_staged_changes, run_nix,
 };
 
-pub fn activate(config_path: &str, dry_run: bool, nix_cmd: &str, sudo_cmd: &str, activation_suffix: Option<&str>) -> Result<()> {
+pub fn activate(
+    config_path: &str,
+    dry_run: bool,
+    nix_cmd: &str,
+    sudo_cmd: &str,
+    activation_suffix: Option<&str>,
+) -> Result<()> {
     if dry_run {
         println!(
             "DRY-RUN: activate (run_nix write-flake + toplevel build, optional build_xxx+Build-commit if changes, switch -C activation_xxx, optional amend-recommit, nixos-rebuild, cleanup build_ on success or restore+delete branches on fail)"
@@ -15,9 +21,9 @@ pub fn activate(config_path: &str, dry_run: bool, nix_cmd: &str, sudo_cmd: &str,
         return Ok(());
     }
 
-    let suffix = activation_suffix
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| std::env::var("NEO_ACTIVATION_SUFFIX").unwrap_or_else(|_| get_timestamp()));
+    let suffix = activation_suffix.map(|s| s.to_string()).unwrap_or_else(|| {
+        std::env::var("NEO_ACTIVATION_SUFFIX").unwrap_or_else(|_| get_timestamp())
+    });
     let activation_id = format!("activation_{}", suffix);
     let act_dir = PathBuf::from("/tmp/neo-activations");
     let _ = fs::create_dir_all(&act_dir);
@@ -31,9 +37,16 @@ pub fn activate(config_path: &str, dry_run: bool, nix_cmd: &str, sudo_cmd: &str,
             "started_at": &suffix,
             "log_path": log_path.to_string_lossy(),
         });
-        if let Some(e) = err { s["error"] = serde_json::json!(e); }
-        if let Some(b) = br { s["branch"] = serde_json::json!(b); }
-        let _ = fs::write(&state_path, serde_json::to_string_pretty(&s).unwrap_or_else(|_| "{}".to_string()));
+        if let Some(e) = err {
+            s["error"] = serde_json::json!(e);
+        }
+        if let Some(b) = br {
+            s["branch"] = serde_json::json!(b);
+        }
+        let _ = fs::write(
+            &state_path,
+            serde_json::to_string_pretty(&s).unwrap_or_else(|_| "{}".to_string()),
+        );
     };
     write_state("in_progress", "starting", None, None);
 
@@ -87,7 +100,12 @@ pub fn activate(config_path: &str, dry_run: bool, nix_cmd: &str, sudo_cmd: &str,
         write_state("failed", "branch-failed", Some(&e.to_string()), None);
         return Err(e);
     }
-    write_state("in_progress", "branches-created", None, Some(&activation_branch));
+    write_state(
+        "in_progress",
+        "branches-created",
+        None,
+        Some(&activation_branch),
+    );
 
     if has_changes {
         if let Err(e) = git_cmd(config_path, &["add", "."]) {

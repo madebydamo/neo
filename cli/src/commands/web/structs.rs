@@ -5,11 +5,25 @@ use std::path::PathBuf;
 pub struct Service {
     pub name: String,
     pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
 }
 
 #[derive(Serialize)]
 pub struct IndexContext {
     pub services: Vec<Service>,
+}
+
+#[derive(Serialize)]
+pub struct BranchInfo {
+    pub name: String,
+    pub is_current: bool,
+}
+
+#[derive(Serialize)]
+pub struct BranchesContext {
+    pub graph: String,
+    pub branches: Vec<BranchInfo>,
 }
 
 #[derive(Clone, Debug)]
@@ -109,4 +123,10 @@ pub struct OptionPaneContext {
     pub options: Vec<OptionSchema>,
     /// Pre-serialized JSON for the Alpine form (the options array only).
     pub options_json: String,
+    /// Endpoint for save POST (e.g. /save/foo or /save-core/bar)
+    #[serde(default)]
+    pub save_endpoint: String,
+    /// Whether this pane was loaded from the core grid (affects which back button is shown)
+    #[serde(default)]
+    pub is_core: bool,
 }

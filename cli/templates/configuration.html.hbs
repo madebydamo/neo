@@ -16,80 +16,46 @@
         </div>
         <div class="flex-none flex items-center gap-2 pr-2">
           <div id="pending-changes" hx-get="/changes/indicator" hx-trigger="load, every 20s" hx-swap="innerHTML"></div>
-          <button hx-post="/flake/update" hx-target="#update-log" hx-swap="innerHTML" class="btn btn-xs btn-ghost">Update</button>
+          <div class="join">
+            <button hx-post="/flake/update" hx-target="#update-log" hx-swap="innerHTML" class="btn btn-xs join-item btn-ghost">↻ Update</button>
+            <button hx-post="/actions/activate" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Trigger full activation now (via service)?" hx-on::after-request="document.getElementById('changes-modal').showModal();var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{target:'#pending-changes',swap:'innerHTML'})" class="btn btn-xs join-item btn-error">▶ Activate</button>
+          </div>
+          <div class="join">
+            <button hx-post="/actions/reset" hx-target="#update-log" hx-swap="innerHTML" hx-confirm="Reset settings from last applied (/etc/neo)?" class="btn btn-xs join-item btn-ghost">↩ Reset</button>
+            <button hx-post="/actions/hard-reset" hx-target="#update-log" hx-swap="innerHTML" hx-confirm="HARD RESET: nuke + init? Destructive." class="btn btn-xs join-item btn-warning">⚠ Hard</button>
+          </div>
           <span id="update-log" class="text-[10px] opacity-60"></span>
         </div>
       </div>
 
-      <div class="flex flex-col lg:flex-row gap-4 lg:gap-6">
-
-        <!-- Mobile: collapsible services menu (auto-closes on selection) -->
-        <div class="lg:hidden" x-data="{ menuOpen: false }">
-          <details
-            class="collapse bg-base-200 rounded-box"
-            :open="menuOpen"
-            @toggle="menuOpen = $event.target.open">
-            <summary class="collapse-title text-sm font-medium">Services</summary>
-            <div class="collapse-content p-0">
-              <ul class="menu w-full text-sm">
-                {{#each services}}
-                  <li>
-                    <a hx-get="/option/{{name}}"
-                       hx-target="#options-pane"
-                       hx-swap="outerHTML"
-                       class="font-mono"
-                       @click="menuOpen = false">
-                      {{#if enabled}}
-                        <span class="inline-block w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
-                      {{else}}
-                        <span class="inline-block w-2 h-2 rounded-full bg-base-300 flex-shrink-0"></span>
-                      {{/if}}
-                      {{name}}
-                    </a>
-                  </li>
-                {{/each}}
-              </ul>
-            </div>
-          </details>
+      <div x-data="{ tab: 'services' }">
+        <div class="tabs tabs-bordered mb-2 text-sm">
+          <button
+            class="tab"
+            :class="{ 'tab-active': tab === 'services' }"
+            @click="tab = 'services'; htmx.ajax('GET', '/services-grid', {target: '#config-content', swap: 'innerHTML'})">
+            Services
+          </button>
+          <button
+            class="tab"
+            :class="{ 'tab-active': tab === 'settings' }"
+            @click="tab = 'settings'; htmx.ajax('GET', '/core-grid', {target: '#config-content', swap: 'innerHTML'})">
+            Settings
+          </button>
+          <button
+            class="tab"
+            :class="{ 'tab-active': tab === 'versioning' }"
+            @click="tab = 'versioning'; htmx.ajax('GET', '/branches', {target: '#config-content', swap: 'innerHTML'})">
+            Versioning
+          </button>
         </div>
-
-        <!-- Desktop: narrow sidebar menu -->
-        <div class="hidden lg:block w-60 flex-shrink-0">
-          <div class="card bg-base-100 shadow">
-            <div class="card-body p-2">
-              <ul class="menu w-full text-sm">
-                {{#each services}}
-                  <li>
-                    <a hx-get="/option/{{name}}"
-                       hx-target="#options-pane"
-                       hx-swap="outerHTML"
-                       class="font-mono">
-                      {{#if enabled}}
-                        <span class="inline-block w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
-                      {{else}}
-                        <span class="inline-block w-2 h-2 rounded-full bg-base-300 flex-shrink-0"></span>
-                      {{/if}}
-                      {{name}}
-                    </a>
-                  </li>
-                {{/each}}
-              </ul>
-            </div>
-          </div>
-          <p class="text-xs opacity-40 mt-2 px-1">Click a service to load its options.</p>
+        <div id="config-content"
+             hx-get="/services-grid"
+             hx-trigger="load"
+             hx-swap="innerHTML"
+             class="min-h-[100px]">
+          <div class="text-xs opacity-60 p-4 border border-dashed rounded">Loading...</div>
         </div>
-
-        <!-- Main content -->
-        <div class="flex-1 min-w-0">
-          <div id="options-pane">
-            <div class="card bg-base-100 shadow h-full">
-              <div class="card-body text-base-content/60">
-                Select a service to edit its configuration.
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
 
       <p class="mt-6 text-[10px] opacity-30">

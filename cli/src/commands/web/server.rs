@@ -9,11 +9,16 @@ use rocket::{get, http::Status, post, routes, State};
 use rocket_dyn_templates::Template;
 use toml_edit::{DocumentMut, Item, Table, Value};
 
-use super::nix_eval::{extract_proxied_services, extract_service_options, extract_services};
-use super::structs::{AppConfig, IndexContext, OptionPaneContext};
+use super::nix_eval::{
+    extract_neo_section, extract_proxied_services, extract_service_options, extract_services,
+};
+use super::structs::{AppConfig, BranchInfo, BranchesContext, IndexContext, OptionPaneContext};
 
+use crate::commands::init::init;
+use crate::commands::nuke::nuke;
 use crate::commands::paste_settings::paste_settings;
 use crate::commands::update::update;
+use crate::commands::{get_current_branch, git_cmd};
 
 use super::activation;
 
@@ -33,6 +38,12 @@ pub fn configuration(config: &State<Arc<AppConfig>>) -> Template {
 pub fn option_pane(config: &State<Arc<AppConfig>>, service: &str) -> Template {
     let pane = extract_service_options(&config.nix_cmd, &config.neo_input, service);
     Template::render("option_pane", pane)
+}
+
+#[get("/services-grid")]
+pub fn services_grid(config: &State<Arc<AppConfig>>) -> Template {
+    let svcs = extract_services(&config.nix_cmd, &config.neo_input);
+    Template::render("services_grid", IndexContext { services: svcs })
 }
 
 fn json_to_toml_value(v: &serde_json::Value) -> Option<Value> {
@@ -128,6 +139,98 @@ fn config_dir(cfg: &AppConfig) -> PathBuf {
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| PathBuf::from("."))
+}
+
+fn trigger_activation(config: &AppConfig) -> RawHtml<String> {
+    let dir = config_dir(config);
+    let _dir_str = dir.to_str().unwrap_or(".");
+    let sudo_cmd = std::env::var("SUDO_BINARY_PATH").unwrap_or_else(|_| "sudo".to_string());
+    let ts = crate::commands::get_timestamp();
+    let id = format!("activation_{}", ts);
+    let act_dir = activation::activation_dir();
+    let _ = fs::create_dir_all(&act_dir);
+    let state_path = act_dir.join(format!("{}.json", id));
+    let log_path = act_dir.join(format!("{}.log", id));
+    let initial = serde_json::json!({
+        "id": id,
+        "status": "in_progress",
+        "phase": "triggered",
+        "started_at": ts,
+        "log_path": log_path.to_string_lossy(),
+    });
+    let _ = fs::write(
+        &state_path,
+        serde_json::to_string_pretty(&initial).unwrap_or_default(),
+    );
+    let _ = fs::write(
+        &log_path,
+        format!("activation {} triggered via web at {}\n", id, ts),
+    );
+    if let Some(other) = activation::find_recent_in_progress_activation() {
+        if other != id {
+            return RawHtml(format!("<div class=\"alert alert-error text-sm\">Another activation {} in progress (or auto-update). Wait.</div>", other));
+        }
+    }
+    let systemctl_bin = "/run/current-system/sw/bin/systemctl";
+    let svc = format!("neo-activate@{}.service", ts);
+    let desc = format!("{} {} start --no-block {} ", sudo_cmd, systemctl_bin, svc);
+    let _ = crate::commands::execute_command(
+        &mut Command::new(&sudo_cmd).args([systemctl_bin, "start", "--no-block", &svc]),
+        &desc,
+    );
+    RawHtml(activation::build_monitor_fragment(&id))
+}
+
+fn list_activation_branches(config_path: &str) -> Vec<BranchInfo> {
+    let names: Vec<String> = Command::new("git")
+        .current_dir(config_path)
+        .args([
+            "for-each-ref",
+            "--format=%(refname:short)",
+            "--sort=-committerdate",
+            "refs/heads/activation_*",
+        ])
+        .output()
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(|s| s.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+    let cur = get_current_branch(config_path).unwrap_or_default();
+    names
+        .into_iter()
+        .map(|name| BranchInfo {
+            name: name.clone(),
+            is_current: name == cur,
+        })
+        .collect()
+}
+
+fn get_activation_graph(config_path: &str) -> String {
+    let out = Command::new("git")
+        .current_dir(config_path)
+        .args([
+            "log",
+            "--graph",
+            "--no-color",
+            "--oneline",
+            "--decorate",
+            "-25",
+            "--branches=activation_*",
+        ])
+        .output();
+    match out {
+        Ok(o) => {
+            let mut t = String::from_utf8_lossy(&o.stdout).into_owned();
+            if !o.stderr.is_empty() {
+                t.push_str(&String::from_utf8_lossy(&o.stderr));
+            }
+            t
+        }
+        Err(e) => format!("graph error: {}", e),
+    }
 }
 
 fn settings_changed_and_diff(cfg: &AppConfig) -> (bool, String) {
@@ -245,6 +348,74 @@ pub fn save_service(
     Status::Ok
 }
 
+#[post("/save-core/<section>", data = "<payload>")]
+pub fn save_core_section(
+    config: &State<Arc<AppConfig>>,
+    section: &str,
+    payload: Json<serde_json::Value>,
+) -> Status {
+    if section.trim().is_empty() {
+        return Status::BadRequest;
+    }
+    let settings_path = &config.settings_path;
+    if let Some(parent) = settings_path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let content = if settings_path.exists() {
+        match fs::read_to_string(settings_path) {
+            Ok(c) => c,
+            Err(_) => return Status::InternalServerError,
+        }
+    } else {
+        String::new()
+    };
+    let mut doc: DocumentMut = if content.trim().is_empty() {
+        DocumentMut::new()
+    } else {
+        match content.parse() {
+            Ok(d) => d,
+            Err(_) => return Status::InternalServerError,
+        }
+    };
+    doc.remove(section);
+    let payload_map = match payload.as_object() {
+        Some(m) if !m.is_empty() => m,
+        _ => {
+            if let Err(_) = fs::write(settings_path, doc.to_string()) {
+                return Status::InternalServerError;
+            }
+            return Status::Ok;
+        }
+    };
+    // Scalar core options (timeZone, uid, gid) are bare keys at toml root, not [section] tables.
+    // The extract renames the single field name to the section for them, so payload has the section as key.
+    if payload_map.len() == 1 && payload_map.contains_key(section) {
+        if let Some(v) = payload_map.get(section) {
+            if let Some(tval) = json_to_toml_value(v) {
+                doc.insert(section, Item::Value(tval));
+            }
+        }
+    } else {
+        let mut tbl = Table::new();
+        for (k, v) in payload_map.iter() {
+            if k.contains('.') {
+                if let Some(tval) = json_to_toml_value(v) {
+                    insert_dotted(&mut tbl, k, tval);
+                }
+            } else if let Some(titem) = json_to_toml_item(v) {
+                tbl.insert(k, titem);
+            }
+        }
+        if !tbl.is_empty() {
+            doc.insert(section, Item::Table(tbl));
+        }
+    }
+    if let Err(_) = fs::write(settings_path, doc.to_string()) {
+        return Status::InternalServerError;
+    }
+    Status::Ok
+}
+
 #[get("/changes/indicator")]
 pub fn changes_indicator(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     activation::gc_old_activations();
@@ -294,37 +465,7 @@ pub fn revert_settings(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
 
 #[post("/changes/apply")]
 pub fn apply_settings(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    let dir = config_dir(&config);
-    let _dir_str = dir.to_str().unwrap_or(".");
-    let sudo_cmd = std::env::var("SUDO_BINARY_PATH").unwrap_or_else(|_| "sudo".to_string());
-    let ts = crate::commands::get_timestamp();
-    let id = format!("activation_{}", ts);
-    let act_dir = activation::activation_dir();
-    let _ = fs::create_dir_all(&act_dir);
-    let state_path = act_dir.join(format!("{}.json", id));
-    let log_path = act_dir.join(format!("{}.log", id));
-    let initial = serde_json::json!({
-        "id": id,
-        "status": "in_progress",
-        "phase": "triggered",
-        "started_at": ts,
-        "log_path": log_path.to_string_lossy(),
-    });
-    let _ = fs::write(&state_path, serde_json::to_string_pretty(&initial).unwrap_or_default());
-    let _ = fs::write(&log_path, format!("activation {} triggered via web at {}\n", id, ts));
-    if let Some(other) = activation::find_recent_in_progress_activation() {
-        if other != id {
-            return RawHtml(format!("<div class=\"alert alert-error text-sm\">Another activation {} in progress (or auto-update). Wait.</div>", other));
-        }
-    }
-    let systemctl_bin = "/run/current-system/sw/bin/systemctl";
-    let svc = format!("neo-activate@{}.service", ts);
-    let desc = format!("{} {} start --no-block {} ", sudo_cmd, systemctl_bin, svc);
-    let _ = crate::commands::execute_command(
-        &mut Command::new(&sudo_cmd).args([systemctl_bin, "start", "--no-block", &svc]),
-        &desc,
-    );
-    RawHtml(activation::build_monitor_fragment(&id))
+    trigger_activation(&config)
 }
 
 #[post("/flake/update")]
@@ -341,6 +482,97 @@ pub fn flake_update(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
             e
         )),
     }
+}
+
+#[post("/actions/activate")]
+pub fn actions_activate(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
+    trigger_activation(&config)
+}
+
+#[post("/actions/reset")]
+pub fn actions_reset(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
+    let dir = config_dir(&config);
+    let dir_str = dir.to_str().unwrap_or(".");
+    let source = PathBuf::from("/etc/neo/settings.toml");
+    let dummy = DocumentMut::new();
+    match paste_settings(dir_str, &source, &dummy, false, &config.nix_cmd) {
+        Ok(()) => RawHtml(
+            "<span class=\"text-success text-[10px]\">reset (paste from /etc) done</span>"
+                .to_string(),
+        ),
+        Err(e) => RawHtml(format!(
+            "<span class=\"text-error text-[10px]\">reset failed: {}</span>",
+            e
+        )),
+    }
+}
+
+#[post("/actions/hard-reset")]
+pub fn actions_hard_reset(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
+    let dir = config_dir(&config);
+    let dir_str = dir.to_str().unwrap_or(".");
+    let nix_cmd = &config.nix_cmd;
+    let content = fs::read_to_string(&config.settings_path).unwrap_or_default();
+    let doc: DocumentMut = content.parse().unwrap_or_else(|_| DocumentMut::new());
+    let section = if PathBuf::from("/etc/neo/settings.toml").exists() {
+        "nixos"
+    } else {
+        "cli"
+    };
+    let nuke_res = nuke(dir_str, false, nix_cmd);
+    let init_res = init(dir_str, &doc, section, false, nix_cmd);
+    match (nuke_res, init_res) {
+        (Ok(()), Ok(())) => RawHtml("<span class=\"text-success text-[10px]\">hard reset (nuke+init) done — reload dashboard</span>".to_string()),
+        (Err(e), _) | (_, Err(e)) => RawHtml(format!("<span class=\"text-error text-[10px]\">hard reset error: {}</span>", e)),
+    }
+}
+
+#[get("/branches")]
+pub fn branches(config: &State<Arc<AppConfig>>) -> Template {
+    let dir = config_dir(&config);
+    let dir_str = dir.to_str().unwrap_or(".");
+    let graph = get_activation_graph(dir_str);
+    let brs = list_activation_branches(dir_str);
+    Template::render(
+        "branches",
+        BranchesContext {
+            graph,
+            branches: brs,
+        },
+    )
+}
+
+#[post("/git/switch/<br>")]
+pub fn git_switch(config: &State<Arc<AppConfig>>, br: &str) -> RawHtml<String> {
+    if activation::is_activation_in_progress() {
+        return RawHtml(
+            "<span class=\"text-error text-xs\">activation in progress — cannot switch</span>"
+                .to_string(),
+        );
+    }
+    let dir = config_dir(&config);
+    let dir_str = dir.to_str().unwrap_or(".");
+    match git_cmd(dir_str, &["switch", br]) {
+        Ok(()) => RawHtml(format!(
+            "<span class=\"text-success text-xs\">switched to {}</span>",
+            br
+        )),
+        Err(e) => RawHtml(format!(
+            "<span class=\"text-error text-xs\">switch failed: {}</span>",
+            e
+        )),
+    }
+}
+
+#[get("/core-grid")]
+pub fn core_grid(_config: &State<Arc<AppConfig>>) -> Template {
+    Template::render("core_grid", IndexContext { services: vec![] })
+}
+
+#[get("/core/<section>")]
+pub fn core_pane(config: &State<Arc<AppConfig>>, section: &str) -> Template {
+    let pane = extract_neo_section(&config.nix_cmd, &config.neo_input, section);
+    Template::render("option_pane", pane)
 }
 
 #[get("/activation/monitor/<id>")]
@@ -372,12 +604,21 @@ pub fn routes() -> Vec<rocket::Route> {
         index,
         configuration,
         option_pane,
+        services_grid,
         save_service,
+        save_core_section,
         changes_indicator,
         changes_summary,
         revert_settings,
         apply_settings,
         flake_update,
+        actions_activate,
+        actions_reset,
+        actions_hard_reset,
+        branches,
+        git_switch,
+        core_grid,
+        core_pane,
         activation_monitor,
         activation_log,
         activation_status,
