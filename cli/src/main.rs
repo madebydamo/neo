@@ -8,7 +8,7 @@ use toml_edit::DocumentMut;
 pub mod commands;
 use crate::commands::{
     activate::activate, build::build, edit::edit, execute_command,
-    generate_hardware::generate_hardware, git::git, init::init, nuke::nuke,
+    generate_hardware::generate_hardware, git::git, init::init, migrate::migrate, nuke::nuke,
     paste_settings::paste_settings, update::update, update_inputs::update_inputs, web::web,
 };
 #[derive(Parser)]
@@ -62,6 +62,7 @@ enum Commands {
     Init,
     UpdateInputs,
     Update,
+    Migrate,
     Build,
     Activate {
         #[arg(long, env = "NEO_ACTIVATION_SUFFIX")]
@@ -180,12 +181,30 @@ fn run(cli: Cli) -> Result<()> {
         }
     }
 
-    let config_path = doc
-        .get(&section)
-        .and_then(|t| t.get("configPath"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("./build")
-        .to_string();
+    let config_path = {
+        let primary = if section == "neo-service" {
+            "neo-service"
+        } else {
+            "neo-cli"
+        };
+        let legacy = if section == "neo-service" {
+            "nixos"
+        } else {
+            "cli"
+        };
+        let from_legacy = doc
+            .get(legacy)
+            .and_then(|t| t.get("configPath"))
+            .and_then(|v| v.as_str());
+        let from_primary = doc
+            .get(primary)
+            .and_then(|t| t.get("configPath"))
+            .and_then(|v| v.as_str());
+        from_legacy
+            .or(from_primary)
+            .unwrap_or("./build")
+            .to_string()
+    };
 
     // The writable settings file lives under configPath (same as `neo edit` uses).
     // The original CLI --settings (or /etc/neo/settings.toml) is only the source we loaded from.
@@ -205,7 +224,8 @@ fn run(cli: Cli) -> Result<()> {
         }
         Commands::Init => init(&config_path, &doc, &section, dry_run, nix_cmd),
         Commands::UpdateInputs => update_inputs(&config_path, dry_run, nix_cmd),
-        Commands::Update => update(&config_path, dry_run, nix_cmd),
+        Commands::Update => update(&config_path, &doc, &section, dry_run, nix_cmd),
+        Commands::Migrate => migrate(&config_path, &settings_path, dry_run),
         Commands::Build => build(&config_path, &doc, dry_run, nix_cmd),
         Commands::Activate { activation_suffix } => activate(
             &config_path,

@@ -547,7 +547,15 @@ pub fn apply_settings(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
 pub fn flake_update(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     let dir = config_dir(&config);
     let dir_str = dir.to_str().unwrap_or(".");
-    match update(dir_str, false, &config.nix_cmd) {
+    let nix_cmd = &config.nix_cmd;
+    let content = fs::read_to_string(&config.settings_path).unwrap_or_default();
+    let doc: DocumentMut = content.parse().unwrap_or_else(|_| DocumentMut::new());
+    let section = if PathBuf::from("/etc/neo/settings.toml").exists() {
+        "neo-service"
+    } else {
+        "neo-cli"
+    };
+    match update(dir_str, &doc, section, false, nix_cmd) {
         Ok(()) => RawHtml(
             "<span class=\"text-success text-[10px]\">flake update done (direct)</span>"
                 .to_string(),

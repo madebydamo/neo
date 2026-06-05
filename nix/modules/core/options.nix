@@ -73,5 +73,11 @@
         default = "";
         description = "Generate the hash using `mkpasswd -m sha-512` (from pkgs.mkpasswd) or `openssl passwd -6`. This sets the password for the user without exposing plaintext.";
       };
+      options.neo.migrations.applied = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        description = lib.mdDoc "Applied settings.toml migrations (managed by neo migrate command).";
+        internal = true;
+      };
     };
 }

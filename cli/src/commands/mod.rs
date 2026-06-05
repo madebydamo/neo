@@ -4,6 +4,7 @@ pub mod edit;
 pub mod generate_hardware;
 pub mod git;
 pub mod init;
+pub mod migrate;
 pub mod nuke;
 pub mod paste_settings;
 pub mod update;

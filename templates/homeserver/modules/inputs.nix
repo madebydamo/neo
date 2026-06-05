@@ -4,12 +4,13 @@
   ...
 }: let
   settingsPath = ../settings.toml;
-  neo =
+  raw =
     if builtins.pathExists settingsPath
     then builtins.fromTOML (builtins.readFile settingsPath)
     else {};
-  neoInput = neo."neo-service".neoInput or "github:madebydamo/neo";
-  plugins = neo."neo-service".plugins or [];
+  neoService = raw."neo-service" or raw.nixos or {};
+  neoInput = neoService.neoInput or "github:madebydamo/neo";
+  plugins = neoService.plugins or [];
 in {
   flake-file.inputs =
     {
