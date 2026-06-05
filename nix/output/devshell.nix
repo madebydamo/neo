@@ -13,6 +13,10 @@
         nix
         git
         nixos-install-tools
+        cargo
+        rustc
+        rustfmt
+        clippy
       ];
     };
   };

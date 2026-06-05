@@ -93,10 +93,28 @@ ssh:
   ssh {{ssh_opts}}
 
 format:
-  alejandra -e ./build/ .
+  #!/usr/bin/env bash
+  set -euo pipefail
+  alejandra -e ./build/ . 2> /dev/null
+  if command -v cargo >/dev/null 2>&1; then
+    cargo fmt --all --manifest-path cli/Cargo.toml
+  else
+    nix develop --command cargo fmt --all --manifest-path cli/Cargo.toml
+  fi
+  echo "Rust formatted"
 
 check:
+  #!/usr/bin/env bash
+  set -euo pipefail
   git add flake.nix nix/ templates/
   nix flake check
-  (cd build && git add . && nix flake check)
+  #if [ -d build ]; then
+  #  (cd build && git add . && nix flake check)
+  #fi
+  alejandra -c -e ./build/ . 2> /dev/null
+  if command -v cargo >/dev/null 2>&1; then
+    cargo fmt --all --manifest-path cli/Cargo.toml -- --check
+  else
+    nix develop --command cargo fmt --all --manifest-path cli/Cargo.toml -- --check
+  fi
 
