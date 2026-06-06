@@ -35,7 +35,7 @@
     environment.systemPackages = with pkgs; [
       vim
       btop
-      docker
+      docker_29
       netcat
     ];
 
