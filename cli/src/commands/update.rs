@@ -45,8 +45,8 @@ pub fn update(
             .inspect_err(|_| println!("Best effort applied"));
     }
 
+    run_nix(config_path, nix_cmd, &["run", ".#write-flake"])?;
     run_nix(config_path, nix_cmd, &["flake", "update"])?;
-
     run_nix(config_path, nix_cmd, &["run", ".#neo", "--", "migrate"])?;
     println!("Flake updated and migrated in {}", config_path);
     Ok(())
