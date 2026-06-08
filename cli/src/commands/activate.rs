@@ -1,7 +1,7 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use crate::commands::{
     execute_command, get_current_branch, get_timestamp, git_cmd, has_staged_changes, run_nix,
@@ -16,7 +16,7 @@ pub fn activate(
 ) -> Result<()> {
     if dry_run {
         println!(
-            "DRY-RUN: activate (run_nix write-flake + toplevel build, optional build_xxx+Build-commit if changes, switch -C activation_xxx, optional amend-recommit, pre-clean transient, nixos-rebuild, cleanup build_ on success; on rebuild-fail only cleanup build_ and keep activation branch+checkout, still error)"
+            "DRY-RUN: activate (write-flake + toplevel build + git branch dance + pre-clean + nixos-rebuild; exit 0 or 4 treated as success (keep branch, 'Activated using...'); other non-zero keeps branch but errors)"
         );
         return Ok(());
     }
@@ -147,24 +147,51 @@ pub fn activate(
         "{} nixos-rebuild switch --flake .#neo (in {})",
         sudo_cmd, config_path
     );
-    if let Err(e) = execute_command(
-        Command::new(sudo_cmd).current_dir(config_path).args([
-            "nixos-rebuild",
-            "switch",
-            "--flake",
-            ".#neo",
-        ]),
-        &desc,
-    ) {
+    println!("→ {}", desc);
+    let status = Command::new(sudo_cmd)
+        .current_dir(config_path)
+        .args(["nixos-rebuild", "switch", "--flake", ".#neo"])
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .with_context(|| format!("failed to spawn: {}", desc))?;
+    let code = status.code().unwrap_or(-1);
+
+    if code == 4 {
         println!(
-            "nixos-rebuild failed (non-zero). Keeping {} branch+checkout (partial activation common from setup units/user bus; run 'systemctl --failed' in VM).",
-            activation_branch
+            "warning: nixos-rebuild exited 4 (success with warnings). The switch succeeded and the new generation is active. This is common for user session reloads (dbus-broker), non-critical service restarts, etc. Treating as success for activation tracking."
         );
         if has_changes {
             let _ = git_cmd(config_path, &["branch", "-D", &build_branch]);
         }
-        write_state("failed", "rebuild-failed", Some(&e.to_string()), None);
-        return Err(e);
+        write_state(
+            "success",
+            "completed-with-warnings",
+            None,
+            Some(&activation_branch),
+        );
+        println!(
+            "Activated using branch {} (exit code 4 / warnings)",
+            activation_branch
+        );
+        return Ok(());
+    }
+
+    if !status.success() {
+        println!(
+            "nixos-rebuild failed (non-zero exit {}). Keeping {} branch+checkout (check 'systemctl --failed' and logs).",
+            code, activation_branch
+        );
+        if has_changes {
+            let _ = git_cmd(config_path, &["branch", "-D", &build_branch]);
+        }
+        write_state(
+            "failed",
+            "rebuild-failed",
+            Some(&format!("exit code {}", code)),
+            None,
+        );
+        anyhow::bail!("Command failed: {} (exit {})", desc, code);
     }
 
     if has_changes {
