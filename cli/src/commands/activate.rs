@@ -16,7 +16,7 @@ pub fn activate(
 ) -> Result<()> {
     if dry_run {
         println!(
-            "DRY-RUN: activate (run_nix write-flake + toplevel build, optional build_xxx+Build-commit if changes, switch -C activation_xxx, optional amend-recommit, nixos-rebuild, cleanup build_ on success or restore+delete branches on fail)"
+            "DRY-RUN: activate (run_nix write-flake + toplevel build, optional build_xxx+Build-commit if changes, switch -C activation_xxx, optional amend-recommit, pre-clean transient, nixos-rebuild, cleanup build_ on success; on rebuild-fail only cleanup build_ and keep activation branch+checkout, still error)"
         );
         return Ok(());
     }
@@ -127,6 +127,22 @@ pub fn activate(
     }
 
     write_state("in_progress", "pre-rebuild", None, Some(&activation_branch));
+    let _ = Command::new(sudo_cmd)
+        .current_dir(config_path)
+        .args([
+            "systemctl",
+            "reset-failed",
+            "nixos-rebuild-switch-to-configuration.service",
+        ])
+        .status();
+    let _ = Command::new(sudo_cmd)
+        .current_dir(config_path)
+        .args([
+            "systemctl",
+            "stop",
+            "nixos-rebuild-switch-to-configuration.service",
+        ])
+        .status();
     let desc = format!(
         "{} nixos-rebuild switch --flake .#neo (in {})",
         sudo_cmd, config_path
@@ -140,11 +156,13 @@ pub fn activate(
         ]),
         &desc,
     ) {
+        println!(
+            "nixos-rebuild failed (non-zero). Keeping {} branch+checkout (partial activation common from setup units/user bus; run 'systemctl --failed' in VM).",
+            activation_branch
+        );
         if has_changes {
             let _ = git_cmd(config_path, &["branch", "-D", &build_branch]);
         }
-        let _ = git_cmd(config_path, &["switch", &orig_branch]);
-        let _ = git_cmd(config_path, &["branch", "-D", &activation_branch]);
         write_state("failed", "rebuild-failed", Some(&e.to_string()), None);
         return Err(e);
     }
