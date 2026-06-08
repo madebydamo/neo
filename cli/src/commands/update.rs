@@ -18,7 +18,6 @@ pub fn update(
         println!("DRY-RUN: would nix run .#neo -- migrate (from updated input)");
         return Ok(());
     }
-    run_nix(config_path, nix_cmd, &["flake", "update"])?;
 
     // Delete modules/ folder and re-run the exact same nix flake init as init.rs does.
     // This refreshes the template-provided modules (imports, inputs, nixos, settings) from the
@@ -45,6 +44,8 @@ pub fn update(
         run_nix(config_path, nix_cmd, &["flake", "init", "-t", template])
             .inspect_err(|_| println!("Best effort applied"));
     }
+
+    run_nix(config_path, nix_cmd, &["flake", "update"])?;
 
     run_nix(config_path, nix_cmd, &["run", ".#neo", "--", "migrate"])?;
     println!("Flake updated and migrated in {}", config_path);
