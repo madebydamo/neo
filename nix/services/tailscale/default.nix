@@ -81,9 +81,9 @@
           '';
         };
 
+        systemd.services.tailscaled.wants = ["tailscale-up.service"];
         systemd.services.tailscale-up = {
           description = "Configure Tailscale with user settings";
-          wantedBy = ["multi-user.target"];
           after = [
             "tailscaled.service"
             "network.target"

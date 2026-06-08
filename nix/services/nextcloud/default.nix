@@ -108,7 +108,6 @@
             "docker-nextcloud.service"
           ];
           wants = ["docker-nextcloud.service"];
-          wantedBy = ["multi-user.target"];
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
@@ -122,17 +121,25 @@
             occ = "${docker} exec --user www-data nextcloud php occ";
           in ''
             echo "Running Nextcloud setup..."
-            # Fails (and systemd retries) if DB is not ready or container not running
-            ${occ} config:system:set maintenance_window_start --value ${toString cfg.maintenanceWindowStart} --type integer
-            ${occ} config:system:set default_phone_region --value '${cfg.defaultPhoneRegion}'
-            ${occ} config:system:set instanceid --value '${cfg.instanceId}'
-            ${occ} config:system:set overwritehost --value '${nextcloudUrl}'
-            ${occ} config:system:set trusted_proxies 0 --value '0.0.0.0/0' --type string
-            ${occ} maintenance:repair --include-expensive
-            ${occ} db:add-missing-indices
-            echo "Nextcloud setup completed."
+            for _ in $(seq 1 20); do
+              if ${occ} config:system:set maintenance_window_start --value ${toString cfg.maintenanceWindowStart} --type integer \
+                 && ${occ} config:system:set default_phone_region --value '${cfg.defaultPhoneRegion}' \
+                 && ${occ} config:system:set instanceid --value '${cfg.instanceId}' \
+                 && ${occ} config:system:set overwritehost --value '${nextcloudUrl}' \
+                 && ${occ} config:system:set trusted_proxies 0 --value '0.0.0.0/0' --type string \
+                 && ${occ} maintenance:repair --include-expensive \
+                 && ${occ} db:add-missing-indices; then
+                echo "Nextcloud setup completed."
+                exit 0
+              fi
+              echo "setup not ready, retry in 10s"
+              sleep 10
+            done
+            echo "setup gave up after retries (will restart via systemd)"
+            exit 1
           '';
         };
+        systemd.services.docker-nextcloud.wants = ["nextcloud-setup.service"];
       };
     };
 }

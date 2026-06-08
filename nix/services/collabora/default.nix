@@ -52,7 +52,6 @@
             "docker-nextcloud.service"
             "nextcloud-setup.service"
           ];
-          wantedBy = ["multi-user.target"];
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
@@ -66,18 +65,27 @@
             occ = "${docker} exec --user www-data nextcloud php occ";
           in ''
             echo "Configuring Collabora integration..."
-            ${occ} app:install richdocuments || true
-            ${occ} app:disable richdocuments
-            ${occ} app:disable richdocumentscode
-            ${occ} app:enable richdocuments
-            ${occ} config:app:set richdocuments wopi_url --value 'http://collabora:9980'
-            ${occ} config:app:set richdocuments public_wopi_url --value "https://${collaboraUrl}"
-            ${occ} config:app:set richdocuments wopi_callback_url --value "https://${nextcloudUrl}"
-            ${occ} config:app:set richdocuments wopi_allowlist --value "0.0.0.0/0"
-            ${occ} richdocuments:activate-config
-            echo "Collabora setup completed."
+            for _ in $(seq 1 20); do
+              if ${occ} app:install richdocuments || true \
+                 && ${occ} app:disable richdocuments \
+                 && ${occ} app:disable richdocumentscode \
+                 && ${occ} app:enable richdocuments \
+                 && ${occ} config:app:set richdocuments wopi_url --value 'http://collabora:9980' \
+                 && ${occ} config:app:set richdocuments public_wopi_url --value "https://${collaboraUrl}" \
+                 && ${occ} config:app:set richdocuments wopi_callback_url --value "https://${nextcloudUrl}" \
+                 && ${occ} config:app:set richdocuments wopi_allowlist --value "0.0.0.0/0" \
+                 && ${occ} richdocuments:activate-config; then
+                echo "Collabora setup completed."
+                exit 0
+              fi
+              echo "collabora setup not ready, retry in 10s"
+              sleep 10
+            done
+            echo "collabora setup gave up after retries (will restart via systemd)"
+            exit 1
           '';
         };
+        systemd.services.docker-collabora.wants = ["collabora-setup.service"];
       };
     };
 }
