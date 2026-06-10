@@ -91,7 +91,42 @@
             ];
           }
           {
+            command = "/nix/store/*-nixos-rebuild-*/bin/nixos-rebuild";
+            options = [
+              "NOPASSWD"
+              "SETENV"
+            ];
+          }
+          {
             command = "/run/current-system/sw/bin/systemctl";
+            options = [
+              "NOPASSWD"
+              "SETENV"
+            ];
+          }
+          {
+            command = "${pkgs.systemd}/bin/systemctl";
+            options = [
+              "NOPASSWD"
+              "SETENV"
+            ];
+          }
+          {
+            command = "/nix/store/*-systemd-*/bin/systemctl";
+            options = [
+              "NOPASSWD"
+              "SETENV"
+            ];
+          }
+          {
+            command = "/run/current-system/sw/bin/systemd-run";
+            options = [
+              "NOPASSWD"
+              "SETENV"
+            ];
+          }
+          {
+            command = "/nix/store/*-systemd-*/bin/systemd-run";
             options = [
               "NOPASSWD"
               "SETENV"

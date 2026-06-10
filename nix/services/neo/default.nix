@@ -52,30 +52,6 @@
         ];
       };
 
-      systemd.services."neo-activate@" = {
-        description = "Neo one-shot activation %i";
-        serviceConfig = {
-          Type = "oneshot";
-          User = "homeserver";
-          Group = "homeserver";
-          StandardOutput = "append:/tmp/neo-activations/activation_%i.log";
-          StandardError = "append:/tmp/neo-activations/activation_%i.log";
-          ExecStart = "${neoPkg}/bin/neo activate";
-        };
-        environment = {
-          NIX_BINARY_PATH = "${pkgs.nix}/bin/nix";
-          SUDO_BINARY_PATH = "/run/wrappers/bin/sudo";
-          NEO_ACTIVATION_SUFFIX = "%i";
-        };
-        path = [
-          neoPkg
-          pkgs.git
-          pkgs.nix
-          pkgs.coreutils
-          pkgs.nixos-rebuild
-        ];
-      };
-
       security.sudo.extraRules = [
         {
           users = ["homeserver"];
@@ -89,6 +65,48 @@
             }
             {
               command = "/run/current-system/sw/bin/nixos-rebuild";
+              options = [
+                "NOPASSWD"
+                "SETENV"
+              ];
+            }
+            {
+              command = "/nix/store/*-nixos-rebuild-*/bin/nixos-rebuild";
+              options = [
+                "NOPASSWD"
+                "SETENV"
+              ];
+            }
+            {
+              command = "/run/current-system/sw/bin/systemctl";
+              options = [
+                "NOPASSWD"
+                "SETENV"
+              ];
+            }
+            {
+              command = "${pkgs.systemd}/bin/systemctl";
+              options = [
+                "NOPASSWD"
+                "SETENV"
+              ];
+            }
+            {
+              command = "/nix/store/*-systemd-*/bin/systemctl";
+              options = [
+                "NOPASSWD"
+                "SETENV"
+              ];
+            }
+            {
+              command = "/run/current-system/sw/bin/systemd-run";
+              options = [
+                "NOPASSWD"
+                "SETENV"
+              ];
+            }
+            {
+              command = "/nix/store/*-systemd-*/bin/systemd-run";
               options = [
                 "NOPASSWD"
                 "SETENV"

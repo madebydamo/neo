@@ -171,13 +171,39 @@ fn trigger_activation(config: &AppConfig) -> RawHtml<String> {
             return RawHtml(format!("<div class=\"alert alert-error text-sm\">Another activation {} in progress (or auto-update). Wait.</div>", other));
         }
     }
-    let systemctl_bin = "/run/current-system/sw/bin/systemctl";
-    let svc = format!("neo-activate@{}.service", ts);
-    let desc = format!("{} {} start --no-block {} ", sudo_cmd, systemctl_bin, svc);
-    let _ = crate::commands::execute_command(
-        &mut Command::new(&sudo_cmd).args([systemctl_bin, "start", "--no-block", &svc]),
-        &desc,
-    );
+    let nix_bin = std::env::var("NIX_BINARY_PATH")
+        .unwrap_or_else(|_| "/run/current-system/sw/bin/nix".to_string());
+    let unit = format!("neo-activate@{}.service", ts);
+    let neo_bin = "/run/current-system/sw/bin/neo";
+    let desc = format!("{} systemd-run --unit={} (as homeserver)", sudo_cmd, unit);
+    let mut run_cmd = Command::new(&sudo_cmd);
+    run_cmd.args([
+        "systemd-run",
+        "--collect",
+        "--no-ask-password",
+        "--unit",
+        &unit,
+        "--service-type=oneshot",
+        "--uid=homeserver",
+        "--gid=homeserver",
+        "-E",
+        &format!("NIX_BINARY_PATH={}", nix_bin),
+        "-E",
+        &format!("SUDO_BINARY_PATH={}", sudo_cmd),
+        "-E",
+        &format!("NEO_ACTIVATION_SUFFIX={}", ts),
+        "-E",
+        "PATH=/run/current-system/sw/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "--property",
+        &format!("StandardOutput=append:{}", log_path.to_string_lossy()),
+        "--property",
+        &format!("StandardError=append:{}", log_path.to_string_lossy()),
+        "--property",
+        &format!("Description=Neo one-shot activation {}", ts),
+        neo_bin,
+        "activate",
+    ]);
+    let _ = crate::commands::execute_command(&mut run_cmd, &desc);
     RawHtml(activation::build_monitor_fragment(&id))
 }
 

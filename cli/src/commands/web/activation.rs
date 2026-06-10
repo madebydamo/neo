@@ -157,7 +157,7 @@ pub fn build_monitor_fragment(id: &str) -> String {
         ));
     }
     html.push_str(&format!(
-        r#"<pre id="act-log" class="text-[10px] bg-base-300 p-1 mt-1 max-h-64 overflow-auto" hx-get="{}" hx-trigger="load, every 1s" hx-swap="innerHTML"></pre>"#,
+        r#"<div id="act-log" class="text-[10px] bg-base-300 p-1 mt-1 max-h-80 overflow-auto font-mono" hx-get="{}" hx-trigger="load, every 1s" hx-swap="innerHTML"></div>"#,
         log_url
     ));
     html.push_str(&format!(
@@ -217,15 +217,12 @@ pub fn build_status_fragment(id: &str) -> String {
 }
 
 pub fn build_log_fragment(id: &str) -> String {
-    let tail = load_log_tail(id, 60);
+    let tail = load_log_tail(id, 300);
     let esc = tail
         .replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;");
-    format!(
-        "<pre class=\"text-[10px] whitespace-pre-wrap\">{}</pre>",
-        esc
-    )
+    format!("<pre class=\"whitespace-pre-wrap\">{}</pre>", esc)
 }
 
 pub fn is_activation_in_progress() -> bool {

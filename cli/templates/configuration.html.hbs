@@ -102,7 +102,7 @@
         document.addEventListener('htmx:afterSettle', resume);
         var m=document.getElementById('changes-modal');if(m){m.addEventListener('close',function(){var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{target:'#pending-changes',swap:'innerHTML'});});}
         var s=document.getElementById('activation-success');if(s){s.addEventListener('close',function(){var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{target:'#pending-changes',swap:'innerHTML'});});}
-        document.body.addEventListener('htmx:afterSwap',function(e){var l=document.getElementById('act-log');if(l&&e.detail.target===l){l.scrollTop=l.scrollHeight;}});
+        document.body.addEventListener('htmx:beforeSwap',function(e){var l=document.getElementById('act-log');if(l&&e.detail.target===l){l.dataset.atBottom=(l.scrollTop+l.clientHeight>=l.scrollHeight-8)?'1':'';}});        document.body.addEventListener('htmx:afterSwap',function(e){var l=document.getElementById('act-log');if(l&&e.detail.target===l&&l.dataset.atBottom){l.scrollTop=l.scrollHeight;}});
       })();
     </script>
   </body>
