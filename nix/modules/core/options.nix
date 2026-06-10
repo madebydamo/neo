@@ -1,4 +1,4 @@
-# Global neo options (volumes, uid, gid, ssh, timezone, hostname, hashedLinuxPassword under core).
+# Global neo options (volumes, uid, gid, ssh, timezone, hostname, hashedLinuxPassword, nix build limits under core).
 {...}: {
   flake.modules.nixos.core-options = {
     config,
@@ -73,6 +73,19 @@
         default = "";
         description = "Generate the hash using `mkpasswd -m sha-512` (from pkgs.mkpasswd) or `openssl passwd -6`. This sets the password for the user without exposing plaintext.";
       };
+
+      options.neo.core.nix.maxJobs = mkOption {
+        type = types.nullOr types.int;
+        default = null;
+        description = lib.mdDoc "If set, configures nix.settings.max-jobs (maximum parallel Nix derivations). Recommendations: ≤ 8 GB RAM → 1; 8–16 GB RAM → leave it on default (null)";
+      };
+
+      options.neo.core.nix.cores = mkOption {
+        type = types.nullOr types.int;
+        default = null;
+        description = lib.mdDoc "If set, configures nix.settings.cores (cores per Nix build job). Pair with maxJobs using the same recommendations: ≤ 8 GB RAM → 1; 8–16 GB RAM → leave it on default (null)";
+      };
+
       options.neo.migrations.applied = mkOption {
         type = types.listOf types.str;
         default = [];

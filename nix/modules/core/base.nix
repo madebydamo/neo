@@ -6,7 +6,7 @@
     pkgs,
     ...
   }: let
-    deviceCfg = config.neo.core;
+    cfg = config.neo.core;
   in {
     boot.loader = {
       grub = {
@@ -20,7 +20,7 @@
       efi.canTouchEfiVariables = false;
     };
 
-    networking.hostName = deviceCfg.hostname;
+    networking.hostName = cfg.hostname;
 
     i18n = {
       defaultLocale = "en_US.UTF-8";
@@ -55,9 +55,19 @@
     };
     time.timeZone = config.neo.core.timeZone;
 
-    nix.settings.experimental-features = [
-      "nix-command"
-      "flakes"
+    nix.settings = lib.mkMerge [
+      (lib.optionalAttrs (cfg.nix.maxJobs != null) {
+        max-jobs = cfg.nix.maxJobs;
+      })
+      (lib.optionalAttrs (cfg.nix.cores != null) {
+        cores = cfg.nix.cores;
+      })
+      {
+        experimental-features = [
+          "nix-command"
+          "flakes"
+        ];
+      }
     ];
   };
 }
