@@ -1,6 +1,10 @@
 <html>
   <head>
     <title>neo</title>
+    <link rel="icon" href="/static/favicon/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" />
     <link rel="stylesheet" href="/static/neo.css" />
@@ -11,7 +15,7 @@
       <div class="w-16 bg-base-200 border-r border-base-300 flex flex-col items-center py-2 gap-y-1 overflow-y-auto flex-shrink-0">
         <!-- Logo / home -->
         <div class="w-12 h-10 flex items-center justify-center mb-1" title="neo homeserver">
-          <span class="text-xl font-bold text-primary">N</span>
+          <img src="/static/neo-icon.png" class="w-8 h-8 object-contain rounded" alt="neo">
         </div>
 
         <div class="w-8 border-t border-base-300 my-1"></div>
@@ -77,7 +81,7 @@
           <!-- Welcome / empty state overlay (hidden when any service is shown) -->
           <div id="welcome" class="absolute inset-0 flex items-center justify-center bg-base-300/95">
             <div class="text-center max-w-xs px-4">
-              <div class="text-4xl mb-3 opacity-30">N</div>
+              <img src="/static/neo-icon.png" class="w-12 h-12 mx-auto mb-3 opacity-30 object-contain rounded" alt="neo">
               <div class="font-semibold mb-1">Select a service</div>
               <p class="text-xs opacity-60">Click an icon on the left to load its web UI in this view. The ⚙ cfg button loads the full configuration editor inside the pane (navigator stays visible).</p>
               {{#if domain}}

@@ -38,7 +38,7 @@
             }
             // lib.neo.mkReverseProxyOptions {subdomain = "neo";}
             // lib.neo.mkServiceMeta {
-              icon = "⚙";
+              icon = "/static/neo-icon.png";
               description = ''
                 The neo web UI gives you a live, in-browser editor for all your homeserver services.
                 Changes are written to settings.toml and can be reviewed/applied with a single click.
