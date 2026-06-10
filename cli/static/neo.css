@@ -24,3 +24,31 @@
   pointer-events: none;
   z-index: 10;
 }
+
+/* === Viewport-locked iframe shell (desktop + mobile) ===
+   The goal: the entire navigator frame (sidebar + bars + viewer) is pinned to the
+   visual viewport size. The *only* place that should scroll is inside the <iframe>s
+   (or the sidebar icon list when you have many services).
+*/
+html,
+body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* The direct container for the absolutely positioned iframes + overlays must not scroll. */
+#viewer-wrap,
+#viewer-host {
+  overflow: hidden;
+}
+
+/* Reinforce that iframes exactly fill their host and don't create their own outer scroll. */
+#viewer-host > iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: #fff;
+}
