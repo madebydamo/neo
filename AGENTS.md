@@ -79,7 +79,7 @@ in {
   # main config
 }
 ```
-- Always `with lib;` or qualify `lib.mdDoc`, `lib.mkIf`, `lib.mkOption`.
+- Always `with lib;` or qualify `lib.mkIf`, `lib.mkOption`.
 - Use `let cfg = config.neo.services.foo; in` pattern (see `nix/services/filebrowser/default.nix:9`).
 - Reference lib extensions as `lib.neo.mkActivationScriptForDir config { ... }` (defined in `nix/lib/activation/dir.nix:4`).
 
@@ -87,21 +87,21 @@ in {
 - Variables: camelCase (`additionalMountPoints`)
 - Nix attrs/options: snake_case (`neo.services.filebrowser`, `neo.core.volumes.appdata`, `neo.neo-service`)
 - Functions: camelCase (`mkActivationScriptForDir`, `mkReverseProxyOptions`)
-- Options: `enabled = mkEnableOption (lib.mdDoc "description");`
-- Use `lib.mdDoc` for all descriptions (not plain strings).
+- Options: `enabled = mkEnableOption "description";`
+- Use plain strings for all descriptions (not `lib.mdDoc`).
 
 ### Option Definitions (in option.nix)
 ```nix
 options.neo.services.example = mkOption {
   type = types.submodule {
     options = {
-      enabled = mkEnableOption (lib.mdDoc "example service");
+      enabled = mkEnableOption "example service";
       domain = mkOption { type = types.nullOr types.str; default = null; ... };
       # Use neo.mkReverseProxyOptions { subdomain = "example"; ... }
     };
   };
   default = { };
-  description = lib.mdDoc "Example service configuration";
+  description = "Example service configuration";
 };
 ```
 See `nix/services/filebrowser/option.nix:9` and `nix/services/hermes/option.nix:142` for complex examples with reverse proxy.
@@ -202,7 +202,7 @@ fn run(cli: Cli) -> Result<()> { ... }
 ## Expanded Checklist
 - [ ] `just format`
 - [ ] `just check` (passes type/syntax/build checks)
-- [ ] All options typed with `lib.mdDoc` descriptions
+- [ ] All options use plain string descriptions
 - [ ] Uses `lib.neo` helpers for dirs/files/activation/proxy
 - [ ] Follows dendritic: separate option/impl/swag
 - [ ] Volumes/mounts use `neo.core.volumes.*` pattern

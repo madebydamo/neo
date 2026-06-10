@@ -77,19 +77,19 @@
       options.neo.core.nix.maxJobs = mkOption {
         type = types.nullOr types.int;
         default = null;
-        description = lib.mdDoc "If set, configures nix.settings.max-jobs (maximum parallel Nix derivations). Recommendations: ≤ 8 GB RAM → 1; 8–16 GB RAM → leave it on default (null)";
+        description = "If set, configures nix.settings.max-jobs (maximum parallel Nix derivations). Recommendations: ≤ 8 GB RAM → 1; 8–16 GB RAM → leave it on default (null)";
       };
 
       options.neo.core.nix.cores = mkOption {
         type = types.nullOr types.int;
         default = null;
-        description = lib.mdDoc "If set, configures nix.settings.cores (cores per Nix build job). Pair with maxJobs using the same recommendations: ≤ 8 GB RAM → 1; 8–16 GB RAM → leave it on default (null)";
+        description = "If set, configures nix.settings.cores (cores per Nix build job). Pair with maxJobs using the same recommendations: ≤ 8 GB RAM → 1; 8–16 GB RAM → leave it on default (null)";
       };
 
       options.neo.migrations.applied = mkOption {
         type = types.listOf types.str;
         default = [];
-        description = lib.mdDoc "Applied settings.toml migrations (managed by neo migrate command).";
+        description = "Applied settings.toml migrations (managed by neo migrate command).";
         internal = true;
       };
     };
