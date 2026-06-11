@@ -14,6 +14,10 @@ static EXTRACT_PROXIED: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/src/commands/web/nix/extract_proxied_services.nix"
 ));
+static EXTRACT_NEO_THEME: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/commands/web/nix/extract_neo_theme.nix"
+));
 
 pub fn extract_services(nix_cmd: &str, neo_input: &str) -> Vec<Service> {
     let expr = format!(
@@ -206,4 +210,25 @@ pub fn extract_proxied_services(nix_cmd: &str, neo_input: &str) -> NavigatorCont
         }
     }
     ctx
+}
+
+pub fn extract_neo_theme(nix_cmd: &str, neo_input: &str) -> String {
+    let expr = format!(
+        r#"({}) {{ neoFlake = "{}"; }}"#,
+        EXTRACT_NEO_THEME, neo_input
+    );
+    let output = Command::new(nix_cmd)
+        .args(["eval", "--json", "--impure", "--expr", &expr])
+        .output();
+    output
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(o.stdout)
+            } else {
+                None
+            }
+        })
+        .and_then(|stdout| serde_json::from_slice::<String>(&stdout).ok())
+        .unwrap_or_else(|| "lofi".to_string())
 }

@@ -10,9 +10,10 @@ use rocket_dyn_templates::Template;
 use toml_edit::{DocumentMut, Item, Table, Value};
 
 use super::nix_eval::{
-    extract_neo_section, extract_proxied_services, extract_service_options, extract_services,
+    extract_neo_section, extract_neo_theme, extract_proxied_services, extract_service_options,
+    extract_services,
 };
-use super::structs::{AppConfig, BranchInfo, BranchesContext, IndexContext, OptionPaneContext};
+use super::structs::{AppConfig, BranchInfo, BranchesContext, IndexContext};
 
 use crate::commands::init::init;
 use crate::commands::nuke::nuke;
@@ -24,14 +25,22 @@ use super::activation;
 
 #[get("/")]
 pub fn index(config: &State<Arc<AppConfig>>) -> Template {
-    let data = extract_proxied_services(&config.nix_cmd, &config.neo_input);
+    let mut data = extract_proxied_services(&config.nix_cmd, &config.neo_input);
+    data.theme = extract_neo_theme(&config.nix_cmd, &config.neo_input);
     Template::render("index", data)
 }
 
 #[get("/configuration")]
 pub fn configuration(config: &State<Arc<AppConfig>>) -> Template {
     let svcs = extract_services(&config.nix_cmd, &config.neo_input);
-    Template::render("configuration", IndexContext { services: svcs })
+    let theme = extract_neo_theme(&config.nix_cmd, &config.neo_input);
+    Template::render(
+        "configuration",
+        IndexContext {
+            services: svcs,
+            theme,
+        },
+    )
 }
 
 #[get("/option/<service>")]
@@ -43,7 +52,13 @@ pub fn option_pane(config: &State<Arc<AppConfig>>, service: &str) -> Template {
 #[get("/services-grid")]
 pub fn services_grid(config: &State<Arc<AppConfig>>) -> Template {
     let svcs = extract_services(&config.nix_cmd, &config.neo_input);
-    Template::render("services_grid", IndexContext { services: svcs })
+    Template::render(
+        "services_grid",
+        IndexContext {
+            services: svcs,
+            ..Default::default()
+        },
+    )
 }
 
 fn json_to_toml_value(v: &serde_json::Value) -> Option<Value> {
@@ -675,7 +690,13 @@ pub fn git_switch(config: &State<Arc<AppConfig>>, br: &str) -> RawHtml<String> {
 
 #[get("/core-grid")]
 pub fn core_grid(_config: &State<Arc<AppConfig>>) -> Template {
-    Template::render("core_grid", IndexContext { services: vec![] })
+    Template::render(
+        "core_grid",
+        IndexContext {
+            services: vec![],
+            ..Default::default()
+        },
+    )
 }
 
 #[get("/core/<section>")]

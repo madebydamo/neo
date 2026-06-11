@@ -111,8 +111,13 @@
       }
       else {};
     enumVals =
-      if fName == "enum" && builtins.isList fPayload
-      then fPayload
+      if fName == "enum"
+      then
+        if builtins.isList fPayload
+        then fPayload
+        else if builtins.isAttrs fPayload && builtins.hasAttr "values" fPayload && builtins.isList (fPayload.values or null)
+        then fPayload.values
+        else null
       else null;
   in
     if n == "nullOr"

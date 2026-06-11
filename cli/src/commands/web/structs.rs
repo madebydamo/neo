@@ -11,9 +11,11 @@ pub struct Service {
     pub rank: Option<i64>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 pub struct IndexContext {
     pub services: Vec<Service>,
+    #[serde(default)]
+    pub theme: String,
 }
 
 #[derive(Serialize)]
@@ -95,6 +97,8 @@ pub struct ProxiedService {
 pub struct NavigatorContext {
     pub domain: Option<String>,
     pub services: Vec<ProxiedService>,
+    #[serde(default)]
+    pub theme: String,
 }
 
 /// Rich presentation metadata for a service (shown in the option pane header).

@@ -15,6 +15,13 @@
             {
               enabled = mkEnableOption "Neo web UI service (config editor launched via `neo web`)" {rank = 0;};
 
+              theme = mkOption {
+                type = types.enum ["lofi" "halloween" "dark" "light"];
+                default = "lofi";
+                rank = 5;
+                description = "Color theme for the neo web UI (navigator dashboard and configuration editor).";
+              };
+
               port = mkOption {
                 type = types.port;
                 internal = true;
