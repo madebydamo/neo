@@ -22,7 +22,7 @@
           <div class="min-w-0 flex-1">
             <div class="flex items-center justify-between gap-2 flex-wrap">
               <div class="flex items-center gap-2 flex-wrap">
-                <h2 class="card-title font-mono text-xl">{{service}}</h2>
+                <h1 class="card-title font-mono text-xl">{{service}}</h1>
                 {{#if meta.projectUrl}}
                   <a href="{{meta.projectUrl}}" target="_blank" class="btn btn-xs btn-outline no-underline">Project ↗</a>
                 {{/if}}
@@ -64,7 +64,7 @@
     {{else}}
       <!-- Fallback compact header when no meta is defined for the service -->
       <div class="flex items-center justify-between mb-2">
-        <h2 class="card-title font-mono">{{service}}</h2>
+        <h1 class="card-title font-mono">{{service}}</h1>
         <button @click="resetAll()" class="btn btn-ghost btn-xs">Reset all to defaults</button>
       </div>
     {{/if}}
