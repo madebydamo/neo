@@ -7,10 +7,17 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        daisyui: {
+          themes: ["halloween", "dark", "light"]
+        }
+      };
+    </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" />
     <link rel="stylesheet" href="/static/neo.css" />
   </head>
-  <body class="bg-base-300 text-base-content h-dvh min-h-dvh h-screen overflow-hidden overscroll-none" data-theme="dark">
+  <body class="bg-base-300 text-base-content h-dvh min-h-dvh h-screen overflow-hidden overscroll-none" data-theme="lofi">
     <div class="flex h-full">
       <!-- Slim icon sidebar (icon-bar style) -->
       <div class="w-16 bg-base-200 border-r border-base-300 flex flex-col items-center py-2 gap-y-1 overflow-y-auto flex-shrink-0">

@@ -6,12 +6,19 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        daisyui: {
+          themes: ["halloween", "dark", "light", "lofi"]
+        }
+      };
+    </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css" />
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <script src="https://unpkg.com/alpinejs" defer></script>
     <script src="/static/option_form.js"></script>
   </head>
-  <body class="bg-base-300 text-base-content p-6" data-theme="dark">
+  <body class="bg-base-300 text-base-content p-6" data-theme="lofi">
     <div class="max-w-7xl mx-auto">
       <div class="navbar bg-base-100 rounded-box mb-6 shadow">
         <div class="flex-1">
