@@ -12,6 +12,9 @@ pub mod update_inputs;
 pub mod web;
 
 use anyhow::{Context, Result};
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 pub fn execute_command(cmd: &mut Command, description: &str) -> Result<()> {
@@ -90,4 +93,35 @@ pub fn get_current_branch(config_path: &str) -> Result<String> {
             .to_string();
         Ok(if n.is_empty() { "HEAD".to_string() } else { n })
     }
+}
+
+pub fn run_nix_logged(
+    config_path: &str,
+    nix_cmd: &str,
+    args: &[&str],
+    log_path: &Path,
+) -> Result<()> {
+    let output = Command::new(nix_cmd)
+        .current_dir(config_path)
+        .args(["--extra-experimental-features", "nix-command flakes"])
+        .args(args)
+        .output()
+        .with_context(|| format!("failed to run nix logged in {}", config_path))?;
+    let combined = format!(
+        "$ {} {:?}\nstdout:\n{}\nstderr:\n{}\nexit: {:?}\n\n",
+        nix_cmd,
+        args,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+        output.status.code()
+    );
+    let mut f = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)?;
+    f.write_all(combined.as_bytes())?;
+    if !output.status.success() {
+        anyhow::bail!("nix command failed (see log)");
+    }
+    Ok(())
 }

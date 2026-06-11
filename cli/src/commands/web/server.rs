@@ -2,6 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
+use std::thread;
 
 use rocket::response::content::RawHtml;
 use rocket::serde::json::Json;
@@ -15,11 +16,8 @@ use super::nix_eval::{
 };
 use super::structs::{AppConfig, BranchInfo, BranchesContext, IndexContext};
 
-use crate::commands::init::init;
-use crate::commands::nuke::nuke;
 use crate::commands::paste_settings::paste_settings;
-use crate::commands::update::update;
-use crate::commands::{get_current_branch, git_cmd};
+use crate::commands::{get_current_branch, git_cmd, run_nix_logged};
 
 use super::activation;
 
@@ -274,22 +272,67 @@ fn get_activation_graph(config_path: &str) -> String {
     }
 }
 
-fn settings_changed_and_diff(cfg: &AppConfig) -> (bool, String) {
+fn worktree_changed_and_summary(cfg: &AppConfig) -> (bool, String) {
     let dir = config_dir(cfg);
-    let file = "settings.toml";
-    let status = Command::new("git")
+    let staged = Command::new("git")
         .current_dir(&dir)
-        .args(["diff", "--quiet", "--", file])
-        .status();
-    let changed = status.map(|s| !s.success()).unwrap_or(false);
+        .args(["diff", "--cached", "--quiet"])
+        .status()
+        .map(|s| !s.success())
+        .unwrap_or(false);
+    let unstaged = Command::new("git")
+        .current_dir(&dir)
+        .args(["diff", "--quiet"])
+        .status()
+        .map(|s| !s.success())
+        .unwrap_or(false);
+    let changed = staged || unstaged;
     if !changed {
         return (false, String::new());
     }
+    let status = Command::new("git")
+        .current_dir(&dir)
+        .args(["status", "--porcelain", "-b", "--short"])
+        .output();
+    let stat = Command::new("git")
+        .current_dir(&dir)
+        .args(["diff", "--stat", "--no-color"])
+        .output();
+    let mut text = String::new();
+    if let Ok(o) = status {
+        text.push_str(&String::from_utf8_lossy(&o.stdout));
+    }
+    text.push_str("\n");
+    if let Ok(o) = stat {
+        text.push_str(&String::from_utf8_lossy(&o.stdout));
+    }
+    (true, text)
+}
+
+fn settings_toml_has_diff(cfg: &AppConfig) -> bool {
+    let dir = config_dir(cfg);
+    let unstaged = Command::new("git")
+        .current_dir(&dir)
+        .args(["diff", "--quiet", "--", "settings.toml"])
+        .status()
+        .map(|s| !s.success())
+        .unwrap_or(false);
+    let staged = Command::new("git")
+        .current_dir(&dir)
+        .args(["diff", "--cached", "--quiet", "--", "settings.toml"])
+        .status()
+        .map(|s| !s.success())
+        .unwrap_or(false);
+    unstaged || staged
+}
+
+fn get_settings_toml_diff(cfg: &AppConfig) -> String {
+    let dir = config_dir(cfg);
     let output = Command::new("git")
         .current_dir(&dir)
-        .args(["diff", "--no-color", "--", file])
+        .args(["diff", "--no-color", "HEAD", "--", "settings.toml"])
         .output();
-    let text = match output {
+    match output {
         Ok(o) => {
             let mut t = String::from_utf8_lossy(&o.stdout).into_owned();
             let e = String::from_utf8_lossy(&o.stderr);
@@ -299,8 +342,7 @@ fn settings_changed_and_diff(cfg: &AppConfig) -> (bool, String) {
             t
         }
         Err(e) => format!("git diff error: {}", e),
-    };
-    (true, text)
+    }
 }
 
 #[post("/save/<service>", data = "<payload>")]
@@ -537,32 +579,47 @@ pub fn changes_indicator(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     activation::gc_old_activations();
     if let Some(id) = activation::find_recent_in_progress_activation() {
         let btn = format!(
-            "<button class=\"btn btn-warning btn-sm animate-pulse\" onclick=\"document.getElementById('changes-modal').showModal();htmx.ajax('GET','/activation/monitor/{}',{{target:'#changes-body',swap:'innerHTML'}})\">Activation {} in progress — view</button>",
+            "<button class=\"btn btn-warning btn-xs animate-pulse\" onclick=\"var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Activation progress';m.showModal();htmx.ajax('GET','/activation/monitor/{}',{{target:'#changes-body',swap:'innerHTML'}})\">Act {} — view</button>",
             id, id
         );
         return RawHtml(btn);
     }
-    let (changed, _) = settings_changed_and_diff(&config);
+    if let Some(id) = activation::find_recent_in_progress_update() {
+        let btn = format!(
+            "<button class=\"btn btn-info btn-xs animate-pulse\" onclick=\"var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Update progress';m.showModal();htmx.ajax('GET','/update/monitor/{}',{{target:'#changes-body',swap:'innerHTML'}})\">Update {} — view</button>",
+            id, id
+        );
+        return RawHtml(btn);
+    }
+    let (changed, _) = worktree_changed_and_summary(&config);
     let content = if changed {
-        "<button class=\"btn btn-warning btn-sm\" onclick=\"document.getElementById('changes-modal').showModal();htmx.ajax('GET','/changes/summary',{target:'#changes-body',swap:'innerHTML'})\">Settings changed — review &amp; apply</button>"
+        "<button class=\"btn btn-warning btn-xs\" onclick=\"var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Pending changes';m.showModal();htmx.ajax('GET','/changes/summary',{target:'#changes-body',swap:'innerHTML'})\">Changes — review</button>"
     } else {
-        "<span class=\"text-xs opacity-50\">Settings in sync with applied</span>"
+        "<span class=\"text-[10px] opacity-40\">clean</span>"
     };
     RawHtml(content.to_string())
 }
 
 #[get("/changes/summary")]
 pub fn changes_summary(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    let (changed, diff) = settings_changed_and_diff(&config);
-    let body = if changed {
+    let body = if settings_toml_has_diff(&config) {
+        let diff = get_settings_toml_diff(&config);
         let esc = diff
             .replace('&', "&amp;")
             .replace('<', "&lt;")
             .replace('>', "&gt;");
         format!("<div class=\"mb-2 text-warning text-sm\">Pending changes to settings.toml (git diff)</div><pre class=\"text-xs overflow-auto max-h-[50vh] bg-base-300 p-2 rounded whitespace-pre\">{}</pre><div class=\"flex gap-2 mt-3\"><button hx-post=\"/changes/revert\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" class=\"btn btn-sm btn-ghost\">Revert (paste-settings)</button><button hx-post=\"/changes/apply\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" hx-confirm=\"Run full activation (write-flake + nixos-rebuild)? This can take several minutes.\" hx-on::after-request=\"var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{{target:'#pending-changes',swap:'innerHTML'}})\" class=\"btn btn-sm btn-error\">Apply (activate)</button></div>", esc)
     } else {
-        "<div class=\"text-sm\">Settings match the last applied version. No pending changes.</div>"
-            .to_string()
+        let (changed, summary) = worktree_changed_and_summary(&config);
+        if changed {
+            let esc = summary
+                .replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;");
+            format!("<div class=\"mb-2 text-warning text-sm\">Other files changed in working tree</div><pre class=\"text-xs overflow-auto max-h-[50vh] bg-base-300 p-2 rounded whitespace-pre\">{}</pre><div class=\"flex gap-2 mt-3\"><button hx-post=\"/changes/revert\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" class=\"btn btn-sm btn-ghost\">Revert (paste-settings)</button><button hx-post=\"/changes/apply\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" hx-confirm=\"Run full activation (write-flake + nixos-rebuild)? This can take several minutes.\" hx-on::after-request=\"var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{{target:'#pending-changes',swap:'innerHTML'}})\" class=\"btn btn-sm btn-error\">Apply (activate)</button></div>", esc)
+        } else {
+            "<div class=\"text-sm\">Working tree clean. No pending changes.</div>".to_string()
+        }
     };
     RawHtml(body)
 }
@@ -586,26 +643,40 @@ pub fn apply_settings(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
 
 #[post("/flake/update")]
 pub fn flake_update(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    let dir = config_dir(&config);
-    let dir_str = dir.to_str().unwrap_or(".");
-    let nix_cmd = &config.nix_cmd;
-    let content = fs::read_to_string(&config.settings_path).unwrap_or_default();
-    let doc: DocumentMut = content.parse().unwrap_or_else(|_| DocumentMut::new());
-    let section = if PathBuf::from("/etc/neo/settings.toml").exists() {
-        "neo-service"
-    } else {
-        "neo-cli"
-    };
-    match update(dir_str, &doc, section, false, nix_cmd) {
-        Ok(()) => RawHtml(
-            "<span class=\"text-success text-[10px]\">flake update done (direct)</span>"
-                .to_string(),
-        ),
-        Err(e) => RawHtml(format!(
-            "<span class=\"text-error text-[10px]\">update failed: {}</span>",
-            e
-        )),
+    activation::gc_old_activations();
+    if let Some(id) = activation::find_recent_in_progress_update() {
+        return RawHtml(format!(
+            "<div class=\"alert alert-info text-sm\">Update {} already in progress</div>",
+            id
+        ));
     }
+    let dir = config_dir(&config);
+    let dir_str = dir.to_str().unwrap_or(".").to_string();
+    let nix_cmd = config.nix_cmd.clone();
+    let settings_path = config.settings_path.clone();
+    let ts = crate::commands::get_timestamp();
+    let id = format!("update_{}", ts);
+    let act_dir = activation::activation_dir();
+    let _ = fs::create_dir_all(&act_dir);
+    let state_path = act_dir.join(format!("{}.json", id));
+    let log_path = act_dir.join(format!("{}.log", id));
+    let initial = serde_json::json!({
+        "id": id,
+        "status": "in_progress",
+        "phase": "starting",
+        "started_at": ts,
+        "log_path": log_path.to_string_lossy(),
+    });
+    let _ = fs::write(
+        &state_path,
+        serde_json::to_string_pretty(&initial).unwrap_or_default(),
+    );
+    let _ = fs::write(&log_path, format!("update {} triggered via web\n", id));
+    let id_for_thread = id.clone();
+    thread::spawn(move || {
+        run_update_job(dir_str, nix_cmd, id_for_thread, settings_path);
+    });
+    RawHtml(activation::build_update_monitor_fragment(&id))
 }
 
 #[post("/actions/activate")]
@@ -620,34 +691,8 @@ pub fn actions_reset(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     let source = PathBuf::from("/etc/neo/settings.toml");
     let dummy = DocumentMut::new();
     match paste_settings(dir_str, &source, &dummy, false, &config.nix_cmd) {
-        Ok(()) => RawHtml(
-            "<span class=\"text-success text-[10px]\">reset (paste from /etc) done</span>"
-                .to_string(),
-        ),
-        Err(e) => RawHtml(format!(
-            "<span class=\"text-error text-[10px]\">reset failed: {}</span>",
-            e
-        )),
-    }
-}
-
-#[post("/actions/hard-reset")]
-pub fn actions_hard_reset(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    let dir = config_dir(&config);
-    let dir_str = dir.to_str().unwrap_or(".");
-    let nix_cmd = &config.nix_cmd;
-    let content = fs::read_to_string(&config.settings_path).unwrap_or_default();
-    let doc: DocumentMut = content.parse().unwrap_or_else(|_| DocumentMut::new());
-    let section = if PathBuf::from("/etc/neo/settings.toml").exists() {
-        "neo-service"
-    } else {
-        "neo-cli"
-    };
-    let nuke_res = nuke(dir_str, false, nix_cmd);
-    let init_res = init(dir_str, &doc, section, false, nix_cmd);
-    match (nuke_res, init_res) {
-        (Ok(()), Ok(())) => RawHtml("<span class=\"text-success text-[10px]\">hard reset (nuke+init) done — reload dashboard</span>".to_string()),
-        (Err(e), _) | (_, Err(e)) => RawHtml(format!("<span class=\"text-error text-[10px]\">hard reset error: {}</span>", e)),
+        Ok(()) => RawHtml("<div class=\"alert alert-success text-sm\">Reset done (settings restored from /etc/neo). Close to refresh state.</div><div class=\"mt-2\"><button onclick=\"document.getElementById('changes-modal').close()\" class=\"btn btn-sm\">Close</button></div>".to_string()),
+        Err(e) => RawHtml(format!("<div class=\"alert alert-error text-sm\">Reset failed: {}</div>", e))
     }
 }
 
@@ -729,6 +774,21 @@ pub fn activation_current() -> RawHtml<String> {
     }
 }
 
+#[get("/update/monitor/<id>")]
+pub fn update_monitor(id: &str) -> RawHtml<String> {
+    RawHtml(activation::build_update_monitor_fragment(id))
+}
+
+#[get("/update/log/<id>")]
+pub fn update_log(id: &str) -> RawHtml<String> {
+    RawHtml(activation::build_log_fragment(id))
+}
+
+#[get("/update/status/<id>")]
+pub fn update_status(id: &str) -> RawHtml<String> {
+    RawHtml(activation::build_update_status_fragment(id))
+}
+
 pub fn routes() -> Vec<rocket::Route> {
     routes![
         index,
@@ -744,7 +804,6 @@ pub fn routes() -> Vec<rocket::Route> {
         flake_update,
         actions_activate,
         actions_reset,
-        actions_hard_reset,
         branches,
         git_switch,
         core_grid,
@@ -752,6 +811,74 @@ pub fn routes() -> Vec<rocket::Route> {
         activation_monitor,
         activation_log,
         activation_status,
-        activation_current
+        activation_current,
+        update_monitor,
+        update_log,
+        update_status
     ]
+}
+
+fn run_update_job(dir: String, nix: String, id: String, settings_path: PathBuf) {
+    let act_dir = activation::activation_dir();
+    let state_path = act_dir.join(format!("{}.json", id));
+    let log_path = act_dir.join(format!("{}.log", id));
+    let set_state = |status: &str, phase: &str, err: Option<&str>| {
+        let v = serde_json::json!({
+            "id": id,
+            "status": status,
+            "phase": phase,
+            "error": err.unwrap_or(""),
+        });
+        let _ = fs::write(
+            &state_path,
+            serde_json::to_string_pretty(&v).unwrap_or_default(),
+        );
+    };
+    set_state("in_progress", "starting", None);
+    let content = fs::read_to_string(&settings_path).unwrap_or_default();
+    let doc: DocumentMut = content.parse().unwrap_or_else(|_| DocumentMut::new());
+    let section = if PathBuf::from("/etc/neo/settings.toml").exists() {
+        "neo-service"
+    } else {
+        "neo-cli"
+    };
+    let bootstrap = doc
+        .get(section)
+        .and_then(|t| t.get("bootstrapMethod"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("template");
+    if bootstrap != "clone" {
+        let modules_dir = std::path::Path::new(&dir).join("modules");
+        if modules_dir.exists() {
+            let _ = fs::remove_dir_all(&modules_dir);
+            let _ = fs::write(&log_path, format!("removed modules/\n"));
+        }
+        let template = doc
+            .get(section)
+            .and_then(|t| t.get("template"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("github:madebydamo/neo#homeserver");
+        set_state("in_progress", "flake init", None);
+        if let Err(e) = run_nix_logged(&dir, &nix, &["flake", "init", "-t", template], &log_path) {
+            set_state("failed", "flake init", Some(&e.to_string()));
+            return;
+        }
+    }
+    set_state("in_progress", "write-flake", None);
+    if let Err(e) = run_nix_logged(&dir, &nix, &["run", ".#write-flake"], &log_path) {
+        set_state("failed", "write-flake", Some(&e.to_string()));
+        return;
+    }
+    set_state("in_progress", "flake update", None);
+    if let Err(e) = run_nix_logged(&dir, &nix, &["flake", "update"], &log_path) {
+        set_state("failed", "flake update", Some(&e.to_string()));
+        return;
+    }
+    set_state("in_progress", "migrate", None);
+    if let Err(e) = run_nix_logged(&dir, &nix, &["run", ".#neo", "--", "migrate"], &log_path) {
+        set_state("failed", "migrate", Some(&e.to_string()));
+        return;
+    }
+    set_state("success", "complete", None);
+    let _ = fs::write(&log_path, format!("update complete\n"));
 }

@@ -28,14 +28,10 @@
         <div class="flex-none flex items-center gap-2 pr-2">
           <div id="pending-changes" hx-get="/changes/indicator" hx-trigger="load, every 20s" hx-swap="innerHTML"></div>
           <div class="join">
-            <button hx-post="/flake/update" hx-target="#update-log" hx-swap="innerHTML" class="btn btn-xs join-item btn-ghost">↻ Update</button>
-            <button hx-post="/actions/activate" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Trigger full activation now (via service)?" hx-on::after-request="document.getElementById('changes-modal').showModal();var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{target:'#pending-changes',swap:'innerHTML'})" class="btn btn-xs join-item btn-error">▶ Activate</button>
+            <button hx-post="/flake/update" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Run flake update + template refresh?" hx-on::after-request="var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Update progress';m.showModal();var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{target:'#pending-changes',swap:'innerHTML'})" class="btn btn-xs join-item btn-ghost">↻<span class="hidden sm:inline ml-1">Update</span></button>
+            <button hx-post="/actions/activate" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Trigger full activation now (via service)?" hx-on::after-request="var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Activation progress';m.showModal();var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{target:'#pending-changes',swap:'innerHTML'})" class="btn btn-xs join-item btn-error">▶<span class="hidden sm:inline ml-1">Activate</span></button>
           </div>
-          <div class="join">
-            <button hx-post="/actions/reset" hx-target="#update-log" hx-swap="innerHTML" hx-confirm="Reset settings from last applied (/etc/neo)?" class="btn btn-xs join-item btn-ghost">↩ Reset</button>
-            <button hx-post="/actions/hard-reset" hx-target="#update-log" hx-swap="innerHTML" hx-confirm="HARD RESET: nuke + init? Destructive." class="btn btn-xs join-item btn-warning">⚠ Hard</button>
-          </div>
-          <span id="update-log" class="text-[10px] opacity-60"></span>
+          <button hx-post="/actions/reset" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Reset settings from last applied (/etc/neo)?" hx-on::after-request="var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Reset';m.showModal();var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{target:'#pending-changes',swap:'innerHTML'})" class="btn btn-xs join-item btn-ghost">↩<span class="hidden sm:inline ml-1">Reset</span></button>
         </div>
       </div>
 

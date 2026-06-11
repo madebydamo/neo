@@ -3,9 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use crate::commands::{
-    execute_command, get_current_branch, get_timestamp, git_cmd, has_staged_changes, run_nix,
-};
+use crate::commands::{get_current_branch, get_timestamp, git_cmd, has_staged_changes, run_nix};
 
 pub fn activate(
     config_path: &str,
