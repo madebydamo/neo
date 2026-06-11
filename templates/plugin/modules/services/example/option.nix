@@ -10,7 +10,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Example service";
+              enabled = mkEnableOption "Example service" // {rank = 0;};
             }
             // neo.mkReverseProxyOptions {
               subdomain = "example";

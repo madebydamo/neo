@@ -4,7 +4,8 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.streamproxy = mkOption {
         type = types.submodule (
           {config, ...}: let
@@ -23,7 +24,7 @@
           in {
             options =
               {
-                enabled = mkEnableOption "streamproxy nginx + rathole server for public IP sharing";
+                enabled = mkEnableOption "streamproxy nginx + rathole server for public IP sharing" {rank = 0;};
                 entries = mkOption {
                   type = types.attrsOf (
                     types.submodule {

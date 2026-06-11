@@ -7,6 +7,8 @@ pub struct Service {
     pub enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rank: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -70,6 +72,8 @@ pub struct OptionSchema {
     pub defaultDisplay: String,
     #[serde(default)]
     pub currentDisplay: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rank: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -83,6 +87,8 @@ pub struct ProxiedService {
     /// First two letters of the service name, for overlay on icons.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub initials: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rank: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, Default)]

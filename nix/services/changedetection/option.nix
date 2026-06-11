@@ -6,14 +6,16 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.changedetection = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "changedetection.io website change detection service";
+              enabled = mkEnableOption "changedetection.io website change detection service" {rank = 0;};
               port = mkOption {
                 type = types.port;
+                internal = true;
                 default = 5000;
                 description = "Internal port for changedetection web UI";
               };

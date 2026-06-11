@@ -21,5 +21,6 @@ in
     name = n;
     enabled = svc.enabled or false;
     icon = meta.icon or null;
+    rank = meta.rank or null;
   })
   names

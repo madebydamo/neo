@@ -5,15 +5,17 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.syncthing = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "syncthing service";
+              enabled = mkEnableOption "syncthing service" {rank = 0;};
               additionalMountPoints = mkOption {
                 type = types.attrsOf types.str;
                 default = {};
+                rank = 10;
                 description = "Additional volume mounts";
               };
             }

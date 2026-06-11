@@ -5,26 +5,30 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.beszel-agent = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "beszel agent service";
+              enabled = mkEnableOption "beszel agent service" {rank = 0;};
               hubUrl = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Hub URL for websocket connection (e.g. http://beszel:8090)";
+                rank = 10;
               };
               key = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Public key from hub (shown when adding system)";
+                rank = 20;
               };
               token = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Universal or system token for websocket auth (from hub /settings/tokens)";
+                rank = 30;
               };
             }
             // lib.neo.mkServiceMeta {

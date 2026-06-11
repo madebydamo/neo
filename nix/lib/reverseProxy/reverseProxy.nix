@@ -14,11 +14,13 @@
         auth = lib.recursiveUpdate defaultAuth (args.auth or {});
       in
         with lib; {
-          subdomain = mkOption {
-            type = types.nullOr types.str;
-            default = subdomain;
-            description = "Subdomain for the service (used by swag reverse proxy)";
-          };
+          subdomain =
+            mkOption {
+              type = types.nullOr types.str;
+              default = subdomain;
+              description = "Subdomain for the service (used by swag reverse proxy)";
+            }
+            // {rank = 100;};
           proxyConf = mkOption {
             type = types.nullOr types.str;
             internal = true;
@@ -30,24 +32,30 @@
             default = customDomains;
             description = "Custom domains (one domain per string, e.g. example.com or www.example.com) that should resolve to this service; automatically added to SWAG for certificates and to Pi-hole for local DNS";
           };
-          auth = mkOption {
-            type = types.submodule {
-              options = {
-                enabled = mkOption {
-                  type = types.bool;
-                  default = auth.enabled;
-                  description = "tinyauth forward auth";
-                };
-                publicPaths = mkOption {
-                  type = types.listOf types.str;
-                  default = auth.publicPaths;
-                  description = "Regex paths that bypass tinyauth authentication";
+          auth =
+            mkOption {
+              type = types.submodule {
+                options = {
+                  enabled =
+                    mkOption {
+                      type = types.bool;
+                      default = auth.enabled;
+                      description = "tinyauth forward auth";
+                    }
+                    // {rank = 101;};
+                  publicPaths =
+                    mkOption {
+                      type = types.listOf types.str;
+                      default = auth.publicPaths;
+                      description = "Regex paths that bypass tinyauth authentication";
+                    }
+                    // {rank = 102;};
                 };
               };
-            };
-            default = auth;
-            description = "Tinyauth forward authentication settings";
-          };
+              default = auth;
+              description = "Tinyauth forward authentication settings";
+            }
+            // {rank = 110;};
         };
       getProxiedServices = config:
         lib.filterAttrs (

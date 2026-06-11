@@ -34,7 +34,12 @@ pub fn extract_services(nix_cmd: &str, neo_input: &str) -> Vec<Service> {
         })
         .and_then(|stdout| serde_json::from_slice(&stdout).ok())
         .unwrap_or_default();
-    svcs.sort_by_key(|s| s.name.clone());
+    svcs.sort_by(|a, b| match (a.rank, b.rank) {
+        (Some(ra), Some(rb)) => ra.cmp(&rb),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.name.cmp(&b.name),
+    });
     svcs
 }
 
@@ -187,7 +192,12 @@ pub fn extract_proxied_services(nix_cmd: &str, neo_input: &str) -> NavigatorCont
         })
         .and_then(|stdout| serde_json::from_slice(&stdout).ok())
         .unwrap_or_default();
-    ctx.services.sort_by_key(|s| s.name.clone());
+    ctx.services.sort_by(|a, b| match (a.rank, b.rank) {
+        (Some(ra), Some(rb)) => ra.cmp(&rb),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.name.cmp(&b.name),
+    });
     let dom = ctx.domain.clone();
     for s in &mut ctx.services {
         s.domain = dom.clone();

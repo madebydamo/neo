@@ -219,6 +219,7 @@
     );
     internal = tryOr false (o.internal or false);
     readOnly = tryOr false (o.readOnly or false);
+    rank = tryOr null (o.rank or null);
   in {
     name = path;
     type = ti;
@@ -229,6 +230,7 @@
     internal = internal;
     readOnly = readOnly;
     current = toSafeValue curVal;
+    rank = rank;
   };
 
   walk = pathList: o: let
@@ -293,6 +295,11 @@
     )
     raw;
 
+  ranked = builtins.filter (r: (r.rank or null) != null) visible;
+  unranked = builtins.filter (r: (r.rank or null) == null) visible;
+
+  sortedRanked = builtins.sort (a: b: (a.rank or 0) < (b.rank or 0)) ranked;
+
   sortKey = r: let
     n = r.name or "";
   in
@@ -302,7 +309,9 @@
     then "2\u0000" + n
     else "1\u0000" + n;
 
-  sorted = builtins.sort (a: b: (sortKey a) < (sortKey b)) visible;
+  sortedUnranked = builtins.sort (a: b: (sortKey a) < (sortKey b)) unranked;
+
+  sorted = sortedRanked ++ sortedUnranked;
 
   meta = tryOr {} (configRoot.meta or {});
 in {

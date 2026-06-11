@@ -10,6 +10,7 @@
         githubUrl ? null,
         releaseUrl ? null,
         screenshots ? [],
+        rank ? null,
       } @ args:
         with lib; {
           meta = mkOption {
@@ -56,6 +57,11 @@
                   });
                   default = screenshots;
                   description = "Example screenshots to show in the option pane.";
+                };
+                rank = mkOption {
+                  type = types.nullOr types.int;
+                  default = rank;
+                  description = "Optional sort rank for the neo web UI. Services with a rank are listed first (sorted by rank asc), followed by the rest (by name).";
                 };
               };
             };

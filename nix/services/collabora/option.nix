@@ -5,12 +5,13 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.collabora = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Collabora real time collaboration platform for Nextcloud. Needs nextcloud to be enabled";
+              enabled = mkEnableOption "Collabora real time collaboration platform for Nextcloud. Needs nextcloud to be enabled" {rank = 0;};
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "collabora";

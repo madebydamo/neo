@@ -5,20 +5,23 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.paperless = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "paperless document management service";
+              enabled = mkEnableOption "paperless document management service" {rank = 0;};
               port = mkOption {
                 type = types.port;
+                internal = true;
                 default = 8000;
                 description = "Internal port for paperless web UI";
               };
               dbPassword = mkOption {
                 type = types.str;
                 default = "your_strong_password_here";
+                rank = 10;
                 description = "Password for internal docker connection";
               };
             }

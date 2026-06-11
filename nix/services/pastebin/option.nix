@@ -6,15 +6,17 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.pastebin = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "pastebin (wantguns/bin) service";
+              enabled = mkEnableOption "pastebin (wantguns/bin) service" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 default = 6163;
+                internal = true;
                 description = "Internal port the pastebin service listens on";
               };
             }

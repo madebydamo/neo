@@ -5,28 +5,33 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.rathole = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "rathole client service";
+              enabled = mkEnableOption "rathole client service" {rank = 0;};
               token = mkOption {
                 type = types.str;
                 description = "Authentication token for rathole";
+                rank = 10;
               };
               remoteAddr = mkOption {
                 type = types.str;
                 description = "Remote server address for rathole";
+                rank = 20;
               };
               port = mkOption {
                 type = types.port;
                 default = 2333;
                 description = "Remote server port for rathole";
+                rank = 30;
               };
               name = mkOption {
                 type = types.str;
                 description = "Name prefix for rathole services";
+                rank = 40;
               };
             }
             // lib.neo.mkServiceMeta {

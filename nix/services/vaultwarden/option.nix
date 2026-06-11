@@ -1,21 +1,25 @@
 # Vaultwarden service options.
 {...}: {
   flake.modules.nixos.vaultwarden-option = {lib, ...}:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.vaultwarden = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "vaultwarden password manager service";
+              enabled = mkEnableOption "vaultwarden password manager service" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 default = 8888;
+                internal = true;
                 description = "Internal port vaultwarden listens on (ROCKET_PORT)";
+                rank = 10;
               };
               adminToken = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Random auth token to authenticate in admin page";
+                rank = 20;
               };
             }
             // lib.neo.mkReverseProxyOptions {

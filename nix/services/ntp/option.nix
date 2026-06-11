@@ -5,12 +5,13 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.ntp = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "NTP server (chrony)";
+              enabled = mkEnableOption "NTP server (chrony)" {rank = 0;};
               servers = mkOption {
                 type = types.listOf types.str;
                 default = [
@@ -20,6 +21,7 @@
                   "3.pool.ntp.org"
                 ];
                 description = "Upstream NTP servers/pools to synchronize from.";
+                rank = 10;
               };
             }
             // lib.neo.mkServiceMeta {

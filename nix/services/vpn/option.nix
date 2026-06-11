@@ -5,53 +5,61 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.vpn = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "VPN (gluetun) service for WireGuard";
+              enabled = mkEnableOption "VPN (gluetun) service for WireGuard" {rank = 0;};
 
               image = mkOption {
                 type = types.str;
                 default = "qmcgaw/gluetun";
                 description = "Docker image for gluetun VPN";
+                rank = 10;
               };
 
               vpnServiceProvider = mkOption {
                 type = types.str;
                 default = "airvpn";
                 description = "VPN provider for gluetun";
+                rank = 20;
               };
 
               wireguardPrivateKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "WireGuard private key (sensitive)";
+                rank = 30;
               };
 
               wireguardPresharedKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "WireGuard preshared key";
+                rank = 40;
               };
 
               wireguardAddresses = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "WireGuard addresses";
+                rank = 50;
               };
 
               serverCountries = mkOption {
                 type = types.str;
                 default = "Netherlands";
                 description = "Server countries for VPN";
+                rank = 60;
               };
 
               firewallVpnInputPorts = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Firewall VPN input ports";
+                rank = 70;
               };
             }
             // lib.neo.mkServiceMeta {

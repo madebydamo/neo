@@ -6,21 +6,24 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.hermes = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Hermes Agent service (replaces OpenClaw)";
+              enabled = mkEnableOption "Hermes Agent service (replaces OpenClaw)" {rank = 0;};
 
               gatewayPort = mkOption {
                 type = types.port;
+                internal = true;
                 default = 18789;
                 description = "Port for the Hermes gateway/API";
               };
 
               dashboardPort = mkOption {
                 type = types.port;
+                internal = true;
                 default = 9119;
                 description = "Port for the Hermes web dashboard UI (uses tinyauth via SWAG)";
               };
@@ -29,6 +32,7 @@
                 type = types.nullOr types.str;
                 default = null;
                 description = "Gateway authentication token";
+                rank = 10;
               };
 
               telegramBotToken = mkOption {
@@ -38,6 +42,7 @@
                   Telegram bot token string.
                   Create a bot via @BotFather on Telegram.
                 '';
+                rank = 11;
               };
 
               telegramAllowedUserId = mkOption {
@@ -47,6 +52,7 @@
                   List of Telegram user/chat IDs allowed to interact with the bot.
                   Get your ID from @userinfobot on Telegram.
                 '';
+                rank = 12;
               };
 
               telegramGroups = mkOption {
@@ -61,6 +67,7 @@
                     };
                   }
                 );
+                rank = 13;
                 default = {};
                 description = ''
                   Per-group Telegram settings. Keys are chat IDs (as strings) or "*" for default.
@@ -70,6 +77,7 @@
               anthropicApiKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
+                rank = 20;
                 description = ''
                   Anthropic (Claude) API key.
                 '';
@@ -78,6 +86,7 @@
               openaiApiKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
+                rank = 21;
                 description = ''
                   OpenAI API key.
                 '';
@@ -86,12 +95,14 @@
               xaiApiKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
+                rank = 22;
                 description = "xAI (Grok) API key";
               };
 
               defaultModel = mkOption {
                 type = types.nullOr types.str;
                 default = "grok-4.3";
+                rank = 30;
                 description = ''
                   Default LLM model for the agent (e.g. "grok-4.20-0309-reasoning",
                   "claude-sonnet-4", "gpt-4o").
@@ -101,6 +112,7 @@
               documents = mkOption {
                 type = types.nullOr types.path;
                 default = null;
+                rank = 40;
                 description = ''
                   Path to the documents directory containing AGENTS.md, SOUL.md, etc.
                   These files configure the bot's personality and capabilities.

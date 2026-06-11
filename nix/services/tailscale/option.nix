@@ -5,61 +5,72 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.tailscale = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Tailscale service";
+              enabled = mkEnableOption "Tailscale service" {rank = 0;};
               authKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Node authorization key; if provided and device not logged in, will be used for authentication";
+                rank = 10;
               };
               acceptDns = mkOption {
                 type = types.bool;
                 default = true;
                 description = "Accept DNS configuration from the admin panel";
+                rank = 20;
               };
               acceptRoutes = mkOption {
                 type = types.bool;
                 default = false;
                 description = "Accept routes advertised by other Tailscale nodes";
+                rank = 30;
               };
               advertiseExitNode = mkOption {
                 type = types.bool;
                 default = false;
                 description = "Offer to be an exit node for internet traffic for the tailnet";
+                rank = 40;
               };
               advertiseRoutes = mkOption {
                 type = types.listOf types.str;
                 default = [];
                 description = "Routes to advertise to other nodes (list of CIDR strings, e.g. [\"10.0.0.0/8\", \"192.168.0.0/24\"])";
+                rank = 50;
               };
               exitNode = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Tailscale exit node (IP or base name) for internet traffic";
+                rank = 60;
               };
               exitNodeAllowLanAccess = mkOption {
                 type = types.bool;
                 default = false;
                 description = "Allow direct access to the local network when routing traffic via an exit node";
+                rank = 70;
               };
               hostname = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Hostname to use instead of the one provided by the OS";
+                rank = 80;
               };
               loginServer = mkOption {
                 type = types.str;
                 default = "https://controlplane.tailscale.com";
                 description = "Base URL of control server";
+                rank = 90;
               };
               ssh = mkOption {
                 type = types.bool;
                 default = false;
                 description = "Run an SSH server, permitting access per tailnet admin's declared policy";
+                rank = 100;
               };
             }
             // lib.neo.mkServiceMeta {

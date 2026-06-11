@@ -1,43 +1,50 @@
 # SWAG reverse proxy service options.
 {...}: {
   flake.modules.nixos.swag-option = {lib, ...}:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.swag = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "swag service";
+              enabled = mkEnableOption "swag service" {rank = 0;};
               domain = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Primary domain for swag";
+                rank = 10;
               };
               email = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "LetsEncrypt email for swag";
+                rank = 20;
               };
               proxyPass = mkOption {
                 type = types.attrsOf types.str;
                 default = {};
                 description = "Map of extra domains to http upstream URLs (plain http backends) to create direct proxy server blocks for (e.g. { \"octo.example.com\" = \"http://192.168.178.42:8123\"; }). SWAG handles TLS termination; no need if the target already speaks HTTPS.";
+                rank = 30;
               };
               onlySubdomains = mkOption {
                 type = types.bool;
                 default = true;
                 description = "Only use subdomains";
+                rank = 40;
               };
               localHttpPort = mkOption {
                 type = types.port;
                 internal = true;
                 default = 80;
                 description = "Local HTTP port for SWAG container (overridden to 9980 with streamproxy)";
+                rank = 50;
               };
               localHttpsPort = mkOption {
                 type = types.port;
                 internal = true;
                 default = 443;
                 description = "Local HTTPS port for SWAG container (overridden to 9981 with streamproxy)";
+                rank = 60;
               };
             }
             // lib.neo.mkServiceMeta {

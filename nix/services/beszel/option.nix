@@ -5,16 +5,18 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.beszel = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "beszel hub service";
+              enabled = mkEnableOption "beszel hub service" {rank = 0;};
               enableSingleUserSystem = mkOption {
                 type = types.bool;
                 default = true;
                 description = "Disable password auth for single-user + tinyauth setup (recommended)";
+                rank = 10;
               };
             }
             // lib.neo.mkReverseProxyOptions {

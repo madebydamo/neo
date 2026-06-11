@@ -5,35 +5,41 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.nextcloud = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "nextcloud file sharing and collaboration platform";
+              enabled = mkEnableOption "nextcloud file sharing and collaboration platform" {rank = 0;};
               port = mkOption {
                 type = types.port;
+                internal = true;
                 default = 80;
                 description = "Internal port for nextcloud apache web server";
               };
               dbPassword = mkOption {
                 type = types.str;
                 default = "your_strong_password_here";
+                rank = 10;
                 description = "Password for the nextcloud mysql user (also used for root in db container)";
               };
               maintenanceWindowStart = mkOption {
                 type = types.ints.between 0 23;
                 default = 3;
+                rank = 20;
                 description = "Hour (0-23) when maintenance window starts (for background jobs)";
               };
               defaultPhoneRegion = mkOption {
                 type = types.str;
                 default = "CH";
+                rank = 30;
                 description = "ISO 3166-1 alpha-2 country code for default phone region (e.g. CH, US)";
               };
               instanceId = mkOption {
                 type = types.str;
                 default = "neo-homeserver";
+                rank = 40;
                 description = "Unique server/instance identifier (used by Nextcloud for clustering/multi-server setups)";
               };
             }

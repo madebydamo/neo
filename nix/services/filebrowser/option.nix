@@ -5,31 +5,18 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.filebrowser = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "filebrowser service";
+              enabled = mkEnableOption "filebrowser service" {rank = 0;};
               additionalMountPoints = mkOption {
                 type = types.attrsOf types.str;
                 default = {};
                 description = "Additional volume mounts";
-              };
-              domain = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Primary domain for swag";
-              };
-              email = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "LetsEncrypt email for swag";
-              };
-              extraDomains = mkOption {
-                type = types.listOf types.str;
-                default = [];
-                description = "Extra domains for swag";
+                rank = 10;
               };
             }
             // neo.mkReverseProxyOptions {

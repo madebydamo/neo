@@ -37,6 +37,7 @@ in {
       name = n;
       subdomain = svc.subdomain or "";
       icon = meta.icon or null;
+      rank = meta.rank or null;
     })
     proxiedNames;
 }

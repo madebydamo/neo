@@ -5,17 +5,13 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.immich = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "immich service";
-              additionalMountPoints = mkOption {
-                type = types.attrsOf types.str;
-                default = {};
-                description = "Additional volume mounts";
-              };
+              enabled = mkEnableOption "immich service" {rank = 0;};
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "immich";

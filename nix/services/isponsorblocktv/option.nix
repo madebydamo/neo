@@ -5,12 +5,13 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.isponsorblocktv = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "iSponsorBlockTV - SponsorBlock client for YouTube TV";
+              enabled = mkEnableOption "iSponsorBlockTV - SponsorBlock client for YouTube TV" {rank = 0;};
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "isponsorblocktv";

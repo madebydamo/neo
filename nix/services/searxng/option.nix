@@ -5,12 +5,13 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.searxng = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "searxng service";
+              enabled = mkEnableOption "searxng service" {rank = 0;};
             }
             // neo.mkReverseProxyOptions {
               subdomain = "search";

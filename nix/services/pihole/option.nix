@@ -5,26 +5,30 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.pihole = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "pihole ad-blocking DNS service";
-              webPassword = mkOption {
-                type = types.str;
-                default = "";
-                description = "Password for Pi-hole web admin interface";
-              };
+              enabled = mkEnableOption "pihole ad-blocking DNS service" {rank = 0;};
               upstream = mkOption {
                 type = types.str;
                 default = "9.9.9.9;1.1.1.1";
                 description = "Semicolon separated list of upstream dns servers";
+                rank = 10;
               };
               localIP = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Local IP address to forward services.swag.domain toward to.";
+                rank = 20;
+              };
+              webPassword = mkOption {
+                type = types.str;
+                default = "";
+                description = "Optional Password for Pi-hole web admin interface. Do not leave it blank and turn auth off.";
+                rank = 30;
               };
             }
             // lib.neo.mkReverseProxyOptions {

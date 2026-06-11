@@ -7,12 +7,13 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.neo = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Neo web UI service (config editor launched via `neo web`)";
+              enabled = mkEnableOption "Neo web UI service (config editor launched via `neo web`)" {rank = 0;};
 
               port = mkOption {
                 type = types.port;
@@ -24,6 +25,7 @@
               iframeCookieSupport = mkOption {
                 type = types.bool;
                 default = true;
+                rank = 10;
                 description = ''
                   When enabled (default), configures support for loading other services inside
                   the neo web UI iframes (neo.* embeds sub.domain pages):
@@ -45,6 +47,7 @@
                 Use the sidebar on the left (in the main navigator) to quickly jump between your self-hosted apps.
               '';
               githubUrl = "https://github.com/madebydamo/neo";
+              rank = 20;
             };
         };
         default = {};

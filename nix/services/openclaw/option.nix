@@ -5,12 +5,13 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.openclaw = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "OpenClaw service";
+              enabled = mkEnableOption "OpenClaw service" {rank = 0;};
 
               gatewayPort = mkOption {
                 type = types.port;

@@ -5,17 +5,13 @@
     lib,
     ...
   }:
-    with lib; {
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.tinyauth = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "tinyauth forward authentication service";
-              port = mkOption {
-                type = types.port;
-                default = 3000;
-                description = "Port on which tinyauth listens";
-              };
+              enabled = mkEnableOption "tinyauth forward authentication service" {rank = 0;};
               users = mkOption {
                 type = types.listOf types.str;
                 default = [];
@@ -23,11 +19,19 @@
                   List of users in username:bcrypt_hash format.
                   Generate with: docker run -i -t --rm ghcr.io/steveiliop56/tinyauth:v5 user create --interactive
                 '';
+                rank = 10;
               };
               sessionExpiry = mkOption {
                 type = types.int;
                 default = 86400;
                 description = "Session expiry time in seconds (default 24h)";
+                rank = 20;
+              };
+              port = mkOption {
+                type = types.port;
+                default = 3000;
+                internal = true;
+                description = "Port on which tinyauth listens";
               };
             }
             // lib.neo.mkReverseProxyOptions {
@@ -45,6 +49,7 @@
               projectUrl = "https://tinyauth.app/";
               githubUrl = "https://github.com/tinyauthapp/tinyauth";
               releaseUrl = "https://github.com/tinyauthapp/tinyauth/releases";
+              rank = 30;
             };
         };
         default = {};
