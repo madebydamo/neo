@@ -56,9 +56,56 @@ launch: shutdown build
     ./build/result/bin/disko-vm &
   fi
 
-web: build
+web:
   #!/usr/bin/env bash
-  nix run ./build#neo -- web
+  set -euo pipefail
+  SETTINGS="build/settings.toml"
+  if [ ! -f "$SETTINGS" ]; then
+    echo "build/settings.toml not found."
+    echo "Run 'just build' (or 'just launch') once to initialize the build directory."
+    echo "After initial setup, 'just web' uses fast rebuilds (nix run .#neo) against the existing build/ only."
+    exit 1
+  fi
+  echo "neo web (dev from source tree) -> $SETTINGS"
+  echo "Edit files under cli/; the server will auto-recompile + restart. Ctrl-C to stop."
+  echo "Tip: 'cd build && nix flake update neo' to refresh Nix module/option definitions from source."
+  WATCH_PATHS=(cli/src cli/templates cli/static cli/Cargo.toml cli/Cargo.lock build)
+  get_mtime() {
+    find "${WATCH_PATHS[@]}" -type f -exec stat -c %Y {} + 2>/dev/null | sort -n | tail -1 || echo 0
+  }
+  cleanup() {
+    if [ -n "${SERVER_PID:-}" ]; then
+      kill "$SERVER_PID" 2>/dev/null || true
+      wait "$SERVER_PID" 2>/dev/null || true
+    fi
+  }
+  trap cleanup EXIT INT TERM
+  while true; do
+    MTIME=$(get_mtime)
+    # Always build via nix so native deps (openssl, pkg-config) are provided.
+    # Rebuild is a no-op (or very fast) when nothing changed; triggers on cli edits.
+    nix build .#neo -o /tmp/neo-web-dev
+    /tmp/neo-web-dev/bin/neo --settings "$SETTINGS" web &
+    SERVER_PID=$!
+    echo "[$(date +%H:%M:%S)] started (pid $SERVER_PID)"
+    while kill -0 "$SERVER_PID" 2>/dev/null; do
+      sleep 1
+      NEW_MTIME=$(get_mtime)
+      if [ "$NEW_MTIME" != "$MTIME" ]; then
+        echo "[$(date +%H:%M:%S)] change in cli/ — restarting"
+        kill "$SERVER_PID" 2>/dev/null || true
+        wait "$SERVER_PID" 2>/dev/null || true
+        sleep 0.2
+        break
+      fi
+    done
+    wait "$SERVER_PID" 2>/dev/null || true
+    # Backoff on crash with unchanged sources (e.g. build error); next mtime change will retry immediately.
+    CUR_MTIME=$(get_mtime)
+    if [ "$CUR_MTIME" == "$MTIME" ]; then
+      sleep 2
+    fi
+  done
 
 # Show VM status: QEMU process, monitor, SSH, and disk image info.
 status:
