@@ -69,7 +69,7 @@ web:
   echo "neo web (dev from source tree) -> $SETTINGS"
   echo "Edit files under cli/; the server will auto-recompile + restart. Ctrl-C to stop."
   echo "Tip: 'cd build && nix flake update neo' to refresh Nix module/option definitions from source."
-  WATCH_PATHS=(cli/src cli/templates cli/static cli/Cargo.toml cli/Cargo.lock build)
+  WATCH_PATHS=(cli/src cli/templates cli/static cli/Cargo.toml cli/Cargo.lock)
   get_mtime() {
     find "${WATCH_PATHS[@]}" -type f -exec stat -c %Y {} + 2>/dev/null | sort -n | tail -1 || echo 0
   }

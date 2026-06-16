@@ -16,7 +16,9 @@
     then "homeserver"
     else if builtins.elem "neo" cfgNames
     then "neo"
-    else builtins.head cfgNames;
+    else if cfgNames != []
+    then builtins.head cfgNames
+    else null;
   servicesOpt = f.nixosConfigurations.${cfg}.options.neo.services or {};
   coreSections = ["ssh" "volumes" "timeZone" "uid" "gid" "hostname" "hashedLinuxPassword"];
   # These are the leaf sections that live under neo.core.* (for individual panes or dotted names in aggregate "core" pane).

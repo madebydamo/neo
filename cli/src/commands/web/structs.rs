@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Service {
@@ -35,6 +38,7 @@ pub struct AppConfig {
     pub nix_cmd: String,
     pub neo_input: String,
     pub settings_path: PathBuf,
+    pub evaluator: Arc<Mutex<super::nix_eval::NixEvaluator>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

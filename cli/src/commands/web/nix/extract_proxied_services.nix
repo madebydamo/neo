@@ -27,9 +27,8 @@
     n != "swag" && (v.enabled or false) && (v.subdomain or null) != null;
 
   proxiedNames = builtins.filter isProxied (builtins.attrNames services);
-in {
-  domain = domain;
-  services =
+
+  raw =
     map (n: let
       svc = services.${n};
       meta = svc.meta or {};
@@ -40,4 +39,13 @@ in {
       rank = meta.rank or null;
     })
     proxiedNames;
+
+  ranked = builtins.filter (s: s.rank != null) raw;
+  unranked = builtins.filter (s: s.rank == null) raw;
+
+  sortedRanked = builtins.sort (a: b: a.rank < b.rank) ranked;
+  sortedUnranked = builtins.sort (a: b: a.name < b.name) unranked;
+in {
+  domain = domain;
+  services = sortedRanked ++ sortedUnranked;
 }

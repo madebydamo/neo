@@ -1,4 +1,4 @@
-<div id="options-pane" class="card bg-base-100 shadow" data-service="{{service}}" data-save-endpoint="{{save_endpoint}}" x-data="optionForm()" x-init="initForm()">
+<div id="options-pane" class="card bg-base-100 shadow" data-service="{{service}}" data-save-endpoint="{{save_endpoint}}" data-load-url="{{#if is_core}}/core/{{service}}{{else}}/option/{{service}}{{/if}}" x-data="optionForm()" x-init="initForm()">
   <!-- Seed script moved to top so it is available immediately when x-init runs -->
   <script id="options-seed" type="application/json">{{{options_json}}}</script>
 

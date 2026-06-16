@@ -4,17 +4,12 @@ use std::process::Command;
 use std::sync::Arc;
 use std::thread;
 
+use super::structs::{AppConfig, BranchInfo, BranchesContext, IndexContext};
 use rocket::response::content::RawHtml;
 use rocket::serde::json::Json;
 use rocket::{get, http::Status, post, routes, State};
 use rocket_dyn_templates::Template;
 use toml_edit::{DocumentMut, Item, Table, Value};
-
-use super::nix_eval::{
-    extract_neo_section, extract_neo_theme, extract_proxied_services, extract_service_options,
-    extract_services,
-};
-use super::structs::{AppConfig, BranchInfo, BranchesContext, IndexContext};
 
 use crate::commands::paste_settings::paste_settings;
 use crate::commands::{get_current_branch, git_cmd, run_nix_logged};
@@ -22,16 +17,25 @@ use crate::commands::{get_current_branch, git_cmd, run_nix_logged};
 use super::activation;
 
 #[get("/")]
-pub fn index(config: &State<Arc<AppConfig>>) -> Template {
-    let mut data = extract_proxied_services(&config.nix_cmd, &config.neo_input);
-    data.theme = extract_neo_theme(&config.nix_cmd, &config.neo_input);
+pub async fn index(config: &State<Arc<AppConfig>>) -> Template {
+    let (mut data, theme) = {
+        let mut ev = config.evaluator.lock().await;
+        let data = ev.extract_proxied_services().await;
+        let theme = ev.extract_neo_theme().await;
+        (data, theme)
+    };
+    data.theme = theme;
     Template::render("index", data)
 }
 
 #[get("/configuration")]
-pub fn configuration(config: &State<Arc<AppConfig>>) -> Template {
-    let svcs = extract_services(&config.nix_cmd, &config.neo_input);
-    let theme = extract_neo_theme(&config.nix_cmd, &config.neo_input);
+pub async fn configuration(config: &State<Arc<AppConfig>>) -> Template {
+    let (svcs, theme) = {
+        let mut ev = config.evaluator.lock().await;
+        let svcs = ev.extract_services().await;
+        let theme = ev.extract_neo_theme().await;
+        (svcs, theme)
+    };
     Template::render(
         "configuration",
         IndexContext {
@@ -42,14 +46,20 @@ pub fn configuration(config: &State<Arc<AppConfig>>) -> Template {
 }
 
 #[get("/option/<service>")]
-pub fn option_pane(config: &State<Arc<AppConfig>>, service: &str) -> Template {
-    let pane = extract_service_options(&config.nix_cmd, &config.neo_input, service);
+pub async fn option_pane(config: &State<Arc<AppConfig>>, service: &str) -> Template {
+    let pane = {
+        let mut ev = config.evaluator.lock().await;
+        ev.extract_service_options(service).await
+    };
     Template::render("option_pane", pane)
 }
 
 #[get("/services-grid")]
-pub fn services_grid(config: &State<Arc<AppConfig>>) -> Template {
-    let svcs = extract_services(&config.nix_cmd, &config.neo_input);
+pub async fn services_grid(config: &State<Arc<AppConfig>>) -> Template {
+    let svcs = {
+        let mut ev = config.evaluator.lock().await;
+        ev.extract_services().await
+    };
     Template::render(
         "services_grid",
         IndexContext {
@@ -428,6 +438,12 @@ pub fn save_service(
         return Status::InternalServerError;
     }
 
+    let ev = config.evaluator.clone();
+    tokio::spawn(async move {
+        let mut g = ev.lock().await;
+        let _ = g.refresh().await;
+    });
+
     Status::Ok
 }
 
@@ -499,12 +515,22 @@ pub fn save_core_section(
                     if let Err(_) = fs::write(settings_path, doc.to_string()) {
                         return Status::InternalServerError;
                     }
+                    let ev = config.evaluator.clone();
+                    tokio::spawn(async move {
+                        let mut g = ev.lock().await;
+                        let _ = g.refresh().await;
+                    });
                     return Status::Ok;
                 }
                 core_table.remove(section);
                 if let Err(_) = fs::write(settings_path, doc.to_string()) {
                     return Status::InternalServerError;
                 }
+                let ev = config.evaluator.clone();
+                tokio::spawn(async move {
+                    let mut g = ev.lock().await;
+                    let _ = g.refresh().await;
+                });
                 return Status::Ok;
             }
         };
@@ -551,6 +577,11 @@ pub fn save_core_section(
                 if let Err(_) = fs::write(settings_path, doc.to_string()) {
                     return Status::InternalServerError;
                 }
+                let ev = config.evaluator.clone();
+                tokio::spawn(async move {
+                    let mut g = ev.lock().await;
+                    let _ = g.refresh().await;
+                });
                 return Status::Ok;
             }
         };
@@ -571,6 +602,13 @@ pub fn save_core_section(
     if let Err(_) = fs::write(settings_path, doc.to_string()) {
         return Status::InternalServerError;
     }
+
+    let ev = config.evaluator.clone();
+    tokio::spawn(async move {
+        let mut g = ev.lock().await;
+        let _ = g.refresh().await;
+    });
+
     Status::Ok
 }
 
@@ -598,6 +636,21 @@ pub fn changes_indicator(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
         "<span class=\"text-[10px] opacity-40\">clean</span>"
     };
     RawHtml(content.to_string())
+}
+#[get("/changes/reset-button")]
+
+pub fn reset_button(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
+    activation::gc_old_activations();
+    // Only render the reset button when there is actually pending work.
+    // This makes the button appear/disappear and prevents useless clicks.
+    let has_settings_diff = settings_toml_has_diff(&config);
+    let (tree_changed, _) = worktree_changed_and_summary(&config);
+    let dirty = has_settings_diff || tree_changed;
+    if !dirty {
+        return RawHtml(String::new());
+    }
+    let btn = "<button hx-post=\"/actions/reset\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" hx-confirm=\"Reset settings from last applied (/etc/neo)?\" hx-on::after-request=\"var m=document.getElementById('changes-modal');if(m){m.querySelector('h3').textContent='Reset';m.showModal();} var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{target:'#pending-changes',swap:'innerHTML'}); var r=document.getElementById('reset-button-container');if(r)htmx.ajax('GET','/changes/reset-button',{target:'#reset-button-container',swap:'innerHTML'});\" class=\"btn btn-xs btn-ghost\">↩<span class=\"hidden sm:inline ml-1\">Reset</span></button>";
+    RawHtml(btn.to_string())
 }
 
 #[get("/changes/summary")]
@@ -630,7 +683,15 @@ pub fn revert_settings(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     let dir_str = dir.to_str().unwrap_or(".");
     let source = PathBuf::from("/etc/neo/settings.toml");
     let dummy = DocumentMut::new();
-    match paste_settings(dir_str, &source, &dummy, false, &config.nix_cmd) {
+    let res = paste_settings(dir_str, &source, &dummy, false, &config.nix_cmd);
+    if res.is_ok() {
+        let ev = config.evaluator.clone();
+        tokio::spawn(async move {
+            let mut g = ev.lock().await;
+            let _ = g.refresh().await;
+        });
+    }
+    match res {
         Ok(()) => RawHtml("<div class=\"alert alert-success text-sm\">Reverted via paste-settings. Close and reload options to see state.</div><div class=\"mt-2\"><button onclick=\"document.getElementById('changes-modal').close()\" class=\"btn btn-sm\">Close</button></div>".to_string()),
         Err(e) => RawHtml(format!("<div class=\"alert alert-error text-sm\">Revert failed: {}</div>", e))
     }
@@ -690,7 +751,15 @@ pub fn actions_reset(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     let dir_str = dir.to_str().unwrap_or(".");
     let source = PathBuf::from("/etc/neo/settings.toml");
     let dummy = DocumentMut::new();
-    match paste_settings(dir_str, &source, &dummy, false, &config.nix_cmd) {
+    let res = paste_settings(dir_str, &source, &dummy, false, &config.nix_cmd);
+    if res.is_ok() {
+        let ev = config.evaluator.clone();
+        tokio::spawn(async move {
+            let mut g = ev.lock().await;
+            let _ = g.refresh().await;
+        });
+    }
+    match res {
         Ok(()) => RawHtml("<div class=\"alert alert-success text-sm\">Reset done (settings restored from /etc/neo). Close to refresh state.</div><div class=\"mt-2\"><button onclick=\"document.getElementById('changes-modal').close()\" class=\"btn btn-sm\">Close</button></div>".to_string()),
         Err(e) => RawHtml(format!("<div class=\"alert alert-error text-sm\">Reset failed: {}</div>", e))
     }
@@ -745,8 +814,11 @@ pub fn core_grid(_config: &State<Arc<AppConfig>>) -> Template {
 }
 
 #[get("/core/<section>")]
-pub fn core_pane(config: &State<Arc<AppConfig>>, section: &str) -> Template {
-    let pane = extract_neo_section(&config.nix_cmd, &config.neo_input, section);
+pub async fn core_pane(config: &State<Arc<AppConfig>>, section: &str) -> Template {
+    let pane = {
+        let mut ev = config.evaluator.lock().await;
+        ev.extract_neo_section(section).await
+    };
     Template::render("option_pane", pane)
 }
 
@@ -798,6 +870,7 @@ pub fn routes() -> Vec<rocket::Route> {
         save_service,
         save_core_section,
         changes_indicator,
+        reset_button,
         changes_summary,
         revert_settings,
         apply_settings,
@@ -814,7 +887,7 @@ pub fn routes() -> Vec<rocket::Route> {
         activation_current,
         update_monitor,
         update_log,
-        update_status
+        update_status,
     ]
 }
 

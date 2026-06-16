@@ -161,6 +161,10 @@ function optionForm() {
             if (event?.target) event.target.innerText = orig || 'Save';
           }, 1200);
           const ind = document.getElementById('pending-changes');
+          const loadUrl = pane?.dataset?.loadUrl;
+          if (loadUrl) {
+            htmx.ajax('GET', loadUrl, {target: '#config-content', swap: 'innerHTML'});
+          }
           if (ind) htmx.ajax('GET', '/changes/indicator', {target: '#pending-changes', swap: 'innerHTML'});
         } else {
           const txt = await res.text().catch(() => '');

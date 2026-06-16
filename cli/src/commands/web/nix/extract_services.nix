@@ -10,17 +10,34 @@
     then "homeserver"
     else if builtins.elem "neo" cfgNames
     then "neo"
-    else builtins.head cfgNames;
+    else if cfgNames != []
+    then builtins.head cfgNames
+    else null;
 
-  names = builtins.attrNames (f.nixosConfigurations.${cfg}.config.neo.services or {});
+  names =
+    if cfg != null
+    then builtins.attrNames (f.nixosConfigurations.${cfg}.config.neo.services or {})
+    else [];
+
+  raw =
+    if cfg != null
+    then
+      map (n: let
+        svc = f.nixosConfigurations.${cfg}.config.neo.services.${n} or {};
+        meta = svc.meta or {};
+      in {
+        name = n;
+        enabled = svc.enabled or false;
+        icon = meta.icon or null;
+        rank = meta.rank or null;
+      })
+      names
+    else [];
+
+  ranked = builtins.filter (s: s.rank != null) raw;
+  unranked = builtins.filter (s: s.rank == null) raw;
+
+  sortedRanked = builtins.sort (a: b: a.rank < b.rank) ranked;
+  sortedUnranked = builtins.sort (a: b: a.name < b.name) unranked;
 in
-  map (n: let
-    svc = f.nixosConfigurations.${cfg}.config.neo.services.${n} or {};
-    meta = svc.meta or {};
-  in {
-    name = n;
-    enabled = svc.enabled or false;
-    icon = meta.icon or null;
-    rank = meta.rank or null;
-  })
-  names
+  sortedRanked ++ sortedUnranked
