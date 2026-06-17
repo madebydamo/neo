@@ -37,6 +37,12 @@
       btop
       docker_29
       netcat
+      curl
+      dnsutils
+      iputils
+      iproute2
+      traceroute
+      mtr
     ];
 
     users.users.root = {
