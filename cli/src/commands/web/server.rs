@@ -10,6 +10,7 @@ use rocket::{get, http::Status, post, routes, State};
 use rocket_dyn_templates::Template;
 use toml_edit::{DocumentMut, Item, Table, Value};
 
+use crate::commands::log::OperationLog;
 use crate::commands::paste_settings::paste_settings;
 use crate::commands::{get_current_branch, git_cmd};
 
@@ -163,42 +164,11 @@ fn config_dir(cfg: &AppConfig) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-fn prepare_one_shot_state(prefix: &str, initial_phase: &str) -> (String, String, PathBuf, PathBuf) {
-    let ts = crate::commands::get_timestamp();
-    let id = format!("{}_{}", prefix, ts);
-    let act_dir = activation::activation_dir();
-    let _ = fs::create_dir_all(&act_dir);
-    let state_path = act_dir.join(format!("{}.json", id));
-    let log_path = act_dir.join(format!("{}.log", id));
-    let initial = serde_json::json!({
-        "id": id,
-        "status": "in_progress",
-        "phase": initial_phase,
-        "started_at": ts,
-        "log_path": log_path.to_string_lossy(),
-    });
-    let _ = fs::write(
-        &state_path,
-        serde_json::to_string_pretty(&initial).unwrap_or_default(),
-    );
-    let _ = fs::write(
-        &log_path,
-        format!("{} {} triggered via web at {}\n", prefix, id, ts),
-    );
-    (id, ts, state_path, log_path)
-}
-
-fn trigger_systemd_run(
-    config: &AppConfig,
-    subcommand: &str,
-    env_var: &str,
-    ts: &str,
-    log_path: &PathBuf,
-) {
+fn trigger_systemd_run(subcommand: &str, env_var: &str, suffix: &str, log_path: &std::path::Path) {
     let sudo_cmd = std::env::var("SUDO_BINARY_PATH").unwrap_or_else(|_| "sudo".to_string());
     let nix_bin = std::env::var("NIX_BINARY_PATH")
         .unwrap_or_else(|_| "/run/current-system/sw/bin/nix".to_string());
-    let unit = format!("neo-{}@{}.service", subcommand, ts);
+    let unit = format!("neo-{}@{}.service", subcommand, suffix);
     let neo_bin = "/run/current-system/sw/bin/neo";
     let desc = format!("{} systemd-run --unit={} (as homeserver)", sudo_cmd, unit);
     let mut run_cmd = Command::new(&sudo_cmd);
@@ -216,7 +186,7 @@ fn trigger_systemd_run(
         "-E",
         &format!("SUDO_BINARY_PATH={}", sudo_cmd),
         "-E",
-        &format!("{}={}", env_var, ts),
+        &format!("{}={}", env_var, suffix),
         "-E",
         "PATH=/run/current-system/sw/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "--property",
@@ -224,7 +194,7 @@ fn trigger_systemd_run(
         "--property",
         &format!("StandardError=append:{}", log_path.to_string_lossy()),
         "--property",
-        &format!("Description=Neo one-shot {} {}", subcommand, ts),
+        &format!("Description=Neo one-shot {} {}", subcommand, suffix),
         neo_bin,
         subcommand,
     ]);
@@ -233,15 +203,22 @@ fn trigger_systemd_run(
 
 fn trigger_activation(config: &AppConfig) -> RawHtml<String> {
     activation::gc_old_activations();
-    let (id, ts, _state_path, log_path) = prepare_one_shot_state("activation", "triggered");
+    let ts = crate::commands::get_timestamp();
+    let op = OperationLog::new_activation(&ts);
+    op.init_for_web_trigger(&ts);
     if let Some(other) = activation::find_recent_in_progress_activation() {
-        if other != id {
+        if other != op.id() {
             return RawHtml(format!("<div class=\"alert alert-error text-sm\">Another activation {} in progress (or auto-update). Wait.</div>", other));
         }
     }
-    trigger_systemd_run(config, "activate", "NEO_ACTIVATION_SUFFIX", &ts, &log_path);
+    trigger_systemd_run(
+        "activate",
+        "NEO_ACTIVATION_SUFFIX",
+        op.suffix(),
+        op.log_path(),
+    );
     // If launch failed synchronously the state remains "triggered"; the unit would update it on real run.
-    RawHtml(activation::build_monitor_fragment(&id))
+    RawHtml(activation::build_monitor_fragment(op.id()))
 }
 
 fn list_activation_branches(config_path: &str) -> Vec<BranchInfo> {
@@ -731,9 +708,11 @@ pub fn flake_update(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
             id
         ));
     }
-    let (id, ts, _state_path, log_path) = prepare_one_shot_state("update", "triggered");
-    trigger_systemd_run(config, "update", "NEO_UPDATE_SUFFIX", &ts, &log_path);
-    RawHtml(activation::build_update_monitor_fragment(&id))
+    let ts = crate::commands::get_timestamp();
+    let op = OperationLog::new_update(&ts);
+    op.init_for_web_trigger(&ts);
+    trigger_systemd_run("update", "NEO_UPDATE_SUFFIX", op.suffix(), op.log_path());
+    RawHtml(activation::build_update_monitor_fragment(op.id()))
 }
 
 #[post("/actions/activate")]

@@ -2,10 +2,10 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const ACT_DIR: &str = "/tmp/neo-activations";
+use crate::commands::log;
 
 pub fn activation_dir() -> PathBuf {
-    PathBuf::from(ACT_DIR)
+    log::operations_dir()
 }
 
 pub fn load_activation_state(id: &str) -> Option<serde_json::Value> {
