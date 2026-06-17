@@ -31,16 +31,11 @@ function updateWarmIndicators() {
       btn.classList.remove('warm');
     }
   });
+}
 
-  // Config button
-  const cfgBtn = document.getElementById('config-btn');
-  if (cfgBtn) {
-    if (serviceIframes['__config']) {
-      cfgBtn.classList.add('warm');
-    } else {
-      cfgBtn.classList.remove('warm');
-    }
-  }
+function setActive(btn) {
+  document.querySelectorAll('.svc-btn').forEach(b => b.classList.remove('active', 'text-primary-content'));
+  if (btn) btn.classList.add('active', 'text-primary-content');
 }
 
 function hideAllOverlays() {
@@ -57,11 +52,6 @@ function showWelcome() {
   if (welcome) welcome.style.display = '';
   if (blocked) blocked.style.display = 'none';
   if (host) host.style.visibility = 'hidden';
-}
-
-function setActive(btn) {
-  document.querySelectorAll('.svc-btn, #config-btn').forEach(b => b.classList.remove('active', 'text-primary-content'));
-  if (btn) btn.classList.add('active', 'text-primary-content');
 }
 
 function hardEvictService(key) {
@@ -97,11 +87,8 @@ function hardResetCurrent() {
   // Immediately recreate a fresh one
   setTimeout(() => {
     if (key === '__config') {
-      let cfgBtn = document.getElementById('config-btn');
-      if (!cfgBtn) {
-        cfgBtn = document.querySelector('.svc-btn[data-sub="neo"]');
-      }
-      loadConfig(cfgBtn);
+      const btn = document.querySelector('.svc-btn[data-sub="neo"]');
+      loadConfig(btn);
     } else {
       // Parse subdomain + domain from the stored full URL
       try {
@@ -195,7 +182,7 @@ function handleSidebarClick(e, subOrKey, domain, btn) {
   if (e.shiftKey || e.ctrlKey || e.metaKey) {
     // Modifier+click: open in new tab (like the top-right button)
     let url;
-    if (subOrKey === '__config' || subOrKey === 'neo') {
+    if (subOrKey === 'neo') {
       url = lastUrls['__config'] || '/configuration';
     } else {
       url = lastUrls[subOrKey] || (domain ? `https://${subOrKey}.${domain}/` : null);
@@ -204,30 +191,26 @@ function handleSidebarClick(e, subOrKey, domain, btn) {
     return;
   }
 
-  if (subOrKey === '__config') {
-    loadConfig(btn);
-  } else {
-    loadService(subOrKey, domain, btn);
-  }
+  loadService(subOrKey, domain, btn);
 }
 
 function loadService(subdomain, domain, btn) {
   const urlEl = document.getElementById('current-url');
   const status = document.getElementById('status');
 
-  if (!domain || !subdomain) {
+  const key = subdomain;
+  const svcName = (btn && btn.dataset && btn.dataset.name) || '';
+  const isNeo = subdomain === 'neo' || svcName.toLowerCase() === 'neo';
+
+  if (!subdomain || (!isNeo && !domain)) {
     alert('Missing domain or subdomain configuration');
     return;
   }
 
-  const key = subdomain;
   const cached = lastUrls[key];
   const targetUrl = (cached && cached.startsWith('https://'))
     ? cached
     : `https://${subdomain}.${domain}/`;
-
-  const svcName = (btn && btn.dataset && btn.dataset.name) || '';
-  const isNeo = subdomain === 'neo' || svcName.toLowerCase() === 'neo';
 
   hideAllOverlays();
   currentBlockedUrl = '';
@@ -380,10 +363,10 @@ document.addEventListener('keydown', (e) => {
 const sidebar = document.querySelector('.w-16.bg-base-200');
 if (sidebar) {
   sidebar.addEventListener('contextmenu', (e) => {
-    const btn = e.target.closest('.svc-btn, #config-btn');
+    const btn = e.target.closest('.svc-btn');
     if (!btn) return;
 
-    let key = btn.dataset.sub || (btn.id === 'config-btn' ? '__config' : null);
+    let key = btn.dataset.sub;
     if (key === 'neo') key = '__config';
     if (key && serviceIframes[key]) {
       e.preventDefault();

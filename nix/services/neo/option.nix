@@ -14,8 +14,8 @@
           options =
             {
               enabled = mkEnableOption "Neo web UI service (config editor launched via `neo web`)" {
-                rank = 0;
                 default = true;
+                internal = true;
               };
 
               theme = mkOption {

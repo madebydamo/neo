@@ -5,13 +5,12 @@
 .svc-label { font-size: 9px; line-height: 10px; word-break: break-all; text-align: center; }
 
 /* Ensure the green "warm" dot (::after) is positioned inside the sidebar button */
-.svc-btn, #config-btn {
+.svc-btn {
   position: relative;
 }
 
 /* Warm (already loaded) indicator on sidebar items */
-.svc-btn.warm::after,
-#config-btn.warm::after {
+.svc-btn.warm::after {
   content: '';
   position: absolute;
   top: 2px;
