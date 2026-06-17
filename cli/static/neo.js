@@ -24,7 +24,8 @@ function updateWarmIndicators() {
   document.querySelectorAll('.svc-btn').forEach(btn => {
     const key = btn.dataset.sub;
     if (!key) return;
-    if (serviceIframes[key]) {
+    const checkKey = (key === 'neo') ? '__config' : key;
+    if (serviceIframes[checkKey]) {
       btn.classList.add('warm');
     } else {
       btn.classList.remove('warm');
@@ -64,6 +65,7 @@ function setActive(btn) {
 }
 
 function hardEvictService(key) {
+  if (key === 'neo') key = '__config';
   const iframe = serviceIframes[key];
   if (iframe && iframe.parentNode) {
     iframe.parentNode.removeChild(iframe);
@@ -95,7 +97,10 @@ function hardResetCurrent() {
   // Immediately recreate a fresh one
   setTimeout(() => {
     if (key === '__config') {
-      const cfgBtn = document.getElementById('config-btn');
+      let cfgBtn = document.getElementById('config-btn');
+      if (!cfgBtn) {
+        cfgBtn = document.querySelector('.svc-btn[data-sub="neo"]');
+      }
       loadConfig(cfgBtn);
     } else {
       // Parse subdomain + domain from the stored full URL
@@ -190,7 +195,7 @@ function handleSidebarClick(e, subOrKey, domain, btn) {
   if (e.shiftKey || e.ctrlKey || e.metaKey) {
     // Modifier+click: open in new tab (like the top-right button)
     let url;
-    if (subOrKey === '__config') {
+    if (subOrKey === '__config' || subOrKey === 'neo') {
       url = lastUrls['__config'] || '/configuration';
     } else {
       url = lastUrls[subOrKey] || (domain ? `https://${subOrKey}.${domain}/` : null);
@@ -222,7 +227,7 @@ function loadService(subdomain, domain, btn) {
     : `https://${subdomain}.${domain}/`;
 
   const svcName = (btn && btn.dataset && btn.dataset.name) || '';
-  const isNeo = svcName.toLowerCase() === 'neo';
+  const isNeo = subdomain === 'neo' || svcName.toLowerCase() === 'neo';
 
   hideAllOverlays();
   currentBlockedUrl = '';
@@ -378,7 +383,8 @@ if (sidebar) {
     const btn = e.target.closest('.svc-btn, #config-btn');
     if (!btn) return;
 
-    const key = btn.dataset.sub || (btn.id === 'config-btn' ? '__config' : null);
+    let key = btn.dataset.sub || (btn.id === 'config-btn' ? '__config' : null);
+    if (key === 'neo') key = '__config';
     if (key && serviceIframes[key]) {
       e.preventDefault();
       hardEvictService(key);
