@@ -61,12 +61,15 @@ enum Commands {
     PasteSettings,
     Init,
     UpdateInputs,
-    Update,
     Migrate,
     Build,
     Activate {
         #[arg(long, env = "NEO_ACTIVATION_SUFFIX")]
         activation_suffix: Option<String>,
+    },
+    Update {
+        #[arg(long, env = "NEO_UPDATE_SUFFIX")]
+        update_suffix: Option<String>,
     },
     Nuke,
     Web,
@@ -148,7 +151,7 @@ fn run(cli: Cli) -> Result<()> {
         execute_command(Command::new(sudo_bin).arg("-u")
             .arg("homeserver")
             .arg(
-                "--preserve-env=NEO_NEO_INPUT,NEO_TEMPLATE,NEO_REMOTE_URL,NIX_BINARY_PATH,SUDO_BINARY_PATH",
+                "--preserve-env=NEO_NEO_INPUT,NEO_TEMPLATE,NEO_REMOTE_URL,NIX_BINARY_PATH,SUDO_BINARY_PATH,NEO_ACTIVATION_SUFFIX,NEO_UPDATE_SUFFIX",
             )
             .args(env::args()), "sudo -u homeserver")?;
         return Ok(());
@@ -224,7 +227,14 @@ fn run(cli: Cli) -> Result<()> {
         }
         Commands::Init => init(&config_path, &doc, &section, dry_run, nix_cmd),
         Commands::UpdateInputs => update_inputs(&config_path, dry_run, nix_cmd),
-        Commands::Update => update(&config_path, &doc, &section, dry_run, nix_cmd),
+        Commands::Update { update_suffix } => update(
+            &config_path,
+            &doc,
+            &section,
+            dry_run,
+            nix_cmd,
+            update_suffix.as_deref(),
+        ),
         Commands::Migrate => migrate(&config_path, &settings_path, dry_run),
         Commands::Build => build(&config_path, &doc, dry_run, nix_cmd),
         Commands::Activate { activation_suffix } => activate(

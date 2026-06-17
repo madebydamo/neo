@@ -2,7 +2,6 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
-use std::thread;
 
 use super::structs::{AppConfig, BranchInfo, BranchesContext, IndexContext};
 use rocket::response::content::RawHtml;
@@ -12,7 +11,7 @@ use rocket_dyn_templates::Template;
 use toml_edit::{DocumentMut, Item, Table, Value};
 
 use crate::commands::paste_settings::paste_settings;
-use crate::commands::{get_current_branch, git_cmd, run_nix_logged};
+use crate::commands::{get_current_branch, git_cmd};
 
 use super::activation;
 
@@ -164,12 +163,9 @@ fn config_dir(cfg: &AppConfig) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-fn trigger_activation(config: &AppConfig) -> RawHtml<String> {
-    let dir = config_dir(config);
-    let _dir_str = dir.to_str().unwrap_or(".");
-    let sudo_cmd = std::env::var("SUDO_BINARY_PATH").unwrap_or_else(|_| "sudo".to_string());
+fn prepare_one_shot_state(prefix: &str, initial_phase: &str) -> (String, String, PathBuf, PathBuf) {
     let ts = crate::commands::get_timestamp();
-    let id = format!("activation_{}", ts);
+    let id = format!("{}_{}", prefix, ts);
     let act_dir = activation::activation_dir();
     let _ = fs::create_dir_all(&act_dir);
     let state_path = act_dir.join(format!("{}.json", id));
@@ -177,7 +173,7 @@ fn trigger_activation(config: &AppConfig) -> RawHtml<String> {
     let initial = serde_json::json!({
         "id": id,
         "status": "in_progress",
-        "phase": "triggered",
+        "phase": initial_phase,
         "started_at": ts,
         "log_path": log_path.to_string_lossy(),
     });
@@ -187,16 +183,22 @@ fn trigger_activation(config: &AppConfig) -> RawHtml<String> {
     );
     let _ = fs::write(
         &log_path,
-        format!("activation {} triggered via web at {}\n", id, ts),
+        format!("{} {} triggered via web at {}\n", prefix, id, ts),
     );
-    if let Some(other) = activation::find_recent_in_progress_activation() {
-        if other != id {
-            return RawHtml(format!("<div class=\"alert alert-error text-sm\">Another activation {} in progress (or auto-update). Wait.</div>", other));
-        }
-    }
+    (id, ts, state_path, log_path)
+}
+
+fn trigger_systemd_run(
+    config: &AppConfig,
+    subcommand: &str,
+    env_var: &str,
+    ts: &str,
+    log_path: &PathBuf,
+) {
+    let sudo_cmd = std::env::var("SUDO_BINARY_PATH").unwrap_or_else(|_| "sudo".to_string());
     let nix_bin = std::env::var("NIX_BINARY_PATH")
         .unwrap_or_else(|_| "/run/current-system/sw/bin/nix".to_string());
-    let unit = format!("neo-activate@{}.service", ts);
+    let unit = format!("neo-{}@{}.service", subcommand, ts);
     let neo_bin = "/run/current-system/sw/bin/neo";
     let desc = format!("{} systemd-run --unit={} (as homeserver)", sudo_cmd, unit);
     let mut run_cmd = Command::new(&sudo_cmd);
@@ -214,7 +216,7 @@ fn trigger_activation(config: &AppConfig) -> RawHtml<String> {
         "-E",
         &format!("SUDO_BINARY_PATH={}", sudo_cmd),
         "-E",
-        &format!("NEO_ACTIVATION_SUFFIX={}", ts),
+        &format!("{}={}", env_var, ts),
         "-E",
         "PATH=/run/current-system/sw/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "--property",
@@ -222,11 +224,23 @@ fn trigger_activation(config: &AppConfig) -> RawHtml<String> {
         "--property",
         &format!("StandardError=append:{}", log_path.to_string_lossy()),
         "--property",
-        &format!("Description=Neo one-shot activation {}", ts),
+        &format!("Description=Neo one-shot {} {}", subcommand, ts),
         neo_bin,
-        "activate",
+        subcommand,
     ]);
     let _ = crate::commands::execute_command(&mut run_cmd, &desc);
+}
+
+fn trigger_activation(config: &AppConfig) -> RawHtml<String> {
+    activation::gc_old_activations();
+    let (id, ts, _state_path, log_path) = prepare_one_shot_state("activation", "triggered");
+    if let Some(other) = activation::find_recent_in_progress_activation() {
+        if other != id {
+            return RawHtml(format!("<div class=\"alert alert-error text-sm\">Another activation {} in progress (or auto-update). Wait.</div>", other));
+        }
+    }
+    trigger_systemd_run(config, "activate", "NEO_ACTIVATION_SUFFIX", &ts, &log_path);
+    // If launch failed synchronously the state remains "triggered"; the unit would update it on real run.
     RawHtml(activation::build_monitor_fragment(&id))
 }
 
@@ -705,38 +719,20 @@ pub fn apply_settings(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
 #[post("/flake/update")]
 pub fn flake_update(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     activation::gc_old_activations();
+    if let Some(id) = activation::find_recent_in_progress_activation() {
+        return RawHtml(format!(
+            "<div class=\"alert alert-info text-sm\">Activation {} in progress — cannot update</div>",
+            id
+        ));
+    }
     if let Some(id) = activation::find_recent_in_progress_update() {
         return RawHtml(format!(
             "<div class=\"alert alert-info text-sm\">Update {} already in progress</div>",
             id
         ));
     }
-    let dir = config_dir(&config);
-    let dir_str = dir.to_str().unwrap_or(".").to_string();
-    let nix_cmd = config.nix_cmd.clone();
-    let settings_path = config.settings_path.clone();
-    let ts = crate::commands::get_timestamp();
-    let id = format!("update_{}", ts);
-    let act_dir = activation::activation_dir();
-    let _ = fs::create_dir_all(&act_dir);
-    let state_path = act_dir.join(format!("{}.json", id));
-    let log_path = act_dir.join(format!("{}.log", id));
-    let initial = serde_json::json!({
-        "id": id,
-        "status": "in_progress",
-        "phase": "starting",
-        "started_at": ts,
-        "log_path": log_path.to_string_lossy(),
-    });
-    let _ = fs::write(
-        &state_path,
-        serde_json::to_string_pretty(&initial).unwrap_or_default(),
-    );
-    let _ = fs::write(&log_path, format!("update {} triggered via web\n", id));
-    let id_for_thread = id.clone();
-    thread::spawn(move || {
-        run_update_job(dir_str, nix_cmd, id_for_thread, settings_path);
-    });
+    let (id, ts, _state_path, log_path) = prepare_one_shot_state("update", "triggered");
+    trigger_systemd_run(config, "update", "NEO_UPDATE_SUFFIX", &ts, &log_path);
     RawHtml(activation::build_update_monitor_fragment(&id))
 }
 
@@ -889,74 +885,4 @@ pub fn routes() -> Vec<rocket::Route> {
         update_log,
         update_status,
     ]
-}
-
-fn run_update_job(dir: String, nix: String, id: String, settings_path: PathBuf) {
-    let act_dir = activation::activation_dir();
-    let state_path = act_dir.join(format!("{}.json", id));
-    let log_path = act_dir.join(format!("{}.log", id));
-    let set_state = |status: &str, phase: &str, err: Option<&str>| {
-        let v = serde_json::json!({
-            "id": id,
-            "status": status,
-            "phase": phase,
-            "error": err.unwrap_or(""),
-        });
-        let _ = fs::write(
-            &state_path,
-            serde_json::to_string_pretty(&v).unwrap_or_default(),
-        );
-    };
-    set_state("in_progress", "starting", None);
-    let content = fs::read_to_string(&settings_path).unwrap_or_default();
-    let doc: DocumentMut = content.parse().unwrap_or_else(|_| DocumentMut::new());
-    let section = if PathBuf::from("/etc/neo/settings.toml").exists() {
-        "neo-service"
-    } else {
-        "neo-cli"
-    };
-    let bootstrap = doc
-        .get(section)
-        .and_then(|t| t.get("bootstrapMethod"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("template");
-    if bootstrap != "clone" {
-        let modules_dir = std::path::Path::new(&dir).join("modules");
-        if modules_dir.exists() {
-            let _ = fs::remove_dir_all(&modules_dir);
-            let _ = fs::write(&log_path, format!("removed modules/\n"));
-        }
-        let flake = std::path::Path::new(&dir).join("flake.nix");
-        if flake.exists() {
-            let _ = fs::remove_file(&flake);
-            let _ = fs::write(&log_path, format!("removed flake/\n"));
-        }
-        let template = doc
-            .get(section)
-            .and_then(|t| t.get("template"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("github:madebydamo/neo#homeserver");
-        set_state("in_progress", "flake init", None);
-        if let Err(e) = run_nix_logged(&dir, &nix, &["flake", "init", "-t", template], &log_path) {
-            set_state("failed", "flake init", Some(&e.to_string()));
-            return;
-        }
-    }
-    set_state("in_progress", "write-flake", None);
-    if let Err(e) = run_nix_logged(&dir, &nix, &["run", ".#write-flake"], &log_path) {
-        set_state("failed", "write-flake", Some(&e.to_string()));
-        return;
-    }
-    set_state("in_progress", "flake update", None);
-    if let Err(e) = run_nix_logged(&dir, &nix, &["flake", "update"], &log_path) {
-        set_state("failed", "flake update", Some(&e.to_string()));
-        return;
-    }
-    set_state("in_progress", "migrate", None);
-    if let Err(e) = run_nix_logged(&dir, &nix, &["run", ".#neo", "--", "migrate"], &log_path) {
-        set_state("failed", "migrate", Some(&e.to_string()));
-        return;
-    }
-    set_state("success", "complete", None);
-    let _ = fs::write(&log_path, format!("update complete\n"));
 }
