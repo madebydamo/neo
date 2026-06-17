@@ -926,6 +926,11 @@ fn run_update_job(dir: String, nix: String, id: String, settings_path: PathBuf) 
             let _ = fs::remove_dir_all(&modules_dir);
             let _ = fs::write(&log_path, format!("removed modules/\n"));
         }
+        let flake = std::path::Path::new(&dir).join("flake.nix");
+        if flake.exists() {
+            let _ = fs::remove_file(&flake);
+            let _ = fs::write(&log_path, format!("removed flake/\n"));
+        }
         let template = doc
             .get(section)
             .and_then(|t| t.get("template"))
