@@ -13,7 +13,7 @@
     <script src="https://unpkg.com/alpinejs" defer></script>
     <script src="/static/option_form.js"></script>
   </head>
-  <body class="bg-base-300 text-base-content p-6" data-theme="{{theme}}">
+  <body class="bg-base-300 text-base-content p-6 min-h-screen" data-theme="{{theme}}">
     <div class="max-w-7xl mx-auto">
       <div class="navbar bg-base-100 rounded-box mb-6 shadow">
         <div class="flex-1">
@@ -59,10 +59,6 @@
           <div class="text-xs opacity-60 p-4 border border-dashed rounded">Loading...</div>
         </div>
       </div>
-
-      <p class="mt-6 text-[10px] opacity-30">
-        Rocket + Handlebars + HTMX + Alpine + DaisyUI (CDN). Phase 2 forms (type-driven inputs + reset-to-default).
-      </p>
     </div>
 
     <dialog id="changes-modal" class="modal">
