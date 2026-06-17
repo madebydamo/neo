@@ -228,7 +228,7 @@ function loadService(subdomain, domain, btn) {
   currentBlockedUrl = '';
 
   if (isNeo) {
-    showEmbeddingBlocked(targetUrl, svcName || subdomain, btn, key);
+    loadConfig(btn);
     return;
   }
 

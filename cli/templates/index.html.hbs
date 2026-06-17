@@ -15,14 +15,7 @@
   <body class="bg-base-300 text-base-content h-dvh min-h-dvh h-screen overflow-hidden overscroll-none" data-theme="{{theme}}">
     <div class="flex h-full">
       <!-- Slim icon sidebar (icon-bar style) -->
-      <div class="w-16 bg-base-200 border-r border-base-300 flex flex-col items-center py-2 gap-y-1 overflow-y-auto flex-shrink-0">
-        <!-- Logo / home -->
-        <div class="w-12 h-10 flex items-center justify-center mb-1" title="neo homeserver">
-          <img src="/static/neo-icon.png" class="w-8 h-8 object-contain rounded" alt="neo">
-        </div>
-
-        <div class="w-8 border-t border-base-300 my-1"></div>
-
+      <div class="w-16 bg-base-200 border-r border-base-300 flex flex-col items-center py-2 gap-y-1 overflow-y-auto flex-shrink-0 h-screen">
         <!-- Proxied services -->
         {{#each services}}
           <button
@@ -48,18 +41,18 @@
 
         {{#unless services}}
           <div class="text-[10px] opacity-40 text-center px-1 mt-2">No<br>proxied<br>services</div>
+          <!-- Config editor (loads inside this view, keeps the navigator visible) -->
+          <div class="w-8 border-t border-base-300 my-1"></div>
+          <button
+            id="config-btn"
+            class="nav-btn w-12 h-10 rounded-xl flex flex-col items-center justify-center text-base-content/80 hover:text-base-content"
+            title="Configuration editor (loads inside the viewer pane)"
+            onclick="handleSidebarClick(event, '__config', '', this)">
+            <span class="text-lg leading-none">⚙</span>
+            <span class="font-mono text-[8px] leading-none opacity-70">cfg</span>
+          </button>
         {{/unless}}
 
-        <!-- Config editor (loads inside this view, keeps the navigator visible) -->
-        <div class="w-8 border-t border-base-300 my-1"></div>
-        <button
-          id="config-btn"
-          class="nav-btn w-12 h-10 rounded-xl flex flex-col items-center justify-center text-base-content/80 hover:text-base-content"
-          title="Configuration editor (loads inside the viewer pane)"
-          onclick="handleSidebarClick(event, '__config', '', this)">
-          <span class="text-lg leading-none">⚙</span>
-          <span class="font-mono text-[8px] leading-none opacity-70">cfg</span>
-        </button>
       </div>
 
       <!-- Main viewer area -->
