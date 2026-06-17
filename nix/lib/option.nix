@@ -15,12 +15,8 @@
         then o // {inherit rank;}
         else o;
 
-      mkEnableOption = description: {rank ? null, ...} @ _: let
-        o = lib.mkEnableOption description;
-      in
-        if rank != null
-        then o // {inherit rank;}
-        else o;
+      mkEnableOption = description: args:
+        lib.mkEnableOption description // args;
     };
   };
 }

@@ -13,7 +13,10 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Neo web UI service (config editor launched via `neo web`)" {rank = 0;};
+              enabled = mkEnableOption "Neo web UI service (config editor launched via `neo web`)" {
+                rank = 0;
+                default = true;
+              };
 
               theme = mkOption {
                 type = types.enum ["lofi" "halloween" "dark" "light"];
