@@ -608,15 +608,15 @@ pub fn changes_indicator(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     activation::gc_old_activations();
     if let Some(id) = activation::find_recent_in_progress_activation() {
         let btn = format!(
-            "<button class=\"btn btn-warning btn-xs animate-pulse\" onclick=\"var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Activation progress';m.showModal();htmx.ajax('GET','/activation/monitor/{}',{{target:'#changes-body',swap:'innerHTML'}})\">Act {} — view</button>",
-            id, id
+            "<button class=\"btn btn-warning btn-xs animate-pulse\" onclick=\"var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Activation progress';m.showModal();htmx.ajax('GET','/activation/monitor/{}',{{target:'#changes-body',swap:'innerHTML'}})\">Activation — view</button>",
+            id
         );
         return RawHtml(btn);
     }
     if let Some(id) = activation::find_recent_in_progress_update() {
         let btn = format!(
-            "<button class=\"btn btn-info btn-xs animate-pulse\" onclick=\"var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Update progress';m.showModal();htmx.ajax('GET','/update/monitor/{}',{{target:'#changes-body',swap:'innerHTML'}})\">Update {} — view</button>",
-            id, id
+            "<button class=\"btn btn-info btn-xs animate-pulse\" onclick=\"var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Update progress';m.showModal();htmx.ajax('GET','/update/monitor/{}',{{target:'#changes-body',swap:'innerHTML'}})\">Update — view</button>",
+            id
         );
         return RawHtml(btn);
     }
