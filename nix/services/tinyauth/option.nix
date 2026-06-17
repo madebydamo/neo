@@ -36,7 +36,7 @@
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "tinyauth";
-              auth.enabled = false;
+              auth.available = false;
             }
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/tinyauth.svg";

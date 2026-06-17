@@ -15,7 +15,7 @@
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "drop";
-              auth.enabled = false;
+              auth.available = false;
             }
             // lib.neo.mkServiceMeta {
               icon = "https://raw.githubusercontent.com/immich-app/immich/main/design/immich-logo.svg";

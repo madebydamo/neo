@@ -7,11 +7,12 @@
         auth ? null,
         customDomains ? [],
       } @ args: let
+        authAvailable = args.auth.available or true;
         defaultAuth = {
-          enabled = true;
+          enabled = authAvailable;
           publicPaths = [];
         };
-        auth = lib.recursiveUpdate defaultAuth (args.auth or {});
+        auth = lib.recursiveUpdate defaultAuth (builtins.removeAttrs (args.auth or {}) ["available"]);
       in
         with lib; {
           subdomain =
@@ -53,6 +54,7 @@
                 };
               };
               default = auth;
+              internal = !authAvailable;
               description = "Tinyauth forward authentication settings";
             }
             // {rank = 110;};

@@ -15,7 +15,7 @@
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "collabora";
-              auth.enabled = false;
+              auth.available = false;
             }
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/collaboraonline.svg";
