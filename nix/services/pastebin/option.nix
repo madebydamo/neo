@@ -33,6 +33,7 @@
               '';
               githubUrl = "https://github.com/wantguns/bin";
               releaseUrl = "https://github.com/wantguns/bin/releases";
+              iframeCompatible = false;
             };
         };
         default = {};

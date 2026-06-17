@@ -11,6 +11,7 @@
         releaseUrl ? null,
         screenshots ? [],
         rank ? null,
+        iframeCompatible ? true,
       } @ args:
         with lib; {
           meta = mkOption {
@@ -62,6 +63,11 @@
                   type = types.nullOr types.int;
                   default = rank;
                   description = "Optional sort rank for the neo web UI. Services with a rank are listed first (sorted by rank asc), followed by the rest (by name).";
+                };
+                iframeCompatible = mkOption {
+                  type = types.bool;
+                  default = iframeCompatible;
+                  description = "Whether this service can be loaded inside an iframe in the neo navigator UI.";
                 };
               };
             };

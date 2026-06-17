@@ -37,6 +37,7 @@
       subdomain = svc.subdomain or "";
       icon = meta.icon or null;
       rank = meta.rank or null;
+      iframeCompatible = meta.iframeCompatible or true;
     })
     proxiedNames;
 

@@ -222,13 +222,20 @@ function loadService(subdomain, domain, btn) {
     : `https://${subdomain}.${domain}/`;
 
   const svcName = (btn && btn.dataset && btn.dataset.name) || '';
-  const isNeo = svcName.toLowerCase() === 'neo' || subdomain === 'neo';
+  const isNeo = svcName.toLowerCase() === 'neo';
 
   hideAllOverlays();
   currentBlockedUrl = '';
 
   if (isNeo) {
     loadConfig(btn);
+    return;
+  }
+
+  const iframeCompatibleAttr = (btn && btn.dataset && btn.dataset.iframeCompatible);
+  const isIframeCompatible = iframeCompatibleAttr == null || iframeCompatibleAttr !== 'false';
+  if (!isIframeCompatible) {
+    showEmbeddingBlocked(targetUrl, svcName || subdomain, btn, key);
     return;
   }
 

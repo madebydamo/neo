@@ -23,6 +23,7 @@
             title="{{name}} (https://{{subdomain}}.{{domain}})"
             data-sub="{{subdomain}}"
             data-name="{{name}}"
+            data-iframe-compatible="{{iframeCompatible}}"
             onclick="handleSidebarClick(event, '{{subdomain}}', '{{domain}}', this)">
             <div class="relative w-8 h-8 flex items-center justify-center">
               {{#if icon}}
@@ -93,14 +94,14 @@
             <div class="card bg-base-100 shadow max-w-md w-full">
               <div class="card-body">
                 <h3 class="card-title text-warning text-base">Embedding blocked by the service</h3>
-                <p class="text-sm">This service sets <span class="font-mono">X-Frame-Options</span> or <span class="font-mono">CSP frame-ancestors</span> to protect against clickjacking.</p>
-                <p class="text-xs opacity-70 mt-1">Common for admin/sensitive interfaces (including neo itself).</p>
+                <p class="text-sm">This service does not allow to be embedded into this site, to protect against clickjacking.</p>
+                <p class="text-xs opacity-70 mt-1">Common for admin/sensitive interfaces.</p>
 
+                <div class="text-[10px] opacity-50 mt-2 font-mono break-all" id="blocked-url"></div>
                 <div class="mt-3 flex flex-wrap gap-2">
                   <button onclick="openBlockedInNewTab()" class="btn btn-primary btn-sm flex-1">Open in new tab ↗</button>
                   <button onclick="copyBlockedUrl()" class="btn btn-ghost btn-sm">Copy URL</button>
                 </div>
-                <div class="text-[10px] opacity-50 mt-2 font-mono break-all" id="blocked-url"></div>
               </div>
             </div>
           </div>

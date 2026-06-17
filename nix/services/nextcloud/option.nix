@@ -75,6 +75,7 @@
               projectUrl = "https://nextcloud.com/";
               githubUrl = "https://github.com/nextcloud/server";
               releaseUrl = "https://nextcloud.com/changelog/";
+              iframeCompatible = false;
             };
         };
         default = {};
