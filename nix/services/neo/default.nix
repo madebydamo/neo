@@ -11,7 +11,7 @@
   }: let
     cfg = config.neo.services.neo;
     neoPkg = self.packages.${pkgs.stdenv.hostPlatform.system}.neo;
-    cookieDomain = ".${config.neo.services.swag.domain}";
+    swagDomain = config.neo.services.swag.domain;
   in {
     config = lib.mkIf cfg.enabled {
       systemd.services.neo-web = {
@@ -27,13 +27,13 @@
           Restart = "always";
           RestartSec = 5;
         };
-        preStart = lib.optionalString cfg.iframeCookieSupport (lib.neo.mkActivationScriptForFile config {
+        preStart = lib.optionalString (cfg.iframeCookieSupport && swagDomain != null) (lib.neo.mkActivationScriptForFile config {
           filePath = "${config.neo.core.volumes.appdata}/swag/nginx/conf.d/neo-iframe-cookies.conf";
           content = ''
             # Auto-generated because the neo web UI is enabled with iframeCookieSupport.
             # This makes session/auth cookies from all your subdomains work when the pages
             # are loaded inside the neo dashboard iframes (different origin, same registrable domain).
-            proxy_cookie_domain ~ ${cookieDomain};
+            proxy_cookie_domain ~ .${swagDomain};
             proxy_cookie_flags ~ secure samesite=none;
           '';
         });
