@@ -46,6 +46,7 @@
               "${config.neo.core.volumes.appdata}/filebrowser/database:/database"
               "${config.neo.core.volumes.media}:/srv/Media"
               "${config.neo.core.volumes.documents}:/srv/Documents"
+              "${config.neo.core.volumes.appdata}:/srv/AppData"
             ]
             ++ (lib.mapAttrsToList (
                 hostVol: containerPath: "${config.neo.core.volumes.${hostVol}}:${containerPath}"
