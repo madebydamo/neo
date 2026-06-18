@@ -12,10 +12,10 @@
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="/static/neo.css" />
   </head>
-  <body class="bg-base-300 text-base-content h-dvh min-h-dvh h-screen overflow-hidden overscroll-none" data-theme="{{theme}}">
+  <body class="bg-base-300 text-base-content h-dvh min-h-dvh overflow-hidden overscroll-none" data-theme="{{theme}}">
     <div class="flex h-full">
       <!-- Slim icon sidebar (icon-bar style) -->
-      <div class="w-16 bg-base-200 border-r border-base-300 flex flex-col items-center py-2 gap-y-1 overflow-y-auto flex-shrink-0 h-screen">
+      <div class="w-16 bg-base-200 border-r border-base-300 flex flex-col items-center py-2 gap-y-1 overflow-y-auto flex-shrink-0 h-dvh">
         <!-- Proxied services -->
         {{#each services}}
           <button
