@@ -13,18 +13,18 @@
       options.neo.disko = mkOption {
         type = types.submodule {
           options = {
-            enabled = mkEnableOption "Disko declarative partitioning with ZFS root (single disk)" {};
+            enabled = mkEnableOption "Disko declarative partitioning" {};
 
             mainDisk = mkOption {
               type = types.str;
               default = "/dev/vda";
-              description = "Main disk (entire disk will be partitioned for EFI + ZFS root)";
+              description = "Main disk device for OS (EFI partition + root fs according to rootFilesystem)";
             };
 
             additionalDisks = mkOption {
               type = types.attrsOf types.str;
               default = {};
-              description = "Additional disks mapped to mountpoints (e.g. { \"/dev/sdb\" = \"/var/neo/DATA/Media\"; }). Each gets its own ZFS pool with snapshots disabled.";
+              description = "Additional disks mapped to mountpoints (e.g. { \"/dev/sdb\" = \"/var/neo/DATA/Media\"; } or { \"/dev/mmcblk0\" = \"/var/neo\"; } to back volumes.root with its own pool for easy swap/backup). Each gets independent ZFS pool (snapshots disabled).";
             };
 
             poolName = mkOption {

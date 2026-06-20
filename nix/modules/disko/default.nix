@@ -7,6 +7,7 @@
   }: let
     cfg = config.neo.disko;
     sanitize = n: lib.replaceStrings ["/" "-" "." " "] ["" "" "" ""] (baseNameOf n);
+    volumesRoot = config.neo.core.volumes.root;
   in {
     imports = [inputs.disko.nixosModules.disko];
     disko.devices = lib.mkIf cfg.enabled {
@@ -69,18 +70,19 @@
               compression = "zstd";
               "com.sun:auto-snapshot" = "false";
             };
-            datasets = {
-              root = {
-                type = "zfs_fs";
-                mountpoint = "/";
-                options."com.sun:auto-snapshot" = "false";
+            datasets =
+              {
+                root = {
+                  type = "zfs_fs";
+                  mountpoint = "/";
+                  options."com.sun:auto-snapshot" = "false";
+                };
+                neo = {
+                  type = "zfs_fs";
+                  mountpoint = volumesRoot;
+                  options."com.sun:auto-snapshot" = "true";
+                };
               };
-              neo = {
-                type = "zfs_fs";
-                mountpoint = config.neo.core.volumes.root;
-                options."com.sun:auto-snapshot" = "true";
-              };
-            };
           };
         }
         // lib.mapAttrs' (disk: mp: let
@@ -106,17 +108,17 @@
         cfg.additionalDisks;
     };
 
-    networking.hostId = "4d681778";
+    networking.hostId = lib.mkIf cfg.enabled "4d681778";
 
-    boot.supportedFilesystems = ["zfs"];
-    boot.zfs = {
+    boot.supportedFilesystems = lib.mkIf cfg.enabled ["zfs"];
+    boot.zfs = lib.mkIf cfg.enabled {
       forceImportRoot = lib.mkDefault false;
       forceImportAll = lib.mkDefault false;
     };
 
-    environment.systemPackages = [pkgs.zfs];
+    environment.systemPackages = lib.mkIf cfg.enabled [pkgs.zfs];
 
-    services.zfs.autoSnapshot = {
+    services.zfs.autoSnapshot = lib.mkIf cfg.enabled {
       enable = true;
       flags = "-k -p --utc";
       frequent = 4;
@@ -127,7 +129,7 @@
     };
 
     #TODO
-    system.activationScripts.create-volumes = lib.mkForce (
+    system.activationScripts.create-volumes = lib.mkIf cfg.enabled (lib.mkForce (
       lib.concatStringsSep "\n" (
         lib.map
         (dir:
@@ -141,6 +143,6 @@
           config.neo.core.volumes.documents
         ]
       )
-    );
+    ));
   };
 }
