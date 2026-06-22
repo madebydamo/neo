@@ -158,7 +158,7 @@ pub fn init(
             .unwrap_or("master"),
     )?;
 
-    crate::commands::generate_hardware::generate_hardware(config_path, false, nix_cmd)?;
+    crate::commands::generate_hardware::generate_hardware(config_path, &config, false, nix_cmd)?;
     crate::commands::paste_settings::paste_settings(
         config_path,
         &PathBuf::from("settings.toml"),
