@@ -70,19 +70,18 @@
               compression = "zstd";
               "com.sun:auto-snapshot" = "false";
             };
-            datasets =
-              {
-                root = {
-                  type = "zfs_fs";
-                  mountpoint = "/";
-                  options."com.sun:auto-snapshot" = "false";
-                };
-                neo = {
-                  type = "zfs_fs";
-                  mountpoint = volumesRoot;
-                  options."com.sun:auto-snapshot" = "true";
-                };
+            datasets = {
+              root = {
+                type = "zfs_fs";
+                mountpoint = "/";
+                options."com.sun:auto-snapshot" = "false";
               };
+              neo = {
+                type = "zfs_fs";
+                mountpoint = volumesRoot;
+                options."com.sun:auto-snapshot" = "true";
+              };
+            };
           };
         }
         // lib.mapAttrs' (disk: mp: let
@@ -108,7 +107,7 @@
         cfg.additionalDisks;
     };
 
-    networking.hostId = lib.mkIf cfg.enabled "4d681778";
+    networking.hostId = "4d681778";
 
     boot.supportedFilesystems = lib.mkIf cfg.enabled ["zfs"];
     boot.zfs = lib.mkIf cfg.enabled {
