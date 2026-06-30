@@ -221,7 +221,7 @@ fn run(cli: Cli) -> Result<()> {
     }
 
     match command {
-        Commands::GenerateHardware => generate_hardware(&config_path,&doc, dry_run, nix_cmd),
+        Commands::GenerateHardware => generate_hardware(&config_path, &doc, dry_run, nix_cmd),
         Commands::PasteSettings => {
             paste_settings(&config_path, &settings_path, &doc, dry_run, nix_cmd)
         }

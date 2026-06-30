@@ -176,6 +176,7 @@ fn trigger_systemd_run(subcommand: &str, env_var: &str, suffix: &str, log_path: 
         "systemd-run",
         "--collect",
         "--no-ask-password",
+        "--no-block",
         "--unit",
         &unit,
         "--service-type=oneshot",
