@@ -46,7 +46,7 @@
         ];
 
         virtualisation.oci-containers.containers.tinyauth = {
-          image = "ghcr.io/steveiliop56/tinyauth:v5";
+          image = cfg.containers.tinyauth;
           autoStart = true;
           environment =
             {

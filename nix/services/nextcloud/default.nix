@@ -25,7 +25,7 @@
         };
         virtualisation.oci-containers.containers = {
           nextcloud-db = {
-            image = "mariadb:10.6";
+            image = cfg.containers."nextcloud-db";
             autoStart = true;
             cmd = [
               "--transaction-isolation=READ-COMMITTED"
@@ -45,13 +45,13 @@
           };
 
           nextcloud-redis = {
-            image = "redis:alpine";
+            image = cfg.containers."nextcloud-redis";
             autoStart = true;
             networks = ["internal"];
           };
 
           nextcloud = {
-            image = "nextcloud:apache";
+            image = cfg.containers."nextcloud";
             autoStart = true;
             environment = {
               MYSQL_HOST = "nextcloud-db";
@@ -72,7 +72,7 @@
           };
 
           nextcloud-cron = {
-            image = "nextcloud:apache";
+            image = cfg.containers."nextcloud-cron";
             autoStart = true;
             entrypoint = "/cron.sh";
             environment = {

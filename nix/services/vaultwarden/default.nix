@@ -16,7 +16,7 @@
         ];
 
         virtualisation.oci-containers.containers.vaultwarden = {
-          image = "vaultwarden/server:latest";
+          image = cfg.containers.vaultwarden;
           autoStart = true;
           environment =
             {

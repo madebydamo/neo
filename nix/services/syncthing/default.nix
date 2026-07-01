@@ -21,7 +21,7 @@
             PGID = toString config.neo.core.gid;
             TZ = "Europe/Zurich";
           };
-          image = "linuxserver/syncthing:latest";
+          image = cfg.containers.syncthing;
           autoStart = true;
           volumes =
             [

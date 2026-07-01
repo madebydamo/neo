@@ -47,6 +47,9 @@
                 rank = 60;
               };
             }
+            // lib.neo.mkContainerDefinitions {
+              swag = "lscr.io/linuxserver/swag:latest";
+            }
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nginx.svg";
               description = ''

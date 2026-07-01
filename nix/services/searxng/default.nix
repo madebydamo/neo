@@ -33,7 +33,7 @@
 
         virtualisation.oci-containers.containers = {
           searxng-redis = {
-            image = "docker.io/valkey/valkey:8-alpine";
+            image = cfg.containers."searxng-redis";
             autoStart = true;
             cmd = [
               "valkey-server"
@@ -49,7 +49,7 @@
           };
 
           searxng = {
-            image = "docker.io/searxng/searxng:latest";
+            image = cfg.containers.searxng;
             autoStart = true;
             environment = {
               SEARXNG_BASE_URL = "https://${cfg.subdomain}.${domain}";

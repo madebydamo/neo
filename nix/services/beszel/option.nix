@@ -25,6 +25,9 @@
                 "^/api"
               ];
             }
+            // lib.neo.mkContainerDefinitions {
+              beszel = "henrygd/beszel:latest";
+            }
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/beszel.svg";
               description = ''

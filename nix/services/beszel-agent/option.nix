@@ -31,6 +31,9 @@
                 rank = 30;
               };
             }
+            // lib.neo.mkContainerDefinitions {
+              "beszel-agent" = "henrygd/beszel-agent:latest";
+            }
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/beszel.svg";
               description = ''

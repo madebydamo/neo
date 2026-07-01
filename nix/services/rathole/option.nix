@@ -34,6 +34,9 @@
                 rank = 40;
               };
             }
+            // lib.neo.mkSystemdUnits [
+              "rathole"
+            ]
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/rathole.png";
               description = ''

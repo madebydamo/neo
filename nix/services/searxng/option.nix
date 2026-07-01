@@ -25,6 +25,10 @@
               networks = ["internal"];
               ports = [8080];
             }
+            // lib.neo.mkContainerDefinitions {
+              "searxng-redis" = "docker.io/valkey/valkey:8-alpine";
+              searxng = "docker.io/searxng/searxng:latest";
+            }
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/searxng.svg";
               description = ''

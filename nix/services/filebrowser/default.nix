@@ -38,7 +38,7 @@
           environment = {
             TZ = "Europe/Zurich";
           };
-          image = "filebrowser/filebrowser:latest";
+          image = cfg.containers.filebrowser;
           autoStart = true;
           volumes =
             [

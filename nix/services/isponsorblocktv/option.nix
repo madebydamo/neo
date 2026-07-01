@@ -16,6 +16,9 @@
             // lib.neo.mkReverseProxyOptions {
               subdomain = "isponsorblocktv";
             }
+            // lib.neo.mkContainerDefinitions {
+              isponsorblocktv = "ghcr.io/dmunozv04/isponsorblocktv:latest";
+            }
             // lib.neo.mkServiceMeta {
               icon = "https://raw.githubusercontent.com/ajayyy/SponsorBlock/master/public/icons/LogoSponsorBlocker256px.png";
               description = ''

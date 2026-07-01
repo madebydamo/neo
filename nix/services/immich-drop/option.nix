@@ -17,6 +17,9 @@
               subdomain = "drop";
               auth.available = false;
             }
+            // lib.neo.mkContainerDefinitions {
+              "immich-drop" = "ghcr.io/nasogaa/immich-drop:latest";
+            }
             // lib.neo.mkServiceMeta {
               icon = "https://raw.githubusercontent.com/immich-app/immich/main/design/immich-logo.svg";
               description = ''

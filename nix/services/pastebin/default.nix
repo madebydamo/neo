@@ -15,7 +15,7 @@
         };
 
         virtualisation.oci-containers.containers.pastebin = {
-          image = "wantguns/bin";
+          image = cfg.containers.pastebin;
           autoStart = true;
           environment = {
             BIN_PORT = toString cfg.port;

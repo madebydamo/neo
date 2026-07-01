@@ -38,6 +38,9 @@
               subdomain = "tinyauth";
               auth.available = false;
             }
+            // lib.neo.mkContainerDefinitions {
+              tinyauth = "ghcr.io/steveiliop56/tinyauth:v5";
+            }
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/tinyauth.svg";
               description = ''

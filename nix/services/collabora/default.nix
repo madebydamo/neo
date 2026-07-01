@@ -22,7 +22,7 @@
         ];
 
         virtualisation.oci-containers.containers.collabora = {
-          image = "collabora/code";
+          image = cfg.containers.collabora;
           autoStart = true;
           environment = {
             domain = nextcloudUrl;

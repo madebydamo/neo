@@ -66,6 +66,11 @@
                   description = "Automatically assigned ports for each streamproxy entry";
                 };
               }
+              // lib.neo.mkSystemdUnits [
+                "streamproxy-local80"
+                "streamproxy-local443"
+                "rathole-server"
+              ]
               // lib.neo.mkServiceMeta {
                 icon = "🔀";
                 description = ''

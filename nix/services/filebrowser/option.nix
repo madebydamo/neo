@@ -27,6 +27,9 @@
                 "^/api/public"
               ];
             }
+            // lib.neo.mkContainerDefinitions {
+              filebrowser = "filebrowser/filebrowser:latest";
+            }
             // lib.neo.mkServiceMeta {
               icon = "https://filebrowser.org/static/logo.png";
               description = ''

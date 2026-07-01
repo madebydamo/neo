@@ -32,6 +32,9 @@
               networks = ["internal"];
               ports = [8080];
             }
+            // lib.neo.mkContainerDefinitions {
+              example = "filebrowser/filebrowser:latest";
+            }
             // lib.neo.mkServiceMeta {
               icon = "https://filebrowser.org/static/logo.png";
               description = ''

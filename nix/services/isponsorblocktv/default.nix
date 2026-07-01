@@ -8,8 +8,8 @@
   }:
     with lib; let
       cfg = config.neo.services.isponsorblocktv;
-      image = "ghcr.io/dmunozv04/isponsorblocktv:latest";
       dataDir = "${config.neo.core.volumes.appdata}/isponsorblocktv";
+      image = cfg.containers.isponsorblocktv;
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-isponsorblocktv.preStart = lib.concatStringsSep "\n" [

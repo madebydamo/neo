@@ -49,6 +49,9 @@
               };
             }
             // lib.neo.mkReverseProxyOptions {subdomain = "neo";}
+            // lib.neo.mkSystemdUnits [
+              "neo-web"
+            ]
             // lib.neo.mkServiceMeta {
               icon = "/static/neo-icon.png";
               description = ''

@@ -65,6 +65,12 @@
                 "^/ocs/v2.php/"
               ];
             }
+            // lib.neo.mkContainerDefinitions {
+              "nextcloud-db" = "mariadb:10.6";
+              "nextcloud-redis" = "redis:alpine";
+              "nextcloud" = "nextcloud:apache";
+              "nextcloud-cron" = "nextcloud:apache";
+            }
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nextcloud.svg";
               description = ''

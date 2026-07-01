@@ -86,7 +86,7 @@ in {
 ### Naming Conventions (Nix)
 - Variables: camelCase (`additionalMountPoints`)
 - Nix attrs/options: snake_case (`neo.services.filebrowser`, `neo.core.volumes.appdata`, `neo.neo-service`)
-- Functions: camelCase (`mkActivationScriptForDir`, `mkReverseProxyOptions`)
+- Functions: camelCase (`mkActivationScriptForDir`, `mkReverseProxyOptions`, `mkContainerDefinitions`, `mkSystemdUnits`)
 - Options: `enabled = mkEnableOption "description";`
 - Use plain strings for all descriptions (not `lib.mdDoc`).
 
@@ -109,6 +109,7 @@ See `nix/services/filebrowser/option.nix:9` and `nix/services/hermes/option.nix:
 ### Types and Options
 - `types.port`, `types.str`, `types.nullOr`, `types.listOf`, `types.attrsOf types.str`
 - For reverse proxies: `// neo.mkReverseProxyOptions { subdomain = "..."; auth.publicPaths = [...]; }`
+- For docker containers (to enable image switching, auto-updater, UI status): `// lib.neo.mkContainerDefinitions { "cname" = "repo:tag"; ... }` (or with extraUnits for additional systemd units); then in default.nix use `cfg.containers."cname"` for the image value instead of hardcoding. Use `// lib.neo.mkSystemdUnits [ "unitname" ]` for pure systemd services.
 - Volumes: define in core, reference via `config.neo.core.volumes.*`
 
 ### Strings, Scripts, and Activation
@@ -145,6 +146,7 @@ neo.mkActivationScriptForDir = config: { dirPath, mode ? "0755", user ? ..., ...
 '';
 ```
 See `nix/lib/authorization.nix` for `authBlock`, `authLocations`, `mkReverseProxyOptions`.
+See `nix/lib/containers.nix` for `mkContainerDefinitions`, `mkSystemdUnits`, `getAllContainers` (declare images + units in option.nix for docker services and custom systemd units; enables image config + updater + UI status/logs).
 
 ### Volumes and OCI Containers
 ```nix
@@ -190,7 +192,7 @@ fn run(cli: Cli) -> Result<()> { ... }
 - **Cursor/Copilot rules**: None found in .cursor/ or .github/.
 
 ## Workflow: Add a New Service
-1. Create `nix/services/<name>/option.nix` (with submodule + mkReverseProxyOptions if applicable)
+1. Create `nix/services/<name>/option.nix` (with submodule + mkReverseProxyOptions if applicable + mkContainerDefinitions for any oci containers (images) and/or mkSystemdUnits for custom units)
 2. Create `nix/services/<name>/default.nix` (activationScripts using lib.neo, oci-container config, mkIf enabled)
 3. Create `nix/services/<name>/swag.nix` for nginx proxy/auth if public
 4. Update any core modules if new volume needed (`nix/modules/core/*`)

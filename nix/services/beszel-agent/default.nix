@@ -14,7 +14,7 @@
           dirPath = "${config.neo.core.volumes.appdata}/beszel-agent";
         };
         virtualisation.oci-containers.containers.beszel-agent = {
-          image = "henrygd/beszel-agent:latest";
+          image = cfg.containers."beszel-agent";
           autoStart = true;
           volumes = [
             "${config.neo.core.volumes.appdata}/beszel-agent:/var/lib/beszel-agent"

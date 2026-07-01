@@ -28,6 +28,10 @@
               networks = ["internal"];
               ports = [5000 4444];
             }
+            // lib.neo.mkContainerDefinitions {
+              changedetection = "dgtlmoon/changedetection.io";
+              "changedetection-webengine" = "selenium/standalone-chrome-debug:3.141.59";
+            }
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/changedetection.svg";
               description = ''

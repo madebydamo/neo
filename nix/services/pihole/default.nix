@@ -44,7 +44,7 @@
         };
 
         virtualisation.oci-containers.containers.pihole = {
-          image = "pihole/pihole:latest";
+          image = cfg.containers.pihole;
           autoStart = true;
           environment =
             {

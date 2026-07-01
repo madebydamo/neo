@@ -17,7 +17,7 @@
 
         virtualisation.oci-containers.containers = {
           changedetection = {
-            image = "dgtlmoon/changedetection.io";
+            image = cfg.containers.changedetection;
             autoStart = true;
             environment = {
               PUID = toString config.neo.core.uid;
@@ -32,7 +32,7 @@
           };
 
           changedetection-webengine = {
-            image = "selenium/standalone-chrome-debug:3.141.59";
+            image = cfg.containers."changedetection-webengine";
             autoStart = true;
             environment = {
               PUID = toString config.neo.core.uid;

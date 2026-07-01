@@ -31,6 +31,9 @@
                 "^/icons/"
               ];
             }
+            // lib.neo.mkContainerDefinitions {
+              vaultwarden = "vaultwarden/server:latest";
+            }
             // lib.neo.mkServiceMeta {
               icon = "https://raw.githubusercontent.com/dani-garcia/vaultwarden/main/resources/vaultwarden-icon.svg";
               description = ''

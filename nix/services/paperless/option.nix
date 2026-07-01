@@ -38,6 +38,11 @@
                 "^/fetch/"
               ];
             }
+            // lib.neo.mkContainerDefinitions {
+              "paperless-redis" = "redis:7";
+              "paperless-db" = "postgres:16";
+              "paperless" = "ghcr.io/paperless-ngx/paperless-ngx:latest";
+            }
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/paperless-ngx.svg";
               description = ''

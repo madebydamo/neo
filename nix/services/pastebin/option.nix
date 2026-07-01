@@ -24,6 +24,9 @@
               subdomain = "pastebin";
               auth.enabled = false;
             }
+            // lib.neo.mkContainerDefinitions {
+              pastebin = "wantguns/bin";
+            }
             // lib.neo.mkServiceMeta {
               icon = "https://raw.githubusercontent.com/wantguns/bin/master/static/media/android-chrome-512x512.png";
               description = ''

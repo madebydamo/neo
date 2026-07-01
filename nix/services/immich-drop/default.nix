@@ -17,7 +17,7 @@
 
         virtualisation.oci-containers.containers = {
           immich-drop = {
-            image = "ghcr.io/nasogaa/immich-drop:latest";
+            image = cfg.containers."immich-drop";
             autoStart = true;
             environment = {
               IMMICH_BASE_URL = "https://immich.damo4mf20.ch/api";

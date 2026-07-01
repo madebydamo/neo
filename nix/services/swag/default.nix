@@ -142,7 +142,7 @@
           };
 
           virtualisation.oci-containers.containers.swag = {
-            image = "lscr.io/linuxserver/swag:latest";
+            image = cfg.containers.swag;
             autoStart = true;
             environment = {
               PUID = toString config.neo.core.uid;

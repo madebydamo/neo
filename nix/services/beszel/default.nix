@@ -14,7 +14,7 @@
         };
 
         virtualisation.oci-containers.containers.beszel = {
-          image = "henrygd/beszel:latest";
+          image = cfg.containers.beszel;
           autoStart = true;
           volumes = [
             "${config.neo.core.volumes.appdata}/beszel:/beszel_data"
