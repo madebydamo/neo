@@ -5,9 +5,13 @@ use std::sync::Arc;
 
 use super::structs::{AppConfig, BranchInfo, BranchesContext, IndexContext};
 use rocket::response::content::RawHtml;
+use rocket::response::stream::{Event, EventStream};
 use rocket::serde::json::Json;
 use rocket::{get, http::Status, post, routes, State};
 use rocket_dyn_templates::Template;
+use rocket_ws::{Channel, Message, WebSocket};
+use tokio::io::{AsyncBufReadExt, BufReader as AsyncBufReader};
+use tokio::process::Command as AsyncCommand;
 use toml_edit::{DocumentMut, Item, Table, Value};
 
 use crate::commands::log::OperationLog;
@@ -835,27 +839,102 @@ fn escape_html(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
-#[get("/unit/status/<unit>")]
-pub fn unit_status(unit: &str) -> RawHtml<String> {
+/// Build just the inner content (dot + buttons) for a unit controls area.
+/// Used for OOB WS pushes and composed into full divs.
+fn render_unit_controls_content(unit: &str) -> String {
     let sudo = sudo_cmd();
     let active = Command::new(&sudo)
         .args(["systemctl", "is-active", unit])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_else(|_| "unknown".into());
-    let cls = if active == "active" {
-        "badge badge-success badge-sm"
-    } else if active == "inactive" {
-        "badge badge-ghost badge-sm"
-    } else {
-        "badge badge-warning badge-sm"
+    let is_container = unit.starts_with("docker-");
+
+    let dot_cls = match active.as_str() {
+        "active" => "bg-success",
+        "inactive" => "bg-base-300",
+        "activating" | "deactivating" => "bg-info",
+        _ => "bg-warning",
     };
+
+    let u = escape_html(unit);
+    // Basic JS string escape for onclick arg (single quotes in unit names are rare for units)
+    let u_js = u.replace('\'', "\\'");
+
+    let mut inner = String::new();
+    inner.push_str(&format!(
+        r#"<span class="inline-block w-2 h-2 rounded-full flex-shrink-0 {}" title="{}"></span>"#,
+        dot_cls, u
+    ));
+
+    if active == "active" {
+        inner.push_str(&format!(
+            r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/stop/{u}" hx-swap="none" title="systemctl stop">⏹</button>"##,
+            u = u
+        ));
+        inner.push_str(&format!(
+            r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/restart/{u}" hx-swap="none" title="systemctl restart">⟳</button>"##,
+            u = u
+        ));
+    } else if active == "inactive" || active == "failed" || active == "unknown" {
+        inner.push_str(&format!(
+            r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/start/{u}" hx-swap="none" title="systemctl start">▶</button>"##,
+            u = u
+        ));
+        if active == "failed" {
+            inner.push_str(&format!(
+                r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/restart/{u}" hx-swap="none" title="retry">⟳</button>"##,
+                u = u
+            ));
+        }
+    } else {
+        // transitional state: allow stop
+        inner.push_str(&format!(
+            r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/stop/{u}" hx-swap="none" title="systemctl stop">⏹</button>"##,
+            u = u
+        ));
+    }
+
+    // logs always opens dialog (live via SSE)
+    inner.push_str(&format!(
+        r#"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" onclick="openUnitLogs('{}')" title="open live logs dialog (infinitely scrollable)">logs</button>"#,
+        u_js
+    ));
+
+    if is_container {
+        inner.push_str(&format!(
+            r##"<button class="btn btn-accent btn-xs h-5 min-h-0 px-1.5" hx-post="/container/update/{u}" hx-target="closest .unit-row .update-out-inline" hx-swap="innerHTML" title="docker pull (current running image) + restart">↻</button>"##,
+            u = u
+        ));
+    }
+
+    inner
+}
+
+/// Render the full controls div (for initial population via GET /unit/status on pane load).
+/// Includes the id so OOB swaps from WS can target it later. No polling trigger (replaced by WS pushes).
+fn render_unit_controls(unit: &str) -> RawHtml<String> {
+    let content = render_unit_controls_content(unit);
+    let u = escape_html(unit);
     RawHtml(format!(
-        r#"<span class="{}" title="systemctl is-active {}">{}</span>"#,
-        cls,
-        unit,
-        escape_html(&active)
+        r#"<div id="unit-controls-{u}" class="unit-controls flex items-center gap-1 flex-shrink-0">{content}</div>"#
     ))
+}
+
+/// Broadcast an OOB swap fragment for a unit's controls to all connected WS clients (htmx ws ext will apply it).
+fn broadcast_unit_update(unit: &str, config: &AppConfig) {
+    let content = render_unit_controls_content(unit);
+    let oob = format!(
+        r#"<div id="unit-controls-{}" class="unit-controls flex items-center gap-1 flex-shrink-0" hx-swap-oob="true">{}</div>"#,
+        escape_html(unit),
+        content
+    );
+    let _ = config.unit_updates.send(oob);
+}
+
+#[get("/unit/status/<unit>")]
+pub fn unit_status(unit: &str) -> RawHtml<String> {
+    render_unit_controls(unit)
 }
 
 #[get("/unit/logs/<unit>")]
@@ -890,46 +969,51 @@ pub fn unit_logs(unit: &str) -> RawHtml<String> {
     ))
 }
 
-fn run_unit_action(action: &str, unit: &str) -> RawHtml<String> {
+fn perform_unit_action(action: &str, unit: &str) {
     let sudo = sudo_cmd();
-    let status = Command::new(&sudo)
+    let _ = Command::new(&sudo)
         .args(["systemctl", action, unit, "--no-block", "--no-ask-password"])
         .status();
-    match status {
-        Ok(s) if s.success() => RawHtml(format!(
-            r#"<span class="text-success text-xs">{} {}</span>"#,
-            action, unit
-        )),
-        Ok(s) => RawHtml(format!(
-            r#"<span class="text-error text-xs">{} {} failed (exit {})</span>"#,
-            action,
-            unit,
-            s.code().unwrap_or(-1)
-        )),
-        Err(e) => RawHtml(format!(
-            r#"<span class="text-error text-xs">{} {} error: {}</span>"#,
-            action, unit, e
-        )),
-    }
 }
 
 #[post("/unit/restart/<unit>")]
-pub fn unit_restart(unit: &str) -> RawHtml<String> {
-    run_unit_action("restart", unit)
+pub fn unit_restart(unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
+    perform_unit_action("restart", unit);
+    let oob = format!(
+        r#"<div id="unit-controls-{}" class="unit-controls flex items-center gap-1 flex-shrink-0" hx-swap-oob="true">{}</div>"#,
+        escape_html(unit),
+        render_unit_controls_content(unit)
+    );
+    broadcast_unit_update(unit, &config);
+    RawHtml(oob)
 }
 
 #[post("/unit/start/<unit>")]
-pub fn unit_start(unit: &str) -> RawHtml<String> {
-    run_unit_action("start", unit)
+pub fn unit_start(unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
+    perform_unit_action("start", unit);
+    let oob = format!(
+        r#"<div id="unit-controls-{}" class="unit-controls flex items-center gap-1 flex-shrink-0" hx-swap-oob="true">{}</div>"#,
+        escape_html(unit),
+        render_unit_controls_content(unit)
+    );
+    broadcast_unit_update(unit, &config);
+    RawHtml(oob)
 }
 
 #[post("/unit/stop/<unit>")]
-pub fn unit_stop(unit: &str) -> RawHtml<String> {
-    run_unit_action("stop", unit)
+pub fn unit_stop(unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
+    perform_unit_action("stop", unit);
+    let oob = format!(
+        r#"<div id="unit-controls-{}" class="unit-controls flex items-center gap-1 flex-shrink-0" hx-swap-oob="true">{}</div>"#,
+        escape_html(unit),
+        render_unit_controls_content(unit)
+    );
+    broadcast_unit_update(unit, &config);
+    RawHtml(oob)
 }
 
 #[post("/container/update/<container>")]
-pub fn container_update(container: &str) -> RawHtml<String> {
+pub fn container_update(container: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     // Normalize: accept "foo" or "docker-foo"; use bare name for inspect/restart
     let cname = if container.starts_with("docker-") {
         &container[7..]
@@ -974,12 +1058,108 @@ pub fn container_update(container: &str) -> RawHtml<String> {
             "--no-ask-password",
         ])
         .status();
+    // Push live update to WS clients (and this one will also get the direct response to update-out, but controls via broadcast)
+    broadcast_unit_update(container, &config);
     RawHtml(format!(
         r#"<div class="text-xs"><div>pulled: {}</div><pre class="text-[9px] max-h-32 overflow-auto">{}</pre><div class="text-success">restarted docker-{}</div></div>"#,
         escape_html(&img),
         escape_html(&pull_out),
         escape_html(cname)
     ))
+}
+
+/// SSE endpoint for live journalctl follow in the logs dialog.
+/// Client uses native EventSource; first ~100 lines + subsequent live appends.
+#[get("/sse/logs/<unit>")]
+pub async fn sse_logs(unit: &str) -> EventStream![] {
+    let unit = unit.to_string();
+    EventStream! {
+        let valid = unit.chars().all(|c| c.is_alphanumeric() || "-@._".contains(c));
+        if !valid {
+            yield Event::data("invalid unit name for logs");
+        }
+        if valid {
+            let sudo = sudo_cmd();
+            let spawn_res = AsyncCommand::new(&sudo)
+                .args([
+                    "journalctl",
+                    "-u",
+                    &unit,
+                    "-n",
+                    "100",
+                    "-f",
+                    "--no-pager",
+                    "-o",
+                    "short-iso",
+                ])
+                .kill_on_drop(true)
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn();
+            let mut child_opt = match spawn_res {
+                Ok(c) => Some(c),
+                Err(e) => {
+                    yield Event::data(format!("spawn error: {}", e));
+                    None
+                }
+            };
+            if let Some(mut child) = child_opt {
+                let stdout = child.stdout.take().expect("piped stdout");
+                let mut lines = AsyncBufReader::new(stdout).lines();
+
+                loop {
+                    match lines.next_line().await {
+                        Ok(Some(line)) => {
+                            yield Event::data(escape_html(&line));
+                        }
+                        Ok(None) => break,
+                        Err(e) => {
+                            yield Event::data(format!("[read err] {}", e));
+                            break;
+                        }
+                    }
+                }
+                // child auto-killed by kill_on_drop on drop
+            }
+        }
+    }
+}
+
+/// WebSocket endpoint for htmx ws extension (hx-ext="ws" ws-connect="/ws/status").
+/// Pushes OOB HTML fragments (unit control divs with status dot + conditional buttons) when
+/// unit state changes due to actions. This replaces client polling entirely for live status
+/// without constant traffic or flashing re-renders.
+#[get("/ws/status")]
+pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel<'static> {
+    let mut rx = config.unit_updates.subscribe();
+    ws.channel(move |mut stream| {
+        Box::pin(async move {
+            use rocket::futures::{SinkExt, StreamExt};
+            // Forward any broadcast status OOB fragments to this connected htmx client.
+            // Client->server messages (if any from ws-send in future) are ignored for status.
+            loop {
+                tokio::select! {
+                    client_msg = stream.next() => {
+                        match client_msg {
+                            Some(Ok(_)) => { /* e.g. possible future pings or commands; ignore for now */ }
+                            Some(Err(_)) | None => break,
+                        }
+                    }
+                    update = rx.recv() => {
+                        match update {
+                            Ok(fragment) => {
+                                if stream.send(Message::Text(fragment.into())).await.is_err() {
+                                    break;
+                                }
+                            }
+                            Err(_) => break,
+                        }
+                    }
+                }
+            }
+            Ok(())
+        })
+    })
 }
 
 pub fn routes() -> Vec<rocket::Route> {
@@ -1015,5 +1195,7 @@ pub fn routes() -> Vec<rocket::Route> {
         unit_start,
         unit_stop,
         container_update,
+        sse_logs,
+        ws_status,
     ]
 }

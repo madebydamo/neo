@@ -10,6 +10,8 @@
     <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/sse.js"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
     <script src="https://unpkg.com/alpinejs" defer></script>
     <script src="/static/option_form.js"></script>
   </head>
@@ -36,6 +38,7 @@
         </div>
       </div>
 
+      <div hx-ext="ws" ws-connect="/ws/status">
       <div x-data="{ tab: 'services' }">
         <div class="tabs tabs-bordered mb-2 text-sm">
           <button
@@ -65,6 +68,7 @@
           <div class="text-xs opacity-60 p-4 border border-dashed rounded">Loading...</div>
         </div>
       </div>
+      </div> <!-- / hx-ext="ws" ws-connect -->
     </div>
 
     <dialog id="changes-modal" class="modal">
@@ -88,6 +92,18 @@
       </div>
     </dialog>
 
+    <dialog id="logs-dialog" class="modal">
+      <div class="modal-box w-11/12 max-w-5xl">
+        <h3 class="font-bold text-lg mb-1">Logs for <span id="log-unit" class="font-mono"></span></h3>
+        <div class="text-[10px] opacity-60 mb-1">Live follow (journalctl -f). New lines appended automatically; scrollable infinitely.</div>
+        <pre id="log-pre" class="bg-base-300 p-2 rounded text-[10px] font-mono whitespace-pre-wrap overflow-auto max-h-[55vh] min-h-[180px] border border-base-300"></pre>
+        <div class="modal-action">
+          <button class="btn btn-xs" onclick="clearUnitLogs()">Clear</button>
+          <form method="dialog"><button class="btn btn-ghost btn-sm" onclick="closeUnitLogs()">Close</button></form>
+        </div>
+      </div>
+    </dialog>
+
     <script>
       (function(){
         function resume() {
@@ -107,6 +123,59 @@
         var m=document.getElementById('changes-modal');if(m){m.addEventListener('close',function(){var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{target:'#pending-changes',swap:'innerHTML'});var r=document.getElementById('reset-button-container');if(r)htmx.ajax('GET','/changes/reset-button',{target:'#reset-button-container',swap:'innerHTML'});});}
         var s=document.getElementById('activation-success');if(s){s.addEventListener('close',function(){var i=document.getElementById('pending-changes');if(i)htmx.ajax('GET','/changes/indicator',{target:'#pending-changes',swap:'innerHTML'});var r=document.getElementById('reset-button-container');if(r)htmx.ajax('GET','/changes/reset-button',{target:'#reset-button-container',swap:'innerHTML'});});}
         document.body.addEventListener('htmx:beforeSwap',function(e){var l=document.getElementById('act-log');if(l&&e.detail.target===l){l.dataset.atBottom=(l.scrollTop+l.clientHeight>=l.scrollHeight-8)?'1':'';}});        document.body.addEventListener('htmx:afterSwap',function(e){var l=document.getElementById('act-log');if(l&&e.detail.target===l&&l.dataset.atBottom){l.scrollTop=l.scrollHeight;}});
+
+        // Live logs dialog helpers (EventSource for SSE from /sse/logs/<unit>; integrates htmx ws/sse exts loaded above for future)
+        window.currentLogSource = null;
+        window.openUnitLogs = function(unit) {
+          var dlg = document.getElementById('logs-dialog');
+          var nameEl = document.getElementById('log-unit');
+          var pre = document.getElementById('log-pre');
+          if (!dlg || !nameEl || !pre) return;
+          nameEl.textContent = unit;
+          pre.textContent = 'connecting live logs...\n';
+          dlg.showModal();
+          if (window.currentLogSource) { try { window.currentLogSource.close(); } catch (e) {} }
+          var es = new EventSource('/sse/logs/' + encodeURIComponent(unit));
+          window.currentLogSource = es;
+          es.onmessage = function(e) {
+            pre.textContent += e.data + '\n';
+            // auto-scroll if near bottom
+            if (pre.scrollHeight - pre.scrollTop <= pre.clientHeight + 40) {
+              pre.scrollTop = pre.scrollHeight;
+            }
+          };
+          es.onerror = function() {
+            pre.textContent += '[live connection hiccup; may resume]\n';
+          };
+          dlg.dataset.unit = unit;
+        };
+        window.closeUnitLogs = function() {
+          var dlg = document.getElementById('logs-dialog');
+          if (window.currentLogSource) { try { window.currentLogSource.close(); window.currentLogSource = null; } catch (e) {} }
+          if (dlg) dlg.close();
+        };
+        window.clearUnitLogs = function() {
+          var pre = document.getElementById('log-pre');
+          if (pre) pre.textContent = '';
+        };
+        var ld = document.getElementById('logs-dialog');
+        if (ld) {
+          ld.addEventListener('close', function() {
+            if (window.currentLogSource) { try { window.currentLogSource.close(); window.currentLogSource = null; } catch (e) {} }
+          });
+        }
+
+        // Suppress noisy htmx swapErrors for OOB unit-controls updates when the row
+        // is no longer in the DOM (e.g. switched panes, closed dialog, or rapid actions).
+        // The status will be correct again on next pane load (which does a fresh bootstrap GET).
+        document.body.addEventListener('htmx:swapError', function(evt) {
+          try {
+            var resp = evt.detail && evt.detail.xhr && evt.detail.xhr.responseText;
+            if (resp && /id="unit-controls-/.test(resp)) {
+              evt.stopImmediatePropagation();
+            }
+          } catch (e) {}
+        });
       })();
     </script>
   </body>

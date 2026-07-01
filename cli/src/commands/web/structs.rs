@@ -46,6 +46,9 @@ pub struct AppConfig {
     pub neo_input: String,
     pub settings_path: PathBuf,
     pub evaluator: Arc<Mutex<super::nix_eval::NixEvaluator>>,
+    /// Sender for broadcasting unit status control HTML (as OOB swap fragments) over WS to htmx clients.
+    /// Used to replace polling with push updates for live status dots + conditional action buttons.
+    pub unit_updates: tokio::sync::broadcast::Sender<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -141,6 +144,15 @@ pub struct ServiceScreenshot {
     pub caption: Option<String>,
 }
 
+/// Runtime unit for a service's status/logs/control pane section.
+#[derive(Serialize, Clone)]
+pub struct RuntimeUnit {
+    pub name: String,
+    /// True for docker-* units (or units backed by the containers registry); these get a manual docker update (pull) button.
+    #[serde(default)]
+    pub is_container: bool,
+}
+
 /// Context for the per-service option pane (includes both the form fields and rich intro metadata).
 #[derive(Serialize)]
 pub struct OptionPaneContext {
@@ -160,7 +172,7 @@ pub struct OptionPaneContext {
     pub error: Option<String>,
     /// Systemd units (without .service) declared for this neo service (for status/logs/control UI).
     #[serde(default)]
-    pub units: Vec<String>,
+    pub units: Vec<RuntimeUnit>,
     /// Current container name -> image map for this service (from containers registry; editable in form).
     #[serde(default)]
     pub containers: std::collections::HashMap<String, String>,

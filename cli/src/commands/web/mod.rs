@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
-use tokio::sync::Mutex;
+use tokio::sync::{broadcast, Mutex};
 
 use rocket::fs::FileServer;
 use rocket_dyn_templates::Template;
@@ -49,11 +49,13 @@ pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &s
             nix_eval::NixEvaluator::new(&nix_cmd_for_eval, &neo_input_for_eval, busy.clone())
                 .await
                 .context("start persistent nix repl for fast evals")?;
+        let (unit_tx, _unit_rx) = broadcast::channel::<String>(32);
         let app_config = Arc::new(AppConfig {
             nix_cmd: nix_cmd_for_eval,
             neo_input: neo_input_for_eval,
             settings_path,
             evaluator: Arc::new(Mutex::new(evaluator)),
+            unit_updates: unit_tx,
         });
         println!("{:?}", app_config);
 

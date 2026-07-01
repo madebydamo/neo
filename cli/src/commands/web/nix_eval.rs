@@ -4,7 +4,8 @@ use super::nix_extractors::{
     EXTRACT_NEO_THEME, EXTRACT_PROXIED_SERVICES, EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
 };
 use super::structs::{
-    IndexContext, NavigatorContext, OptionPaneContext, OptionSchema, Service, ServiceMeta,
+    IndexContext, NavigatorContext, OptionPaneContext, OptionSchema, RuntimeUnit, Service,
+    ServiceMeta,
 };
 
 fn value_to_display(v: &serde_json::Value) -> String {
@@ -78,6 +79,19 @@ impl NixEvaluator {
             o.currentDisplay = o.current.as_ref().map(value_to_display).unwrap_or_default();
         }
         let options_json = serde_json::to_string(&opts).unwrap_or_else(|_| "[]".to_string());
+        let units: Vec<RuntimeUnit> = raw
+            .units
+            .into_iter()
+            .map(|name| {
+                let bare = if name.starts_with("docker-") {
+                    &name[7..]
+                } else {
+                    name.as_str()
+                };
+                let is_container = raw.containers.contains_key(bare) || name.starts_with("docker-");
+                RuntimeUnit { name, is_container }
+            })
+            .collect();
         OptionPaneContext {
             service: service.to_string(),
             meta: raw.meta,
@@ -86,7 +100,7 @@ impl NixEvaluator {
             save_endpoint: format!("/save/{service}"),
             is_core: false,
             error: raw.error,
-            units: raw.units,
+            units,
             containers: raw.containers,
         }
     }
@@ -137,6 +151,19 @@ impl NixEvaluator {
         }
 
         let options_json = serde_json::to_string(&opts).unwrap_or_else(|_| "[]".to_string());
+        let units: Vec<RuntimeUnit> = raw
+            .units
+            .into_iter()
+            .map(|name| {
+                let bare = if name.starts_with("docker-") {
+                    &name[7..]
+                } else {
+                    name.as_str()
+                };
+                let is_container = raw.containers.contains_key(bare) || name.starts_with("docker-");
+                RuntimeUnit { name, is_container }
+            })
+            .collect();
         OptionPaneContext {
             service: section.to_string(),
             meta: raw.meta,
@@ -145,7 +172,7 @@ impl NixEvaluator {
             save_endpoint: format!("/save-core/{section}"),
             is_core: true,
             error: raw.error,
-            units: raw.units,
+            units,
             containers: raw.containers,
         }
     }
