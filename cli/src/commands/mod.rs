@@ -1,5 +1,6 @@
 pub mod activate;
 pub mod build;
+pub mod docker_update;
 pub mod edit;
 pub mod generate_hardware;
 pub mod git;

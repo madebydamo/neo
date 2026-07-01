@@ -149,4 +149,10 @@ pub struct OptionPaneContext {
     /// Whether this pane was loaded from the core grid (affects which back button is shown)
     #[serde(default)]
     pub is_core: bool,
+    /// Systemd units (without .service) declared for this neo service (for status/logs/control UI).
+    #[serde(default)]
+    pub units: Vec<String>,
+    /// Current container name -> image map for this service (from containers registry; editable in form).
+    #[serde(default)]
+    pub containers: std::collections::HashMap<String, String>,
 }

@@ -76,6 +76,9 @@ enum Commands {
     Edit,
     Git,
     Lg,
+    DockerUpdate {
+        container: String,
+    },
 }
 
 pub fn load_or_default_settings(path: &PathBuf, _section: &str) -> Result<DocumentMut> {
@@ -249,5 +252,9 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Edit => edit(&config_path, dry_run),
         Commands::Git => git(&config_path, dry_run),
         Commands::Lg => git(&config_path, dry_run),
+        Commands::DockerUpdate { container } => {
+            use crate::commands::docker_update::docker_update;
+            docker_update(&container)
+        }
     }
 }

@@ -69,6 +69,31 @@
       </div>
     {{/if}}
 
+    {{#if units}}
+      <div class="mb-3 p-2 bg-base-200/60 rounded border border-base-300">
+        <div class="text-xs font-semibold mb-1.5 flex items-center gap-2">
+          <span>Runtime units (status, logs, control)</span>
+          <span class="text-[10px] opacity-60">(live via systemctl/journalctl)</span>
+        </div>
+        <div class="space-y-1">
+          {{#each units}}
+            <div class="flex flex-wrap items-center gap-1.5 text-xs" data-unit="{{this}}">
+              <span class="font-mono text-[11px] opacity-80">{{this}}</span>
+              <span class="unit-status" hx-get="/unit/status/{{this}}" hx-trigger="load, every 8s" hx-swap="outerHTML"></span>
+              <button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/start/{{this}}" hx-swap="outerHTML" title="systemctl start">▶</button>
+              <button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/restart/{{this}}" hx-swap="outerHTML" title="systemctl restart">⟳</button>
+              <button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/stop/{{this}}" hx-swap="outerHTML" title="systemctl stop">⏹</button>
+              <button class="btn btn-accent btn-xs h-5 min-h-0 px-1.5" hx-post="/container/update/{{this}}" hx-target="next .update-out" hx-swap="innerHTML" title="docker pull + restart (if this is a docker unit)">↻</button>
+              <button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-get="/unit/logs/{{this}}" hx-target="next .unit-log" hx-swap="innerHTML" title="load recent logs">logs</button>
+              <div class="update-out text-[10px] ml-1"></div>
+              <div class="unit-log w-full text-[9px] mt-0.5"></div>
+            </div>
+          {{/each}}
+        </div>
+        <div class="text-[10px] opacity-60 mt-1">For docker containers the image pull uses the tag currently running (from docker inspect). Change pins via the "containers" field in options below + activate.</div>
+      </div>
+    {{/if}}
+
     <div class="text-[10px] text-base-content/50 -mt-1 mb-3">
       Values loaded from flake evaluation (current where set in your nixosConfiguration).
     </div>

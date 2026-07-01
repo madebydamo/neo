@@ -321,10 +321,14 @@
   sorted = sortedRanked ++ sortedUnranked;
 
   meta = tryOr {} (configRoot.meta or {});
+  units = tryOr [] (configRoot.systemdUnits or []);
+  containers = tryOr {} (configRoot.containers or {});
 in {
   meta =
     if meta == {}
     then null
     else meta;
   options = sorted;
+  units = units;
+  containers = containers;
 }

@@ -837,6 +837,163 @@ pub fn update_status(id: &str) -> RawHtml<String> {
     RawHtml(activation::build_update_status_fragment(id))
 }
 
+fn sudo_cmd() -> String {
+    std::env::var("SUDO_BINARY_PATH").unwrap_or_else(|_| "sudo".to_string())
+}
+
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+#[get("/unit/status/<unit>")]
+pub fn unit_status(unit: &str) -> RawHtml<String> {
+    let sudo = sudo_cmd();
+    let active = Command::new(&sudo)
+        .args(["systemctl", "is-active", unit])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|_| "unknown".into());
+    let cls = if active == "active" {
+        "badge badge-success badge-sm"
+    } else if active == "inactive" {
+        "badge badge-ghost badge-sm"
+    } else {
+        "badge badge-warning badge-sm"
+    };
+    RawHtml(format!(
+        r#"<span class="{}" title="systemctl is-active {}">{}</span>"#,
+        cls,
+        unit,
+        escape_html(&active)
+    ))
+}
+
+#[get("/unit/logs/<unit>")]
+pub fn unit_logs(unit: &str) -> RawHtml<String> {
+    let sudo = sudo_cmd();
+    let out = Command::new(&sudo)
+        .args([
+            "journalctl",
+            "-u",
+            unit,
+            "--no-pager",
+            "-n",
+            "100",
+            "-o",
+            "short-iso",
+        ])
+        .output();
+    let text = match out {
+        Ok(o) => {
+            let mut t = String::from_utf8_lossy(&o.stdout).to_string();
+            if !o.stderr.is_empty() {
+                t.push_str("\n[stderr]\n");
+                t.push_str(&String::from_utf8_lossy(&o.stderr));
+            }
+            t
+        }
+        Err(e) => format!("journalctl error: {}", e),
+    };
+    RawHtml(format!(
+        r#"<pre class="text-[10px] bg-base-300 p-1 mt-1 max-h-64 overflow-auto font-mono whitespace-pre-wrap">{}</pre>"#,
+        escape_html(&text)
+    ))
+}
+
+fn run_unit_action(action: &str, unit: &str) -> RawHtml<String> {
+    let sudo = sudo_cmd();
+    let status = Command::new(&sudo)
+        .args(["systemctl", action, unit, "--no-block", "--no-ask-password"])
+        .status();
+    match status {
+        Ok(s) if s.success() => RawHtml(format!(
+            r#"<span class="text-success text-xs">{} {}</span>"#,
+            action, unit
+        )),
+        Ok(s) => RawHtml(format!(
+            r#"<span class="text-error text-xs">{} {} failed (exit {})</span>"#,
+            action,
+            unit,
+            s.code().unwrap_or(-1)
+        )),
+        Err(e) => RawHtml(format!(
+            r#"<span class="text-error text-xs">{} {} error: {}</span>"#,
+            action, unit, e
+        )),
+    }
+}
+
+#[post("/unit/restart/<unit>")]
+pub fn unit_restart(unit: &str) -> RawHtml<String> {
+    run_unit_action("restart", unit)
+}
+
+#[post("/unit/start/<unit>")]
+pub fn unit_start(unit: &str) -> RawHtml<String> {
+    run_unit_action("start", unit)
+}
+
+#[post("/unit/stop/<unit>")]
+pub fn unit_stop(unit: &str) -> RawHtml<String> {
+    run_unit_action("stop", unit)
+}
+
+#[post("/container/update/<container>")]
+pub fn container_update(container: &str) -> RawHtml<String> {
+    // Normalize: accept "foo" or "docker-foo"; use bare name for inspect/restart
+    let cname = if container.starts_with("docker-") {
+        &container[7..]
+    } else {
+        container
+    };
+    // Inspect current image ref from the running container (works for :latest and pinned)
+    let inspect = Command::new("docker")
+        .args(["inspect", "--format", "{{.Config.Image}}", cname])
+        .output();
+    let img = match inspect {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        Ok(o) => {
+            return RawHtml(format!(
+                r#"<span class="text-error text-xs">inspect failed: {}</span>"#,
+                escape_html(&String::from_utf8_lossy(&o.stderr))
+            ))
+        }
+        Err(e) => {
+            return RawHtml(format!(
+                r#"<span class="text-error text-xs">docker error: {}</span>"#,
+                e
+            ))
+        }
+    };
+    if img.is_empty() {
+        return RawHtml(r#"<span class="text-error text-xs">no image from inspect</span>"#.into());
+    }
+    let pull = Command::new("docker").args(["pull", &img]).output();
+    let pull_out = match pull {
+        Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),
+        Err(e) => format!("pull error: {}", e),
+    };
+    // Restart via sudo to let the unit manage it (use docker- prefix for unit)
+    let sudo = sudo_cmd();
+    let _ = Command::new(&sudo)
+        .args([
+            "systemctl",
+            "restart",
+            &format!("docker-{}", cname),
+            "--no-block",
+            "--no-ask-password",
+        ])
+        .status();
+    RawHtml(format!(
+        r#"<div class="text-xs"><div>pulled: {}</div><pre class="text-[9px] max-h-32 overflow-auto">{}</pre><div class="text-success">restarted docker-{}</div></div>"#,
+        escape_html(&img),
+        escape_html(&pull_out),
+        escape_html(cname)
+    ))
+}
+
 pub fn routes() -> Vec<rocket::Route> {
     routes![
         index,
@@ -864,5 +1021,11 @@ pub fn routes() -> Vec<rocket::Route> {
         update_monitor,
         update_log,
         update_status,
+        unit_status,
+        unit_logs,
+        unit_restart,
+        unit_start,
+        unit_stop,
+        container_update,
     ]
 }

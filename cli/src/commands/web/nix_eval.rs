@@ -38,6 +38,10 @@ impl NixEvaluator {
         struct RawPane {
             meta: Option<ServiceMeta>,
             options: Vec<OptionSchema>,
+            #[serde(default)]
+            units: Vec<String>,
+            #[serde(default)]
+            containers: std::collections::HashMap<String, String>,
         }
         let raw: RawPane = match self.query_json(&inner).await {
             Ok(v) => v,
@@ -46,6 +50,8 @@ impl NixEvaluator {
                 RawPane {
                     meta: None,
                     options: vec![],
+                    units: vec![],
+                    containers: std::collections::HashMap::new(),
                 }
             }
         };
@@ -62,6 +68,8 @@ impl NixEvaluator {
             options_json,
             save_endpoint: format!("/save/{service}"),
             is_core: false,
+            units: raw.units,
+            containers: raw.containers,
         }
     }
 
@@ -74,6 +82,10 @@ impl NixEvaluator {
         struct RawPane {
             meta: Option<ServiceMeta>,
             options: Vec<OptionSchema>,
+            #[serde(default)]
+            units: Vec<String>,
+            #[serde(default)]
+            containers: std::collections::HashMap<String, String>,
         }
         let raw: RawPane = match self.query_json(&inner).await {
             Ok(v) => v,
@@ -82,6 +94,8 @@ impl NixEvaluator {
                 RawPane {
                     meta: None,
                     options: vec![],
+                    units: vec![],
+                    containers: std::collections::HashMap::new(),
                 }
             }
         };
@@ -106,6 +120,8 @@ impl NixEvaluator {
             options_json,
             save_endpoint: format!("/save-core/{section}"),
             is_core: true,
+            units: raw.units,
+            containers: raw.containers,
         }
     }
 
