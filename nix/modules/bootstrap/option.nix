@@ -77,6 +77,12 @@
               description = "systemd timer OnCalendar value";
               rank = 120;
             };
+            garbageCollectOlderThen = mkOption {
+              type = types.nullOr types.str;
+              default = "60d";
+              description = "Value passed to nix-collect-garbage --delete-older-than at the end of each auto-update (e.g. 60d, 30d); set to null to skip GC";
+              rank = 125;
+            };
             rebuildBranchFormat = mkOption {
               type = types.str;
               default = "%Y%m%d-%H%M%S";

@@ -32,6 +32,7 @@
         then "true"
         else "false"
       }
+      garbageCollectOlderThen = "${(cfg."neo-service" or {}).autoUpdateGcDeleteOlderThan or "60d"}"
       bootstrapMethod = "${(cfg."neo-service" or {}).bootstrapMethod or "template"}"
       repoUrl = "${(cfg."neo-service" or {}).repoUrl or ""}"
       gitUserName = "${(cfg."neo-service" or {}).gitUserName or "Neo Bootstrap"}"

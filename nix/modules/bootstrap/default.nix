@@ -10,10 +10,12 @@
     path = [
       neo
       pkgs.git
+      pkgs.nix
       pkgs.nixos-rebuild
       pkgs.nixos-install-tools
       pkgs.coreutils
       pkgs.bash
+      pkgs.sudo
     ];
     environment = {
       NIX_BINARY_PATH = "${pkgs.nix}/bin/nix";
@@ -57,9 +59,13 @@
       };
       stopIfChanged = false;
       restartIfChanged = false;
-      script = ''
-        ${neo}/bin/neo update && ${neo}/bin/neo activate
-      '';
+      script =
+        lib.optionalString (cfg.garbageCollectOlderThen == null) ''
+          sudo nix-collect-garbage --delete-older-than ${cfg.garbageCollectOlderThen} || true
+        ''
+        + ''
+          ${neo}/bin/neo update && ${neo}/bin/neo activate
+        '';
     };
 
     systemd.timers.neo-auto-update = lib.mkIf cfg.autoUpdateEnabled {
@@ -92,6 +98,27 @@
           }
           {
             command = "/nix/store/*-nixos-rebuild-*/bin/nixos-rebuild";
+            options = [
+              "NOPASSWD"
+              "SETENV"
+            ];
+          }
+          {
+            command = "${pkgs.nix}/bin/nix-collect-garbage";
+            options = [
+              "NOPASSWD"
+              "SETENV"
+            ];
+          }
+          {
+            command = "/run/current-system/sw/bin/nix-collect-garbage";
+            options = [
+              "NOPASSWD"
+              "SETENV"
+            ];
+          }
+          {
+            command = "/nix/store/*-nix-*/bin/nix-collect-garbage";
             options = [
               "NOPASSWD"
               "SETENV"
