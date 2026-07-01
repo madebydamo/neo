@@ -12,6 +12,29 @@
     cfg = config.neo.services.neo;
     neoPkg = self.packages.${pkgs.stdenv.hostPlatform.system}.neo;
     swagDomain = config.neo.services.swag.domain;
+    secRuleBuilder = pkg: name: [
+      {
+        command = "${pkg}/bin/${name}";
+        options = [
+          "NOPASSWD"
+          "SETENV"
+        ];
+      }
+      {
+        command = "/run/current-system/sw/bin/${name}";
+        options = [
+          "NOPASSWD"
+          "SETENV"
+        ];
+      }
+      {
+        command = "/nix/store/*-nixos-rebuild-*/bin/${name}";
+        options = [
+          "NOPASSWD"
+          "SETENV"
+        ];
+      }
+    ];
   in {
     config = lib.mkIf cfg.enabled {
       systemd.services.neo-web = {
@@ -55,64 +78,11 @@
       security.sudo.extraRules = [
         {
           users = ["homeserver"];
-          commands = [
-            {
-              command = "${pkgs.nixos-rebuild}/bin/nixos-rebuild";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/run/current-system/sw/bin/nixos-rebuild";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/nix/store/*-nixos-rebuild-*/bin/nixos-rebuild";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/run/current-system/sw/bin/systemctl";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "${pkgs.systemd}/bin/systemctl";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/nix/store/*-systemd-*/bin/systemctl";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/run/current-system/sw/bin/systemd-run";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/nix/store/*-systemd-*/bin/systemd-run";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-          ];
+          commands =
+            (secRuleBuilder pkgs.nixos-rebuild "nixos-rebuild")
+            ++ (secRuleBuilder pkgs.systemd "systemctl")
+            ++ (secRuleBuilder pkgs.systemd "journalctl")
+            ++ (secRuleBuilder pkgs.systemd "systemd-run");
         }
       ];
     };
