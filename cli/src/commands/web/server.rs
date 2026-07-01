@@ -30,19 +30,13 @@ pub async fn index(config: &State<Arc<AppConfig>>) -> Template {
 
 #[get("/configuration")]
 pub async fn configuration(config: &State<Arc<AppConfig>>) -> Template {
-    let (svcs, theme) = {
+    let mut ctx = {
         let mut ev = config.evaluator.lock().await;
-        let svcs = ev.extract_services().await;
-        let theme = ev.extract_neo_theme().await;
-        (svcs, theme)
+        let mut ctx = ev.extract_services().await;
+        ctx.theme = ev.extract_neo_theme().await;
+        ctx
     };
-    Template::render(
-        "configuration",
-        IndexContext {
-            services: svcs,
-            theme,
-        },
-    )
+    Template::render("configuration", ctx)
 }
 
 #[get("/option/<service>")]
@@ -56,17 +50,11 @@ pub async fn option_pane(config: &State<Arc<AppConfig>>, service: &str) -> Templ
 
 #[get("/services-grid")]
 pub async fn services_grid(config: &State<Arc<AppConfig>>) -> Template {
-    let svcs = {
+    let ctx = {
         let mut ev = config.evaluator.lock().await;
         ev.extract_services().await
     };
-    Template::render(
-        "services_grid",
-        IndexContext {
-            services: svcs,
-            ..Default::default()
-        },
-    )
+    Template::render("services_grid", ctx)
 }
 
 fn json_to_toml_value(v: &serde_json::Value) -> Option<Value> {

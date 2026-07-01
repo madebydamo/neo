@@ -3,7 +3,9 @@ pub use super::evaluator::NixEvaluator;
 use super::nix_extractors::{
     EXTRACT_NEO_THEME, EXTRACT_PROXIED_SERVICES, EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
 };
-use super::structs::{NavigatorContext, OptionPaneContext, OptionSchema, Service, ServiceMeta};
+use super::structs::{
+    IndexContext, NavigatorContext, OptionPaneContext, OptionSchema, Service, ServiceMeta,
+};
 
 fn value_to_display(v: &serde_json::Value) -> String {
     match v {
@@ -18,13 +20,25 @@ fn value_to_display(v: &serde_json::Value) -> String {
 }
 
 impl NixEvaluator {
-    pub async fn extract_services(&mut self) -> Vec<Service> {
+    pub async fn extract_services(&mut self) -> IndexContext {
         let inner = format!("{} {{ neoFlake = f; }}", EXTRACT_SERVICES.load_name);
         match self.query_json(&inner).await {
-            Ok(v) => v,
+            Ok(svcs) => IndexContext {
+                services: svcs,
+                ..Default::default()
+            },
             Err(e) => {
                 eprintln!("web: nix extract_services failed: {e}");
-                vec![]
+                IndexContext {
+                    services: vec![],
+                    error: Some(format!(
+                        "Nix evaluator error or timeout (>{}s) while extracting service list: {}. \
+                         This often means a long first-time eval, or a problem in the config flake (e.g. flake.lock has 'path' locked to a /nix/store/*-source that no longer exists after GC or because the lock was generated on a dev machine with local git+file paths). \
+                         The server-side timeout is now 10min to allow completion; the UI will show this message instead of spinning.",
+                        600, e
+                    )),
+                    ..Default::default()
+                }
             }
         }
     }
@@ -42,6 +56,8 @@ impl NixEvaluator {
             units: Vec<String>,
             #[serde(default)]
             containers: std::collections::HashMap<String, String>,
+            #[serde(default)]
+            error: Option<String>,
         }
         let raw: RawPane = match self.query_json(&inner).await {
             Ok(v) => v,
@@ -52,6 +68,7 @@ impl NixEvaluator {
                     options: vec![],
                     units: vec![],
                     containers: std::collections::HashMap::new(),
+                    error: Some(format!("Nix eval error/timeout for service options ({}): {}. See neo-web logs. Long timeout (10min) active.", service, e)),
                 }
             }
         };
@@ -68,6 +85,7 @@ impl NixEvaluator {
             options_json,
             save_endpoint: format!("/save/{service}"),
             is_core: false,
+            error: raw.error,
             units: raw.units,
             containers: raw.containers,
         }
@@ -86,6 +104,8 @@ impl NixEvaluator {
             units: Vec<String>,
             #[serde(default)]
             containers: std::collections::HashMap<String, String>,
+            #[serde(default)]
+            error: Option<String>,
         }
         let raw: RawPane = match self.query_json(&inner).await {
             Ok(v) => v,
@@ -96,6 +116,10 @@ impl NixEvaluator {
                     options: vec![],
                     units: vec![],
                     containers: std::collections::HashMap::new(),
+                    error: Some(format!(
+                        "Nix eval error/timeout for core section ({}): {}. See logs.",
+                        section, e
+                    )),
                 }
             }
         };
@@ -120,6 +144,7 @@ impl NixEvaluator {
             options_json,
             save_endpoint: format!("/save-core/{section}"),
             is_core: true,
+            error: raw.error,
             units: raw.units,
             containers: raw.containers,
         }
@@ -131,7 +156,18 @@ impl NixEvaluator {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("web: nix extract_proxied_services failed: {e}");
-                Default::default()
+                NavigatorContext {
+                    domain: None,
+                    services: vec![],
+                    theme: String::new(),
+                    error: Some(format!(
+                        "Nix evaluator error or timeout (>{}s) while building navigator: {e}. \
+                         Common cause: flake.lock (in your config dir) references a now-missing /nix/store/*-source/flake.nix (from dev machine git+file or post-GC). \
+                         Long server timeout (10min) in effect; UI will display this instead of spinning.",
+                        600
+                    )),
+                    ..Default::default()
+                }
             }
         };
         let dom = ctx.domain.clone();

@@ -3,6 +3,9 @@
   <script id="options-seed" type="application/json">{{{options_json}}}</script>
 
   <div class="card-body">
+    {{#if error}}
+      <div class="alert alert-error mb-4 text-sm">{{error}} <button class="btn btn-xs btn-ghost" onclick="location.reload()">Reload</button></div>
+    {{/if}}
     {{#if is_core}}
       <button class="btn btn-ghost btn-xs mb-2" hx-get="/core-grid" hx-target="#config-content" hx-swap="innerHTML">← Back to core grid</button>
     {{else}}

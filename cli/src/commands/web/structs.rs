@@ -23,6 +23,9 @@ pub struct IndexContext {
     pub services: Vec<Service>,
     #[serde(default)]
     pub theme: String,
+    /// If set, the nix evaluator hit an error/timeout (e.g. flake eval taking >10min or broken flake.lock referencing missing store paths). The UI shows this message instead of hanging.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -109,6 +112,9 @@ pub struct NavigatorContext {
     pub services: Vec<ProxiedService>,
     #[serde(default)]
     pub theme: String,
+    /// If set, the nix evaluator hit an error/timeout (e.g. flake eval taking >10min or broken flake.lock referencing missing store paths). The UI shows this message instead of hanging.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 /// Rich presentation metadata for a service (shown in the option pane header).
@@ -149,6 +155,9 @@ pub struct OptionPaneContext {
     /// Whether this pane was loaded from the core grid (affects which back button is shown)
     #[serde(default)]
     pub is_core: bool,
+    /// If set, the nix evaluator hit an error/timeout (e.g. flake eval taking >10min or broken flake.lock referencing missing store paths). The UI shows this message instead of hanging or empty pane.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
     /// Systemd units (without .service) declared for this neo service (for status/logs/control UI).
     #[serde(default)]
     pub units: Vec<String>,

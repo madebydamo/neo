@@ -207,7 +207,7 @@ impl NixEvaluator {
         let mut collected = String::new();
         let mut line = String::new();
         let mut found: Option<String> = None;
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(180);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(600); // 10 minutes; first-time flake evals (full module system + many services) or after nix gc / stale locks can legitimately take a long time. We surface errors gracefully instead of hanging the UI.
         while tokio::time::Instant::now() < deadline {
             line.clear();
             match timeout(Duration::from_millis(250), self.stdout.read_line(&mut line)).await {

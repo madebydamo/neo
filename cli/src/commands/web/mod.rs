@@ -73,10 +73,10 @@ pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &s
         // The first browser request may still experience the cost if it arrives before the
         // task finishes (the Mutex will serialize it), but once the warm-up completes all
         // subsequent extracts (index, grids, panes, etc.) are fast because the repl has
-        // memoized the results under `f`.
+        // memoized the results under `f`. On error/timeout we now return explicit error HTML (with reload) instead of silent empty data or indefinite spinners.
         let evaluator_for_warmup = app_config.evaluator.clone();
         tokio::spawn(async move {
-            eprintln!("web: starting background warm-up of nix evaluator (full homeserver flake + settings.toml read + option walking; this can take 30-120s the first time)...");
+            eprintln!("web: starting background warm-up of nix evaluator (full homeserver flake + settings.toml read + option walking; this can take 30s-10min the first time or after GC/stale locks)...");
             {
                 let mut ev = evaluator_for_warmup.lock().await;
                 let _ = ev.extract_proxied_services().await;
