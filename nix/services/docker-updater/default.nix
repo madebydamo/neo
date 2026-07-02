@@ -14,7 +14,8 @@
         set -euo pipefail
         ${concatMapStringsSep "\n" (c: ''
             echo "[$(date -Iseconds)] Checking ${c.container} (${c.image}) for ${c.service}..."
-            if ${pkgs.docker}/bin/docker pull ${escapeShellArg c.image} 2>&1 | grep -qE "(Downloaded newer image|Status: Downloaded newer image)"; then
+            output=$(${pkgs.docker}/bin/docker pull ${escapeShellArg c.image} 2>&1 || true)
+            if echo "$output" | grep -qE "(Downloaded newer image|Status: Downloaded newer image)"; then
               echo "  Newer image downloaded; restarting docker-${c.container}"
               ${pkgs.systemd}/bin/systemctl restart "docker-${c.container}" || true
             else
