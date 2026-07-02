@@ -92,10 +92,27 @@
       then t.name
       else ""
     );
-    n =
+    rawName =
       if n0 == "string"
       then "str"
       else n0;
+    n =
+      if rawName == "unsignedInt16"
+      then "port"
+      else if
+        rawName
+        == "intBetween"
+        || rawName == "unsignedInt"
+        || rawName == "positiveInt"
+        || rawName == "signedInt8"
+        || rawName == "signedInt16"
+        || rawName == "signedInt32"
+        || rawName == "unsignedInt8"
+        || rawName == "unsignedInt32"
+      then "int"
+      else if rawName == "numberBetween" || rawName == "numberNonnegative"
+      then "float"
+      else rawName;
     nested = tryOr {} (t.nestedTypes or {});
     elemT = tryOr null (nested.elemType or null);
     elemInfo =
@@ -105,13 +122,45 @@
     functor = tryOr {} (t.functor or {});
     fName = tryOr "" (functor.name or "");
     fPayload = tryOr null (functor.payload or null);
-    bounds =
-      if fName == "between" && builtins.isAttrs fPayload
-      then {
-        min = fPayload.lo or null;
-        max = fPayload.hi or null;
-      }
-      else {};
+    desc = tryOr "" (t.description or "");
+    bounds = let
+      base =
+        if fName == "between" && builtins.isAttrs fPayload
+        then {
+          min = fPayload.lo or null;
+          max = fPayload.hi or null;
+        }
+        else {};
+      m = builtins.match ".*between ([0-9]+) and ([0-9]+) \\(both inclusive\\).*" desc;
+      m2 = builtins.match ".*between ([0-9]+) and ([0-9]+).*" desc;
+      fromM = ms:
+        if builtins.isList ms && builtins.length ms >= 2
+        then {
+          min = builtins.fromJSON (builtins.elemAt ms 0);
+          max = builtins.fromJSON (builtins.elemAt ms 1);
+        }
+        else {};
+      bDesc =
+        if builtins.isList m && builtins.length m >= 2
+        then fromM m
+        else if builtins.isList m2 && builtins.length m2 >= 2
+        then fromM m2
+        else {};
+      bSpecial =
+        if
+          builtins.match ".*unsigned integer, meaning >=0.*" desc
+          != null
+          || builtins.match ".*nonnegative.*" desc != null
+        then {min = 0;}
+        else if builtins.match ".*positive integer, meaning >0.*" desc != null
+        then {min = 1;}
+        else {};
+    in
+      if bDesc != {}
+      then bDesc
+      else if bSpecial != {}
+      then bSpecial
+      else base;
     enumVals =
       if fName == "enum"
       then
@@ -140,11 +189,11 @@
     else if n == "submodule"
     then {kind = "submodule";}
     else if n == "port"
-    then {kind = "port";}
+    then (bounds // {kind = "port";})
     else if n == "int"
     then (bounds // {kind = "int";})
     else if n == "float"
-    then {kind = "float";}
+    then (bounds // {kind = "float";})
     else if n == "bool"
     then {kind = "bool";}
     else if n == "str"
@@ -193,6 +242,18 @@
       else if hi != null
       then "int (<=${toString hi})"
       else "int"
+    else if k == "float"
+    then let
+      lo = info.min or null;
+      hi = info.max or null;
+    in
+      if lo != null && hi != null
+      then "float (${toString lo}-${toString hi})"
+      else if lo != null
+      then "float (>=${toString lo})"
+      else if hi != null
+      then "float (<=${toString hi})"
+      else "float"
     else if k == "enum"
     then "enum"
     else k;
