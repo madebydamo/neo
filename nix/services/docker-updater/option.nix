@@ -11,7 +11,10 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Docker auto-updater (scheduled image pulls + restarts for declared containers)" {rank = 0;};
+              enabled = mkEnableOption "Docker auto-updater (scheduled image pulls + restarts for declared containers)" {
+                rank = 0;
+                default = true;
+              };
               schedule = mkOption {
                 type = types.str;
                 default = "Sun *-*-* 04:00:00";
