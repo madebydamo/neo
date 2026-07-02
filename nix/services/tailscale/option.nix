@@ -73,6 +73,10 @@
                 rank = 100;
               };
             }
+            // lib.neo.mkSystemdUnits [
+              "tailscale-up"
+              "tailscaled"
+            ]
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/tailscale.svg";
               description = ''

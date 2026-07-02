@@ -71,6 +71,7 @@
               "nextcloud" = "nextcloud:apache";
               "nextcloud-cron" = "nextcloud:apache";
             }
+            // lib.neo.mkSystemdUnits ["nextcloud-setup"]
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nextcloud.svg";
               description = ''

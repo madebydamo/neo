@@ -74,9 +74,7 @@
                 rank = 92;
               };
             }
-            // lib.neo.mkSystemdUnits [
-              "backup"
-            ]
+            // lib.neo.mkSystemdUnits ["backup"]
             // lib.neo.mkServiceMeta {
               icon = "💾";
               description = ''

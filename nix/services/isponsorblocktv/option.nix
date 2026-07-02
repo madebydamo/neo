@@ -19,6 +19,9 @@
             // lib.neo.mkContainerDefinitions {
               isponsorblocktv = "ghcr.io/dmunozv04/isponsorblocktv:latest";
             }
+            // lib.neo.mkSystemdUnits [
+              "isponsorblocktv-setup"
+            ]
             // lib.neo.mkServiceMeta {
               icon = "https://raw.githubusercontent.com/ajayyy/SponsorBlock/master/public/icons/LogoSponsorBlocker256px.png";
               description = ''

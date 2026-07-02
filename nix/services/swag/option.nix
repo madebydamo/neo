@@ -50,6 +50,10 @@
             // lib.neo.mkContainerDefinitions {
               swag = "lscr.io/linuxserver/swag:latest";
             }
+            // lib.neo.mkSystemdUnits [
+              "swag-cert-reloader"
+              "swag-patcher"
+            ]
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nginx.svg";
               description = ''

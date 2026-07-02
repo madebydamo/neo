@@ -151,6 +151,10 @@
               };
             }
             // lib.neo.mkReverseProxyOptions {subdomain = "hermes";}
+            // lib.neo.mkSystemdUnits [
+              "hermes-dashboard"
+              "hermes-agent"
+            ]
             // lib.neo.mkServiceMeta {
               icon = "https://raw.githubusercontent.com/NousResearch/hermes-agent/main/website/static/img/logo.png";
               description = ''

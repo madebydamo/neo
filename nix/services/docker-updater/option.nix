@@ -19,6 +19,7 @@
                 rank = 10;
               };
             }
+            // lib.neo.mkSystemdUnits ["neo-docker-updater"]
             // lib.neo.mkServiceMeta {
               icon = "🐋";
               description = ''

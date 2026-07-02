@@ -39,6 +39,7 @@
               pihole = "pihole/pihole:latest";
               extraUnits = ["pihole-update-gravity"];
             }
+            // lib.neo.mkSystemdUnits ["pihole-update-gravity"]
             // lib.neo.mkServiceMeta {
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/pi-hole.svg";
               description = ''
