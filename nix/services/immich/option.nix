@@ -19,6 +19,7 @@
                 "^/share/"
                 "^/.well-known/immich"
                 "^/api/"
+                "^/_app/immutable/"
               ];
             }
             // lib.neo.mkContainerDefinitions {
