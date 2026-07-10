@@ -1,0 +1,65 @@
+{{! Submodule records are purely structural and are omitted (children with dotted names are shown flat) }}
+{{#unless (eq type.kind "submodule")}}
+  <div class="border border-base-300 rounded-lg p-3 bg-base-200/40">
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 flex-wrap min-w-0">
+        <span class="font-mono text-sm break-all">{{name}}</span>
+        {{#if readOnly}}<span class="badge badge-warning badge-xs">readOnly</span>{{/if}}
+        <div class="dropdown dropdown-right dropdown-hover">
+          <span tabindex="0" role="button"
+                class="cursor-help text-base-content/40 hover:text-primary text-[13px] leading-none select-none">
+            ⓘ
+          </span>
+          <div tabindex="0" class="dropdown-content card card-sm bg-base-100 shadow-sm z-10 w-72 text-left">
+            <div class="card-body text-sm">
+              {{#if description}}
+                <div>{{description}}</div>
+                <div class="divider my-1"></div>
+              {{/if}}
+              <div><span class="font-semibold">type:</span> <span class="font-mono text-xs">{{typeLabel}}</span></div>
+              <div><span class="font-semibold">default:</span> <span class="font-mono text-xs">{{defaultDisplay}}</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1 flex-shrink-0">
+        <span x-show="sourceLabel('{{name}}') === 'modified'"
+              class="badge badge-warning badge-xs">modified</span>
+        <button @click="revertField('{{name}}')"
+                class="btn btn-ghost btn-xs"
+                :class="{ 'opacity-40': isAtOriginal('{{name}}') }"
+                :disabled="isAtOriginal('{{name}}')"
+                title="Revert this field to loaded value">↺</button>
+      </div>
+    </div>
+
+    {{#if (eq type.kind "bool")}}
+      {{> options/bool}}
+    {{/if}}
+
+    {{#if (eq type.kind "str")}}
+      {{> options/str}}
+    {{/if}}
+
+    {{#if (eq type.kind "nullOr")}}
+      {{> options/null_or}}
+    {{/if}}
+
+    {{#if (or (eq type.kind "int") (eq type.kind "port") (eq type.kind "float"))}}
+      {{> options/number}}
+    {{/if}}
+
+    {{#if (eq type.kind "enum")}}
+      {{> options/enum}}
+    {{/if}}
+
+    {{#if (eq type.kind "listOf")}}
+      {{> options/list_of}}
+    {{/if}}
+
+    {{#if (eq type.kind "attrsOf")}}
+      {{> options/attrs_of}}
+    {{/if}}
+  </div>
+{{/unless}}

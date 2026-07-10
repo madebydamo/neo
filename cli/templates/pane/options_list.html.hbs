@@ -1,0 +1,14 @@
+{{#if options}}
+  <div class="space-y-4">
+    {{#each options}}
+      {{> options/field}}
+    {{/each}}
+  </div>
+
+  <div class="mt-4 flex gap-2">
+    <button @click="save()" class="btn btn-sm btn-primary">Save</button>
+    <button @click="revertAll()" class="btn btn-sm btn-ghost">Discard changes</button>
+  </div>
+{{else}}
+  <p class="text-base-content/60">No options found or service does not exist.</p>
+{{/if}}

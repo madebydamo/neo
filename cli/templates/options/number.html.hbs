@@ -1,0 +1,19 @@
+{{#if (or (eq type.kind "int") (eq type.kind "port"))}}
+  <div class="mt-2">
+    <input type="number"
+           class="input input-primary input-sm w-full font-mono"
+           x-model.number="values['{{name}}']"
+           {{#if type.min}}min="{{type.min}}"{{/if}}
+           {{#if type.max}}max="{{type.max}}"{{/if}}>
+  </div>
+{{/if}}
+{{#if (eq type.kind "float")}}
+  <div class="mt-2">
+    <input type="number"
+           class="input input-primary input-sm w-full font-mono"
+           x-model.number="values['{{name}}']"
+           step="any"
+           {{#if type.min}}min="{{type.min}}"{{/if}}
+           {{#if type.max}}max="{{type.max}}"{{/if}}>
+  </div>
+{{/if}}

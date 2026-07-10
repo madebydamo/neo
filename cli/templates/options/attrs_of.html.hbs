@@ -1,0 +1,13 @@
+<div class="mt-2 space-y-1">
+  <template x-for="(val, key) in (values['{{name}}'] || {})" :key="key">
+    <div class="flex gap-2">
+      <input class="input input-primary input-sm w-40 font-mono" :value="key" disabled>
+      <input class="input input-primary input-sm flex-1 font-mono" x-model="values['{{name}}'][key]">
+      <button @click="removeAttrItem('{{name}}', key)" class="btn btn-ghost btn-xs">✕</button>
+    </div>
+  </template>
+  <div class="flex gap-2">
+    <input class="input input-primary input-sm w-40" placeholder="key" x-ref="newkey_{{name}}">
+    <button @click="addAttrItem('{{name}}', $refs['newkey_{{name}}'])" class="btn btn-outline btn-xs">+ add</button>
+  </div>
+</div>

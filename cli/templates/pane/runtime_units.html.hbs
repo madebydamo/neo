@@ -1,0 +1,22 @@
+{{#if units}}
+  {{!-- Runtime unit rows: live ActiveState + controls are pushed over /ws/status
+       after the configuration page registers these units (watch_replace). --}}
+  <div class="mb-3 p-2 bg-base-200/60 rounded border border-base-300" id="runtime-units" data-units="{{#each units}}{{name}}{{#unless @last}} {{/unless}}{{/each}}">
+    <div class="text-xs font-semibold mb-1.5 flex items-center gap-2">
+      <span>Runtime units</span>
+      <span class="text-[10px] font-normal opacity-50">live via websocket</span>
+    </div>
+    <div class="space-y-0.5">
+      {{#each units}}
+        <div class="flex items-center text-xs w-full unit-row" data-unit="{{name}}">
+          <span class="font-mono text-[11px] opacity-80 flex-shrink-0 mr-1">{{name}}</span>
+          <div class="flex-1"></div>
+          <div id="unit-controls-{{name}}" class="unit-controls flex items-center gap-1 flex-shrink-0">
+            <span class="text-[10px] opacity-40">⋯</span>
+          </div>
+          <div class="update-out update-out-inline text-[10px] ml-1 flex-shrink-0 max-w-[12rem] truncate"></div>
+        </div>
+      {{/each}}
+    </div>
+  </div>
+{{/if}}

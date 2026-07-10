@@ -1,0 +1,10 @@
+<div class="mt-2">
+  <template x-for="(item, idx) in (values['{{name}}'] || [])" :key="idx">
+    <div class="flex gap-2 mb-1.5">
+      <input type="text" class="input input-primary input-sm flex-1 font-mono"
+             x-model="values['{{name}}'][idx]">
+      <button @click="removeListItem('{{name}}', idx)" class="btn btn-ghost btn-xs">✕</button>
+    </div>
+  </template>
+  <button @click="addListItem('{{name}}')" class="btn btn-outline btn-xs mt-1">+ add</button>
+</div>

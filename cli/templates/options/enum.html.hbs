@@ -1,0 +1,8 @@
+<div class="mt-2">
+  <select class="select select-sm select-primary w-full font-mono inline"
+          x-model="values['{{name}}']">
+    {{#each type.values}}
+      <option value="{{this}}">{{this}}</option>
+    {{/each}}
+  </select>
+</div>
