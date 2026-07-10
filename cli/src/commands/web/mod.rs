@@ -51,7 +51,7 @@ pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &s
     rt.block_on(async move {
         let busy = Arc::new(AtomicBool::new(true));
         let evaluator =
-            nix_eval::NixEvaluator::new(&nix_cmd_for_eval, &neo_input_for_eval, busy.clone())
+            nix::NixEvaluator::new(&nix_cmd_for_eval, &neo_input_for_eval, busy.clone())
                 .await
                 .context("start persistent nix repl for fast evals")?;
         let (unit_tx, _unit_rx) = broadcast::channel::<String>(64);
