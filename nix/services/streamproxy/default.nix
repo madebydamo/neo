@@ -52,23 +52,47 @@
         httpSwagBlock ++ httpConfigBlock
       );
 
-      streamSwagMap = flatten (optional swagEnabled (map (domain: "${domain} ${localIp}:${toString swagHttps};") allSwagDomains));
-      streamConfigMap = flatten (mapAttrsToList (
+      domainLabelCount = domain:
+        length (filter (part: part != "") (splitString "." domain));
+      moreSpecificFirst = a: b: let
+        labelsA = domainLabelCount a.domain;
+        labelsB = domainLabelCount b.domain;
+        lenA = stringLength a.domain;
+        lenB = stringLength b.domain;
+      in
+        if labelsA != labelsB
+        then labelsA > labelsB
+        else if lenA != lenB
+        then lenA > lenB
+        else if a.isWildcard != b.isWildcard
+        then !a.isWildcard && b.isWildcard
+        else a.domain < b.domain;
+      mkStreamMapEntry = domain: isWildcard: line: {
+        inherit domain isWildcard line;
+      };
+      streamSwagEntries = flatten (optional swagEnabled (map (
+          domain: let
+            isWildcard = hasPrefix "*." domain;
+            bare =
+              if isWildcard
+              then removePrefix "*." domain
+              else domain;
+          in
+            mkStreamMapEntry bare isWildcard "${domain} ${localIp}:${toString swagHttps};"
+        )
+        allSwagDomains));
+      streamConfigEntries = flatten (mapAttrsToList (
           name: entry: let
-            wildcard = entry.wildcard;
-            includeTopLevel = entry.includeTopLevel;
-            url = entry.url;
-            customDomains = entry.customDomains;
             httpsPort = cfg.ports.${name}.https;
-          in (
-            (optional wildcard "~^(?<sub>.+\\.)${escapeRegex url}$ 127.0.0.1:${toString httpsPort};")
-            ++ (optional includeTopLevel "${url} 127.0.0.1:${toString httpsPort};")
-            ++ (map (domain: "${domain} 127.0.0.1:${toString httpsPort};") customDomains)
-          )
+            backend = "127.0.0.1:${toString httpsPort}";
+          in
+            (optional entry.wildcard (mkStreamMapEntry entry.url true "~^(?<sub>.+\\.)${escapeRegex entry.url}$ ${backend};"))
+            ++ (optional entry.includeTopLevel (mkStreamMapEntry entry.url false "${entry.url} ${backend};"))
+            ++ (map (domain: mkStreamMapEntry domain false "${domain} ${backend};") entry.customDomains)
         )
         cfg.entries);
       streamMap = concatStringsSep "\n" (
-        streamSwagMap ++ streamConfigMap
+        map (e: e.line) (sort moreSpecificFirst (streamSwagEntries ++ streamConfigEntries))
       );
 
       nonSwagEntries = filterAttrs (n: _: n != "swag-local") cfg.entries;
