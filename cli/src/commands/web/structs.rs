@@ -46,8 +46,10 @@ pub struct AppConfig {
     pub neo_input: String,
     pub settings_path: PathBuf,
     pub evaluator: Arc<Mutex<super::nix_eval::NixEvaluator>>,
-    /// Sender for broadcasting unit status control HTML (as OOB swap fragments) over WS to htmx clients.
-    /// Used to replace polling with push updates for live status dots + conditional action buttons.
+    /// Shared with the persistent nix repl: true while an evaluation/refresh is in flight.
+    pub eval_busy: Arc<AtomicBool>,
+    /// Sender for broadcasting HTML OOB swap fragments over WS to htmx clients
+    /// (unit controls + action-bar status). Replaces client polling with push updates.
     pub unit_updates: tokio::sync::broadcast::Sender<String>,
 }
 

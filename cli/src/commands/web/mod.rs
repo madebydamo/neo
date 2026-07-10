@@ -49,15 +49,20 @@ pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &s
             nix_eval::NixEvaluator::new(&nix_cmd_for_eval, &neo_input_for_eval, busy.clone())
                 .await
                 .context("start persistent nix repl for fast evals")?;
-        let (unit_tx, _unit_rx) = broadcast::channel::<String>(32);
+        let (unit_tx, _unit_rx) = broadcast::channel::<String>(64);
         let app_config = Arc::new(AppConfig {
             nix_cmd: nix_cmd_for_eval,
             neo_input: neo_input_for_eval,
             settings_path,
             evaluator: Arc::new(Mutex::new(evaluator)),
+            eval_busy: busy,
             unit_updates: unit_tx,
         });
         println!("{:?}", app_config);
+
+        // Push action-bar OOB updates (pending changes, reset, nix-busy) over the shared WS
+        // whenever state changes — replaces the old client-side every-20s polling.
+        server::start_action_bar_watcher(app_config.clone());
 
         // Background warm-up: the heavy evaluation (builtins.getFlake on the real on-disk
         // configuration directory + full nixosConfiguration module system + readFile of the

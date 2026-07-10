@@ -160,12 +160,11 @@ function optionForm() {
           setTimeout(() => {
             if (event?.target) event.target.innerText = orig || 'Save';
           }, 1200);
-          const ind = document.getElementById('pending-changes');
+          // Action bar (pending / reset / eval busy) is pushed over WS after save.
           const loadUrl = pane?.dataset?.loadUrl;
           if (loadUrl) {
             htmx.ajax('GET', loadUrl, {target: '#config-content', swap: 'innerHTML'});
           }
-          if (ind) htmx.ajax('GET', '/changes/indicator', {target: '#pending-changes', swap: 'innerHTML'});
         } else {
           const txt = await res.text().catch(() => '');
           alert('Save failed: ' + (txt || res.status));
