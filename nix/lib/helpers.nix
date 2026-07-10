@@ -51,7 +51,7 @@ in {
         bcryptUser = mkHelper {
           id = "bcrypt-user";
           kind = "form";
-          label = "Set user";
+          label = "Helper";
           description = "Fill this list entry with a username:bcrypt_hash line for tinyauth (TINYAUTH_AUTH_USERS). Use + Add for a new row first.";
           # set (not append): UI applies to a specific list index via target.index
           apply = "set";
@@ -76,7 +76,7 @@ in {
         mkpasswdSha512 = mkHelper {
           id = "mkpasswd-sha512";
           kind = "form";
-          label = "Hash password";
+          label = "Helper";
           description = "Generate a SHA-512 crypt hash (mkpasswd -m sha-512).";
           apply = "set";
           script = scripts + "/mkpasswd-sha512.sh";
