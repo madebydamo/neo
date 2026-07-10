@@ -11,7 +11,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStderr, Command as TokioCommand};
 use tokio::time::timeout;
 
-use super::nix_extractors::NIX_EXTRACTORS;
+use super::registry::NIX_EXTRACTORS;
 
 pub struct NixEvaluator {
     child: Child,

@@ -45,7 +45,7 @@ pub struct AppConfig {
     pub nix_cmd: String,
     pub neo_input: String,
     pub settings_path: PathBuf,
-    pub evaluator: Arc<Mutex<super::nix_eval::NixEvaluator>>,
+    pub evaluator: Arc<Mutex<super::nix::NixEvaluator>>,
     /// Shared with the persistent nix repl: true while an evaluation/refresh is in flight.
     pub eval_busy: Arc<AtomicBool>,
     /// Sender for broadcasting HTML OOB swap fragments over WS to htmx clients

@@ -11,10 +11,8 @@ use toml_edit::DocumentMut;
 
 mod action_bar;
 mod activation;
-mod evaluator;
 mod git_ops;
-mod nix_eval;
-mod nix_extractors;
+mod nix;
 mod routes;
 mod settings;
 mod structs;
