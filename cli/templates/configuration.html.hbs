@@ -113,6 +113,21 @@
       </div>
     </dialog>
 
+    <dialog id="helper-dialog" class="modal">
+      <div class="modal-box max-w-md">
+        <h3 id="helper-dialog-title" class="font-bold text-lg mb-1">Helper</h3>
+        <p id="helper-dialog-desc" class="text-sm opacity-70 mb-3"></p>
+        <form id="helper-dialog-form" class="space-y-3" onsubmit="return false;">
+          <div id="helper-dialog-fields" class="space-y-3"></div>
+          <div class="modal-action">
+            <button type="button" class="btn btn-sm btn-ghost" onclick="closeHelperDialog()">Cancel</button>
+            <button type="submit" id="helper-dialog-submit" class="btn btn-sm btn-primary">Apply</button>
+          </div>
+        </form>
+      </div>
+      <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
     <script src="/static/configuration.js"></script>
   </body>
 </html>

@@ -34,6 +34,10 @@ pub async fn option_pane(config: &State<Arc<AppConfig>>, service: &str) -> Templ
         let mut ev = config.evaluator.lock().await;
         ev.extract_service_options(service).await
     };
+    {
+        let mut cache = config.schema_cache.write().await;
+        cache.put(false, service, pane.options.clone());
+    }
     Template::render("option_pane", pane)
 }
 
@@ -63,5 +67,9 @@ pub async fn core_pane(config: &State<Arc<AppConfig>>, section: &str) -> Templat
         let mut ev = config.evaluator.lock().await;
         ev.extract_neo_section(section).await
     };
+    {
+        let mut cache = config.schema_cache.write().await;
+        cache.put(true, section, pane.options.clone());
+    }
     Template::render("option_pane", pane)
 }

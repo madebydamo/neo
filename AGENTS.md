@@ -90,6 +90,38 @@ in {
 - Options: `enabled = mkEnableOption "description";`
 - Use plain strings for all descriptions (not `lib.mdDoc`).
 
+### Option Helpers (web UI fill-assist)
+Attach UI-only helpers so operators can fill secrets/hashes without leaving the config UI.
+Metadata rides on options like `rank` (never executed during pure NixOS eval).
+
+```nix
+# Button-only (no dialog): random secret into a str / nullOr str field
+token = mkOption {
+  type = types.str;
+  description = "...";
+  helper = lib.neo.helpers.randomToken;
+};
+
+# Form dialog on each listOf row (tinyauth users): + Add then Set user on that row
+users = mkOption {
+  type = types.listOf types.str;
+  helper = lib.neo.helpers.bcryptUser;  # apply=set to target.index
+};
+
+# Password → sha-512 crypt (core hashedLinuxPassword)
+helper = lib.neo.helpers.mkpasswdSha512;
+
+# Label override
+helper = lib.neo.helpers.randomToken // { label = "Generate admin token"; };
+
+# Also valid: mkOption { ... } // { helper = lib.neo.helpers.randomToken; };
+```
+
+- Presets / constructor: `nix/lib/helpers.nix` (`lib.neo.mkHelper`, `lib.neo.helpers.*`)
+- Scripts: `nix/helpers/*.sh` (must be executable; tools must be on neo-web `path`)
+- Extract + UI + `POST /helper/run` pick up `helper` automatically
+- Prefer helpers for **self-generated** secrets (tokens, db passwords, bcrypt users). Do **not** attach for external API keys / bot tokens the user obtains elsewhere.
+
 ### Option Definitions (in option.nix)
 ```nix
 options.neo.services.example = mkOption {

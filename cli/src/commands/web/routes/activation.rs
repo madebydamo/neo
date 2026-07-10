@@ -1,5 +1,5 @@
-use rocket::response::content::RawHtml;
 use rocket::get;
+use rocket::response::content::RawHtml;
 
 use crate::commands::web::activation;
 

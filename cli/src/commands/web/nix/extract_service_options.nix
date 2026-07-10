@@ -83,6 +83,46 @@
       )
     else null;
 
+  # Serialize UI helper metadata. Path→string ONLY here (not in toSafeValue), so
+  # existing types.path option defaults/currents keep serializing as null.
+  toHelperMeta = h:
+    if !(builtins.isAttrs h)
+    then null
+    else let
+      kind = tryOr "" (h.kind or "");
+      scriptRaw = h.script or null;
+      script =
+        if scriptRaw == null
+        then null
+        else if builtins.typeOf scriptRaw == "path"
+        then toString scriptRaw
+        else if builtins.typeOf scriptRaw == "string"
+        then scriptRaw
+        else null;
+      inputs = tryOr [] (h.inputs or []);
+    in
+      if kind == "" || script == null
+      then null
+      else {
+        id = tryOr "unnamed" (h.id or "unnamed");
+        inherit kind;
+        label = tryOr "Generate" (h.label or "Generate");
+        description = tryOr "" (h.description or "");
+        apply = tryOr "set" (h.apply or "set");
+        inherit script;
+        inputs = map (
+          i: {
+            name = i.name or "";
+            type = i.type or "str";
+            label = i.label or (i.name or "");
+            required = tryOr true (i.required or true);
+            placeholder = tryOr "" (i.placeholder or "");
+            default = toSafeValue (i.default or null);
+            values = tryOr null (i.values or null);
+          }
+        ) (builtins.filter (i: builtins.isAttrs i && (i.name or "") != "") inputs);
+      };
+
   typeNameOf = t: let
     n0 = tryOr "" (
       if builtins.isAttrs t && builtins.hasAttr "name" t
@@ -156,6 +196,7 @@
             readOnly = tryOr false (o.readOnly or false);
             current = null;
             rank = tryOr null (o.rank or null);
+            helper = toHelperMeta (o.helper or null);
           };
           childSet =
             if tn == "submodule"
@@ -355,6 +396,7 @@
     internal = tryOr false (o.internal or false);
     readOnly = tryOr false (o.readOnly or false);
     rank = tryOr null (o.rank or null);
+    helper = toHelperMeta (o.helper or null);
   in {
     name = path;
     type = ti;
@@ -366,6 +408,7 @@
     readOnly = readOnly;
     current = toSafeValue curVal;
     rank = rank;
+    inherit helper;
   };
 
   # Walk options into a flat form list.

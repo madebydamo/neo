@@ -59,7 +59,11 @@ pub fn unit_logs(unit: &str) -> RawHtml<String> {
 
 /// Shared post-action path: kick systemctl, push OOB once, then burst-refresh while it settles.
 /// Buttons use hx-swap="none"; the returned OOB still updates the controls row.
-fn unit_action_response(action: &str, unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
+fn unit_action_response(
+    action: &str,
+    unit: &str,
+    config: &State<Arc<AppConfig>>,
+) -> RawHtml<String> {
     if !unit_name_valid(unit) {
         return RawHtml(String::new());
     }

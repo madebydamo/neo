@@ -3,6 +3,12 @@
     <input type="text" class="input input-primary input-sm flex-1 font-mono"
            x-model="values['{{name}}']"
            placeholder="null (use default)">
+    <template x-if="resolveHelper('{{name}}')">
+      <button type="button" class="btn btn-outline btn-xs shrink-0"
+              @click="runHelper('{{name}}')"
+              :disabled="helperBusy"
+              x-text="resolveHelper('{{name}}').label"></button>
+    </template>
     <button type="button" @click="values['{{name}}'] = null"
             class="btn btn-ghost btn-xs shrink-0">Clear</button>
   </div>
@@ -12,6 +18,12 @@
     <input type="text" class="input input-primary input-sm flex-1 font-mono"
            x-model="values['{{name}}']"
            placeholder="null (use default)">
+    <template x-if="resolveHelper('{{name}}')">
+      <button type="button" class="btn btn-outline btn-xs shrink-0"
+              @click="runHelper('{{name}}')"
+              :disabled="helperBusy"
+              x-text="resolveHelper('{{name}}').label"></button>
+    </template>
     <button type="button" @click="values['{{name}}'] = null"
             class="btn btn-ghost btn-xs shrink-0">Clear</button>
   </div>

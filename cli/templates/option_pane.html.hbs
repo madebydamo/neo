@@ -1,5 +1,5 @@
 {{!-- Service / core option pane shell. Concern-specific pieces live under pane/ and options/. --}}
-<div id="options-pane" class="card bg-base-100 shadow" data-service="{{service}}" data-save-endpoint="{{save_endpoint}}" data-load-url="{{#if is_core}}/core/{{service}}{{else}}/option/{{service}}{{/if}}" x-data="optionForm()" x-init="initForm()">
+<div id="options-pane" class="card bg-base-100 shadow" data-service="{{service}}" data-save-endpoint="{{save_endpoint}}" data-is-core="{{#if is_core}}true{{else}}false{{/if}}" data-load-url="{{#if is_core}}/core/{{service}}{{else}}/option/{{service}}{{/if}}" x-data="optionForm()" x-init="initForm()">
   <!-- Seed script moved to top so it is available immediately when x-init runs -->
   <script id="options-seed" type="application/json">{{{options_json}}}</script>
 

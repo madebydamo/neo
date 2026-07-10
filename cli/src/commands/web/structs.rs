@@ -9,6 +9,49 @@ fn default_true() -> bool {
     true
 }
 
+fn default_generate_label() -> String {
+    "Generate".to_string()
+}
+
+fn default_apply_set() -> String {
+    "set".to_string()
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct HelperInput {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub input_type: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default = "default_true")]
+    pub required: bool,
+    #[serde(default)]
+    pub placeholder: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub values: Option<Vec<String>>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct OptionHelper {
+    #[serde(default)]
+    pub id: String,
+    pub kind: String,
+    #[serde(default = "default_generate_label")]
+    pub label: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default = "default_apply_set")]
+    pub apply: String,
+    /// Absolute script path from extract. Trusted only after server-side schema resolve.
+    #[serde(default)]
+    pub script: String,
+    #[serde(default)]
+    pub inputs: Vec<HelperInput>,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Service {
     pub name: String,
@@ -54,6 +97,8 @@ pub struct AppConfig {
     pub unit_updates: tokio::sync::broadcast::Sender<String>,
     /// Systemd unit names with an in-flight docker pull+restart (dedup + disable ↻ UI).
     pub pulls_in_flight: Arc<Mutex<HashSet<String>>>,
+    /// Process-local option schema cache for helper resolution (avoids re-taking eval mutex).
+    pub schema_cache: Arc<tokio::sync::RwLock<super::schema_cache::SchemaCache>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -98,6 +143,8 @@ pub struct OptionSchema {
     pub currentDisplay: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rank: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub helper: Option<OptionHelper>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

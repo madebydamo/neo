@@ -12,8 +12,10 @@ use toml_edit::DocumentMut;
 mod action_bar;
 mod activation;
 mod git_ops;
+mod helper_exec;
 mod nix;
 mod routes;
+mod schema_cache;
 mod settings;
 mod structs;
 mod trigger;
@@ -63,6 +65,7 @@ pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &s
             eval_busy: busy,
             unit_updates: unit_tx,
             pulls_in_flight: Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+            schema_cache: Arc::new(tokio::sync::RwLock::new(schema_cache::SchemaCache::default())),
         });
         println!("{:?}", app_config);
 

@@ -10,6 +10,8 @@ function optionForm() {
     hadCurrent: {},
     optionsByName: {},
     serviceName: '',
+    isCore: false,
+    helperBusy: false,
 
     cloneValue(v) {
       if (v === null || v === undefined) return v;
@@ -138,6 +140,113 @@ function optionForm() {
       this.serviceName = (pane?.dataset?.service)
         || (pane?.querySelector?.('h2')?.textContent?.trim())
         || '';
+      this.isCore = (pane?.dataset?.isCore === 'true')
+        || (pane?.dataset?.saveEndpoint || '').startsWith('/save-core/');
+    },
+
+    resolveHelper(optionName, target) {
+      const opt = this.optionsByName[optionName];
+      if (!opt) return null;
+      if (target && target.field) {
+        const fields = opt.type?.elem?.fields || [];
+        const f = fields.find((x) => x.name === target.field);
+        return f?.helper || null;
+      }
+      return opt.helper || null;
+    },
+
+    async runHelper(optionName, target) {
+      const helper = this.resolveHelper(optionName, target);
+      if (!helper) return;
+      if (helper.kind === 'button') {
+        return this.executeHelper(optionName, target, helper, {});
+      }
+      if (typeof window.openHelperDialog === 'function') {
+        window.openHelperDialog(helper, (inputs) =>
+          this.executeHelper(optionName, target, helper, inputs)
+        );
+      } else {
+        alert('Helper dialog unavailable');
+      }
+    },
+
+    async executeHelper(optionName, target, helper, inputs) {
+      this.helperBusy = true;
+      try {
+        const res = await fetch('/helper/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            service: this.serviceName,
+            option: optionName,
+            is_core: !!this.isCore,
+            target: target || null,
+            inputs: inputs || {}
+          })
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!body.ok) {
+          alert(body.error || 'Helper failed');
+          return;
+        }
+        this.applyHelperValue(
+          optionName,
+          target,
+          helper.apply || body.apply || 'set',
+          body.value
+        );
+      } catch (e) {
+        alert('Helper error: ' + e);
+      } finally {
+        this.helperBusy = false;
+      }
+    },
+
+    applyHelperValue(optionName, target, apply, value) {
+      // Top-level listOf element: target = { index } without field (e.g. tinyauth users).
+      if (target && target.index != null && target.index !== undefined && !target.field) {
+        const list = this.ensureList(optionName);
+        while (list.length <= target.index) {
+          const elem = this.unwrapType(this.optType(optionName)?.elem);
+          list.push(this.defaultForType(elem || { kind: 'str' }));
+        }
+        list[target.index] = value;
+        this.values[optionName] = [...list];
+        return;
+      }
+      if (!target || !target.field) {
+        if (apply === 'append') {
+          const list = this.ensureList(optionName);
+          list.push(value);
+          this.values[optionName] = [...list];
+        } else {
+          this.values[optionName] = value;
+        }
+        return;
+      }
+      if (target.key != null && target.key !== undefined) {
+        const obj = this.ensureAttrs(optionName);
+        const entry = Object.assign({}, obj[target.key] || {});
+        if (apply === 'append') {
+          const nested = Array.isArray(entry[target.field]) ? entry[target.field] : [];
+          entry[target.field] = [...nested, value];
+        } else {
+          entry[target.field] = value;
+        }
+        obj[target.key] = entry;
+        this.values[optionName] = { ...obj };
+        return;
+      }
+      if (target.index != null && target.index !== undefined) {
+        const entry = this.ensureListEntry(optionName, target.index);
+        if (apply === 'append') {
+          if (!Array.isArray(entry[target.field])) entry[target.field] = [];
+          entry[target.field] = [...entry[target.field], value];
+        } else {
+          entry[target.field] = value;
+        }
+        this.values[optionName] = [...this.values[optionName]];
+      }
     },
 
     optType(name) {

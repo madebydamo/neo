@@ -124,9 +124,7 @@ fn status_err(msg: &str) -> (String, String) {
 }
 
 pub fn broadcast_update_out(unit: &str, inner: &str, title: &str, config: &AppConfig) {
-    let _ = config
-        .unit_updates
-        .send(update_out_oob(unit, inner, title));
+    let _ = config.unit_updates.send(update_out_oob(unit, inner, title));
 }
 
 /// Build the inner content (dot + state + buttons) for a unit controls area.
@@ -135,11 +133,7 @@ pub fn broadcast_update_out(unit: &str, inner: &str, title: &str, config: &AppCo
 /// Buttons stay stable across transitional states so restart/stop never "vanish"
 /// while systemctl --no-block is still settling (the live WS watcher re-renders
 /// as soon as ActiveState changes).
-pub fn render_unit_controls_content_with_state(
-    unit: &str,
-    active: &str,
-    pulling: bool,
-) -> String {
+pub fn render_unit_controls_content_with_state(unit: &str, active: &str, pulling: bool) -> String {
     let is_container = unit.starts_with("docker-");
 
     let dot_cls = match active {

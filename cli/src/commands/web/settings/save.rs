@@ -21,9 +21,7 @@ pub fn load_settings_doc(path: &Path) -> Result<DocumentMut, Status> {
     if content.trim().is_empty() {
         Ok(DocumentMut::new())
     } else {
-        content
-            .parse()
-            .map_err(|_| Status::InternalServerError)
+        content.parse().map_err(|_| Status::InternalServerError)
     }
 }
 
@@ -32,7 +30,10 @@ pub fn write_settings_doc(path: &Path, doc: &DocumentMut) -> Result<(), Status> 
 }
 
 /// Apply a JSON object payload into a TOML table (supports dotted leaf keys).
-pub fn apply_payload_to_table(table: &mut Table, payload: &serde_json::Map<String, serde_json::Value>) {
+pub fn apply_payload_to_table(
+    table: &mut Table,
+    payload: &serde_json::Map<String, serde_json::Value>,
+) {
     for (k, v) in payload.iter() {
         if k.contains('.') {
             if let Some(tval) = json_to_toml_value(v) {

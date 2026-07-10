@@ -118,6 +118,103 @@
     });
   }
 
+  // Option helper form dialog (password/hash generators etc.)
+  var helperDialogOnApply = null;
+  window.openHelperDialog = function (helper, onApply) {
+    var dlg = document.getElementById('helper-dialog');
+    var title = document.getElementById('helper-dialog-title');
+    var desc = document.getElementById('helper-dialog-desc');
+    var fields = document.getElementById('helper-dialog-fields');
+    var form = document.getElementById('helper-dialog-form');
+    if (!dlg || !fields || !form) return;
+    helperDialogOnApply = onApply;
+    if (title) title.textContent = helper.label || 'Helper';
+    if (desc) {
+      desc.textContent = helper.description || '';
+      desc.style.display = helper.description ? '' : 'none';
+    }
+    fields.innerHTML = '';
+    (helper.inputs || []).forEach(function (inp) {
+      var wrap = document.createElement('div');
+      wrap.className = 'form-control w-full';
+      var lab = document.createElement('label');
+      lab.className = 'label py-1';
+      lab.innerHTML = '<span class="label-text text-sm">' +
+        (inp.label || inp.name) +
+        (inp.required === false ? '' : ' <span class="text-error">*</span>') +
+        '</span>';
+      wrap.appendChild(lab);
+      var el;
+      if (inp.type === 'bool') {
+        el = document.createElement('input');
+        el.type = 'checkbox';
+        el.className = 'toggle toggle-primary toggle-sm';
+        el.checked = !!inp.default;
+      } else if (inp.type === 'enum' && inp.values && inp.values.length) {
+        el = document.createElement('select');
+        el.className = 'select select-bordered select-sm w-full font-mono';
+        inp.values.forEach(function (v) {
+          var o = document.createElement('option');
+          o.value = v;
+          o.textContent = v;
+          el.appendChild(o);
+        });
+      } else {
+        el = document.createElement('input');
+        el.type = inp.type === 'password' ? 'password' : (inp.type === 'int' ? 'number' : 'text');
+        el.className = 'input input-bordered input-sm w-full font-mono';
+        if (inp.placeholder) el.placeholder = inp.placeholder;
+        if (inp.type === 'password') el.autocomplete = 'new-password';
+        if (inp.default != null) el.value = String(inp.default);
+      }
+      el.name = inp.name;
+      el.dataset.helperInput = inp.name;
+      el.dataset.helperType = inp.type || 'str';
+      el.required = inp.required !== false;
+      wrap.appendChild(el);
+      fields.appendChild(wrap);
+    });
+    form.onsubmit = function (ev) {
+      ev.preventDefault();
+      var inputs = {};
+      var nodes = fields.querySelectorAll('[data-helper-input]');
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        var name = node.dataset.helperInput;
+        var t = node.dataset.helperType || 'str';
+        if (t === 'bool') {
+          inputs[name] = !!node.checked;
+        } else if (t === 'int') {
+          inputs[name] = node.value === '' ? null : Number(node.value);
+        } else {
+          inputs[name] = node.value;
+        }
+      }
+      var cb = helperDialogOnApply;
+      window.closeHelperDialog();
+      if (typeof cb === 'function') cb(inputs);
+      return false;
+    };
+    dlg.showModal();
+    var first = fields.querySelector('input, select');
+    if (first) setTimeout(function () { first.focus(); }, 50);
+  };
+  window.closeHelperDialog = function () {
+    var dlg = document.getElementById('helper-dialog');
+    var fields = document.getElementById('helper-dialog-fields');
+    helperDialogOnApply = null;
+    if (fields) fields.innerHTML = '';
+    if (dlg) dlg.close();
+  };
+  var hd = document.getElementById('helper-dialog');
+  if (hd) {
+    hd.addEventListener('close', function () {
+      helperDialogOnApply = null;
+      var fields = document.getElementById('helper-dialog-fields');
+      if (fields) fields.innerHTML = '';
+    });
+  }
+
   // Suppress noisy htmx swapErrors for OOB unit-controls updates when the row
   // is no longer in the DOM (e.g. switched panes, closed dialog, or rapid actions).
   // The status will be correct again on next pane load (which does a fresh bootstrap GET).

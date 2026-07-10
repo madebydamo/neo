@@ -140,15 +140,29 @@
                     <input type="text" class="input input-primary input-sm flex-1 font-mono"
                            x-model="values['{{../name}}'][key]['{{name}}']"
                            placeholder="{{defaultDisplay}}">
+                    <template x-if="resolveHelper('{{../name}}', { field: '{{name}}' })">
+                      <button type="button" class="btn btn-outline btn-xs shrink-0"
+                              @click="runHelper('{{../name}}', { key: key, field: '{{name}}' })"
+                              :disabled="helperBusy"
+                              x-text="resolveHelper('{{../name}}', { field: '{{name}}' }).label"></button>
+                    </template>
                     <button type="button" @click="values['{{../name}}'][key]['{{name}}'] = null"
                             class="btn btn-ghost btn-xs shrink-0">Clear</button>
                   </div>
                 {{/if}}
 
                 {{#if (or (eq type.kind "str") (eq type.kind "path"))}}
-                  <input type="text" class="input input-primary input-sm w-full font-mono"
-                         x-model="values['{{../name}}'][key]['{{name}}']"
-                         placeholder="{{defaultDisplay}}">
+                  <div class="flex gap-2 items-center">
+                    <input type="text" class="input input-primary input-sm flex-1 font-mono"
+                           x-model="values['{{../name}}'][key]['{{name}}']"
+                           placeholder="{{defaultDisplay}}">
+                    <template x-if="resolveHelper('{{../name}}', { field: '{{name}}' })">
+                      <button type="button" class="btn btn-outline btn-xs shrink-0"
+                              @click="runHelper('{{../name}}', { key: key, field: '{{name}}' })"
+                              :disabled="helperBusy"
+                              x-text="resolveHelper('{{../name}}', { field: '{{name}}' }).label"></button>
+                    </template>
+                  </div>
                 {{/if}}
               </div>
             {{/each}}

@@ -5,10 +5,10 @@ use rocket::serde::json::Json;
 use rocket::{post, State};
 use toml_edit::{Item, Table};
 
+use crate::commands::web::settings::json_to_toml_value;
 use crate::commands::web::settings::save::{
     apply_payload_to_table, finish_save_state, load_settings_doc,
 };
-use crate::commands::web::settings::json_to_toml_value;
 use crate::commands::web::structs::AppConfig;
 
 #[post("/save/<service>", data = "<payload>")]

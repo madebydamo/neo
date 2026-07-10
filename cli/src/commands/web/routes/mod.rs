@@ -2,6 +2,7 @@ mod actions;
 mod activation;
 mod branches;
 mod changes;
+mod helpers;
 mod pages;
 mod save;
 mod units;
@@ -17,6 +18,7 @@ pub fn routes() -> Vec<rocket::Route> {
         pages::services_grid,
         pages::core_grid,
         pages::core_pane,
+        helpers::run_helper,
         save::save_service,
         save::save_core_section,
         changes::changes_action_bar,
