@@ -2,7 +2,7 @@
 # Helpers are UI-only metadata on options (like rank); they are never executed during
 # pure NixOS evaluation. Scripts live under nix/helpers/ and resolve to flake store paths.
 {lib, ...}: let
-  scripts = ../helpers;
+  scripts = ./.;
 
   mkHelper = {
     id,
