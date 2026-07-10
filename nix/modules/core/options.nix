@@ -26,8 +26,9 @@
       options.neo.core.hashedLinuxPassword = mkOption {
         type = types.str;
         default = "";
-        description = "Generate the hash using `mkpasswd -m sha-512` (from pkgs.mkpasswd) or `openssl passwd -6`. This sets the password for the user without exposing plaintext.";
+        description = "Generate the hash using the web UI \"Hash password\" helper, or `mkpasswd -m sha-512` / `openssl passwd -6`. This sets the password for the user without exposing plaintext.";
         rank = 20;
+        helper = lib.neo.helpers.mkpasswdSha512;
       };
 
       options.neo.core.timeZone = mkOption {

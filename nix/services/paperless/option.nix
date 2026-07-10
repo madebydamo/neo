@@ -23,6 +23,7 @@
                 default = "your_strong_password_here";
                 rank = 10;
                 description = "Password for internal docker connection";
+                helper = lib.neo.helpers.randomToken;
               };
             }
             // lib.neo.mkReverseProxyOptions {

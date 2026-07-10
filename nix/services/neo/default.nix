@@ -66,12 +66,27 @@
           SUDO_BINARY_PATH = "/run/wrappers/bin/sudo";
           ROCKET_ADDRESS = "0.0.0.0";
           ROCKET_PORT = toString cfg.port;
+          NEO_HELPER_BASH = "${pkgs.bash}/bin/bash";
+          # Explicit tool dirs for option helpers (used ahead of ambient PATH).
+          NEO_HELPER_PATH = lib.makeBinPath [
+            pkgs.bash
+            pkgs.coreutils
+            pkgs.openssl
+            pkgs.jq
+            pkgs.apacheHttpd # htpasswd
+            pkgs.whois # mkpasswd (bcrypt + sha-512)
+          ];
         };
 
         path = [
           pkgs.nix
           pkgs.git
           pkgs.coreutils
+          pkgs.bash
+          pkgs.openssl
+          pkgs.jq
+          pkgs.apacheHttpd
+          pkgs.whois
         ];
       };
 

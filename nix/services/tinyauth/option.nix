@@ -17,9 +17,11 @@
                 default = [];
                 description = ''
                   List of users in username:bcrypt_hash format.
-                  Generate with: docker run -i -t --rm ghcr.io/steveiliop56/tinyauth:v5 user create --interactive
+                  Use "Add user" in the web UI, or generate with:
+                  docker run -i -t --rm ghcr.io/steveiliop56/tinyauth:v5 user create --interactive
                 '';
                 rank = 10;
+                helper = lib.neo.helpers.bcryptUser;
               };
               sessionExpiry = mkOption {
                 type = types.int;

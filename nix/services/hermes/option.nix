@@ -33,6 +33,7 @@
                 default = null;
                 description = "Gateway authentication token";
                 rank = 10;
+                helper = lib.neo.helpers.randomToken;
               };
 
               telegramBotToken = mkOption {

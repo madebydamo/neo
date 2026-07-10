@@ -22,6 +22,7 @@
                 type = types.nullOr types.str;
                 default = null;
                 description = "Gateway authentication token";
+                helper = lib.neo.helpers.randomToken;
               };
 
               telegramBotToken = mkOption {

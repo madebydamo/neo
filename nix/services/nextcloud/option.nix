@@ -23,6 +23,7 @@
                 default = "your_strong_password_here";
                 rank = 10;
                 description = "Password for the nextcloud mysql user (also used for root in db container)";
+                helper = lib.neo.helpers.randomToken;
               };
               maintenanceWindowStart = mkOption {
                 type = types.ints.between 0 23;

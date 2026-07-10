@@ -16,6 +16,7 @@
                 type = types.str;
                 description = "Authentication token for rathole";
                 rank = 10;
+                helper = lib.neo.helpers.randomToken;
               };
               remoteAddr = mkOption {
                 type = types.str;

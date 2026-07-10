@@ -20,6 +20,7 @@
                 default = null;
                 description = "Random auth token to authenticate in admin page";
                 rank = 20;
+                helper = lib.neo.helpers.randomToken;
               };
             }
             // lib.neo.mkReverseProxyOptions {

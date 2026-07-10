@@ -36,6 +36,7 @@
                         token = mkOption {
                           type = types.str;
                           description = "The authentication token for rathole";
+                          helper = lib.neo.helpers.randomToken;
                         };
                         wildcard = mkOption {
                           type = types.bool;

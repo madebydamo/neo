@@ -29,6 +29,7 @@
                 default = "";
                 description = "Optional Password for Pi-hole web admin interface. Do not leave it blank and turn auth off.";
                 rank = 30;
+                helper = lib.neo.helpers.randomToken;
               };
             }
             // lib.neo.mkReverseProxyOptions {
