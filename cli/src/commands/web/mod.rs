@@ -9,17 +9,21 @@ use rocket::fs::FileServer;
 use rocket_dyn_templates::Template;
 use toml_edit::DocumentMut;
 
+mod action_bar;
 mod activation;
 mod evaluator;
 mod git_ops;
 mod nix_eval;
 mod nix_extractors;
-mod server;
+mod routes;
 mod settings;
 mod structs;
+mod trigger;
+mod units;
 mod util;
 
-use server::routes;
+use action_bar::start_action_bar_watcher;
+use routes::routes;
 use structs::AppConfig;
 
 pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &str) -> Result<()> {
@@ -65,7 +69,7 @@ pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &s
 
         // Push action-bar OOB updates (pending changes, reset, nix-busy) over the shared WS
         // whenever state changes — replaces the old client-side every-20s polling.
-        server::start_action_bar_watcher(app_config.clone());
+        start_action_bar_watcher(app_config.clone());
 
         // Background warm-up: the heavy evaluation (builtins.getFlake on the real on-disk
         // configuration directory + full nixosConfiguration module system + readFile of the
