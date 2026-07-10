@@ -61,6 +61,27 @@
     };
     time.timeZone = config.neo.core.timeZone;
 
+    system.activationScripts.homeserver-ssh-key = let
+      uid = toString config.neo.core.uid;
+      gid = toString config.neo.core.gid;
+      sshDir = "/home/homeserver/.ssh";
+      keyPath = "${sshDir}/id_ed25519";
+    in ''
+      if [ -d /home/homeserver ]; then
+        if [ ! -d ${sshDir} ]; then
+          mkdir -p ${sshDir}
+          chown ${uid}:${gid} ${sshDir}
+          chmod 700 ${sshDir}
+        fi
+        if [ ! -f ${keyPath} ]; then
+          ${pkgs.openssh}/bin/ssh-keygen -t ed25519 -N "" -f ${keyPath} -C "homeserver@${cfg.hostname}"
+          chown ${uid}:${gid} ${keyPath} ${keyPath}.pub
+          chmod 600 ${keyPath}
+          chmod 644 ${keyPath}.pub
+        fi
+      fi
+    '';
+
     nix.settings = lib.mkMerge [
       (lib.optionalAttrs (cfg.nix.maxJobs != null) {
         max-jobs = cfg.nix.maxJobs;

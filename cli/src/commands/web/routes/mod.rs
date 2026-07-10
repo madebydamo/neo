@@ -5,6 +5,7 @@ mod changes;
 mod helpers;
 mod pages;
 mod save;
+mod ssh;
 mod units;
 mod ws;
 
@@ -47,5 +48,8 @@ pub fn routes() -> Vec<rocket::Route> {
         units::container_update,
         units::sse_logs,
         ws::ws_status,
+        ssh::ssh_public_key,
+        ssh::ssh_public_key_txt,
+        ssh::ssh_public_key_card,
     ]
 }

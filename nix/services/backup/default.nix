@@ -11,7 +11,7 @@
 
       excludes = concatStringsSep " " (map (dir: "--exclude '${dir}'") cfg.excludedDirs);
 
-      sshOptions = "-i ${cfg.sshKey} ${concatStringsSep " " cfg.sshExtraOptions}";
+      sshOptions = "-i ${escapeShellArg cfg.sshKey} ${concatStringsSep " " cfg.sshExtraOptions}";
 
       backup-script = pkgs.writeShellScriptBin "backup-to-rsync" ''
         set -e
@@ -19,6 +19,12 @@
         SOURCE_DIR="${cfg.sourceDir}"
         DEST_DIR="${cfg.remoteUser}@${cfg.remoteServer}:${cfg.remotePath}"
         LOG_FILE="${cfg.logFile}"
+        SSH_KEY="${cfg.sshKey}"
+
+        if [ ! -f "$SSH_KEY" ]; then
+          echo "Backup SSH key missing at $SSH_KEY (homeserver key is generated on activation)" >&2
+          exit 1
+        fi
 
         echo "Starting backup to ${cfg.remoteServer} at $(date)"
 

@@ -3,4 +3,7 @@
   <div class="card bg-base-100 shadow-sm border border-base-300 hover:border-primary p-2 cursor-pointer text-sm font-mono" hx-get="/core/neo-cli" hx-target="#config-content" hx-swap="innerHTML">neo-cli</div>
   <div class="card bg-base-100 shadow-sm border border-base-300 hover:border-primary p-2 cursor-pointer text-sm font-mono" hx-get="/core/neo-service" hx-target="#config-content" hx-swap="innerHTML">neo-service</div>
   <div class="card bg-base-100 shadow-sm border border-base-300 hover:border-primary p-2 cursor-pointer text-sm font-mono" hx-get="/core/disko" hx-target="#config-content" hx-swap="innerHTML">disko</div>
+  <div class="col-span-full" hx-get="/ssh/public-key-card" hx-trigger="load" hx-swap="innerHTML">
+    <div class="text-xs opacity-60 p-2">Loading SSH public key…</div>
+  </div>
 </div>

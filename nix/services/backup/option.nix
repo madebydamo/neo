@@ -14,8 +14,9 @@
               enabled = mkEnableOption "Enable the rsync backup service" {rank = 0;};
 
               sshKey = mkOption {
-                type = types.path;
-                description = "Path to SSH private key for authentication";
+                type = types.str;
+                default = "/home/homeserver/.ssh/id_ed25519";
+                description = "Path to SSH private key for rsync-over-SSH. Defaults to the auto-generated homeserver key (created at activation if missing). Root runs the backup so source files stay readable; only the key is shared with homeserver.";
                 rank = 10;
               };
 
