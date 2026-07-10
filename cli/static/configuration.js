@@ -34,6 +34,35 @@
     }
   });
 
+  window.openActivationSuccess = function (btn) {
+    var mon = btn && btn.closest ? btn.closest('#activation-monitor') : null;
+    var d = document.getElementById('activation-success');
+    var b = document.getElementById('activation-success-body');
+    if (!mon || !d || !b) return;
+    var clone = mon.cloneNode(true);
+    var actions = clone.querySelectorAll('[data-dialog-actions]');
+    for (var i = 0; i < actions.length; i++) {
+      actions[i].remove();
+    }
+    b.innerHTML = clone.innerHTML;
+    try {
+      localStorage.removeItem('neo.pendingActivation');
+    } catch (e) {}
+    var cm = document.getElementById('changes-modal');
+    if (cm) cm.close();
+    d.showModal();
+  };
+  window.confirmActivationReload = function () {
+    try {
+      localStorage.removeItem('neo.pendingActivation');
+    } catch (e) {}
+    var as = document.getElementById('activation-success');
+    var cm = document.getElementById('changes-modal');
+    if (as) as.close();
+    if (cm) cm.close();
+    window.location.reload();
+  };
+
   // Live logs dialog helpers (EventSource for SSE from /sse/logs/<unit>)
   window.currentLogSource = null;
   window.openUnitLogs = function (unit) {

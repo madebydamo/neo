@@ -59,7 +59,13 @@ pub fn actions_reset(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
         broadcast_action_bar(&config);
     }
     match res {
-        Ok(()) => RawHtml("<div class=\"alert alert-success text-sm\">Reset done (settings restored from /etc/neo). Close to refresh state.</div><div class=\"mt-2\"><button onclick=\"document.getElementById('changes-modal').close()\" class=\"btn btn-sm\">Close</button></div>".to_string()),
-        Err(e) => RawHtml(format!("<div class=\"alert alert-error text-sm\">Reset failed: {}</div>", e))
+        Ok(()) => RawHtml(
+            "<div class=\"alert alert-success text-sm\">Reset done (settings restored from /etc/neo). Close to refresh state.</div>"
+                .to_string(),
+        ),
+        Err(e) => RawHtml(format!(
+            "<div class=\"alert alert-error text-sm\">Reset failed: {}</div>",
+            e
+        )),
     }
 }

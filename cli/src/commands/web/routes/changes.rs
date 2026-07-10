@@ -40,12 +40,28 @@ pub fn changes_summary(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     let body = if settings_toml_has_diff(&config) {
         let diff = get_settings_toml_diff(&config);
         let esc = escape_html(&diff);
-        format!("<div class=\"mb-2 text-warning text-sm\">Pending changes to settings.toml (git diff)</div><pre class=\"text-xs overflow-auto max-h-[50vh] bg-base-300 p-2 rounded whitespace-pre\">{}</pre><div class=\"flex gap-2 mt-3\"><button hx-post=\"/changes/revert\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" class=\"btn btn-sm btn-ghost\">Revert (paste-settings)</button><button hx-post=\"/changes/apply\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" hx-confirm=\"Run full activation (write-flake + nixos-rebuild)? This can take several minutes.\" class=\"btn btn-sm btn-error\">Apply (activate)</button></div>", esc)
+        format!(
+            "<div class=\"mb-2 text-warning text-sm\">Pending changes to settings.toml (git diff)</div>\
+             <pre class=\"text-xs overflow-auto max-h-[50vh] bg-base-300 p-2 rounded whitespace-pre\">{}</pre>\
+             <div class=\"mt-4 flex flex-nowrap items-center justify-end gap-2\" data-dialog-actions>\
+               <button type=\"button\" hx-post=\"/changes/revert\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" class=\"btn btn-sm btn-ghost\">Revert</button>\
+               <button type=\"button\" hx-post=\"/changes/apply\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" hx-confirm=\"Run full activation (write-flake + nixos-rebuild)? This can take several minutes.\" class=\"btn btn-sm btn-error\">Apply (activate)</button>\
+             </div>",
+            esc
+        )
     } else {
         let (changed, summary) = worktree_changed_and_summary(&config);
         if changed {
             let esc = escape_html(&summary);
-            format!("<div class=\"mb-2 text-warning text-sm\">Other files changed in working tree</div><pre class=\"text-xs overflow-auto max-h-[50vh] bg-base-300 p-2 rounded whitespace-pre\">{}</pre><div class=\"flex gap-2 mt-3\"><button hx-post=\"/changes/revert\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" class=\"btn btn-sm btn-ghost\">Revert (paste-settings)</button><button hx-post=\"/changes/apply\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" hx-confirm=\"Run full activation (write-flake + nixos-rebuild)? This can take several minutes.\" class=\"btn btn-sm btn-error\">Apply (activate)</button></div>", esc)
+            format!(
+                "<div class=\"mb-2 text-warning text-sm\">Other files changed in working tree</div>\
+                 <pre class=\"text-xs overflow-auto max-h-[50vh] bg-base-300 p-2 rounded whitespace-pre\">{}</pre>\
+                 <div class=\"mt-4 flex flex-nowrap items-center justify-end gap-2\" data-dialog-actions>\
+                   <button type=\"button\" hx-post=\"/changes/revert\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" class=\"btn btn-sm btn-ghost\">Revert</button>\
+                   <button type=\"button\" hx-post=\"/changes/apply\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" hx-confirm=\"Run full activation (write-flake + nixos-rebuild)? This can take several minutes.\" class=\"btn btn-sm btn-error\">Apply (activate)</button>\
+                 </div>",
+                esc
+            )
         } else {
             "<div class=\"text-sm\">Working tree clean. No pending changes.</div>".to_string()
         }
@@ -69,8 +85,14 @@ pub fn revert_settings(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
         broadcast_action_bar(&config);
     }
     match res {
-        Ok(()) => RawHtml("<div class=\"alert alert-success text-sm\">Reverted via paste-settings. Close and reload options to see state.</div><div class=\"mt-2\"><button onclick=\"document.getElementById('changes-modal').close()\" class=\"btn btn-sm\">Close</button></div>".to_string()),
-        Err(e) => RawHtml(format!("<div class=\"alert alert-error text-sm\">Revert failed: {}</div>", e))
+        Ok(()) => RawHtml(
+            "<div class=\"alert alert-success text-sm\">Reverted via paste-settings. Close and reload options to see state.</div>"
+                .to_string(),
+        ),
+        Err(e) => RawHtml(format!(
+            "<div class=\"alert alert-error text-sm\">Revert failed: {}</div>",
+            e
+        )),
     }
 }
 

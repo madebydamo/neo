@@ -79,7 +79,9 @@
         <h3 class="font-bold text-lg mb-2">Pending changes summary</h3>
         <div id="changes-body" class="max-h-[60vh] overflow-auto"></div>
         <div class="modal-action">
-          <form method="dialog"><button class="btn btn-ghost btn-sm">Close</button></form>
+          <form method="dialog" class="flex flex-nowrap items-center gap-2">
+            <button type="submit" class="btn btn-sm btn-ghost">Close</button>
+          </form>
         </div>
       </div>
     </dialog>
@@ -89,8 +91,10 @@
         <h3 class="font-bold text-lg mb-2 text-success">Activation complete</h3>
         <div id="activation-success-body" class="max-h-[50vh] overflow-auto text-sm"></div>
         <div class="modal-action">
-          <button onclick="localStorage.removeItem('neo.pendingActivation'); document.getElementById('activation-success').close(); document.getElementById('changes-modal').close(); window.location.reload();" class="btn btn-success btn-sm">Confirm & reload config</button>
-          <form method="dialog"><button class="btn btn-ghost btn-sm">Close</button></form>
+          <form method="dialog" class="flex flex-nowrap items-center gap-2">
+            <button type="button" onclick="confirmActivationReload()" class="btn btn-sm btn-success">Confirm &amp; reload</button>
+            <button type="submit" class="btn btn-sm btn-ghost">Close</button>
+          </form>
         </div>
       </div>
     </dialog>
@@ -101,8 +105,10 @@
         <div class="text-[10px] opacity-60 mb-1">Live follow (journalctl -f). New lines appended automatically; scrollable infinitely.</div>
         <pre id="log-pre" class="bg-base-300 p-2 rounded text-[10px] font-mono whitespace-pre-wrap overflow-auto max-h-[55vh] min-h-[180px] border border-base-300"></pre>
         <div class="modal-action">
-          <button class="btn btn-xs" onclick="clearUnitLogs()">Clear</button>
-          <form method="dialog"><button class="btn btn-ghost btn-sm" onclick="closeUnitLogs()">Close</button></form>
+          <form method="dialog" class="flex flex-nowrap items-center gap-2">
+            <button type="button" class="btn btn-sm" onclick="clearUnitLogs()">Clear</button>
+            <button type="submit" class="btn btn-sm btn-ghost" onclick="closeUnitLogs()">Close</button>
+          </form>
         </div>
       </div>
     </dialog>

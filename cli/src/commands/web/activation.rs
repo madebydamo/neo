@@ -248,7 +248,11 @@ fn build_monitor_fragment_for(kind: OpKind, id: &str) -> String {
         kind.status_path(id)
     ));
     if matches!(kind, OpKind::Activation) && status == "success" {
-        html.push_str(r#"<div class="mt-2"><button onclick="var d=document.getElementById('activation-success');var b=document.getElementById('activation-success-body');b.innerHTML=this.closest('#activation-monitor').innerHTML;d.showModal();localStorage.removeItem('neo.pendingActivation');document.getElementById('changes-modal').close();" class="btn btn-sm btn-success">Confirm & reload</button></div>"#);
+        html.push_str(
+            r#"<div class="mt-4 flex flex-nowrap items-center justify-end gap-2" data-dialog-actions>
+<button type="button" onclick="openActivationSuccess(this)" class="btn btn-sm btn-success">Confirm &amp; reload</button>
+</div>"#,
+        );
     }
     html.push_str("</div>");
     html
