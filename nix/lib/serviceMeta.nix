@@ -20,7 +20,7 @@
                 icon = mkOption {
                   type = types.nullOr types.str;
                   default = icon;
-                  description = "Icon shown in the option pane (emoji or image URL recommended).";
+                  description = "Icon shown in the option pane (image URL recommended).";
                 };
                 description = mkOption {
                   type = types.str;

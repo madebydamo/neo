@@ -76,7 +76,7 @@
             }
             // lib.neo.mkSystemdUnits ["backup"]
             // lib.neo.mkServiceMeta {
-              icon = "💾";
+              icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/borg.svg";
               description = ''
                 The backup service performs automated rsync-over-SSH snapshots of your critical Neo homeserver data (AppData, configs, etc.) to a remote server of your choice.
                 It supports custom exclude lists, scheduled execution via systemd OnCalendar timers, detailed per-run logging, and extra SSH options for bastions or restricted keys.

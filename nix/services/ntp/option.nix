@@ -25,7 +25,7 @@
               };
             }
             // lib.neo.mkServiceMeta {
-              icon = "🕒";
+              icon = "https://api.iconify.design/mdi/clock-check-outline.svg";
               description = ''
                 Chrony is a versatile implementation of the Network Time Protocol (NTP) used for accurate system clock synchronization.
                 In this homeserver it syncs from public NTP pools and serves time to other devices on the local network via UDP port 123.
