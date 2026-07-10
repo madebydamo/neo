@@ -54,7 +54,7 @@ pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &s
             nix::NixEvaluator::new(&nix_cmd_for_eval, &neo_input_for_eval, busy.clone())
                 .await
                 .context("start persistent nix repl for fast evals")?;
-        let (unit_tx, _unit_rx) = broadcast::channel::<String>(64);
+        let (unit_tx, _unit_rx) = broadcast::channel::<String>(128);
         let app_config = Arc::new(AppConfig {
             nix_cmd: nix_cmd_for_eval,
             neo_input: neo_input_for_eval,
@@ -62,6 +62,7 @@ pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &s
             evaluator: Arc::new(Mutex::new(evaluator)),
             eval_busy: busy,
             unit_updates: unit_tx,
+            pulls_in_flight: Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
         });
         println!("{:?}", app_config);
 

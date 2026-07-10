@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex as AsyncMutex;
 
 fn default_true() -> bool {
     true
@@ -45,12 +46,14 @@ pub struct AppConfig {
     pub nix_cmd: String,
     pub neo_input: String,
     pub settings_path: PathBuf,
-    pub evaluator: Arc<Mutex<super::nix::NixEvaluator>>,
+    pub evaluator: Arc<AsyncMutex<super::nix::NixEvaluator>>,
     /// Shared with the persistent nix repl: true while an evaluation/refresh is in flight.
     pub eval_busy: Arc<AtomicBool>,
     /// Sender for broadcasting HTML OOB swap fragments over WS to htmx clients
-    /// (unit controls + action-bar status). Replaces client polling with push updates.
+    /// (unit controls + action-bar status + container pull progress).
     pub unit_updates: tokio::sync::broadcast::Sender<String>,
+    /// Systemd unit names with an in-flight docker pull+restart (dedup + disable ↻ UI).
+    pub pulls_in_flight: Arc<Mutex<HashSet<String>>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

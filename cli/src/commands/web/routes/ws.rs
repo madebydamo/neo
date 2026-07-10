@@ -7,8 +7,8 @@ use rocket_ws::{Channel, Message, WebSocket};
 use crate::commands::web::action_bar::action_bar_oob_fragment;
 use crate::commands::web::structs::AppConfig;
 use crate::commands::web::units::{
-    extract_unit_state_from_oob, unit_active_state_async, unit_controls_oob_fragment_with_state,
-    unit_name_valid,
+    extract_unit_state_from_oob, is_pull_in_flight, unit_active_state_async,
+    unit_controls_oob_fragment_with_state, unit_name_valid,
 };
 
 /// Parse a client WS control message.
@@ -42,8 +42,9 @@ fn parse_ws_unit_command(text: &str) -> Option<(String, Vec<String>)> {
 /// - Survives broadcast lag (skips) so a busy action-bar channel cannot kill the socket.
 #[get("/ws/status")]
 pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel<'static> {
+    let config = Arc::clone(config);
     let mut rx = config.unit_updates.subscribe();
-    let initial_bar = action_bar_oob_fragment(config);
+    let initial_bar = action_bar_oob_fragment(&config);
     ws.channel(move |mut stream| {
         Box::pin(async move {
             use rocket::futures::{SinkExt, StreamExt};
@@ -61,6 +62,9 @@ pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel
             let mut watched: HashSet<String> = HashSet::new();
             // unit -> last ActiveState string we pushed (skip identical re-renders)
             let mut last_state: HashMap<String, String> = HashMap::new();
+            // unit -> last pull-in-flight flag we rendered (re-push controls when pull starts/ends
+            // even if ActiveState is unchanged).
+            let mut last_pulling: HashMap<String, bool> = HashMap::new();
             let mut tick = tokio::time::interval(Duration::from_millis(500));
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             // Don't fire immediately; first poll after 500ms (bootstrap GET already filled UI).
@@ -76,6 +80,7 @@ pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel
                                         "watch_replace" => {
                                             watched.clear();
                                             last_state.clear();
+                                            last_pulling.clear();
                                             for u in units {
                                                 watched.insert(u);
                                             }
@@ -89,6 +94,7 @@ pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel
                                             for u in &units {
                                                 watched.remove(u);
                                                 last_state.remove(u);
+                                                last_pulling.remove(u);
                                             }
                                         }
                                         _ => {}
@@ -97,11 +103,17 @@ pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel
                                     // does not wait a full tick after open/reconnect.
                                     for u in watched.iter().cloned().collect::<Vec<_>>() {
                                         let active = unit_active_state_async(&u).await;
+                                        let pulling = is_pull_in_flight(&config, &u);
                                         let prev = last_state.get(&u);
-                                        if prev.map(|p| p.as_str()) != Some(active.as_str()) {
+                                        let prev_pull = last_pulling.get(&u).copied();
+                                        if prev.map(|p| p.as_str()) != Some(active.as_str())
+                                            || prev_pull != Some(pulling)
+                                        {
                                             last_state.insert(u.clone(), active.clone());
-                                            let frag =
-                                                unit_controls_oob_fragment_with_state(&u, &active);
+                                            last_pulling.insert(u.clone(), pulling);
+                                            let frag = unit_controls_oob_fragment_with_state(
+                                                &u, &active, pulling,
+                                            );
                                             if stream
                                                 .send(Message::Text(frag.into()))
                                                 .await
@@ -121,11 +133,16 @@ pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel
                         // Live poll only for units this browser pane registered.
                         for u in watched.iter().cloned().collect::<Vec<_>>() {
                             let active = unit_active_state_async(&u).await;
+                            let pulling = is_pull_in_flight(&config, &u);
                             let changed =
-                                last_state.get(&u).map(|p| p.as_str()) != Some(active.as_str());
+                                last_state.get(&u).map(|p| p.as_str()) != Some(active.as_str())
+                                    || last_pulling.get(&u).copied() != Some(pulling);
                             if changed {
                                 last_state.insert(u.clone(), active.clone());
-                                let frag = unit_controls_oob_fragment_with_state(&u, &active);
+                                last_pulling.insert(u.clone(), pulling);
+                                let frag = unit_controls_oob_fragment_with_state(
+                                    &u, &active, pulling,
+                                );
                                 if stream.send(Message::Text(frag.into())).await.is_err() {
                                     return Ok(());
                                 }
@@ -135,13 +152,15 @@ pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel
                     update = rx.recv() => {
                         match update {
                             Ok(fragment) => {
-                                // Action-bar + burst unit updates from HTTP handlers.
+                                // Action-bar + burst unit updates + pull progress from HTTP handlers.
                                 // Keep last_state coherent so the poller does not re-send
                                 // the same ActiveState right after a broadcast.
                                 if let Some((unit, state)) = extract_unit_state_from_oob(&fragment)
                                 {
                                     if watched.contains(&unit) {
-                                        last_state.insert(unit, state);
+                                        let pulling = is_pull_in_flight(&config, &unit);
+                                        last_state.insert(unit.clone(), state);
+                                        last_pulling.insert(unit, pulling);
                                     }
                                 }
                                 if stream.send(Message::Text(fragment.into())).await.is_err() {

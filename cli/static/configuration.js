@@ -95,7 +95,7 @@
   document.body.addEventListener('htmx:swapError', function (evt) {
     try {
       var resp = evt.detail && evt.detail.xhr && evt.detail.xhr.responseText;
-      if (resp && /id="unit-controls-/.test(resp)) {
+      if (resp && (/id="unit-controls-/.test(resp) || /id="update-out-/.test(resp))) {
         evt.stopImmediatePropagation();
       }
     } catch (e) {}

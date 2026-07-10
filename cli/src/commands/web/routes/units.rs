@@ -9,19 +9,20 @@ use tokio::process::Command as AsyncCommand;
 
 use crate::commands::web::structs::AppConfig;
 use crate::commands::web::units::{
-    broadcast_unit_update, perform_unit_action, render_unit_controls, schedule_unit_refresh_burst,
-    unit_controls_oob_fragment, unit_name_valid,
+    normalize_container_unit, perform_unit_action, render_unit_controls, run_container_pull,
+    schedule_unit_refresh_burst, try_begin_pull, unit_controls_oob_fragment, unit_name_valid,
+    update_out_oob,
 };
 use crate::commands::web::util::{escape_html, sudo_cmd};
 
 #[get("/unit/status/<unit>")]
-pub fn unit_status(unit: &str) -> RawHtml<String> {
+pub fn unit_status(unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
     if !unit_name_valid(unit) {
         return RawHtml(
             r#"<div class="unit-controls text-[10px] text-error">invalid unit</div>"#.into(),
         );
     }
-    render_unit_controls(unit)
+    render_unit_controls(unit, config)
 }
 
 #[get("/unit/logs/<unit>")]
@@ -63,7 +64,7 @@ fn unit_action_response(action: &str, unit: &str, config: &State<Arc<AppConfig>>
         return RawHtml(String::new());
     }
     perform_unit_action(action, unit);
-    let oob = unit_controls_oob_fragment(unit);
+    let oob = unit_controls_oob_fragment(unit, config);
     let _ = config.unit_updates.send(oob.clone());
     schedule_unit_refresh_burst(unit.to_string(), Arc::clone(config));
     RawHtml(oob)
@@ -84,66 +85,40 @@ pub fn unit_stop(unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> 
     unit_action_response("stop", unit, config)
 }
 
+/// Kick off an async docker pull+restart. Returns immediately with OOB status +
+/// disabled ↻ button; progress and completion are pushed over `/ws/status`.
 #[post("/container/update/<container>")]
 pub fn container_update(container: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    // Normalize: accept "foo" or "docker-foo"; use bare name for inspect/restart
-    let cname = if container.starts_with("docker-") {
-        &container[7..]
-    } else {
-        container
-    };
-    // Inspect current image ref from the running container (works for :latest and pinned)
-    let inspect = Command::new("docker")
-        .args(["inspect", "--format", "{{.Config.Image}}", cname])
-        .output();
-    let img = match inspect {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
-        Ok(o) => {
-            return RawHtml(format!(
-                r#"<span class="text-error text-xs">inspect failed: {}</span>"#,
-                escape_html(&String::from_utf8_lossy(&o.stderr))
-            ))
-        }
-        Err(e) => {
-            return RawHtml(format!(
-                r#"<span class="text-error text-xs">docker error: {}</span>"#,
-                e
-            ))
-        }
-    };
-    if img.is_empty() {
-        return RawHtml(r#"<span class="text-error text-xs">no image from inspect</span>"#.into());
+    if !unit_name_valid(container) {
+        return RawHtml(String::new());
     }
-    let pull = Command::new("docker").args(["pull", &img]).output();
-    let pull_out = match pull {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),
-        Err(e) => format!("pull error: {}", e),
-    };
-    // Restart via sudo to let the unit manage it (use docker- prefix for unit)
-    let sudo = sudo_cmd();
-    let _ = Command::new(&sudo)
-        .args([
-            "systemctl",
-            "restart",
-            &format!("docker-{}", cname),
-            "--no-block",
-            "--no-ask-password",
-        ])
-        .status();
-    // Live unit-control updates over WS (burst while restart settles).
-    let unit_for_watch = if container.starts_with("docker-") {
-        container.to_string()
-    } else {
-        format!("docker-{}", cname)
-    };
-    broadcast_unit_update(&unit_for_watch, &config);
-    schedule_unit_refresh_burst(unit_for_watch, Arc::clone(config));
-    RawHtml(format!(
-        r#"<div class="text-xs"><div>pulled: {}</div><pre class="text-[9px] max-h-32 overflow-auto">{}</pre><div class="text-success">restarted docker-{}</div></div>"#,
-        escape_html(&img),
-        escape_html(&pull_out),
-        escape_html(cname)
-    ))
+    let (unit, cname) = normalize_container_unit(container);
+
+    if !try_begin_pull(config, &unit) {
+        let out = update_out_oob(
+            &unit,
+            r#"<span class="inline-flex items-center gap-1 text-info"><span class="loading loading-spinner loading-xs"></span><span>already pulling…</span></span>"#,
+            "docker pull already in progress",
+        );
+        let ctl = unit_controls_oob_fragment(&unit, config);
+        return RawHtml(format!("{out}{ctl}"));
+    }
+
+    let out = update_out_oob(
+        &unit,
+        r#"<span class="inline-flex items-center gap-1 text-info"><span class="loading loading-spinner loading-xs"></span><span>starting pull…</span></span>"#,
+        "starting docker pull",
+    );
+    let ctl = unit_controls_oob_fragment(&unit, config);
+    let _ = config.unit_updates.send(out.clone());
+    let _ = config.unit_updates.send(ctl.clone());
+
+    let cfg = Arc::clone(config);
+    tokio::spawn(async move {
+        run_container_pull(unit, cname, cfg).await;
+    });
+
+    RawHtml(format!("{out}{ctl}"))
 }
 
 /// SSE endpoint for live journalctl follow in the logs dialog.
