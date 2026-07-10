@@ -15,7 +15,6 @@
       pkgs.nixos-install-tools
       pkgs.coreutils
       pkgs.bash
-      pkgs.sudo
     ];
     environment = {
       NIX_BINARY_PATH = "${pkgs.nix}/bin/nix";
@@ -60,8 +59,8 @@
       stopIfChanged = false;
       restartIfChanged = false;
       script =
-        lib.optionalString (cfg.garbageCollectOlderThen == null) ''
-          sudo nix-collect-garbage --delete-older-than ${cfg.garbageCollectOlderThen} || true
+        lib.optionalString (cfg.garbageCollectOlderThen != null) ''
+          /run/wrappers/bin/sudo nix-collect-garbage --delete-older-than ${cfg.garbageCollectOlderThen} || true
         ''
         + ''
           ${neo}/bin/neo update && ${neo}/bin/neo activate
