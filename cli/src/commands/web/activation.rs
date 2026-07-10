@@ -137,11 +137,23 @@ struct ProgressSteps {
 }
 
 const ACTIVATION_STEPS: ProgressSteps = ProgressSteps {
-    labels: &["Start", "Flake", "Build", "Git", "Switch"],
+    labels: &[
+        "Start",
+        "Write Flake",
+        "Build",
+        "Save Checkpoints",
+        "Switch",
+    ],
 };
 
 const UPDATE_STEPS: ProgressSteps = ProgressSteps {
-    labels: &["Start", "Init", "Flake", "Update", "Migrate"],
+    labels: &[
+        "Start",
+        "Reinitialize",
+        "Write Flake",
+        "Update Dependencies",
+        "Migrate",
+    ],
 };
 
 impl OpKind {
