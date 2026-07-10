@@ -45,7 +45,7 @@ pub fn save_service(
     // If payload has no keys (or not an object), we just removed -> done
     let payload_map = match payload.as_object() {
         Some(m) if !m.is_empty() => m,
-        _ => return finish_save_state(settings_path, &doc, config),
+        _ => return finish_save_state(settings_path, &mut doc, config),
     };
 
     // Build new table for the service, handling dotted keys (e.g. "vpn.enabled", "foo.bar.baz")
@@ -56,7 +56,7 @@ pub fn save_service(
         services_table.insert(service, Item::Table(svc_table));
     }
 
-    finish_save_state(settings_path, &doc, config)
+    finish_save_state(settings_path, &mut doc, config)
 }
 
 #[post("/save-core/<section>", data = "<payload>")]
@@ -109,10 +109,10 @@ pub fn save_core_section(
                             doc.remove("core");
                         }
                     }
-                    return finish_save_state(settings_path, &doc, config);
+                    return finish_save_state(settings_path, &mut doc, config);
                 }
                 core_table.remove(section);
-                return finish_save_state(settings_path, &doc, config);
+                return finish_save_state(settings_path, &mut doc, config);
             }
         };
         // Scalars under core (timeZone, uid, gid, hostname, hashedLinuxPassword) are values under [core]
@@ -146,7 +146,7 @@ pub fn save_core_section(
         // Top-level sections: neo-service, neo-cli, disko (and the aggregate "core" is handled in is_core branch)
         let payload_map = match payload.as_object() {
             Some(m) if !m.is_empty() => m,
-            _ => return finish_save_state(settings_path, &doc, config),
+            _ => return finish_save_state(settings_path, &mut doc, config),
         };
         let mut tbl = Table::new();
         apply_payload_to_table(&mut tbl, payload_map);
@@ -154,5 +154,5 @@ pub fn save_core_section(
             doc.insert(section, Item::Table(tbl));
         }
     }
-    finish_save_state(settings_path, &doc, config)
+    finish_save_state(settings_path, &mut doc, config)
 }
