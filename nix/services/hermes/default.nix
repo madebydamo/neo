@@ -32,7 +32,7 @@
       toolsets = ["all"];
       terminal = {
         backend = "local";
-        cwd = "${cfg.stateDir}/workspace"; # suppresses MESSAGING_CWD deprecation
+        cwd = "${cfg.stateDir}/workspace";
       };
       api = {
         enabled = true;
@@ -45,6 +45,12 @@
 
     hermesSettings = lib.recursiveUpdate baseSettings cfg.extraConfig;
 
+    # Fixed internal username — SWAG auto-login posts this; operators never type it.
+    dashboardAuthUsername = "neo";
+
+    dashboardPasswordSet =
+      cfg.dashboardPassword != null && cfg.dashboardPassword != "";
+
     hermesEnv =
       lib.filterAttrs (_: v: v != null && v != "") {
         XAI_API_KEY = cfg.xaiApiKey;
@@ -55,10 +61,76 @@
         TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," (map toString cfg.telegramAllowedUserId);
         GATEWAY_HEALTH_URL = "http://127.0.0.1:${toString cfg.gatewayPort}";
       }
+      // lib.optionalAttrs dashboardPasswordSet {
+        # Hermes 0.17+ refuses non-loopback binds without an auth provider.
+        # SWAG intercepts /login and auto-posts these so only tinyauth is user-facing.
+        HERMES_DASHBOARD_BASIC_AUTH_USERNAME = dashboardAuthUsername;
+        HERMES_DASHBOARD_BASIC_AUTH_PASSWORD = cfg.dashboardPassword;
+        HERMES_DASHBOARD_BASIC_AUTH_SECRET = cfg.dashboardPassword;
+      }
       // cfg.extraEnvironment;
+
+    # Credentials JSON for the SWAG auto-login page (safe JS embedding via toJSON).
+    autologinCredsJson = builtins.toJSON {
+      provider = "basic";
+      username = dashboardAuthUsername;
+      password = cfg.dashboardPassword or "";
+    };
+
+    autologinHtml = ''
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Hermes</title>
+        <style>
+          body { font-family: system-ui, sans-serif; display: grid; place-items: center;
+                 min-height: 100vh; margin: 0; background: #0b0f14; color: #e6edf3; }
+          p { opacity: 0.85; }
+        </style>
+      </head>
+      <body>
+        <p id="status">Signing in…</p>
+        <script>
+          (async () => {
+            const params = new URLSearchParams(location.search);
+            const next = params.get("next") || "/";
+            const body = ${autologinCredsJson};
+            body.next = next;
+            try {
+              const res = await fetch("/auth/password-login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify(body),
+              });
+              if (!res.ok) throw new Error("HTTP " + res.status);
+              const data = await res.json();
+              location.replace(data.next || next || "/");
+            } catch (e) {
+              document.getElementById("status").textContent =
+                "Auto-login failed. Set neo.services.hermes.dashboardPassword and rebuild.";
+            }
+          })();
+        </script>
+      </body>
+      </html>
+    '';
   in {
     config = lib.mkIf cfg.enabled (lib.mkMerge [
       {
+        assertions = [
+          {
+            assertion = dashboardPasswordSet;
+            message = ''
+              neo.services.hermes.dashboardPassword must be set (use the Generate helper in the UI).
+              Hermes 0.17+ requires an auth provider for non-loopback dashboard binds; neo uses this
+              password for internal basic auth and SWAG auto-login so only tinyauth is user-facing.
+            '';
+          }
+        ];
+
         users.users.hermes = {
           extraGroups = ["wheel" "docker"];
           linger = true;
@@ -119,9 +191,16 @@
           mode = "2770";
         };
 
+        # SWAG serves this at /login so Hermes form-auth is invisible behind tinyauth.
+        system.activationScripts.hermes-dashboard-autologin = lib.neo.mkActivationScriptForFile config {
+          filePath = "${config.neo.core.volumes.appdata}/swag/www/hermes-autologin.html";
+          content = autologinHtml;
+          mode = "0644";
+        };
+
         environment.variables.HERMES_HOME = "${cfg.stateDir}/.hermes";
 
-        # Web dashboard service — runs `hermes dashboard`, uses tinyauth (via SWAG), proper defaults, shares state with gateway
+        # Web dashboard — non-loopback bind requires Hermes basic_auth (tinyauth is edge auth via SWAG)
         systemd.services.hermes-dashboard = {
           description = "Hermes Agent Web Dashboard";
           wantedBy = ["multi-user.target"];
@@ -135,7 +214,7 @@
             WorkingDirectory = cfg.stateDir;
             ExecStart = let
               pkg = config.services.hermes-agent.package;
-            in "${pkg}/bin/hermes dashboard --host 0.0.0.0 --port ${toString cfg.dashboardPort} --no-open --insecure";
+            in "${pkg}/bin/hermes dashboard --host 0.0.0.0 --port ${toString cfg.dashboardPort} --no-open";
             Restart = "always";
             RestartSec = 5;
 

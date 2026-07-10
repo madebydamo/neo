@@ -1,6 +1,7 @@
 # Hermes reverse proxy configuration for SWAG.
 # Points to dashboardPort (default 9119) so https://hermes.* serves the web UI.
 # Uses tinyauth for authentication via authBlock + authLocations (enabled by default in mkReverseProxyOptions).
+# Intercepts Hermes /login with an auto-login page so only tinyauth is user-facing.
 {...}: {
   flake.modules.nixos.hermes-swag = {
     config,
@@ -18,9 +19,21 @@
 
         client_max_body_size 0;
 
+        # Hermes form-auth landing page — auto-post internal basic_auth credentials.
+        # Gated by tinyauth; operators never see the Hermes login form.
+        location = /login {
+          default_type text/html;
+          charset utf-8;
+          add_header Cache-Control "no-store, no-cache, must-revalidate";
+          alias /config/www/hermes-autologin.html;
+          ${lib.neo.authBlock config cfg}
+        }
+
         location / {
           include /config/nginx/proxy.conf;
           proxy_pass http://host.docker.internal:${toString cfg.dashboardPort}/;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection "upgrade";
           ${lib.neo.authBlock config cfg}
         }
       ${lib.neo.authLocations config cfg}

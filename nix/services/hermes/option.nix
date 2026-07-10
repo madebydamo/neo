@@ -36,6 +36,17 @@
                 helper = lib.neo.helpers.randomToken;
               };
 
+              dashboardPassword = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = ''
+                  Internal Hermes dashboard password (required for non-loopback bind).
+                  SWAG auto-logs in with this so only tinyauth is user-facing.
+                '';
+                rank = 15;
+                helper = lib.neo.helpers.randomToken // {label = "Generate dashboard password";};
+              };
+
               telegramBotToken = mkOption {
                 type = types.nullOr types.str;
                 default = null;
@@ -102,7 +113,7 @@
 
               defaultModel = mkOption {
                 type = types.nullOr types.str;
-                default = "grok-4.3";
+                default = "grok-build-latest";
                 rank = 30;
                 description = ''
                   Default LLM model for the agent (e.g. "grok-4.20-0309-reasoning",
