@@ -131,6 +131,19 @@ enum OpKind {
     Update,
 }
 
+/// Ordered UI steps for an operation. Index maps onto a daisyUI range (`min=0`, `max=n-1`).
+struct ProgressSteps {
+    labels: &'static [&'static str],
+}
+
+const ACTIVATION_STEPS: ProgressSteps = ProgressSteps {
+    labels: &["Start", "Flake", "Build", "Git", "Switch"],
+};
+
+const UPDATE_STEPS: ProgressSteps = ProgressSteps {
+    labels: &["Start", "Init", "Flake", "Update", "Migrate"],
+};
+
 impl OpKind {
     fn monitor_id(self) -> &'static str {
         match self {
@@ -173,6 +186,40 @@ impl OpKind {
             OpKind::Update => format!("/update/status/{}", id),
         }
     }
+
+    fn steps(self) -> ProgressSteps {
+        match self {
+            OpKind::Activation => ACTIVATION_STEPS,
+            OpKind::Update => UPDATE_STEPS,
+        }
+    }
+
+    /// Map the JSON `phase` string written by activate/update onto a step index.
+    fn step_index(self, phase: &str) -> usize {
+        match self {
+            OpKind::Activation => match phase {
+                "triggered" | "starting" => 0,
+                "write-flake" | "write-flake-done" => 1,
+                "toplevel-build" | "toplevel-built" => 2,
+                "git-add" | "build-branch" | "build-commit" | "branches-created" | "amend-add"
+                | "amend-commit" | "branch-failed" => 3,
+                "pre-rebuild"
+                | "rebuild-failed"
+                | "completed"
+                | "completed-with-warnings"
+                | "complete" => 4,
+                _ => 0,
+            },
+            OpKind::Update => match phase {
+                "triggered" | "starting" => 0,
+                "flake init" | "post-init restore" => 1,
+                "write-flake" => 2,
+                "flake update" => 3,
+                "migrate" | "complete" => 4,
+                _ => 0,
+            },
+        }
+    }
 }
 
 fn state_fields(id: &str) -> (String, String, String, String) {
@@ -200,18 +247,122 @@ fn state_fields(id: &str) -> (String, String, String, String) {
     (status, phase, branch, err)
 }
 
+/// Build the live status strip (phase label + daisyUI range).
+///
+/// Must re-emit the same `id` and `hx-*` attributes on every response: the monitor uses
+/// `hx-swap="outerHTML"`, so dropping them after the first poll permanently kills updates.
+fn build_status_fragment_for(kind: OpKind, id: &str) -> String {
+    let (status, phase, branch, _) = state_fields(id);
+    let steps = kind.steps();
+    let max = steps.labels.len().saturating_sub(1);
+    let mut idx = kind.step_index(&phase);
+    if status == "success" {
+        idx = max;
+    } else if idx > max {
+        idx = max;
+    }
+
+    let (label_class, range_color, headline) = match status.as_str() {
+        "success" => {
+            let msg = match kind {
+                OpKind::Activation => {
+                    let b = if branch.is_empty() {
+                        id
+                    } else {
+                        branch.as_str()
+                    };
+                    format!("complete: {}", escape_html(b))
+                }
+                OpKind::Update => "update complete".to_string(),
+            };
+            ("text-success", "range-success", msg)
+        }
+        "failed" => (
+            "text-error",
+            "range-error",
+            format!("failed in {}", escape_html(&phase)),
+        ),
+        "in_progress" => {
+            let color = match kind {
+                OpKind::Activation => "range-warning",
+                OpKind::Update => "range-info",
+            };
+            let cls = match kind {
+                OpKind::Activation => "text-warning",
+                OpKind::Update => "text-info",
+            };
+            (cls, color, format!("in progress: {}", escape_html(&phase)))
+        }
+        _ => (
+            "opacity-60",
+            "range-neutral",
+            format!("status: {}", escape_html(&status)),
+        ),
+    };
+
+    let ticks: String = steps
+        .labels
+        .iter()
+        .map(|_| "<span>|</span>")
+        .collect::<Vec<_>>()
+        .join("");
+    let labels: String = steps
+        .labels
+        .iter()
+        .map(|l| format!("<span>{}</span>", l))
+        .collect::<Vec<_>>()
+        .join("");
+
+    // While in progress, re-emit id + hx-* so outerHTML polling keeps working.
+    // Terminal states drop hx-trigger so we stop hitting the server every second.
+    let hx_attrs = if status == "in_progress" {
+        format!(
+            r#" hx-get="{}" hx-trigger="load, every 1s" hx-swap="outerHTML""#,
+            kind.status_path(id)
+        )
+    } else {
+        String::new()
+    };
+
+    format!(
+        r#"
+        <div id="{id}"{hx_attrs} class="text-xs mt-1 space-y-1">
+            <div class="flex items-center justify-between gap-2">
+            <span class="{label_class}">{headline}</span>
+            <span class="opacity-60 tabular-nums">{step}/{total}</span>
+            </div>
+            <div class="w-full">
+            <input type="range" min="0" max="{max}" value="{idx}" step="1" class="w-full range range-xs {range_color} pointer-events-none" tabindex="-1" aria-label="Progress" />
+            <div class="flex justify-between px-1 mt-1 text-[10px] opacity-50">{ticks}</div>
+            <div class="flex justify-between px-1 text-[10px] opacity-70">{labels}</div>
+            </div>
+        </div>
+        "#,
+        id = kind.status_div_id(),
+        hx_attrs = hx_attrs,
+        label_class = label_class,
+        headline = headline,
+        step = idx + 1,
+        total = steps.labels.len(),
+        max = max,
+        idx = idx,
+        range_color = range_color,
+        ticks = ticks,
+        labels = labels,
+    )
+}
+
 fn build_monitor_fragment_for(kind: OpKind, id: &str) -> String {
     gc_old_activations();
-    let (status, phase, branch, err) = state_fields(id);
+    let (status, _phase, branch, err) = state_fields(id);
     let mut html = String::new();
     html.push_str(&format!(
         r#"<div id="{}" data-id="{}" class="p-2 bg-base-200 rounded">
-<div class="text-sm font-semibold">{} {} — phase: {}</div>"#,
+<div class="text-sm font-semibold">{} {}</div>"#,
         kind.monitor_id(),
         id,
         kind.title(),
         id,
-        phase
     ));
     match (kind, status.as_str()) {
         (OpKind::Activation, "in_progress") => {
@@ -223,7 +374,7 @@ fn build_monitor_fragment_for(kind: OpKind, id: &str) -> String {
         (OpKind::Activation, "success") => {
             html.push_str(&format!(
                 r#"<div class="alert alert-success text-sm">Success as {}</div>"#,
-                branch
+                escape_html(&branch)
             ));
         }
         (OpKind::Update, "success") => {
@@ -232,20 +383,17 @@ fn build_monitor_fragment_for(kind: OpKind, id: &str) -> String {
         (_, "failed") => {
             html.push_str(&format!(
                 r#"<div class="alert alert-error text-sm">Failed: {}</div>"#,
-                err
+                escape_html(&err)
             ));
         }
         _ => {}
     }
+    // Progress first so step updates are visible above the log stream.
+    html.push_str(&build_status_fragment_for(kind, id));
     html.push_str(&format!(
         r#"<div id="{}" class="text-[10px] bg-base-300 p-1 mt-1 max-h-80 overflow-auto font-mono" hx-get="{}" hx-trigger="load, every 1s" hx-swap="innerHTML"></div>"#,
         kind.log_div_id(),
         kind.log_path(id)
-    ));
-    html.push_str(&format!(
-        r#"<div id="{}" hx-get="{}" hx-trigger="load, every 5s" hx-swap="outerHTML" class="text-xs mt-1"></div>"#,
-        kind.status_div_id(),
-        kind.status_path(id)
     ));
     if matches!(kind, OpKind::Activation) && status == "success" {
         html.push_str(
@@ -267,46 +415,11 @@ pub fn build_update_monitor_fragment(id: &str) -> String {
 }
 
 pub fn build_status_fragment(id: &str) -> String {
-    let (status, phase, branch, _) = state_fields(id);
-    let branch = if branch.is_empty() {
-        id.to_string()
-    } else {
-        branch
-    };
-    match status.as_str() {
-        "success" => format!(
-            r#"<div class="text-success text-xs">complete: {}</div>"#,
-            branch
-        ),
-        "failed" => format!(
-            r#"<div class="text-error text-xs">failed in {}</div>"#,
-            phase
-        ),
-        "in_progress" => format!(
-            r#"<div class="text-warning text-xs">in progress: {}</div>"#,
-            phase
-        ),
-        _ => format!(
-            r#"<div class="text-xs opacity-60">status: {}</div>"#,
-            status
-        ),
-    }
+    build_status_fragment_for(OpKind::Activation, id)
 }
 
 pub fn build_update_status_fragment(id: &str) -> String {
-    let (status, phase, _, _) = state_fields(id);
-    match status.as_str() {
-        "success" => r#"<div class="text-success text-xs">update complete</div>"#.to_string(),
-        "failed" => format!(
-            r#"<div class="text-error text-xs">update failed in {}</div>"#,
-            phase
-        ),
-        "in_progress" => format!(r#"<div class="text-info text-xs">update: {}</div>"#, phase),
-        _ => format!(
-            r#"<div class="text-xs opacity-60">status: {}</div>"#,
-            status
-        ),
-    }
+    build_status_fragment_for(OpKind::Update, id)
 }
 
 pub fn build_log_fragment(id: &str) -> String {
