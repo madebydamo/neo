@@ -5,7 +5,13 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use super::structs::{AppConfig, BranchInfo, BranchesContext, IndexContext};
+use super::git_ops::{
+    get_activation_graph, get_settings_toml_diff, list_activation_branches, settings_toml_has_diff,
+    worktree_changed_and_summary,
+};
+use super::settings::{insert_dotted, json_to_toml_item, json_to_toml_value};
+use super::structs::{AppConfig, BranchesContext, IndexContext};
+use super::util::{config_dir, escape_html, sudo_cmd};
 use rocket::response::content::RawHtml;
 use rocket::response::stream::{Event, EventStream};
 use rocket::serde::json::Json;
@@ -14,11 +20,11 @@ use rocket_dyn_templates::Template;
 use rocket_ws::{Channel, Message, WebSocket};
 use tokio::io::{AsyncBufReadExt, BufReader as AsyncBufReader};
 use tokio::process::Command as AsyncCommand;
-use toml_edit::{DocumentMut, Item, Table, Value};
+use toml_edit::{DocumentMut, Item, Table};
 
 use crate::commands::log::OperationLog;
 use crate::commands::paste_settings::paste_settings;
-use crate::commands::{get_current_branch, git_cmd};
+use crate::commands::git_cmd;
 
 use super::activation;
 
@@ -61,101 +67,6 @@ pub async fn services_grid(config: &State<Arc<AppConfig>>) -> Template {
         ev.extract_services().await
     };
     Template::render("services_grid", ctx)
-}
-
-fn json_to_toml_value(v: &serde_json::Value) -> Option<Value> {
-    match v {
-        serde_json::Value::Null => None,
-        serde_json::Value::Bool(b) => Some(Value::from(*b)),
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                Some(Value::from(i))
-            } else if let Some(f) = n.as_f64() {
-                Some(Value::from(f))
-            } else {
-                None
-            }
-        }
-        serde_json::Value::String(s) => Some(Value::from(s.clone())),
-        serde_json::Value::Array(arr) => {
-            let mut tarr = toml_edit::Array::new();
-            for item in arr {
-                if let Some(tv) = json_to_toml_value(item) {
-                    tarr.push(tv);
-                }
-            }
-            Some(Value::from(tarr))
-        }
-        serde_json::Value::Object(_) => None,
-    }
-}
-
-fn json_to_toml_item(v: &serde_json::Value) -> Option<Item> {
-    match v {
-        serde_json::Value::Null => None,
-        serde_json::Value::Bool(b) => Some(Item::Value(Value::from(*b))),
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                Some(Item::Value(Value::from(i)))
-            } else if let Some(f) = n.as_f64() {
-                Some(Item::Value(Value::from(f)))
-            } else {
-                None
-            }
-        }
-        serde_json::Value::String(s) => Some(Item::Value(Value::from(s.clone()))),
-        serde_json::Value::Array(arr) => {
-            let mut tarr = toml_edit::Array::new();
-            for item in arr {
-                if let Some(tv) = json_to_toml_value(item) {
-                    tarr.push(tv);
-                }
-            }
-            Some(Item::Value(Value::from(tarr)))
-        }
-        serde_json::Value::Object(obj) => {
-            let mut ttable = Table::new();
-            for (k, val) in obj {
-                if let Some(ti) = json_to_toml_item(val) {
-                    ttable.insert(k, ti);
-                }
-            }
-            Some(Item::Table(ttable))
-        }
-    }
-}
-
-fn insert_dotted(table: &mut Table, dotted_key: &str, value: Value) {
-    let parts: Vec<&str> = dotted_key.split('.').collect();
-    if parts.is_empty() {
-        return;
-    }
-    let mut current = table;
-    for (i, part) in parts.iter().enumerate() {
-        if i == parts.len() - 1 {
-            current.insert(part, Item::Value(value));
-            return;
-        }
-        // ensure next level is a table (avoid overlapping borrows)
-        {
-            let entry = current.entry(part).or_insert(Item::Table(Table::new()));
-            if !entry.is_table() {
-                *entry = Item::Table(Table::new());
-            }
-        }
-        if let Some(t) = current.get_mut(part).and_then(|e| e.as_table_mut()) {
-            current = t;
-        } else {
-            return;
-        }
-    }
-}
-
-fn config_dir(cfg: &AppConfig) -> PathBuf {
-    cfg.settings_path
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 fn trigger_systemd_run(subcommand: &str, env_var: &str, suffix: &str, log_path: &std::path::Path) {
@@ -214,131 +125,6 @@ fn trigger_activation(config: &AppConfig) -> RawHtml<String> {
     );
     // If launch failed synchronously the state remains "triggered"; the unit would update it on real run.
     RawHtml(activation::build_monitor_fragment(op.id()))
-}
-
-fn list_activation_branches(config_path: &str) -> Vec<BranchInfo> {
-    let names: Vec<String> = Command::new("git")
-        .current_dir(config_path)
-        .args([
-            "for-each-ref",
-            "--format=%(refname:short)",
-            "--sort=-committerdate",
-            "refs/heads/activation_*",
-        ])
-        .output()
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .map(|s| s.to_string())
-                .collect()
-        })
-        .unwrap_or_default();
-    let cur = get_current_branch(config_path).unwrap_or_default();
-    names
-        .into_iter()
-        .map(|name| BranchInfo {
-            name: name.clone(),
-            is_current: name == cur,
-        })
-        .collect()
-}
-
-fn get_activation_graph(config_path: &str) -> String {
-    let out = Command::new("git")
-        .current_dir(config_path)
-        .args([
-            "log",
-            "--graph",
-            "--no-color",
-            "--oneline",
-            "--decorate",
-            "-25",
-            "--branches=activation_*",
-        ])
-        .output();
-    match out {
-        Ok(o) => {
-            let mut t = String::from_utf8_lossy(&o.stdout).into_owned();
-            if !o.stderr.is_empty() {
-                t.push_str(&String::from_utf8_lossy(&o.stderr));
-            }
-            t
-        }
-        Err(e) => format!("graph error: {}", e),
-    }
-}
-
-fn worktree_changed_and_summary(cfg: &AppConfig) -> (bool, String) {
-    let dir = config_dir(cfg);
-    let staged = Command::new("git")
-        .current_dir(&dir)
-        .args(["diff", "--cached", "--quiet"])
-        .status()
-        .map(|s| !s.success())
-        .unwrap_or(false);
-    let unstaged = Command::new("git")
-        .current_dir(&dir)
-        .args(["diff", "--quiet"])
-        .status()
-        .map(|s| !s.success())
-        .unwrap_or(false);
-    let changed = staged || unstaged;
-    if !changed {
-        return (false, String::new());
-    }
-    let status = Command::new("git")
-        .current_dir(&dir)
-        .args(["status", "--porcelain", "-b", "--short"])
-        .output();
-    let stat = Command::new("git")
-        .current_dir(&dir)
-        .args(["diff", "--stat", "--no-color"])
-        .output();
-    let mut text = String::new();
-    if let Ok(o) = status {
-        text.push_str(&String::from_utf8_lossy(&o.stdout));
-    }
-    text.push_str("\n");
-    if let Ok(o) = stat {
-        text.push_str(&String::from_utf8_lossy(&o.stdout));
-    }
-    (true, text)
-}
-
-fn settings_toml_has_diff(cfg: &AppConfig) -> bool {
-    let dir = config_dir(cfg);
-    let unstaged = Command::new("git")
-        .current_dir(&dir)
-        .args(["diff", "--quiet", "--", "settings.toml"])
-        .status()
-        .map(|s| !s.success())
-        .unwrap_or(false);
-    let staged = Command::new("git")
-        .current_dir(&dir)
-        .args(["diff", "--cached", "--quiet", "--", "settings.toml"])
-        .status()
-        .map(|s| !s.success())
-        .unwrap_or(false);
-    unstaged || staged
-}
-
-fn get_settings_toml_diff(cfg: &AppConfig) -> String {
-    let dir = config_dir(cfg);
-    let output = Command::new("git")
-        .current_dir(&dir)
-        .args(["diff", "--no-color", "HEAD", "--", "settings.toml"])
-        .output();
-    match output {
-        Ok(o) => {
-            let mut t = String::from_utf8_lossy(&o.stdout).into_owned();
-            let e = String::from_utf8_lossy(&o.stderr);
-            if !e.is_empty() {
-                t.push_str(&e);
-            }
-            t
-        }
-        Err(e) => format!("git diff error: {}", e),
-    }
 }
 
 #[post("/save/<service>", data = "<payload>")]
@@ -907,16 +693,6 @@ pub fn update_log(id: &str) -> RawHtml<String> {
 #[get("/update/status/<id>")]
 pub fn update_status(id: &str) -> RawHtml<String> {
     RawHtml(activation::build_update_status_fragment(id))
-}
-
-fn sudo_cmd() -> String {
-    std::env::var("SUDO_BINARY_PATH").unwrap_or_else(|_| "sudo".to_string())
-}
-
-fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
 }
 
 fn unit_name_valid(unit: &str) -> bool {

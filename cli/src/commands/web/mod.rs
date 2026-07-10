@@ -11,10 +11,13 @@ use toml_edit::DocumentMut;
 
 mod activation;
 mod evaluator;
+mod git_ops;
 mod nix_eval;
 mod nix_extractors;
 mod server;
+mod settings;
 mod structs;
+mod util;
 
 use server::routes;
 use structs::AppConfig;
