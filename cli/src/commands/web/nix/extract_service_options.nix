@@ -59,11 +59,6 @@
     then getNested (builtins.tail pathList) attrs.${builtins.head pathList}
     else null;
 
-  isSafeJson = v: let
-    t = builtins.typeOf v;
-  in
-    t == "null" || t == "bool" || t == "int" || t == "float" || t == "string" || t == "list" || t == "set";
-
   toSafeValue = v: let
     r = builtins.tryEval v;
     val =
@@ -74,21 +69,23 @@
   in
     if t == "null" || t == "bool" || t == "int" || t == "float" || t == "string"
     then val
-    else if t == "list" || t == "set"
+    else if t == "list"
+    then map toSafeValue val
+    else if t == "set"
     then
-      if
-        builtins.all isSafeJson (
-          if t == "list"
-          then val
-          else builtins.attrValues val
-        )
-      then val
-      else builtins.toJSON val
-    else builtins.toJSON val;
+      builtins.listToAttrs (
+        map (
+          k: {
+            name = k;
+            value = toSafeValue val.${k};
+          }
+        ) (builtins.attrNames val)
+      )
+    else null;
 
-  getTypeInfo = t: let
+  typeNameOf = t: let
     n0 = tryOr "" (
-      if builtins.hasAttr "name" t
+      if builtins.isAttrs t && builtins.hasAttr "name" t
       then t.name
       else ""
     );
@@ -96,23 +93,90 @@
       if n0 == "string"
       then "str"
       else n0;
-    n =
-      if rawName == "unsignedInt16"
-      then "port"
-      else if
-        rawName
-        == "intBetween"
-        || rawName == "unsignedInt"
-        || rawName == "positiveInt"
-        || rawName == "signedInt8"
-        || rawName == "signedInt16"
-        || rawName == "signedInt32"
-        || rawName == "unsignedInt8"
-        || rawName == "unsignedInt32"
-      then "int"
-      else if rawName == "numberBetween" || rawName == "numberNonnegative"
-      then "float"
-      else rawName;
+  in
+    if rawName == "unsignedInt16"
+    then "port"
+    else if
+      rawName
+      == "intBetween"
+      || rawName == "unsignedInt"
+      || rawName == "positiveInt"
+      || rawName == "signedInt8"
+      || rawName == "signedInt16"
+      || rawName == "signedInt32"
+      || rawName == "unsignedInt8"
+      || rawName == "unsignedInt32"
+    then "int"
+    else if rawName == "numberBetween" || rawName == "numberNonnegative"
+    then "float"
+    else if rawName == "lazyAttrsOf"
+    then "attrsOf"
+    else rawName;
+
+  callGetSubOptions = t: prefix:
+    tryOr {} (
+      if builtins.isAttrs t && builtins.hasAttr "getSubOptions" t
+      then t.getSubOptions prefix
+      else {}
+    );
+
+  # Field records for a submodule type (used as attrsOf/listOf element schema).
+  # Plain nested submodules are expanded to dotted field names; collections stay as one field.
+  mkFieldRecords = t: let
+    walkF = pathList: o:
+      if builtins.isAttrs o && builtins.hasAttr "_type" o && o._type == "option"
+      then let
+        internal = tryOr false (o.internal or false);
+      in
+        if internal
+        then []
+        else let
+          path =
+            if pathList == []
+            then ""
+            else builtins.concatStringsSep "." pathList;
+          ot = tryOr {} (o.type or {});
+          tn = typeNameOf ot;
+          ti = getTypeInfo ot;
+          record = {
+            name = path;
+            type = ti;
+            typeLabel = typeLabel ti;
+            default = toSafeValue (
+              if builtins.hasAttr "default" o
+              then o.default
+              else null
+            );
+            description = tryOr "" (
+              if builtins.hasAttr "description" o
+              then o.description
+              else ""
+            );
+            internal = false;
+            readOnly = tryOr false (o.readOnly or false);
+            current = null;
+            rank = tryOr null (o.rank or null);
+          };
+          childSet =
+            if tn == "submodule"
+            then callGetSubOptions ot pathList
+            else {};
+        in
+          if tn == "submodule" && childSet != {}
+          then walkF pathList childSet
+          else [record]
+      else if builtins.isAttrs o
+      then let
+        ns = builtins.attrNames o;
+        pub = builtins.filter (k: k != "_freeformOptions" && builtins.substring 0 1 k != "_") ns;
+      in
+        builtins.concatLists (map (k: walkF (pathList ++ [k]) o.${k}) pub)
+      else [];
+  in
+    walkF [] (callGetSubOptions t []);
+
+  getTypeInfo = t: let
+    n = typeNameOf t;
     nested = tryOr {} (t.nestedTypes or {});
     elemT = tryOr null (nested.elemType or null);
     elemInfo =
@@ -181,13 +245,16 @@
       kind = "listOf";
       elem = elemInfo;
     }
-    else if n == "attrsOf" || n == "lazyAttrsOf"
+    else if n == "attrsOf"
     then {
       kind = "attrsOf";
       elem = elemInfo;
     }
     else if n == "submodule"
-    then {kind = "submodule";}
+    then {
+      kind = "submodule";
+      fields = mkFieldRecords t;
+    }
     else if n == "port"
     then (bounds // {kind = "port";})
     else if n == "int"
@@ -301,6 +368,10 @@
     rank = rank;
   };
 
+  # Walk options into a flat form list.
+  # - Plain submodules expand to dotted children (auth.enabled).
+  # - listOf / attrsOf stay as a single field; element schema lives on type.elem
+  #   (including submodule fields). No placeholder paths like entries.<name>.* .
   walk = pathList: o: let
     path =
       if pathList == []
@@ -310,37 +381,23 @@
     if builtins.isAttrs o && builtins.hasAttr "_type" o && o._type == "option"
     then let
       internal = tryOr false (o.internal or false);
-      # Completely skip internal options and everything nested under them
-      # (e.g. the `meta` submodule we declare via mkServiceMeta).
-      # This prevents leaking meta.icon / meta.description etc. into the form fields.
     in
       if internal
       then []
       else let
         record = mkOptionRecord path o;
         t = tryOr null (o.type or null);
-        subSet = tryOr {} (
-          if builtins.isAttrs t && builtins.hasAttr "getSubOptions" t
-          then t.getSubOptions pathList
-          else {}
-        );
+        tn = typeNameOf (tryOr {} t);
+        subSet = callGetSubOptions (tryOr {} t) pathList;
+        expandChildren =
+          tn
+          != "listOf"
+          && tn != "attrsOf"
+          && subSet != {};
         subs =
-          if subSet == {}
-          then []
-          else let
-            tn = tryOr "" (
-              if builtins.isAttrs t && builtins.hasAttr "name" t
-              then t.name
-              else ""
-            );
-            ph =
-              if tn == "listOf"
-              then ["*"]
-              else if tn == "attrsOf" || tn == "lazyAttrsOf"
-              then ["<name>"]
-              else [];
-          in
-            walk (pathList ++ ph) subSet;
+          if expandChildren
+          then walk pathList subSet
+          else [];
       in
         [record] ++ subs
     else if builtins.isAttrs o

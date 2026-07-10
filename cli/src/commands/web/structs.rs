@@ -61,6 +61,9 @@ pub struct OptionType {
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub elem: Option<Box<OptionType>>,
+    /// Submodule field schemas (for attrsOf/listOf of submodule, or nested submodule types).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fields: Option<Vec<OptionSchema>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub min: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

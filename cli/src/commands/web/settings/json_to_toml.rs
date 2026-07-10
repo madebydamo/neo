@@ -1,5 +1,15 @@
 use toml_edit::{Item, Table, Value};
 
+fn json_object_to_inline_table(obj: &serde_json::Map<String, serde_json::Value>) -> Option<Value> {
+    let mut it = toml_edit::InlineTable::new();
+    for (k, val) in obj {
+        if let Some(tv) = json_to_toml_value(val) {
+            it.insert(k, tv);
+        }
+    }
+    Some(Value::InlineTable(it))
+}
+
 pub fn json_to_toml_value(v: &serde_json::Value) -> Option<Value> {
     match v {
         serde_json::Value::Null => None,
@@ -23,7 +33,8 @@ pub fn json_to_toml_value(v: &serde_json::Value) -> Option<Value> {
             }
             Some(Value::from(tarr))
         }
-        serde_json::Value::Object(_) => None,
+        // Nested objects as values (e.g. array-of-submodule items, dotted inserts).
+        serde_json::Value::Object(obj) => json_object_to_inline_table(obj),
     }
 }
 

@@ -79,10 +79,20 @@ fn map_units(
         .collect()
 }
 
+fn enrich_type(t: &mut crate::commands::web::structs::OptionType) {
+    if let Some(fields) = t.fields.as_mut() {
+        enrich_options(fields);
+    }
+    if let Some(elem) = t.elem.as_mut() {
+        enrich_type(elem);
+    }
+}
+
 fn enrich_options(opts: &mut [OptionSchema]) {
     for o in opts.iter_mut() {
         o.defaultDisplay = value_to_display(&o.default);
         o.currentDisplay = o.current.as_ref().map(value_to_display).unwrap_or_default();
+        enrich_type(&mut o.r#type);
     }
 }
 

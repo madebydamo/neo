@@ -1,10 +1,141 @@
-<div class="mt-2">
-  <template x-for="(item, idx) in (values['{{name}}'] || [])" :key="idx">
-    <div class="flex gap-2 mb-1.5">
-      <input type="text" class="input input-primary input-sm flex-1 font-mono"
-             x-model="values['{{name}}'][idx]">
-      <button @click="removeListItem('{{name}}', idx)" class="btn btn-ghost btn-xs">✕</button>
-    </div>
-  </template>
-  <button @click="addListItem('{{name}}')" class="btn btn-outline btn-xs mt-1">+ add</button>
-</div>
+{{! listOf: scalars or one-deep submodule entries }}
+{{#if (eq type.elem.kind "submodule")}}
+  <div class="mt-2">
+    <template x-for="(item, idx) in (values['{{name}}'] || [])" :key="idx">
+      <div>
+        <div class="divider my-3 text-xs text-base-content/40" x-show="idx > 0">entry</div>
+
+        <div class="border border-base-300 rounded-lg p-3 bg-base-100/60 space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-sm font-medium text-base-content/80">
+              Entry <span class="font-mono text-base-content/50" x-text="'#' + idx"></span>
+            </span>
+            <button type="button"
+                    class="btn btn-ghost btn-sm text-error"
+                    @click="removeListItem('{{name}}', idx)"
+                    title="Remove this entry">
+              Remove
+            </button>
+          </div>
+
+          <div class="divider my-0 before:h-px after:h-px"></div>
+
+          <div class="space-y-3">
+            {{#each type.elem.fields}}
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-xs text-base-content/70">{{name}}</span>
+                  {{#if description}}
+                    <div class="dropdown dropdown-right dropdown-hover">
+                      <span tabindex="0" role="button" class="cursor-help text-base-content/40 text-[11px]">ⓘ</span>
+                      <div tabindex="0" class="dropdown-content card card-sm bg-base-100 shadow-sm z-10 w-64 text-left">
+                        <div class="card-body text-xs">{{description}}</div>
+                      </div>
+                    </div>
+                  {{/if}}
+                </div>
+
+                {{#if (eq type.kind "bool")}}
+                  <label class="label cursor-pointer justify-start gap-2 py-0">
+                    <input type="checkbox" class="toggle toggle-primary toggle-sm"
+                           x-model="values['{{../name}}'][idx]['{{name}}']">
+                  </label>
+                {{/if}}
+
+                {{#if (or (eq type.kind "int") (eq type.kind "port"))}}
+                  <input type="number" class="input input-primary input-sm w-full font-mono"
+                         x-model.number="values['{{../name}}'][idx]['{{name}}']"
+                         {{#if type.min}}min="{{type.min}}"{{/if}}
+                         {{#if type.max}}max="{{type.max}}"{{/if}}>
+                {{/if}}
+
+                {{#if (eq type.kind "float")}}
+                  <input type="number" class="input input-primary input-sm w-full font-mono" step="any"
+                         x-model.number="values['{{../name}}'][idx]['{{name}}']">
+                {{/if}}
+
+                {{#if (eq type.kind "listOf")}}
+                  <div class="pl-1 space-y-1">
+                    <template x-for="(nitem, nidx) in (values['{{../name}}'][idx]['{{name}}'] || [])" :key="nidx">
+                      <div class="flex gap-2">
+                        {{#if (or (eq type.elem.kind "int") (eq type.elem.kind "port"))}}
+                          <input type="number" class="input input-primary input-sm flex-1 font-mono"
+                                 x-model.number="values['{{../name}}'][idx]['{{name}}'][nidx]">
+                        {{else}}
+                          <input type="text" class="input input-primary input-sm flex-1 font-mono"
+                                 x-model="values['{{../name}}'][idx]['{{name}}'][nidx]">
+                        {{/if}}
+                        <button type="button" @click="removeNestedListItemAtIndex('{{../name}}', idx, '{{name}}', nidx)"
+                                class="btn btn-ghost btn-xs">✕</button>
+                      </div>
+                    </template>
+                    <button type="button" @click="addNestedListItemAtIndex('{{../name}}', idx, '{{name}}')"
+                            class="btn btn-outline btn-xs">+ add</button>
+                  </div>
+                {{/if}}
+
+                {{#if (eq type.kind "enum")}}
+                  <select class="select select-sm select-primary w-full font-mono"
+                          x-model="values['{{../name}}'][idx]['{{name}}']">
+                    {{#each type.values}}
+                      <option value="{{this}}">{{this}}</option>
+                    {{/each}}
+                  </select>
+                {{/if}}
+
+                {{#if (eq type.kind "nullOr")}}
+                  <div class="flex gap-2">
+                    <input type="text" class="input input-primary input-sm flex-1 font-mono"
+                           x-model="values['{{../name}}'][idx]['{{name}}']">
+                    <button type="button" @click="values['{{../name}}'][idx]['{{name}}'] = null"
+                            class="btn btn-ghost btn-xs">clear</button>
+                  </div>
+                {{/if}}
+
+                {{#if (or (eq type.kind "str") (eq type.kind "path"))}}
+                  <input type="text" class="input input-primary input-sm w-full font-mono"
+                         x-model="values['{{../name}}'][idx]['{{name}}']">
+                {{/if}}
+              </div>
+            {{/each}}
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <div class="divider my-3 text-xs text-base-content/40"
+         x-show="(values['{{name}}'] || []).length > 0"></div>
+
+    <button type="button" @click="addListItem('{{name}}')" class="btn btn-outline btn-sm">+ Add entry</button>
+  </div>
+{{else}}
+  <div class="mt-2">
+    <template x-for="(item, idx) in (values['{{name}}'] || [])" :key="idx">
+      <div class="flex gap-2 mb-1.5">
+        {{#if (or (eq type.elem.kind "int") (eq type.elem.kind "port"))}}
+          <input type="number" class="input input-primary input-sm flex-1 font-mono"
+                 x-model.number="values['{{name}}'][idx]"
+                 {{#if type.elem.min}}min="{{type.elem.min}}"{{/if}}
+                 {{#if type.elem.max}}max="{{type.elem.max}}"{{/if}}>
+        {{else}}
+          {{#if (eq type.elem.kind "float")}}
+            <input type="number" class="input input-primary input-sm flex-1 font-mono" step="any"
+                   x-model.number="values['{{name}}'][idx]">
+          {{else}}
+            {{#if (eq type.elem.kind "bool")}}
+              <label class="label cursor-pointer justify-start gap-2 flex-1">
+                <input type="checkbox" class="toggle toggle-primary toggle-sm"
+                       x-model="values['{{name}}'][idx]">
+              </label>
+            {{else}}
+              <input type="text" class="input input-primary input-sm flex-1 font-mono"
+                     x-model="values['{{name}}'][idx]">
+            {{/if}}
+          {{/if}}
+        {{/if}}
+        <button type="button" @click="removeListItem('{{name}}', idx)" class="btn btn-ghost btn-xs">✕</button>
+      </div>
+    </template>
+    <button type="button" @click="addListItem('{{name}}')" class="btn btn-outline btn-xs mt-1">+ add</button>
+  </div>
+{{/if}}

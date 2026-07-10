@@ -1,13 +1,221 @@
-<div class="mt-2 space-y-1">
-  <template x-for="(val, key) in (values['{{name}}'] || {})" :key="key">
-    <div class="flex gap-2">
-      <input class="input input-primary input-sm w-40 font-mono" :value="key" disabled>
-      <input class="input input-primary input-sm flex-1 font-mono" x-model="values['{{name}}'][key]">
-      <button @click="removeAttrItem('{{name}}', key)" class="btn btn-ghost btn-xs">✕</button>
+{{! attrsOf: scalar values or one-deep submodule entries }}
+{{#if (eq type.elem.kind "submodule")}}
+  <div class="mt-2">
+    <template x-for="(key, idx) in attrKeys('{{name}}')" :key="key">
+      <div>
+        <div class="divider my-3 text-xs text-base-content/40" x-show="idx > 0">entry</div>
+
+        <div class="border border-base-300 rounded-lg p-3 bg-base-100/60 space-y-3">
+          {{! Card header: named entry + remove }}
+          <div class="flex items-start justify-between gap-3">
+            <div class="form-control flex-1 min-w-0 gap-1">
+              <label class="label py-0 gap-2 justify-start flex-wrap">
+                <span class="label-text text-xs font-semibold">Name</span>
+                <span class="label-text-alt text-[10px] text-base-content/45">unique key for this entry</span>
+              </label>
+              <input type="text"
+                     class="input input-primary input-sm font-mono w-full max-w-md"
+                     :value="key"
+                     @change="renameAttrKey('{{name}}', key, $event.target.value)"
+                     placeholder="e.g. home"
+                     aria-label="Entry name">
+            </div>
+            <button type="button"
+                    class="btn btn-ghost btn-sm text-error shrink-0 mt-5"
+                    @click="removeAttrItem('{{name}}', key)"
+                    title="Remove this entry">
+              Remove
+            </button>
+          </div>
+
+          <div class="divider my-0 before:h-px after:h-px"></div>
+
+          <div class="space-y-3">
+            {{#each type.elem.fields}}
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-xs text-base-content/70">{{name}}</span>
+                  {{#if description}}
+                    <div class="dropdown dropdown-right dropdown-hover">
+                      <span tabindex="0" role="button" class="cursor-help text-base-content/40 text-[11px]">ⓘ</span>
+                      <div tabindex="0" class="dropdown-content card card-sm bg-base-100 shadow-sm z-10 w-64 text-left">
+                        <div class="card-body text-xs">{{description}}</div>
+                      </div>
+                    </div>
+                  {{/if}}
+                </div>
+
+                {{#if (eq type.kind "bool")}}
+                  <label class="label cursor-pointer justify-start gap-2 py-0">
+                    <input type="checkbox" class="toggle toggle-primary toggle-sm"
+                           x-model="values['{{../name}}'][key]['{{name}}']">
+                  </label>
+                {{/if}}
+
+                {{#if (or (eq type.kind "int") (eq type.kind "port"))}}
+                  <input type="number" class="input input-primary input-sm w-full font-mono"
+                         x-model.number="values['{{../name}}'][key]['{{name}}']"
+                         {{#if type.min}}min="{{type.min}}"{{/if}}
+                         {{#if type.max}}max="{{type.max}}"{{/if}}>
+                {{/if}}
+
+                {{#if (eq type.kind "float")}}
+                  <input type="number" class="input input-primary input-sm w-full font-mono" step="any"
+                         x-model.number="values['{{../name}}'][key]['{{name}}']">
+                {{/if}}
+
+                {{#if (eq type.kind "listOf")}}
+                  <div class="pl-1 space-y-1">
+                    <template x-for="(nitem, nidx) in (values['{{../name}}'][key]['{{name}}'] || [])" :key="nidx">
+                      <div class="flex gap-2">
+                        {{#if (or (eq type.elem.kind "int") (eq type.elem.kind "port"))}}
+                          <input type="number" class="input input-primary input-sm flex-1 font-mono"
+                                 x-model.number="values['{{../name}}'][key]['{{name}}'][nidx]">
+                        {{else}}
+                          {{#if (eq type.elem.kind "bool")}}
+                            <label class="label cursor-pointer justify-start gap-2 flex-1">
+                              <input type="checkbox" class="toggle toggle-primary toggle-sm"
+                                     x-model="values['{{../name}}'][key]['{{name}}'][nidx]">
+                            </label>
+                          {{else}}
+                            <input type="text" class="input input-primary input-sm flex-1 font-mono"
+                                   x-model="values['{{../name}}'][key]['{{name}}'][nidx]">
+                          {{/if}}
+                        {{/if}}
+                        <button type="button"
+                                @click="removeNestedListItem('{{../name}}', key, '{{name}}', nidx)"
+                                class="btn btn-ghost btn-xs">✕</button>
+                      </div>
+                    </template>
+                    <button type="button"
+                            @click="addNestedListItem('{{../name}}', key, '{{name}}')"
+                            class="btn btn-outline btn-xs">+ add</button>
+                  </div>
+                {{/if}}
+
+                {{#if (eq type.kind "attrsOf")}}
+                  <div class="pl-1 space-y-1">
+                    <template x-for="(nval, nkey) in (values['{{../name}}'][key]['{{name}}'] || {})" :key="nkey">
+                      <div class="flex gap-2">
+                        <input class="input input-primary input-sm w-32 font-mono" :value="nkey" disabled>
+                        {{#if (or (eq type.elem.kind "int") (eq type.elem.kind "port"))}}
+                          <input type="number" class="input input-primary input-sm flex-1 font-mono"
+                                 x-model.number="values['{{../name}}'][key]['{{name}}'][nkey]">
+                        {{else}}
+                          {{#if (eq type.elem.kind "bool")}}
+                            <label class="label cursor-pointer justify-start gap-2 flex-1">
+                              <input type="checkbox" class="toggle toggle-primary toggle-sm"
+                                     x-model="values['{{../name}}'][key]['{{name}}'][nkey]">
+                            </label>
+                          {{else}}
+                            <input type="text" class="input input-primary input-sm flex-1 font-mono"
+                                   x-model="values['{{../name}}'][key]['{{name}}'][nkey]">
+                          {{/if}}
+                        {{/if}}
+                        <button type="button"
+                                @click="removeNestedAttrItem('{{../name}}', key, '{{name}}', nkey)"
+                                class="btn btn-ghost btn-xs">✕</button>
+                      </div>
+                    </template>
+                    <div class="flex gap-2">
+                      <input class="input input-primary input-sm w-32 font-mono" placeholder="key">
+                      <button type="button"
+                              @click="addNestedAttrItem('{{../name}}', key, '{{name}}', $event.target.previousElementSibling)"
+                              class="btn btn-outline btn-xs">+ add</button>
+                    </div>
+                  </div>
+                {{/if}}
+
+                {{#if (eq type.kind "enum")}}
+                  <select class="select select-sm select-primary w-full font-mono"
+                          x-model="values['{{../name}}'][key]['{{name}}']">
+                    {{#each type.values}}
+                      <option value="{{this}}">{{this}}</option>
+                    {{/each}}
+                  </select>
+                {{/if}}
+
+                {{#if (eq type.kind "nullOr")}}
+                  <div class="flex gap-2">
+                    <input type="text" class="input input-primary input-sm flex-1 font-mono"
+                           x-model="values['{{../name}}'][key]['{{name}}']"
+                           placeholder="{{defaultDisplay}}">
+                    <button type="button" @click="values['{{../name}}'][key]['{{name}}'] = null"
+                            class="btn btn-ghost btn-xs">clear</button>
+                  </div>
+                {{/if}}
+
+                {{#if (or (eq type.kind "str") (eq type.kind "path"))}}
+                  <input type="text" class="input input-primary input-sm w-full font-mono"
+                         x-model="values['{{../name}}'][key]['{{name}}']"
+                         placeholder="{{defaultDisplay}}">
+                {{/if}}
+              </div>
+            {{/each}}
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <div class="divider my-3 text-xs text-base-content/40"
+         x-show="attrKeys('{{name}}').length > 0"></div>
+
+    <div class="flex flex-wrap items-end gap-2">
+      <div class="form-control gap-1 flex-1 min-w-[10rem] max-w-md">
+        <label class="label py-0">
+          <span class="label-text text-xs font-medium">New entry name</span>
+        </label>
+        <input class="input input-primary input-sm font-mono w-full"
+               placeholder="e.g. home"
+               x-ref="newkey_{{name}}"
+               @keydown.enter.prevent="addAttrItem('{{name}}', $refs['newkey_{{name}}'])">
+      </div>
+      <button type="button"
+              @click="addAttrItem('{{name}}', $refs['newkey_{{name}}'])"
+              class="btn btn-outline btn-sm">
+        + Add entry
+      </button>
     </div>
-  </template>
-  <div class="flex gap-2">
-    <input class="input input-primary input-sm w-40" placeholder="key" x-ref="newkey_{{name}}">
-    <button @click="addAttrItem('{{name}}', $refs['newkey_{{name}}'])" class="btn btn-outline btn-xs">+ add</button>
   </div>
-</div>
+{{else}}
+  <div class="mt-2 space-y-1">
+    <template x-for="(val, key) in (values['{{name}}'] || {})" :key="key">
+      <div class="flex gap-2 items-center">
+        <input class="input input-primary input-sm w-40 font-mono"
+               :value="key"
+               @change="renameAttrKey('{{name}}', key, $event.target.value)"
+               title="Key (rename)"
+               aria-label="Key">
+        {{#if (or (eq type.elem.kind "int") (eq type.elem.kind "port"))}}
+          <input type="number" class="input input-primary input-sm flex-1 font-mono"
+                 x-model.number="values['{{name}}'][key]"
+                 {{#if type.elem.min}}min="{{type.elem.min}}"{{/if}}
+                 {{#if type.elem.max}}max="{{type.elem.max}}"{{/if}}>
+        {{else}}
+          {{#if (eq type.elem.kind "float")}}
+            <input type="number" class="input input-primary input-sm flex-1 font-mono" step="any"
+                   x-model.number="values['{{name}}'][key]">
+          {{else}}
+            {{#if (eq type.elem.kind "bool")}}
+              <label class="label cursor-pointer justify-start gap-2 flex-1">
+                <input type="checkbox" class="toggle toggle-primary toggle-sm"
+                       x-model="values['{{name}}'][key]">
+              </label>
+            {{else}}
+              <input class="input input-primary input-sm flex-1 font-mono" x-model="values['{{name}}'][key]">
+            {{/if}}
+          {{/if}}
+        {{/if}}
+        <button type="button"
+                @click="removeAttrItem('{{name}}', key)"
+                class="btn btn-ghost btn-xs text-error"
+                title="Remove">Remove</button>
+      </div>
+    </template>
+    <div class="flex gap-2 mt-2">
+      <input class="input input-primary input-sm w-40 font-mono" placeholder="key" x-ref="newkey_{{name}}">
+      <button type="button" @click="addAttrItem('{{name}}', $refs['newkey_{{name}}'])"
+              class="btn btn-outline btn-xs">+ Add</button>
+    </div>
+  </div>
+{{/if}}
