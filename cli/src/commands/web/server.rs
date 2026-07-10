@@ -919,25 +919,69 @@ fn escape_html(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
-/// Build just the inner content (dot + buttons) for a unit controls area.
-/// Used for OOB WS pushes and composed into full divs.
-fn render_unit_controls_content(unit: &str) -> String {
+fn unit_name_valid(unit: &str) -> bool {
+    !unit.is_empty()
+        && unit.len() <= 256
+        && unit
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-@._".contains(c))
+}
+
+/// Query systemctl is-active for a unit (sync; used from HTTP handlers and render).
+fn unit_active_state(unit: &str) -> String {
     let sudo = sudo_cmd();
-    let active = Command::new(&sudo)
+    Command::new(&sudo)
         .args(["systemctl", "is-active", unit])
         .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_else(|_| "unknown".into());
+        .map(|o| {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if s.is_empty() {
+                "unknown".into()
+            } else {
+                s
+            }
+        })
+        .unwrap_or_else(|_| "unknown".into())
+}
+
+async fn unit_active_state_async(unit: &str) -> String {
+    let sudo = sudo_cmd();
+    match AsyncCommand::new(&sudo)
+        .args(["systemctl", "is-active", unit])
+        .output()
+        .await
+    {
+        Ok(o) => {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if s.is_empty() {
+                "unknown".into()
+            } else {
+                s
+            }
+        }
+        Err(_) => "unknown".into(),
+    }
+}
+
+/// Build the inner content (dot + state + buttons) for a unit controls area.
+/// Used for OOB WS pushes and composed into full divs.
+///
+/// Buttons stay stable across transitional states so restart/stop never "vanish"
+/// while systemctl --no-block is still settling (the live WS watcher re-renders
+/// as soon as ActiveState changes).
+fn render_unit_controls_content_with_state(unit: &str, active: &str) -> String {
     let is_container = unit.starts_with("docker-");
 
-    let dot_cls = match active.as_str() {
+    let dot_cls = match active {
         "active" => "bg-success",
         "inactive" => "bg-base-300",
-        "activating" | "deactivating" => "bg-info",
+        "activating" | "deactivating" | "reloading" => "bg-info animate-pulse",
+        "failed" => "bg-error",
         _ => "bg-warning",
     };
 
     let u = escape_html(unit);
+    let state_label = escape_html(active);
     // Basic JS string escape for onclick arg (single quotes in unit names are rare for units)
     let u_js = u.replace('\'', "\\'");
 
@@ -946,33 +990,41 @@ fn render_unit_controls_content(unit: &str) -> String {
         r#"<span class="inline-block w-2 h-2 rounded-full flex-shrink-0 {}" title="{}"></span>"#,
         dot_cls, u
     ));
+    inner.push_str(&format!(
+        r#"<span class="text-[10px] opacity-60 font-mono min-w-[4.5rem]" title="ActiveState">{}</span>"#,
+        state_label
+    ));
 
-    if active == "active" {
-        inner.push_str(&format!(
-            r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/stop/{u}" hx-swap="none" title="systemctl stop">⏹</button>"##,
-            u = u
-        ));
-        inner.push_str(&format!(
-            r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/restart/{u}" hx-swap="none" title="systemctl restart">⟳</button>"##,
-            u = u
-        ));
-    } else if active == "inactive" || active == "failed" || active == "unknown" {
-        inner.push_str(&format!(
-            r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/start/{u}" hx-swap="none" title="systemctl start">▶</button>"##,
-            u = u
-        ));
-        if active == "failed" {
+    // Stable control set: inactive/failed → start; anything running/transitional → stop+restart.
+    // failed also keeps restart so a retry is one click.
+    match active {
+        "inactive" => {
             inner.push_str(&format!(
-                r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/restart/{u}" hx-swap="none" title="retry">⟳</button>"##,
+                r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/start/{u}" hx-swap="none" title="systemctl start">▶</button>"##,
                 u = u
             ));
         }
-    } else {
-        // transitional state: allow stop
-        inner.push_str(&format!(
-            r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/stop/{u}" hx-swap="none" title="systemctl stop">⏹</button>"##,
-            u = u
-        ));
+        "failed" => {
+            inner.push_str(&format!(
+                r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/start/{u}" hx-swap="none" title="systemctl start">▶</button>"##,
+                u = u
+            ));
+            inner.push_str(&format!(
+                r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/restart/{u}" hx-swap="none" title="systemctl restart">⟳</button>"##,
+                u = u
+            ));
+        }
+        _ => {
+            // active | activating | deactivating | reloading | unknown
+            inner.push_str(&format!(
+                r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/stop/{u}" hx-swap="none" title="systemctl stop">⏹</button>"##,
+                u = u
+            ));
+            inner.push_str(&format!(
+                r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/restart/{u}" hx-swap="none" title="systemctl restart">⟳</button>"##,
+                u = u
+            ));
+        }
     }
 
     // logs always opens dialog (live via SSE)
@@ -991,29 +1043,59 @@ fn render_unit_controls_content(unit: &str) -> String {
     inner
 }
 
-/// Render the full controls div (for initial population via GET /unit/status on pane load).
-/// Includes the id so OOB swaps from WS can target it later. No polling trigger (replaced by WS pushes).
+/// Full unit-controls div (with id) for bootstrap GET.
 fn render_unit_controls(unit: &str) -> RawHtml<String> {
-    let content = render_unit_controls_content(unit);
+    let active = unit_active_state(unit);
+    let content = render_unit_controls_content_with_state(unit, &active);
     let u = escape_html(unit);
     RawHtml(format!(
-        r#"<div id="unit-controls-{u}" class="unit-controls flex items-center gap-1 flex-shrink-0">{content}</div>"#
+        r#"<div id="unit-controls-{u}" class="unit-controls flex items-center gap-1 flex-shrink-0" data-active-state="{}">{content}</div>"#,
+        escape_html(&active)
     ))
 }
 
-/// Broadcast an OOB swap fragment for a unit's controls to all connected WS clients (htmx ws ext will apply it).
-fn broadcast_unit_update(unit: &str, config: &AppConfig) {
-    let content = render_unit_controls_content(unit);
-    let oob = format!(
-        r#"<div id="unit-controls-{}" class="unit-controls flex items-center gap-1 flex-shrink-0" hx-swap-oob="true">{}</div>"#,
+/// OOB fragment for htmx ws (and action HTTP responses).
+fn unit_controls_oob_fragment(unit: &str) -> String {
+    let active = unit_active_state(unit);
+    unit_controls_oob_fragment_with_state(unit, &active)
+}
+
+fn unit_controls_oob_fragment_with_state(unit: &str, active: &str) -> String {
+    format!(
+        r#"<div id="unit-controls-{}" class="unit-controls flex items-center gap-1 flex-shrink-0" data-active-state="{}" hx-swap-oob="true">{}</div>"#,
         escape_html(unit),
-        content
-    );
-    let _ = config.unit_updates.send(oob);
+        escape_html(active),
+        render_unit_controls_content_with_state(unit, active)
+    )
+}
+
+/// Broadcast an OOB swap fragment for a unit's controls to all connected WS clients.
+fn broadcast_unit_update(unit: &str, config: &AppConfig) {
+    let _ = config.unit_updates.send(unit_controls_oob_fragment(unit));
+}
+
+/// After a non-blocking systemctl action, ActiveState may lag for a few seconds.
+/// Push a short burst of refreshes so the UI settles without waiting for the next
+/// watcher tick alone (and even if the pane only did a one-shot HTTP OOB).
+fn schedule_unit_refresh_burst(unit: String, config: Arc<AppConfig>) {
+    if !unit_name_valid(&unit) {
+        return;
+    }
+    tokio::spawn(async move {
+        for delay_ms in [150_u64, 400, 900, 1800, 3500] {
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            broadcast_unit_update(&unit, &config);
+        }
+    });
 }
 
 #[get("/unit/status/<unit>")]
 pub fn unit_status(unit: &str) -> RawHtml<String> {
+    if !unit_name_valid(unit) {
+        return RawHtml(
+            r#"<div class="unit-controls text-[10px] text-error">invalid unit</div>"#.into(),
+        );
+    }
     render_unit_controls(unit)
 }
 
@@ -1050,46 +1132,41 @@ pub fn unit_logs(unit: &str) -> RawHtml<String> {
 }
 
 fn perform_unit_action(action: &str, unit: &str) {
+    if !unit_name_valid(unit) {
+        return;
+    }
     let sudo = sudo_cmd();
     let _ = Command::new(&sudo)
         .args(["systemctl", action, unit, "--no-block", "--no-ask-password"])
         .status();
 }
 
+/// Shared post-action path: kick systemctl, push OOB once, then burst-refresh while it settles.
+/// Buttons use hx-swap="none"; the returned OOB still updates the controls row.
+fn unit_action_response(action: &str, unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
+    if !unit_name_valid(unit) {
+        return RawHtml(String::new());
+    }
+    perform_unit_action(action, unit);
+    let oob = unit_controls_oob_fragment(unit);
+    let _ = config.unit_updates.send(oob.clone());
+    schedule_unit_refresh_burst(unit.to_string(), Arc::clone(config));
+    RawHtml(oob)
+}
+
 #[post("/unit/restart/<unit>")]
 pub fn unit_restart(unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    perform_unit_action("restart", unit);
-    let oob = format!(
-        r#"<div id="unit-controls-{}" class="unit-controls flex items-center gap-1 flex-shrink-0" hx-swap-oob="true">{}</div>"#,
-        escape_html(unit),
-        render_unit_controls_content(unit)
-    );
-    broadcast_unit_update(unit, &config);
-    RawHtml(oob)
+    unit_action_response("restart", unit, config)
 }
 
 #[post("/unit/start/<unit>")]
 pub fn unit_start(unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    perform_unit_action("start", unit);
-    let oob = format!(
-        r#"<div id="unit-controls-{}" class="unit-controls flex items-center gap-1 flex-shrink-0" hx-swap-oob="true">{}</div>"#,
-        escape_html(unit),
-        render_unit_controls_content(unit)
-    );
-    broadcast_unit_update(unit, &config);
-    RawHtml(oob)
+    unit_action_response("start", unit, config)
 }
 
 #[post("/unit/stop/<unit>")]
 pub fn unit_stop(unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    perform_unit_action("stop", unit);
-    let oob = format!(
-        r#"<div id="unit-controls-{}" class="unit-controls flex items-center gap-1 flex-shrink-0" hx-swap-oob="true">{}</div>"#,
-        escape_html(unit),
-        render_unit_controls_content(unit)
-    );
-    broadcast_unit_update(unit, &config);
-    RawHtml(oob)
+    unit_action_response("stop", unit, config)
 }
 
 #[post("/container/update/<container>")]
@@ -1138,8 +1215,14 @@ pub fn container_update(container: &str, config: &State<Arc<AppConfig>>) -> RawH
             "--no-ask-password",
         ])
         .status();
-    // Push live update to WS clients (and this one will also get the direct response to update-out, but controls via broadcast)
-    broadcast_unit_update(container, &config);
+    // Live unit-control updates over WS (burst while restart settles).
+    let unit_for_watch = if container.starts_with("docker-") {
+        container.to_string()
+    } else {
+        format!("docker-{}", cname)
+    };
+    broadcast_unit_update(&unit_for_watch, &config);
+    schedule_unit_refresh_burst(unit_for_watch, Arc::clone(config));
     RawHtml(format!(
         r#"<div class="text-xs"><div>pulled: {}</div><pre class="text-[9px] max-h-32 overflow-auto">{}</pre><div class="text-success">restarted docker-{}</div></div>"#,
         escape_html(&img),
@@ -1205,9 +1288,35 @@ pub async fn sse_logs(unit: &str) -> EventStream![] {
     }
 }
 
+/// Parse a client WS control message.
+/// Supported forms:
+///   {"op":"watch","units":["docker-foo","bar"]}
+///   {"op":"unwatch","units":[...]}
+///   {"op":"watch_replace","units":[...]}  // drop previous interest, watch only these
+/// Unknown / non-JSON messages are ignored (htmx may send form-shaped JSON).
+fn parse_ws_unit_command(text: &str) -> Option<(String, Vec<String>)> {
+    let v: serde_json::Value = serde_json::from_str(text).ok()?;
+    let op = v.get("op")?.as_str()?.to_string();
+    if op != "watch" && op != "unwatch" && op != "watch_replace" {
+        return None;
+    }
+    let units = v
+        .get("units")?
+        .as_array()?
+        .iter()
+        .filter_map(|u| u.as_str().map(|s| s.to_string()))
+        .filter(|u| unit_name_valid(u))
+        .collect::<Vec<_>>();
+    Some((op, units))
+}
+
 /// WebSocket endpoint for htmx ws extension (hx-ext="ws" ws-connect="/ws/status").
-/// Pushes OOB HTML fragments for unit controls and the action bar (pending changes / reset /
-/// nix-busy). Replaces client polling for live status without constant traffic.
+///
+/// - Forwards broadcast OOB fragments (action bar + unit control bursts from actions).
+/// - Accepts client `watch` / `unwatch` / `watch_replace` messages listing systemd units;
+///   while those units are watched *and this socket is open*, a per-connection poller
+///   re-checks ActiveState (~500ms) and pushes OOB HTML only when it changes.
+/// - Survives broadcast lag (skips) so a busy action-bar channel cannot kill the socket.
 #[get("/ws/status")]
 pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel<'static> {
     let mut rx = config.unit_updates.subscribe();
@@ -1215,6 +1324,8 @@ pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel
     ws.channel(move |mut stream| {
         Box::pin(async move {
             use rocket::futures::{SinkExt, StreamExt};
+            use std::collections::{HashMap, HashSet};
+
             // Immediate action-bar snapshot so the navbar is correct before the watcher ticks.
             if stream
                 .send(Message::Text(initial_bar.into()))
@@ -1223,30 +1334,125 @@ pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel
             {
                 return Ok(());
             }
-            // Forward broadcast OOB fragments (unit controls + action bar) to this client.
+
+            let mut watched: HashSet<String> = HashSet::new();
+            // unit -> last ActiveState string we pushed (skip identical re-renders)
+            let mut last_state: HashMap<String, String> = HashMap::new();
+            let mut tick = tokio::time::interval(Duration::from_millis(500));
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            // Don't fire immediately; first poll after 500ms (bootstrap GET already filled UI).
+            tick.tick().await;
+
             loop {
                 tokio::select! {
                     client_msg = stream.next() => {
                         match client_msg {
-                            Some(Ok(_)) => { /* e.g. possible future pings or commands; ignore for now */ }
-                            Some(Err(_)) | None => break,
+                            Some(Ok(Message::Text(text))) => {
+                                if let Some((op, units)) = parse_ws_unit_command(&text) {
+                                    match op.as_str() {
+                                        "watch_replace" => {
+                                            watched.clear();
+                                            last_state.clear();
+                                            for u in units {
+                                                watched.insert(u);
+                                            }
+                                        }
+                                        "watch" => {
+                                            for u in units {
+                                                watched.insert(u);
+                                            }
+                                        }
+                                        "unwatch" => {
+                                            for u in &units {
+                                                watched.remove(u);
+                                                last_state.remove(u);
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                    // Immediate snapshot for newly watched units so the pane
+                                    // does not wait a full tick after open/reconnect.
+                                    for u in watched.iter().cloned().collect::<Vec<_>>() {
+                                        let active = unit_active_state_async(&u).await;
+                                        let prev = last_state.get(&u);
+                                        if prev.map(|p| p.as_str()) != Some(active.as_str()) {
+                                            last_state.insert(u.clone(), active.clone());
+                                            let frag =
+                                                unit_controls_oob_fragment_with_state(&u, &active);
+                                            if stream
+                                                .send(Message::Text(frag.into()))
+                                                .await
+                                                .is_err()
+                                            {
+                                                return Ok(());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
+                            Some(Ok(_)) => { /* ping/pong/binary — ignore */ }
+                        }
+                    }
+                    _ = tick.tick(), if !watched.is_empty() => {
+                        // Live poll only for units this browser pane registered.
+                        for u in watched.iter().cloned().collect::<Vec<_>>() {
+                            let active = unit_active_state_async(&u).await;
+                            let changed =
+                                last_state.get(&u).map(|p| p.as_str()) != Some(active.as_str());
+                            if changed {
+                                last_state.insert(u.clone(), active.clone());
+                                let frag = unit_controls_oob_fragment_with_state(&u, &active);
+                                if stream.send(Message::Text(frag.into())).await.is_err() {
+                                    return Ok(());
+                                }
+                            }
                         }
                     }
                     update = rx.recv() => {
                         match update {
                             Ok(fragment) => {
+                                // Action-bar + burst unit updates from HTTP handlers.
+                                // Keep last_state coherent so the poller does not re-send
+                                // the same ActiveState right after a broadcast.
+                                if let Some((unit, state)) = extract_unit_state_from_oob(&fragment)
+                                {
+                                    if watched.contains(&unit) {
+                                        last_state.insert(unit, state);
+                                    }
+                                }
                                 if stream.send(Message::Text(fragment.into())).await.is_err() {
                                     break;
                                 }
                             }
-                            Err(_) => break,
+                            // Lagged: drop missed messages and keep the socket alive.
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                         }
                     }
                 }
             }
+            // Connection closed → watched set drops with this task (no more polling).
             Ok(())
         })
     })
+}
+
+/// Best-effort parse of `id="unit-controls-…"` + `data-active-state="…"` from an OOB fragment.
+fn extract_unit_state_from_oob(fragment: &str) -> Option<(String, String)> {
+    let id_marker = r#"id="unit-controls-"#;
+    let state_marker = r#"data-active-state=""#;
+    let id_start = fragment.find(id_marker)? + id_marker.len();
+    let id_end = fragment[id_start..].find('"')? + id_start;
+    let unit = fragment[id_start..id_end].to_string();
+    let state_start = fragment.find(state_marker)? + state_marker.len();
+    let state_end = fragment[state_start..].find('"')? + state_start;
+    let state = fragment[state_start..state_end].to_string();
+    if unit_name_valid(&unit) {
+        Some((unit, state))
+    } else {
+        None
+    }
 }
 
 pub fn routes() -> Vec<rocket::Route> {

@@ -178,6 +178,71 @@
             }
           } catch (e) {}
         });
+
+        // Live unit status over /ws/status:
+        // When an option pane with runtime units is shown, register those units with the
+        // server so it polls systemctl ActiveState while this WebSocket stays open and
+        // pushes OOB control HTML on every change. Leaving the pane (or disconnect)
+        // clears interest so we do not poll forever.
+        window.neoWsWrapper = null;
+        window.neoWatchedUnits = [];
+
+        function neoSendUnitWatch(op, units) {
+          if (!window.neoWsWrapper || !units || !units.length) return;
+          try {
+            window.neoWsWrapper.send(JSON.stringify({ op: op, units: units }));
+          } catch (e) {}
+        }
+
+        function neoCollectUnitsFrom(root) {
+          if (!root || !root.querySelectorAll) return [];
+          var rows = root.querySelectorAll('.unit-row[data-unit]');
+          var out = [];
+          for (var i = 0; i < rows.length; i++) {
+            var n = rows[i].getAttribute('data-unit');
+            if (n) out.push(n);
+          }
+          return out;
+        }
+
+        function neoSyncWatchedUnits(root) {
+          var next = neoCollectUnitsFrom(root || document.getElementById('config-content'));
+          // Replace interest set on the server (handles pane switches cleanly).
+          neoSendUnitWatch('watch_replace', next);
+          window.neoWatchedUnits = next;
+        }
+
+        document.body.addEventListener('htmx:wsOpen', function(evt) {
+          try {
+            window.neoWsWrapper = evt.detail && evt.detail.socketWrapper;
+            // Re-register after reconnect (htmx ws extension reconnects automatically).
+            if (window.neoWatchedUnits && window.neoWatchedUnits.length) {
+              neoSendUnitWatch('watch_replace', window.neoWatchedUnits);
+            } else {
+              neoSyncWatchedUnits(document.getElementById('config-content'));
+            }
+          } catch (e) {}
+        });
+
+        document.body.addEventListener('htmx:wsClose', function() {
+          window.neoWsWrapper = null;
+        });
+
+        document.body.addEventListener('htmx:afterSwap', function(evt) {
+          try {
+            var t = evt.detail && evt.detail.target;
+            if (!t) return;
+            // Option pane (or grid without units) landed in #config-content.
+            if (t.id === 'config-content' || (t.closest && t.closest('#config-content') && t.id === 'options-pane')) {
+              neoSyncWatchedUnits(document.getElementById('config-content'));
+            }
+          } catch (e) {}
+        });
+
+        // If the option pane was already present when the script ran (unlikely), sync once.
+        document.addEventListener('DOMContentLoaded', function() {
+          neoSyncWatchedUnits(document.getElementById('config-content'));
+        });
       })();
     </script>
   </body>
