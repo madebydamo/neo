@@ -1,13 +1,14 @@
-use std::fs;
 use std::sync::Arc;
 
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{post, State};
-use toml_edit::{DocumentMut, Item, Table};
+use toml_edit::{Item, Table};
 
-use crate::commands::web::action_bar::broadcast_action_bar;
-use crate::commands::web::settings::{insert_dotted, json_to_toml_item, json_to_toml_value};
+use crate::commands::web::settings::save::{
+    apply_payload_to_table, finish_save_state, load_settings_doc,
+};
+use crate::commands::web::settings::json_to_toml_value;
 use crate::commands::web::structs::AppConfig;
 
 #[post("/save/<service>", data = "<payload>")]
@@ -24,28 +25,9 @@ pub fn save_service(
     }
 
     let settings_path = &config.settings_path;
-
-    // Ensure the target directory exists (e.g. first save after init into a fresh configPath).
-    if let Some(parent) = settings_path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-
-    let content = if settings_path.exists() {
-        match fs::read_to_string(settings_path) {
-            Ok(c) => c,
-            Err(_) => return Status::InternalServerError,
-        }
-    } else {
-        String::new()
-    };
-
-    let mut doc: DocumentMut = if content.trim().is_empty() {
-        DocumentMut::new()
-    } else {
-        match content.parse() {
-            Ok(d) => d,
-            Err(_) => return Status::InternalServerError,
-        }
+    let mut doc = match load_settings_doc(settings_path) {
+        Ok(d) => d,
+        Err(s) => return s,
     };
 
     // Ensure [services] table exists
@@ -63,45 +45,18 @@ pub fn save_service(
     // If payload has no keys (or not an object), we just removed -> done
     let payload_map = match payload.as_object() {
         Some(m) if !m.is_empty() => m,
-        _ => {
-            // write back (may have removed the section)
-            if let Err(_) = fs::write(settings_path, doc.to_string()) {
-                return Status::InternalServerError;
-            }
-            broadcast_action_bar(&config);
-            return Status::Ok;
-        }
+        _ => return finish_save_state(settings_path, &doc, config),
     };
 
     // Build new table for the service, handling dotted keys (e.g. "vpn.enabled", "foo.bar.baz")
     let mut svc_table = Table::new();
-    for (k, v) in payload_map.iter() {
-        if k.contains('.') {
-            // Dotted names are always terminal leaf fields (scalar / list / etc.) in the UI schema
-            if let Some(tval) = json_to_toml_value(v) {
-                insert_dotted(&mut svc_table, k, tval);
-            }
-        } else if let Some(titem) = json_to_toml_item(v) {
-            svc_table.insert(k, titem);
-        }
-    }
+    apply_payload_to_table(&mut svc_table, payload_map);
 
     if !svc_table.is_empty() {
         services_table.insert(service, Item::Table(svc_table));
     }
 
-    if let Err(_) = fs::write(settings_path, doc.to_string()) {
-        return Status::InternalServerError;
-    }
-
-    let ev = config.evaluator.clone();
-    tokio::spawn(async move {
-        let mut g = ev.lock().await;
-        let _ = g.refresh().await;
-    });
-    broadcast_action_bar(&config);
-
-    Status::Ok
+    finish_save_state(settings_path, &doc, config)
 }
 
 #[post("/save-core/<section>", data = "<payload>")]
@@ -114,24 +69,9 @@ pub fn save_core_section(
         return Status::BadRequest;
     }
     let settings_path = &config.settings_path;
-    if let Some(parent) = settings_path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    let content = if settings_path.exists() {
-        match fs::read_to_string(settings_path) {
-            Ok(c) => c,
-            Err(_) => return Status::InternalServerError,
-        }
-    } else {
-        String::new()
-    };
-    let mut doc: DocumentMut = if content.trim().is_empty() {
-        DocumentMut::new()
-    } else {
-        match content.parse() {
-            Ok(d) => d,
-            Err(_) => return Status::InternalServerError,
-        }
+    let mut doc = match load_settings_doc(settings_path) {
+        Ok(d) => d,
+        Err(s) => return s,
     };
     let core_sections = [
         "ssh",
@@ -169,28 +109,10 @@ pub fn save_core_section(
                             doc.remove("core");
                         }
                     }
-                    if let Err(_) = fs::write(settings_path, doc.to_string()) {
-                        return Status::InternalServerError;
-                    }
-                    let ev = config.evaluator.clone();
-                    tokio::spawn(async move {
-                        let mut g = ev.lock().await;
-                        let _ = g.refresh().await;
-                    });
-                    broadcast_action_bar(&config);
-                    return Status::Ok;
+                    return finish_save_state(settings_path, &doc, config);
                 }
                 core_table.remove(section);
-                if let Err(_) = fs::write(settings_path, doc.to_string()) {
-                    return Status::InternalServerError;
-                }
-                let ev = config.evaluator.clone();
-                tokio::spawn(async move {
-                    let mut g = ev.lock().await;
-                    let _ = g.refresh().await;
-                });
-                broadcast_action_bar(&config);
-                return Status::Ok;
+                return finish_save_state(settings_path, &doc, config);
             }
         };
         // Scalars under core (timeZone, uid, gid, hostname, hashedLinuxPassword) are values under [core]
@@ -206,15 +128,7 @@ pub fn save_core_section(
             }
         } else {
             let mut tbl = Table::new();
-            for (k, v) in payload_map.iter() {
-                if k.contains('.') {
-                    if let Some(tval) = json_to_toml_value(v) {
-                        insert_dotted(&mut tbl, k, tval);
-                    }
-                } else if let Some(titem) = json_to_toml_item(v) {
-                    tbl.insert(k, titem);
-                }
-            }
+            apply_payload_to_table(&mut tbl, payload_map);
             if !tbl.is_empty() {
                 if section == "core" {
                     // Merge deltas (scalars + dotted sub keys like "volumes.root", "ssh.authorizedKeys")
@@ -232,43 +146,13 @@ pub fn save_core_section(
         // Top-level sections: neo-service, neo-cli, disko (and the aggregate "core" is handled in is_core branch)
         let payload_map = match payload.as_object() {
             Some(m) if !m.is_empty() => m,
-            _ => {
-                if let Err(_) = fs::write(settings_path, doc.to_string()) {
-                    return Status::InternalServerError;
-                }
-                let ev = config.evaluator.clone();
-                tokio::spawn(async move {
-                    let mut g = ev.lock().await;
-                    let _ = g.refresh().await;
-                });
-                broadcast_action_bar(&config);
-                return Status::Ok;
-            }
+            _ => return finish_save_state(settings_path, &doc, config),
         };
         let mut tbl = Table::new();
-        for (k, v) in payload_map.iter() {
-            if k.contains('.') {
-                if let Some(tval) = json_to_toml_value(v) {
-                    insert_dotted(&mut tbl, k, tval);
-                }
-            } else if let Some(titem) = json_to_toml_item(v) {
-                tbl.insert(k, titem);
-            }
-        }
+        apply_payload_to_table(&mut tbl, payload_map);
         if !tbl.is_empty() {
             doc.insert(section, Item::Table(tbl));
         }
     }
-    if let Err(_) = fs::write(settings_path, doc.to_string()) {
-        return Status::InternalServerError;
-    }
-
-    let ev = config.evaluator.clone();
-    tokio::spawn(async move {
-        let mut g = ev.lock().await;
-        let _ = g.refresh().await;
-    });
-    broadcast_action_bar(&config);
-
-    Status::Ok
+    finish_save_state(settings_path, &doc, config)
 }
