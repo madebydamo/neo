@@ -11,7 +11,7 @@
               Entry <span class="font-mono text-base-content/50" x-text="'#' + idx"></span>
             </span>
             <button type="button"
-                    class="btn btn-ghost btn-sm text-error"
+                    class="btn btn-ghost btn-xs text-error shrink-0"
                     @click="removeListItem('{{name}}', idx)"
                     title="Remove this entry">
               Remove
@@ -57,7 +57,7 @@
                 {{#if (eq type.kind "listOf")}}
                   <div class="pl-1 space-y-1">
                     <template x-for="(nitem, nidx) in (values['{{../name}}'][idx]['{{name}}'] || [])" :key="nidx">
-                      <div class="flex gap-2">
+                      <div class="flex gap-2 items-center">
                         {{#if (or (eq type.elem.kind "int") (eq type.elem.kind "port"))}}
                           <input type="number" class="input input-primary input-sm flex-1 font-mono"
                                  x-model.number="values['{{../name}}'][idx]['{{name}}'][nidx]">
@@ -65,12 +65,13 @@
                           <input type="text" class="input input-primary input-sm flex-1 font-mono"
                                  x-model="values['{{../name}}'][idx]['{{name}}'][nidx]">
                         {{/if}}
-                        <button type="button" @click="removeNestedListItemAtIndex('{{../name}}', idx, '{{name}}', nidx)"
-                                class="btn btn-ghost btn-xs">✕</button>
+                        <button type="button"
+                                @click="removeNestedListItemAtIndex('{{../name}}', idx, '{{name}}', nidx)"
+                                class="btn btn-ghost btn-xs text-error shrink-0">Remove</button>
                       </div>
                     </template>
                     <button type="button" @click="addNestedListItemAtIndex('{{../name}}', idx, '{{name}}')"
-                            class="btn btn-outline btn-xs">+ add</button>
+                            class="btn btn-outline btn-xs">+ Add</button>
                   </div>
                 {{/if}}
 
@@ -84,11 +85,11 @@
                 {{/if}}
 
                 {{#if (eq type.kind "nullOr")}}
-                  <div class="flex gap-2">
+                  <div class="flex gap-2 items-center">
                     <input type="text" class="input input-primary input-sm flex-1 font-mono"
                            x-model="values['{{../name}}'][idx]['{{name}}']">
                     <button type="button" @click="values['{{../name}}'][idx]['{{name}}'] = null"
-                            class="btn btn-ghost btn-xs">clear</button>
+                            class="btn btn-ghost btn-xs shrink-0">Clear</button>
                   </div>
                 {{/if}}
 
@@ -106,12 +107,13 @@
     <div class="divider my-3 text-xs text-base-content/40"
          x-show="(values['{{name}}'] || []).length > 0"></div>
 
-    <button type="button" @click="addListItem('{{name}}')" class="btn btn-outline btn-sm">+ Add entry</button>
+    <button type="button" @click="addListItem('{{name}}')"
+            class="btn btn-outline btn-xs mt-1">+ Add entry</button>
   </div>
 {{else}}
   <div class="mt-2">
     <template x-for="(item, idx) in (values['{{name}}'] || [])" :key="idx">
-      <div class="flex gap-2 mb-1.5">
+      <div class="flex gap-2 items-center mb-1.5">
         {{#if (or (eq type.elem.kind "int") (eq type.elem.kind "port"))}}
           <input type="number" class="input input-primary input-sm flex-1 font-mono"
                  x-model.number="values['{{name}}'][idx]"
@@ -133,9 +135,10 @@
             {{/if}}
           {{/if}}
         {{/if}}
-        <button type="button" @click="removeListItem('{{name}}', idx)" class="btn btn-ghost btn-xs">✕</button>
+        <button type="button" @click="removeListItem('{{name}}', idx)"
+                class="btn btn-ghost btn-xs text-error shrink-0">Remove</button>
       </div>
     </template>
-    <button type="button" @click="addListItem('{{name}}')" class="btn btn-outline btn-xs mt-1">+ add</button>
+    <button type="button" @click="addListItem('{{name}}')" class="btn btn-outline btn-xs mt-1">+ Add</button>
   </div>
 {{/if}}

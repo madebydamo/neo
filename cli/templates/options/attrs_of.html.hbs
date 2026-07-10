@@ -7,7 +7,7 @@
 
         <div class="border border-base-300 rounded-lg p-3 bg-base-100/60 space-y-3">
           {{! Card header: named entry + remove }}
-          <div class="flex items-start justify-between gap-3">
+          <div class="flex items-end justify-between gap-3">
             <div class="form-control flex-1 min-w-0 gap-1">
               <label class="label py-0 gap-2 justify-start flex-wrap">
                 <span class="label-text text-xs font-semibold">Name</span>
@@ -21,7 +21,7 @@
                      aria-label="Entry name">
             </div>
             <button type="button"
-                    class="btn btn-ghost btn-sm text-error shrink-0 mt-5"
+                    class="btn btn-ghost btn-xs text-error shrink-0"
                     @click="removeAttrItem('{{name}}', key)"
                     title="Remove this entry">
               Remove
@@ -67,7 +67,7 @@
                 {{#if (eq type.kind "listOf")}}
                   <div class="pl-1 space-y-1">
                     <template x-for="(nitem, nidx) in (values['{{../name}}'][key]['{{name}}'] || [])" :key="nidx">
-                      <div class="flex gap-2">
+                      <div class="flex gap-2 items-center">
                         {{#if (or (eq type.elem.kind "int") (eq type.elem.kind "port"))}}
                           <input type="number" class="input input-primary input-sm flex-1 font-mono"
                                  x-model.number="values['{{../name}}'][key]['{{name}}'][nidx]">
@@ -84,19 +84,19 @@
                         {{/if}}
                         <button type="button"
                                 @click="removeNestedListItem('{{../name}}', key, '{{name}}', nidx)"
-                                class="btn btn-ghost btn-xs">✕</button>
+                                class="btn btn-ghost btn-xs text-error shrink-0">Remove</button>
                       </div>
                     </template>
                     <button type="button"
                             @click="addNestedListItem('{{../name}}', key, '{{name}}')"
-                            class="btn btn-outline btn-xs">+ add</button>
+                            class="btn btn-outline btn-xs">+ Add</button>
                   </div>
                 {{/if}}
 
                 {{#if (eq type.kind "attrsOf")}}
                   <div class="pl-1 space-y-1">
                     <template x-for="(nval, nkey) in (values['{{../name}}'][key]['{{name}}'] || {})" :key="nkey">
-                      <div class="flex gap-2">
+                      <div class="flex gap-2 items-center">
                         <input class="input input-primary input-sm w-32 font-mono" :value="nkey" disabled>
                         {{#if (or (eq type.elem.kind "int") (eq type.elem.kind "port"))}}
                           <input type="number" class="input input-primary input-sm flex-1 font-mono"
@@ -114,14 +114,14 @@
                         {{/if}}
                         <button type="button"
                                 @click="removeNestedAttrItem('{{../name}}', key, '{{name}}', nkey)"
-                                class="btn btn-ghost btn-xs">✕</button>
+                                class="btn btn-ghost btn-xs text-error shrink-0">Remove</button>
                       </div>
                     </template>
-                    <div class="flex gap-2">
+                    <div class="flex gap-2 items-center">
                       <input class="input input-primary input-sm w-32 font-mono" placeholder="key">
                       <button type="button"
                               @click="addNestedAttrItem('{{../name}}', key, '{{name}}', $event.target.previousElementSibling)"
-                              class="btn btn-outline btn-xs">+ add</button>
+                              class="btn btn-outline btn-xs shrink-0">+ Add</button>
                     </div>
                   </div>
                 {{/if}}
@@ -136,12 +136,12 @@
                 {{/if}}
 
                 {{#if (eq type.kind "nullOr")}}
-                  <div class="flex gap-2">
+                  <div class="flex gap-2 items-center">
                     <input type="text" class="input input-primary input-sm flex-1 font-mono"
                            x-model="values['{{../name}}'][key]['{{name}}']"
                            placeholder="{{defaultDisplay}}">
                     <button type="button" @click="values['{{../name}}'][key]['{{name}}'] = null"
-                            class="btn btn-ghost btn-xs">clear</button>
+                            class="btn btn-ghost btn-xs shrink-0">Clear</button>
                   </div>
                 {{/if}}
 
@@ -160,19 +160,15 @@
     <div class="divider my-3 text-xs text-base-content/40"
          x-show="attrKeys('{{name}}').length > 0"></div>
 
-    <div class="flex flex-wrap items-end gap-2">
-      <div class="form-control gap-1 flex-1 min-w-[10rem] max-w-md">
-        <label class="label py-0">
-          <span class="label-text text-xs font-medium">New entry name</span>
-        </label>
-        <input class="input input-primary input-sm font-mono w-full"
-               placeholder="e.g. home"
-               x-ref="newkey_{{name}}"
-               @keydown.enter.prevent="addAttrItem('{{name}}', $refs['newkey_{{name}}'])">
-      </div>
+    <div class="flex gap-2 items-center mt-1">
+      <input class="input input-primary input-sm w-40 font-mono"
+             placeholder="entry name"
+             x-ref="newkey_{{name}}"
+             @keydown.enter.prevent="addAttrItem('{{name}}', $refs['newkey_{{name}}'])"
+             aria-label="New entry name">
       <button type="button"
               @click="addAttrItem('{{name}}', $refs['newkey_{{name}}'])"
-              class="btn btn-outline btn-sm">
+              class="btn btn-outline btn-xs shrink-0">
         + Add entry
       </button>
     </div>
@@ -208,14 +204,14 @@
         {{/if}}
         <button type="button"
                 @click="removeAttrItem('{{name}}', key)"
-                class="btn btn-ghost btn-xs text-error"
+                class="btn btn-ghost btn-xs text-error shrink-0"
                 title="Remove">Remove</button>
       </div>
     </template>
-    <div class="flex gap-2 mt-2">
+    <div class="flex gap-2 items-center mt-2">
       <input class="input input-primary input-sm w-40 font-mono" placeholder="key" x-ref="newkey_{{name}}">
       <button type="button" @click="addAttrItem('{{name}}', $refs['newkey_{{name}}'])"
-              class="btn btn-outline btn-xs">+ Add</button>
+              class="btn btn-outline btn-xs shrink-0">+ Add</button>
     </div>
   </div>
 {{/if}}
