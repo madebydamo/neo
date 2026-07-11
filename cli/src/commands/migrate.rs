@@ -94,55 +94,74 @@ struct Migration {
     renames: &'static [KeyRename],
 }
 
-const MIGRATIONS: &[Migration] = &[Migration {
-    id: "001-rename-legacy-neo-nixos-cli-and-core-keys",
-    renames: &[
-        KeyRename {
-            from: "nixos",
-            to: "neo-service",
-        },
-        KeyRename {
-            from: "cli",
-            to: "neo-cli",
-        },
-        KeyRename {
-            from: "volumes",
-            to: "core.volumes",
-        },
-        KeyRename {
-            from: "ssh",
-            to: "core.ssh",
-        },
-        KeyRename {
-            from: "timeZone",
-            to: "core.timeZone",
-        },
-        KeyRename {
-            from: "uid",
-            to: "core.uid",
-        },
-        KeyRename {
-            from: "gid",
-            to: "core.gid",
-        },
-        KeyRename {
-            from: "device.hostname",
-            to: "core.hostname",
-        },
-        KeyRename {
-            from: "users.hashedPassword",
-            to: "core.hashedLinuxPassword",
-        },
-        KeyRename {
-            from: "device",
-            to: "",
-        },
-        KeyRename {
-            from: "users",
-            to: "",
-        },
-    ],
-}];
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        id: "001-rename-legacy-neo-nixos-cli-and-core-keys",
+        renames: &[
+            KeyRename {
+                from: "nixos",
+                to: "neo-service",
+            },
+            KeyRename {
+                from: "cli",
+                to: "neo-cli",
+            },
+            KeyRename {
+                from: "volumes",
+                to: "core.volumes",
+            },
+            KeyRename {
+                from: "ssh",
+                to: "core.ssh",
+            },
+            KeyRename {
+                from: "timeZone",
+                to: "core.timeZone",
+            },
+            KeyRename {
+                from: "uid",
+                to: "core.uid",
+            },
+            KeyRename {
+                from: "gid",
+                to: "core.gid",
+            },
+            KeyRename {
+                from: "device.hostname",
+                to: "core.hostname",
+            },
+            KeyRename {
+                from: "users.hashedPassword",
+                to: "core.hashedLinuxPassword",
+            },
+            KeyRename {
+                from: "device",
+                to: "",
+            },
+            KeyRename {
+                from: "users",
+                to: "",
+            },
+        ],
+    },
+    Migration {
+        id: "002-backup-ssh-connection-keys",
+        renames: &[
+            KeyRename {
+                from: "services.backup.remoteServer",
+                to: "services.backup.host",
+            },
+            KeyRename {
+                from: "services.backup.remoteUser",
+                to: "services.backup.user",
+            },
+            KeyRename {
+                from: "services.backup.sshExtraOptions",
+                to: "services.backup.extraOptions",
+            },
+        ],
+    },
+];
 
 fn apply_renames(doc: &mut DocumentMut, renames: &[KeyRename]) {
     for r in renames {
@@ -151,29 +170,26 @@ fn apply_renames(doc: &mut DocumentMut, renames: &[KeyRename]) {
 }
 
 fn remove_dotted(doc: &mut DocumentMut, path: &str) -> Option<Item> {
-    let parts: Vec<&str> = path.split('.').collect();
-    match parts.len() {
-        0 => None,
-        1 => doc.remove(parts[0]),
-        2 => {
-            let p = parts[0];
-            let c = parts[1];
-            let t = doc.get_mut(p)?.as_table_mut()?;
-            t.remove(c)
+    let parts: Vec<&str> = path.split('.').filter(|p| !p.is_empty()).collect();
+    match parts.as_slice() {
+        [] => None,
+        [key] => doc.remove(key),
+        [head, mid @ .., leaf] => {
+            let mut cur = doc.get_mut(head)?.as_table_mut()?;
+            for p in mid {
+                cur = cur.get_mut(p)?.as_table_mut()?;
+            }
+            cur.remove(leaf)
         }
-        _ => None,
     }
 }
 
 fn insert_dotted(doc: &mut DocumentMut, path: &str, value: Item) {
-    let parts: Vec<&str> = path.split('.').collect();
-    if parts.is_empty() {
-        return;
-    }
-    match parts.len() {
-        1 => {
-            let k = parts[0];
-            if let Some(ex) = doc.get_mut(k) {
+    let parts: Vec<&str> = path.split('.').filter(|p| !p.is_empty()).collect();
+    match parts.as_slice() {
+        [] => {}
+        [key] => {
+            if let Some(ex) = doc.get_mut(key) {
                 if let (Some(d), Some(s)) = (ex.as_table_mut(), value.as_table()) {
                     for (kk, vv) in s.iter() {
                         d.insert(kk, vv.clone());
@@ -181,17 +197,32 @@ fn insert_dotted(doc: &mut DocumentMut, path: &str, value: Item) {
                     return;
                 }
             }
-            doc.insert(k, value);
+            doc.insert(key, value);
         }
-        2 => {
-            let p = parts[0];
-            let c = parts[1];
-            let pt = doc
-                .entry(p)
-                .or_insert(Item::Table(Table::new()))
-                .as_table_mut()
-                .expect("parent");
-            if let Some(ex) = pt.get_mut(c) {
+        [head, mid @ .., leaf] => {
+            {
+                let top = doc.entry(head).or_insert(Item::Table(Table::new()));
+                if top.as_table_mut().is_none() {
+                    return;
+                }
+            }
+            let mut cur = match doc.get_mut(head).and_then(|i| i.as_table_mut()) {
+                Some(t) => t,
+                None => return,
+            };
+            for p in mid {
+                {
+                    let child = cur.entry(p).or_insert(Item::Table(Table::new()));
+                    if child.as_table_mut().is_none() {
+                        return;
+                    }
+                }
+                cur = match cur.get_mut(p).and_then(|i| i.as_table_mut()) {
+                    Some(t) => t,
+                    None => return,
+                };
+            }
+            if let Some(ex) = cur.get_mut(leaf) {
                 if let (Some(d), Some(s)) = (ex.as_table_mut(), value.as_table()) {
                     for (kk, vv) in s.iter() {
                         d.insert(kk, vv.clone());
@@ -199,9 +230,8 @@ fn insert_dotted(doc: &mut DocumentMut, path: &str, value: Item) {
                     return;
                 }
             }
-            pt.insert(c, value);
+            cur.insert(leaf, value);
         }
-        _ => {}
     }
 }
 

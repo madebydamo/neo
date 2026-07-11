@@ -113,19 +113,57 @@
       ${homeserverSshKey}/bin/neo-homeserver-ssh-key ensure
     '';
 
-    nix.settings = lib.mkMerge [
-      (lib.optionalAttrs (cfg.nix.maxJobs != null) {
-        max-jobs = cfg.nix.maxJobs;
-      })
-      (lib.optionalAttrs (cfg.nix.cores != null) {
-        cores = cfg.nix.cores;
-      })
-      {
-        experimental-features = [
-          "nix-command"
-          "flakes"
-        ];
-      }
-    ];
+    nix = let
+      rb = cfg.nix.remoteBuild;
+    in
+      lib.mkMerge [
+        {
+          settings = lib.mkMerge [
+            (lib.optionalAttrs (cfg.nix.maxJobs != null) {
+              max-jobs = cfg.nix.maxJobs;
+            })
+            (lib.optionalAttrs (cfg.nix.cores != null) {
+              cores = cfg.nix.cores;
+            })
+            (lib.optionalAttrs rb.enabled {
+              # Let remotes fetch from binary caches themselves instead of the weak local box
+              # uploading every source/input (see nix.conf "builders-use-substitutes").
+              builders-use-substitutes = true;
+            })
+            {
+              experimental-features = [
+                "nix-command"
+                "flakes"
+              ];
+            }
+          ];
+        }
+        (lib.mkIf rb.enabled {
+          distributedBuilds = true;
+          buildMachines = [
+            (
+              {
+                hostName = rb.host;
+                sshUser = rb.user;
+                sshKey = rb.sshKey;
+                system = rb.system;
+                protocol = "ssh-ng";
+                maxJobs = rb.maxJobs;
+                speedFactor = rb.speedFactor;
+                supportedFeatures = rb.supportedFeatures;
+                mandatoryFeatures = [];
+              }
+              // lib.optionalAttrs (rb.publicHostKey != null) {
+                publicHostKey = rb.publicHostKey;
+              }
+            )
+          ];
+        })
+      ];
+
+    # nix-daemon invokes ssh for remote builders; forward extra SSH flags.
+    systemd.services.nix-daemon = lib.mkIf (cfg.nix.remoteBuild.enabled && cfg.nix.remoteBuild.extraOptions != []) {
+      environment.NIX_SSHOPTS = lib.concatStringsSep " " cfg.nix.remoteBuild.extraOptions;
+    };
   };
 }

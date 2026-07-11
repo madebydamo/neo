@@ -86,8 +86,20 @@ enabled = true
 [services.backup]
 enabled = true
 remotePath = "yourservername"
-remoteServer = "zh1234.rsync.net"
-remoteUser = "zh1234"
+host = "zh1234.rsync.net"
+user = "zh1234"
+# sshKey defaults to the auto-generated homeserver key; override only if needed
+# extraOptions = ["-o", "StrictHostKeyChecking=accept-new"]
+
+# Offload heavy Nix builds (system rebuilds, etc.) to a remote machine over SSH.
+# Authorize the homeserver public key (neo web UI / home/homeserver/.ssh/id_ed25519.pub)
+# on the remote user and add that user to nix.settings.trusted-users there.
+# [core.nix.remoteBuild]
+# enabled = true
+# host = "buildbox"
+# user = "builder"
+# maxJobs = 32
+# extraOptions = ["-o", "StrictHostKeyChecking=accept-new"]
 
 [services.tailscale]
 enabled = true

@@ -13,25 +13,6 @@
             {
               enabled = mkEnableOption "Enable the rsync backup service" {rank = 0;};
 
-              sshKey = mkOption {
-                type = types.str;
-                default = "/home/homeserver/.ssh/id_ed25519";
-                description = "Path to SSH private key for rsync-over-SSH. Defaults to the auto-generated homeserver key (created at activation if missing). Root runs the backup so source files stay readable; only the key is shared with homeserver.";
-                rank = 10;
-              };
-
-              remoteServer = mkOption {
-                type = types.str;
-                description = "Remote backup server hostname or IP";
-                rank = 20;
-              };
-
-              remoteUser = mkOption {
-                type = types.str;
-                description = "Username for SSH connection to backup server";
-                rank = 30;
-              };
-
               sourceDir = mkOption {
                 type = types.path;
                 default = config.neo.core.volumes.root;
@@ -67,13 +48,16 @@
                 description = "Path to log file for backup operations";
                 rank = 91;
               };
-
-              sshExtraOptions = mkOption {
-                type = types.listOf types.str;
-                default = [];
-                description = "Additional SSH options for the rsync connection";
-                rank = 92;
-              };
+            }
+            // lib.neo.mkSshConnectionOptions {
+              hostRank = 20;
+              userRank = 30;
+              sshKeyRank = 10;
+              extraOptionsRank = 92;
+              hostDescription = "Remote backup server hostname or IP";
+              userDescription = "Username for SSH connection to backup server";
+              sshKeyDescription = "Path to SSH private key for rsync-over-SSH. Defaults to the auto-generated homeserver key (created at activation if missing). Root runs the backup so source files stay readable; only the key is shared with homeserver. Override only if you need a different key.";
+              extraOptionsDescription = "Additional SSH options for the rsync connection";
             }
             // lib.neo.mkSystemdUnits ["backup"]
             // lib.neo.mkServiceMeta {
