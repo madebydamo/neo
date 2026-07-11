@@ -167,6 +167,8 @@ pub struct ProxiedService {
 #[derive(Serialize, Deserialize, Default)]
 pub struct NavigatorContext {
     pub domain: Option<String>,
+    #[serde(default)]
+    pub hostname: String,
     pub services: Vec<ProxiedService>,
     #[serde(default)]
     pub theme: String,

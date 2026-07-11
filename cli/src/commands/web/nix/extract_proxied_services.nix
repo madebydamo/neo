@@ -14,12 +14,14 @@
     then builtins.head cfgNames
     else null;
 
-  services =
+  neoConfig =
     if cfg != null
-    then (f.nixosConfigurations.${cfg}.config.neo.services or {})
+    then (f.nixosConfigurations.${cfg}.config.neo or {})
     else {};
+  services = neoConfig.services or {};
   swag = services.swag or {};
   domain = swag.domain or null;
+  hostname = neoConfig.core.hostname or "nixos";
 
   isProxied = n: let
     v = services.${n} or {};
@@ -48,5 +50,6 @@
   sortedUnranked = builtins.sort (a: b: a.name < b.name) unranked;
 in {
   domain = domain;
+  hostname = hostname;
   services = sortedRanked ++ sortedUnranked;
 }
