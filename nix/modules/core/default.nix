@@ -37,6 +37,9 @@
       hashedPassword = config.neo.core.hashedLinuxPassword;
     };
 
+    # Allow other neo hosts to use this machine as a remote Nix builder over SSH as homeserver.
+    nix.settings.trusted-users = ["homeserver"];
+
     system.activationScripts.create-volumes = lib.concatStringsSep "\n" (
       lib.map
       (

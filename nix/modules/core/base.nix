@@ -107,6 +107,7 @@
       openssh.authorizedKeys.keys = config.neo.core.ssh.authorizedKeys;
       hashedPassword = config.neo.core.hashedLinuxPassword;
     };
+
     time.timeZone = config.neo.core.timeZone;
 
     system.activationScripts.homeserver-ssh-key = ''
@@ -131,6 +132,8 @@
               builders-use-substitutes = true;
             })
             {
+              # admin is defined in this module; allow it as a remote-build SSH user.
+              trusted-users = ["admin"];
               experimental-features = [
                 "nix-command"
                 "flakes"
