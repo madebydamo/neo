@@ -51,5 +51,6 @@ pub fn routes() -> Vec<rocket::Route> {
         ssh::ssh_public_key,
         ssh::ssh_public_key_txt,
         ssh::ssh_public_key_card,
+        ssh::ssh_regenerate,
     ]
 }

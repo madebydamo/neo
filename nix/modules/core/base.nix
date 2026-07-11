@@ -7,6 +7,52 @@
     ...
   }: let
     cfg = config.neo.core;
+    uid = toString config.neo.core.uid;
+    gid = toString config.neo.core.gid;
+    # Shared by activation (ensure) and neo-web rotate (rm + ensure).
+    homeserverSshKey = pkgs.writeShellScriptBin "neo-homeserver-ssh-key" ''
+      set -euo pipefail
+      SSH_DIR=/home/homeserver/.ssh
+      KEY="$SSH_DIR/id_ed25519"
+      OWNER_UID=${uid}
+      OWNER_GID=${gid}
+      COMMENT="homeserver@${cfg.hostname}"
+
+      mode="''${1:-ensure}"
+      case "$mode" in
+        ensure|rotate) ;;
+        *)
+          echo "usage: neo-homeserver-ssh-key [ensure|rotate]" >&2
+          exit 2
+          ;;
+      esac
+
+      if [ ! -d /home/homeserver ]; then
+        echo "homeserver home missing at /home/homeserver" >&2
+        exit 1
+      fi
+
+      if [ ! -d "$SSH_DIR" ]; then
+        mkdir -p "$SSH_DIR"
+        chmod 700 "$SSH_DIR"
+        if [ "$(id -u)" -eq 0 ]; then
+          chown "$OWNER_UID:$OWNER_GID" "$SSH_DIR"
+        fi
+      fi
+
+      if [ "$mode" = rotate ]; then
+        rm -f "$KEY" "$KEY.pub"
+      fi
+
+      if [ ! -f "$KEY" ]; then
+        ${pkgs.openssh}/bin/ssh-keygen -t ed25519 -N "" -f "$KEY" -C "$COMMENT"
+        chmod 600 "$KEY"
+        chmod 644 "$KEY.pub"
+        if [ "$(id -u)" -eq 0 ]; then
+          chown "$OWNER_UID:$OWNER_GID" "$KEY" "$KEY.pub"
+        fi
+      fi
+    '';
   in {
     boot.loader = {
       grub = {
@@ -32,18 +78,20 @@
       keyMap = "sg";
     };
 
-    environment.systemPackages = with pkgs; [
-      vim
-      btop
-      docker_29
-      netcat
-      curl
-      dnsutils
-      iputils
-      iproute2
-      traceroute
-      mtr
-    ];
+    environment.systemPackages =
+      (with pkgs; [
+        vim
+        btop
+        docker_29
+        netcat
+        curl
+        dnsutils
+        iputils
+        iproute2
+        traceroute
+        mtr
+      ])
+      ++ [homeserverSshKey];
 
     users.users.root = {
       openssh.authorizedKeys.keys = config.neo.core.ssh.authorizedKeys;
@@ -61,25 +109,8 @@
     };
     time.timeZone = config.neo.core.timeZone;
 
-    system.activationScripts.homeserver-ssh-key = let
-      uid = toString config.neo.core.uid;
-      gid = toString config.neo.core.gid;
-      sshDir = "/home/homeserver/.ssh";
-      keyPath = "${sshDir}/id_ed25519";
-    in ''
-      if [ -d /home/homeserver ]; then
-        if [ ! -d ${sshDir} ]; then
-          mkdir -p ${sshDir}
-          chown ${uid}:${gid} ${sshDir}
-          chmod 700 ${sshDir}
-        fi
-        if [ ! -f ${keyPath} ]; then
-          ${pkgs.openssh}/bin/ssh-keygen -t ed25519 -N "" -f ${keyPath} -C "homeserver@${cfg.hostname}"
-          chown ${uid}:${gid} ${keyPath} ${keyPath}.pub
-          chmod 600 ${keyPath}
-          chmod 644 ${keyPath}.pub
-        fi
-      fi
+    system.activationScripts.homeserver-ssh-key = ''
+      ${homeserverSshKey}/bin/neo-homeserver-ssh-key ensure
     '';
 
     nix.settings = lib.mkMerge [
