@@ -1,265 +1,132 @@
-# AGENTS.md - Development Guidelines for Neo Homeserver (Nix + Rust CLI)
+# AGENTS.md — Neo development guide
 
-## Overview
-This is a Nix-based homeserver configuration that builds QEMU VMs for various self-hosted services using flakes. It follows the [Dendritic pattern](https://github.com/mightyiam/dendritic): flake-parts with `import-tree` that auto-imports all non-entrypoint `.nix` files from `./nix/` as modules. Each file implements a focused feature (e.g. `nix/services/<name>/{default,option,swag}.nix`).
+Concise map for humans and coding agents. Product overview: [README.md](README.md). Install: [docs/INSTALL.md](docs/INSTALL.md). Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-The project also includes a Rust CLI (`cli/`) for bootstrap, init, build, and management operations, built via crane in Nix.
+## What this is
 
-**flake.nix** uses `inputs.import-tree ./nix` for automatic module loading. See `nix/modules/flakeparts/` and `nix/lib/` for extensions.
+NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) plus a Rust **`neo` CLI** (crane). Operators configure via `settings.toml`; modules turn that into OCI services, SWAG, volumes, and optional Disko/ZFS. No traditional unit-test suite—validate with `nix flake check`, `just` VM loop, and smoke checks over SSH.
 
-No traditional unit tests; validation via `nix flake check`, VM runtime tests, and Rust integration tests (minimal).
+## Architecture (what is special)
 
-## Build, Lint, and Test Commands (justfile + Nix)
+| Choice | Why it matters |
+|--------|----------------|
+| **Dendritic modules** | Every non-entrypoint `.nix` under `nix/` is auto-imported. One concern per file; no manual import list in root `flake.nix`. |
+| **Service split** | `nix/services/<name>/{option,default,swag}.nix` — options, impl (`mkIf`), reverse-proxy. |
+| **`lib.neo` helpers** | Activation scripts, reverse-proxy/auth, container image options, systemd unit lists, web UI helpers. |
+| **settings.toml → neo** | Deploy flake maps TOML into `config.neo` (see `templates/homeserver/modules/settings.nix`). |
+| **Plugins as flakes** | Extra inputs `plugin0…` export `nixosModules.default`; same option namespace. |
+| **CLI + web UI** | `cli/`: clap commands; `neo web` edits TOML against live option schema. |
+| **VM-first dev** | `just build` / `launch` / `ssh` against QEMU; `tools/id_ed25519` for SSH. |
 
-### Core Commands
+## Repository map
+
+| Path | Role |
+|------|------|
+| `flake.nix` | Inputs + `flake-parts` + `import-tree ./nix` |
+| `nix/lib/` | `lib.neo` (activation, reverseProxy, containers, helpers, …) |
+| `nix/modules/` | core, bootstrap, disko, flakeparts |
+| `nix/services/<name>/` | Built-in services |
+| `nix/output/` | nixos configs, templates registration, devshell, systems |
+| `cli/` | Rust `neo` + static/templates for web UI |
+| `templates/homeserver` | `nix flake init` target for deploys (`#homeserver`) |
+| `templates/plugin` | Skeleton for a plugin flake (`#plugin`) |
+| `justfile` | format, check, VM build/launch/ssh |
+| `build/` | Local init output (dev; gitignored-ish workflow) |
+| `docs/` | INSTALL, ARCHITECTURE, CLI, PLUGINS |
+| `settings.toml` | Local/dev operator settings (may contain secrets—do not commit real secrets) |
+
+## Commands
+
 ```bash
-just build      # Runs neo nuke/init/build -> creates VM (see justfile for details)
-just launch     # shutdown + build + launch QEMU VM (4CPU/8G, port 2222)
-just ssh        # SSH into running VM (uses tools/id_ed25519)
-just exec CMD   # SSH and run CMD in VM (e.g. 'systemctl status filebrowser')
+# VM / integration
+just build      # neo nuke → init → build (qcow / VM)
+just launch     # shutdown + build + QEMU (SSH :2222)
+just ssh        # root@localhost -p 2222
+just exec CMD   # run CMD in VM
 just logs SVC   # journalctl -b -u SVC
-just status     # Check QEMU, monitor, SSH, disk status
-just shutdown   # Graceful QEMU shutdown via monitor or pkill
+just status     # QEMU / monitor / SSH / disk
+just shutdown
+
+# Lint
+just format     # alejandra .
+just check      # nix flake check (root + build/)
+
+# Nix / CLI
+nix flake check -L
+nix build .#neo
+nix run .#neo -- --help
+nix develop     # Rust/Cargo env with tools
 ```
 
-### Lint and Format
-```bash
-just format  # alejandra . (Nix formatter)
-just check   # git add changed files; nix flake check (in root + build/)
-```
+**Rust:** `cargo fmt`, `cargo clippy -- -D warnings` (prefer via `nix develop`).
 
-**Rust specific:**
-- `cargo fmt --all -- --check` (or via nix develop)
-- `cargo clippy -- -D warnings`
-- Build CLI: `nix build .#neo` or `nix run .#neo -- build`
+## Conventions
 
-### Test Commands
-No dedicated unit tests currently (previous test package removed). Validation focuses on:
+### Nix
 
-```bash
-nix flake check -L                  # Full syntax, typecheck, build checks
-nix build .#neo                     # Test Rust CLI build
-just build && just launch           # Full VM integration test
-just exec 'systemctl status <svc>'  # Single service test (e.g. filebrowser, swag)
-just exec 'journalctl -u <svc> --no-pager'  # Service logs
-just exec 'systemctl list-units --type=service'  # List all services
-just exec 'neo --help'              # Test CLI in VM
-```
+- Files end in `.nix`; start with a short `#` comment; prefer under 200 lines.
+- Service module pattern:
 
-**Running a single test:**
-- For Nix checks: `nix build .#checks.x86_64-linux.<check-name>` (see flake outputs)
-- For Rust (if adding tests): `cargo test <test_function> -- --test-threads=1`
-- Service-specific: `just exec 'systemctl --no-pager status <svc> && echo "OK"'`
-- Full lint+check: `just format && just check && nix flake check`
-
-Use `nix develop` for Rust/Cargo environment with neo CLI prebuilt.
-
-## Code Style Guidelines
-
-### Nix - File Structure (Dendritic Pattern)
-- All files end in `.nix`
-- `nix/services/<name>/`: `option.nix` (options), `default.nix` (impl + mkIf), `swag.nix` (reverse proxy config)
-- `nix/lib/`: reusable fns (activation, auth, types)
-- `nix/modules/*/*.nix`: core, bootstrap, disko, flakeparts
-- Keep files <200 lines. One concern per file.
-- Start every file with `# Descriptive comment.`
-- Auto-imported; no manual imports in flake.nix except top-level.
-- See `nix/lib/default.nix:19` for lib extension pattern.
-
-### Nix - Imports and Structure
 ```nix
-# Service description comment.
-{ config, lib, ... }: 
+# Service description.
+{ config, lib, ... }:
 let
   cfg = config.neo.services.example;
 in {
-  imports = [ ./option.nix ./swag.nix ];  # Always include
-  # activationScripts here if needed
+  imports = [ ./option.nix ./swag.nix ];
 } // lib.mkIf cfg.enabled {
-  # main config
+  # implementation
 }
 ```
-- Always `with lib;` or qualify `lib.mkIf`, `lib.mkOption`.
-- Use `let cfg = config.neo.services.foo; in` pattern (see `nix/services/filebrowser/default.nix:9`).
-- Reference lib extensions as `lib.neo.mkActivationScriptForDir config { ... }` (defined in `nix/lib/activation/dir.nix:4`).
 
-### Naming Conventions (Nix)
-- Variables: camelCase (`additionalMountPoints`)
-- Nix attrs/options: snake_case (`neo.services.filebrowser`, `neo.core.volumes.appdata`, `neo.neo-service`)
-- Functions: camelCase (`mkActivationScriptForDir`, `mkReverseProxyOptions`, `mkContainerDefinitions`, `mkSystemdUnits`)
-- Options: `enabled = mkEnableOption "description";`
-- Use plain strings for all descriptions (not `lib.mdDoc`).
+- Options: `enabled = mkEnableOption "…";`, snake_case attrs (`neo.services.*`), camelCase locals.
+- Reverse proxy: `// neo.mkReverseProxyOptions { … }` (or `lib.neo…` where used that way).
+- Containers: `// lib.neo.mkContainerDefinitions { name = "image:tag"; };` then `image = cfg.containers.name;`.
+- Units only: `// lib.neo.mkSystemdUnits [ "unit" ];`.
+- Volumes: `config.neo.core.volumes.appdata` (etc.), not hard-coded paths.
+- Internal services: Docker `networks = ["internal"];`, `restart` always where applicable.
+- Option UI helpers (tokens, bcrypt, mkpasswd): `helper = lib.neo.helpers.…` — see `nix/lib/helpers/`.
 
-### Option Helpers (web UI fill-assist)
-Attach UI-only helpers so operators can fill secrets/hashes without leaving the config UI.
-Metadata rides on options like `rank` (never executed during pure NixOS eval).
+### Rust (`cli/src/`)
 
-```nix
-# Button-only (no dialog): random secret into a str / nullOr str field
-token = mkOption {
-  type = types.str;
-  description = "...";
-  helper = lib.neo.helpers.randomToken;
-};
+- clap derive, `anyhow::Result`, `?` + `.context(…)`, no `unwrap()` in library paths.
+- `toml_edit::DocumentMut` for surgical TOML edits.
+- Commands in `cli/src/commands/`; web under `commands/web/`.
 
-# Form dialog on each listOf row (tinyauth users): + Add then Set user on that row
-users = mkOption {
-  type = types.listOf types.str;
-  helper = lib.neo.helpers.bcryptUser;  # apply=set to target.index
-};
+## Workflow: add a service
 
-# Password → sha-512 crypt (core hashedLinuxPassword)
-helper = lib.neo.helpers.mkpasswdSha512;
-
-# Label override
-helper = lib.neo.helpers.randomToken // { label = "Generate admin token"; };
-
-# Also valid: mkOption { ... } // { helper = lib.neo.helpers.randomToken; };
-```
-
-- Presets / constructor: `nix/lib/helpers.nix` (`lib.neo.mkHelper`, `lib.neo.helpers.*`)
-- Scripts: `nix/helpers/*.sh` (must be executable; tools must be on neo-web `path`)
-- Extract + UI + `POST /helper/run` pick up `helper` automatically
-- Prefer helpers for **self-generated** secrets (tokens, db passwords, bcrypt users). Do **not** attach for external API keys / bot tokens the user obtains elsewhere.
-
-### Option Definitions (in option.nix)
-```nix
-options.neo.services.example = mkOption {
-  type = types.submodule {
-    options = {
-      enabled = mkEnableOption "example service";
-      domain = mkOption { type = types.nullOr types.str; default = null; ... };
-      # Use neo.mkReverseProxyOptions { subdomain = "example"; ... }
-    };
-  };
-  default = { };
-  description = "Example service configuration";
-};
-```
-See `nix/services/filebrowser/option.nix:9` and `nix/services/hermes/option.nix:142` for complex examples with reverse proxy.
-
-### Types and Options
-- `types.port`, `types.str`, `types.nullOr`, `types.listOf`, `types.attrsOf types.str`
-- For reverse proxies: `// neo.mkReverseProxyOptions { subdomain = "..."; auth.publicPaths = [...]; }`
-- For docker containers (to enable image switching, auto-updater, UI status): `// lib.neo.mkContainerDefinitions { "cname" = "repo:tag"; ... }` (or with extraUnits for additional systemd units); then in default.nix use `cfg.containers."cname"` for the image value instead of hardcoding. Use `// lib.neo.mkSystemdUnits [ "unitname" ]` for pure systemd services.
-- Volumes: define in core, reference via `config.neo.core.volumes.*`
-
-### Strings, Scripts, and Activation
-Use lib helpers (preferred):
-```nix
-systemd.services.docker-foo.preStart = lib.concatStringsSep "\n" [
-  (lib.neo.mkActivationScriptForDir config { dirPath = "${config.neo.core.volumes.appdata}/foo"; })
-  (lib.neo.mkActivationScriptForFile config {
-    filePath = "...";
-    content = builtins.toJSON { ... };
-    mode = "0644";
-  })
-];
-```
-See `nix/lib/activation/dir.nix:4` and `file.nix`. Escape with `${escapeShellArg ...}`. Use absolute paths.
-
-### Error Handling and Assertions (Nix)
-```nix
-assert lib.assertMsg (cfg.port > 1024) "Ports must be > 1024 for non-root";
-lib.mkIf cfg.enabled { ... }  # Conditional config only
-# Prefer mkIf over if/then in most module contexts
-```
-Use `lib.neo` helpers for common patterns to avoid duplication.
-
-### Lib Functions (nix/lib/)
-```nix
-# In nix/lib/activation/dir.nix or similar
-neo.mkActivationScriptForDir = config: { dirPath, mode ? "0755", user ? ..., ... }: ''
-  if [ ! -e ${dirPath} ]; then
-    mkdir -p ${dirPath}
-    chown ${user}:${group} ${dirPath}
-    chmod ${mode} ${dirPath}
-  fi
-'';
-```
-See `nix/lib/authorization.nix` for `authBlock`, `authLocations`, `mkReverseProxyOptions`.
-See `nix/lib/containers.nix` for `mkContainerDefinitions`, `mkSystemdUnits`, `getAllContainers` (declare images + units in option.nix for docker services and custom systemd units; enables image config + updater + UI status/logs).
-
-### Volumes and OCI Containers
-```nix
-neo.core.volumes.appdata = "/var/neo/AppData";
-volumes = [
-  "${config.neo.core.volumes.appdata}/foo:/config"
-  "${config.neo.core.volumes.media}:/srv/Media"
-] ++ (lib.mapAttrsToList (h: c: "${config.neo.core.volumes.${h}}:${c}") cfg.additionalMountPoints);
-```
-Always use `extraOptions = ["--network=internal"]` for internal services. `restartPolicy = "always"`, resource limits where possible.
-
-### Service Modules Example
-See `nix/services/filebrowser/default.nix:19`, `nix/services/swag/default.nix:20`, `nix/modules/core/default.nix:43`.
-
-## Rust CLI Code Style (cli/src/)
-- **Formatting/Linting**: `cargo fmt`, `cargo clippy --all-targets -- -D warnings`
-- **Build/Test**: Integrated in Nix (`nix build .#neo`); `cargo test <test_name>` for single test (add #[test] as needed)
-- **Imports**: Grouped - std, extern crates, then `crate::` or `super::`. See `cli/src/main.rs:1-13`
-- **Naming**: snake_case for functions/vars, UpperCamelCase for structs/enums (e.g. `Cli`, `Commands`)
-- **Error Handling**: `anyhow::{Context, Result}`, extensive use of `?` and `.context("msg")`. No `unwrap()` in lib code. Main uses `if let Err(e) = run()`
-- **CLI**: Use clap derive (`#[derive(Parser)]`, `#[command(...)]`). See `cli/src/main.rs:15`, `commands/*.rs`
-- **TOML**: Use `toml_edit::DocumentMut` for precise edits without reformatting.
-- Keep functions small, prefer `execute_command` helper.
-
-Example from `cli/src/main.rs:118`:
-```rust
-fn run(cli: Cli) -> Result<()> { ... }
-```
-
-## Agentic Coding Guidelines
-- **Before editing**: Use glob/grep/read tools extensively to understand patterns. Follow existing conventions strictly (see "Following conventions" in system prompt).
-- **When modifying**: 
-  1. Read relevant files (options, defaults, lib, similar services).
-  2. Mimic style, naming, imports exactly.
-  3. Use `lib.neo.*` helpers.
-  4. NEVER add comments unless explicitly asked (per code style).
-  5. After changes: ALWAYS run `just format && just check` via bash tool.
-- **For new services**: Follow "Workflow: Add Service" below. Add to templates if needed.
-- **Testing**: Verify with `just check`, VM launch, `just exec 'systemctl status <new-svc>'`. Use nix-developer-agent via Task tool when available for Nix changes.
-- **Security**: No committed secrets (use sops-nix). Ports >1024 for non-root. Least privilege. Validate all inputs. Abs paths only.
-- **Performance**: Minimal containers, proper volumes, restart=always. Use internal network.
-- **NEVER commit** unless user explicitly asks. Run lints first.
-- **Cursor/Copilot rules**: None found in .cursor/ or .github/.
-
-## Workflow: Add a New Service
-1. Create `nix/services/<name>/option.nix` (with submodule + mkReverseProxyOptions if applicable + mkContainerDefinitions for any oci containers (images) and/or mkSystemdUnits for custom units)
-2. Create `nix/services/<name>/default.nix` (activationScripts using lib.neo, oci-container config, mkIf enabled)
-3. Create `nix/services/<name>/swag.nix` for nginx proxy/auth if public
-4. Update any core modules if new volume needed (`nix/modules/core/*`)
+1. `nix/services/<name>/option.nix` — submodule + proxy/containers/units/meta as needed.
+2. `nix/services/<name>/default.nix` — `mkIf`, activation helpers, oci-container.
+3. `nix/services/<name>/swag.nix` if publicly proxied.
+4. New volume only if required → `nix/modules/core/`.
 5. `just format && just check`
-6. `just build && just launch`
-7. Test: `just exec 'systemctl status <name>'`, `just logs <name>`, verify in browser via swag
-8. Check VM with `just status`
+6. Optional: `just build && just launch` → `just exec 'systemctl status …'`
 
-## Expanded Checklist
-- [ ] `just format`
-- [ ] `just check` (passes type/syntax/build checks)
-- [ ] All options use plain string descriptions
-- [ ] Uses `lib.neo` helpers for dirs/files/activation/proxy
-- [ ] Follows dendritic: separate option/impl/swag
-- [ ] Volumes/mounts use `neo.core.volumes.*` pattern
-- [ ] Rust changes (if any): cargo fmt/clippy, Result handling
-- [ ] Security: no secrets, proper users, network=internal
-- [ ] Tested in VM with `just launch` + `just exec`
-- [ ] File <200 lines, follows exact surrounding code style
+Plugins: same patterns inside a separate flake — [docs/PLUGINS.md](docs/PLUGINS.md).
 
-## Debug Commands
+## Verification checklist
+
+- [ ] `just format` / `just check`
+- [ ] Plain-string option descriptions; `lib.neo` helpers for dirs/files/proxy
+- [ ] Dendritic split respected; volumes via `neo.core.volumes.*`
+- [ ] No secrets committed; internal network for private containers
+- [ ] VM smoke test when behavior changes
+
+## Security / agent don'ts
+
+- Do not commit secrets or real API keys.
+- Prefer ports above 1024 for non-root listeners; least privilege.
+- Do not force-push or commit unless the user asks.
+- Prefer fixing root causes over bypassing checks.
+
+## Debug
+
 ```bash
 just status
 just logs <svc>
 just exec 'journalctl -u <svc> --no-pager -f'
-just exec 'systemctl status <svc>'
-just exec 'ls -la /var/neo/AppData/<svc>'
+just exec 'ls -la /var/neo/DATA/AppData/<svc>'
 nix flake check --print-build-logs
 ```
 
-## Additional Notes
-- VM uses disko for disk, sops-nix for secrets (not committed).
-- Templates in `templates/homeserver/` for new deployments.
-- CLI commands in `cli/src/commands/*.rs` mirror Nix bootstrap logic.
-- When in doubt, grep similar services (`nix/services/*/`) first.
-- For agents: prefer Task tool with "nix-developer-agent" for modifications. Verify with lint/check/build before concluding.
-
-This document (~165 lines) equips agentic tools with precise patterns for consistent contributions.
+CLI details: [docs/CLI.md](docs/CLI.md).

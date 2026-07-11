@@ -1,175 +1,120 @@
 # Neo Homeserver
 
-A fully declarative, self-replicating NixOS homeserver built with flakes, OCI containers, and the `neo` CLI.
+<p align="center">
+  <img src="cli/static/neo-icon.png" alt="Neo logo" width="160" />
+</p>
 
-This template gives you a complete homeserver with automatic updates, reverse proxy (SWAG), authentication, backup, and many self-hosted services.
+**Your data. Your machine. Your software.**
 
-## Prerequisites
+Neo is a complete homeserver you can actually run yourself—without becoming a full-time sysadmin. It gives you the strengths of a modern Nix-based system (reproducible, revertable, recoverable) with **opinionated defaults** and a simple **web interface**. You choose what to turn on; Neo handles HTTPS, updates, firewalling, and the rest.
 
-**Step 1: Install NixOS**
+You should not need a technical background to understand what is going on. If you care about **owning your data and your software**, and you do not want to maintain a fragile pile of Docker Compose files by hand, Neo is for you.
 
-1. Install a **minimal NixOS** installation (physical machine or VM).
-2. Make sure you have:
-   - SSH access with your public key
-   - Internet connection
-   - At least 2 CPU cores and 4GB RAM recommended (for multiple services)
+## Why this exists
 
-No additional configuration is needed during NixOS install — the `neo` CLI will handle everything.
+Big tech wants you renting access forever: your photos on their cloud, your documents on their servers, your passwords and habits as their product. You do not really _own_ the service—you have a login until the terms change.
 
-## Quick Start
+Neo flips that model:
 
-### 1. Configure your services
+- **Everything lives on your homeserver.** Photos, files, passwords, documents, media—on hardware you control.
+- **You own the software.** The stack is open source. You can inspect it, keep it, move it, and run it without a vendor’s permission.
+- **Privacy by design.** Traffic is encrypted with TLS until it reaches _your_ machine. Services sit behind authentication. The machine only needs the usual web ports open—not a wide-open network.
+- **No “learn Nginx, Let’s Encrypt, and compose” tax.** Neo is opinionated so sensible defaults do the heavy lifting. Day to day you use the **Neo web UI**, not a command line.
 
-Create a `./settings.toml` on your computer with your domain, email, API keys, and which services you want enabled.
+That spirit—**if you can’t host it and control it, you don’t really own it**—is the same fight people like [Louis Rossmann](https://www.youtube.com/watch?v=rk3snANxYMY) make for repair, ownership, and a [self-managed life](https://wiki.futo.org/wiki/Introduction_to_a_Self_Managed_Life:_a_13_hour_%26_28_minute_presentation_by_FUTO_software) instead of permanent rental from Big Tech.
 
-See the example below.
+## What you need
 
-### 2. Initialize the configuration
+| You need                                                                     | You do **not** need                        |
+| ---------------------------------------------------------------------------- | ------------------------------------------ |
+| A computer (or VPS) that can run the homeserver                              | Deep Linux or Nix knowledge                |
+| A **public IP** _or_ access to a **streamproxy** token from a public machine | To open random ports all over your network |
+| A domain name pointed at that public endpoint                                | To hand-maintain Docker Compose            |
+| Willingness to click through a setup UI                                      | To become a reverse-proxy expert           |
 
-On your fresh NixOS machine, run:
+Only **ports 80 and 443** need to be reachable from the internet (or from your streamproxy path). Everything else stays on the machine. The server does not have to be a public cloud box sitting “in the internet”—it can live at home; it only needs that path for HTTPS.
 
-```bash
-nix-shell --extra-experimental-features "nix-command flakes" -p git # not needed if git is available
-nix run --extra-experimental-features "nix-command flakes" --refresh github:madebydamo/neo#neo -- init
+## How communication works
+
+Your browser always talks **HTTPS** to Neo. Encryption is terminated on _your_ server; apps talk among themselves inside a protected network; answers are encrypted again before they go back out.
+
+```mermaid
+flowchart LR
+  U[You / browser] -->|HTTPS encrypted| NGX[Nginx · De / encryption + routing]
+  NGX --> AUTH[tinyauth · login gate]
+  AUTH --> APP[Your Services]
+  APP --> NGX
+  NGX -->|HTTPS encrypted| U
+
+  subgraph machine [Your homeserver]
+    NGX
+    AUTH
+    APP
+  end
 ```
 
-This creates a new git repository with all necessary files.
+- **Ingress** — traffic arrives on your public IP **or** via streamproxy (same idea from your point of view).
+- **TLS** — Nginx unwraps encryption only on your machine, then routes to the right service.
+- **Double protection** — almost every service is behind **tinyauth** _and_ the app’s own login where applicable: two layers, not “hope nobody finds the port.”
+- **Inside the box** — apps run as containers on an internal network; they are not casually exposed to the world.
+- **Auto-updates** — system and containers pick up new software without you babysitting upgrades every weekend.
 
-### 3. Deploy
+More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-```bash
-nix run --extra-experimental-features "nix-command flakes" github:madebydamo/neo#neo -- activate
-```
+## Features that do the hard work for you
 
-This will:
+- **Automatic HTTPS** — certificates and encryption handled for you; traffic is encrypted in transit and only decrypted on your server.
+- **Double authentication** — gateway login (tinyauth) plus per-app accounts on most services.
+- **Automatic updates** — OS and containers stay current so you get security fixes and new features without a maintenance hobby.
+- **Opinionated, safe defaults** — a firewalled host, internal service network, and sensible packaging so you are not inventing a security model from scratch.
+- **Network-wide DNS blocking** — optional Pi-hole style blocking for ads and trackers across your network.
+- **Reproducible & revertable** — built on NixOS: rebuild the same system, roll back a bad change, recover after disaster with configuration and data you control.
+- **One web UI for daily life** — enable services, set domain and users, manage the stack in the browser. Power-user CLI exists;
+- **Data stays home** — backups, files, photos, vaults: on _your_ disk, not a free tier that mines you.
+- **Plugins when you want more** — add media stacks, personal apps, or extra NixOS configurations without reinventing TLS and auth ([Plugins](docs/PLUGINS.md)).
+- **Works without a public IP at home** — pair with streamproxy on a small public machine; your data can still live on the box in your house.
 
-- Build your system
-- Switch to the new configuration
-- Start all enabled services (via Docker/OCI containers)
+## What you can run
 
-After the first activation, you can use the neo cli for simple management.
-Your configuration will by default be found at `/var/neo/DATA/AppData/configuration`.
-To edit your configuration, make desired changes at `/var/neo/DATA/AppData/configuration/settings.toml` and run `neo activate`.
+Out of the box (enable what you need in the UI):
 
-```bash
-neo --help
-vi /var/neo/DATA/AppData/configuration/settings.toml # do desired edits.
-neo activate # changes will apply, on errors you see a message.
-```
+| You want…             | Neo can run…                                           |
+| --------------------- | ------------------------------------------------------ |
+| Secure access & login | Reverse proxy (SWAG), tinyauth, Tailscale, VPN helpers |
+| Files & sync          | Filebrowser, Syncthing, Nextcloud (+ Collabora)        |
+| Photos                | Immich, Immich Drop                                    |
+| Documents             | Paperless                                              |
+| Passwords             | Vaultwarden                                            |
+| Search & utilities    | SearXNG, pastebin, change detection                    |
+| Privacy on the LAN    | Pi-hole                                                |
+| Backups & monitoring  | Automated backup, Beszel                               |
+| AI / assistants       | Hermes, Openclaw, and more                             |
+| Management            | **Neo web** — your control panel                       |
 
-## Example `settings.toml`
+Want a full **media / \*arr** stack (Jellyfin, Sonarr, Radarr, …)? That ships as the **[highsea.neo](https://github.com/madebydamo/highsea.neo)** plugin—same homeserver, extra apps. See [Plugins](docs/PLUGINS.md).
 
-```toml
-[neo-service]
-enabled = true
-bootstrapEnabled = true
-autoUpdateEnabled = true
+## Getting started
 
-[core.ssh]
-authorizedKeys = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."]
+Full steps (including install from another computer): **[Installation guide](docs/INSTALL.md)**.
 
-[services.swag]
-enabled = true
-domain = "example.com"
-email = "you@example.com"
+In short: install Neo on your machine (or install _onto_ a remote machine with a guided path), open the **web UI**, set your domain and login, turn services on, and apply. You do not need to learn a custom command language for everyday use.
 
-[services.tinyauth]
-enabled = true
-users = ["username:$2a$10$..."]  # Use `docker run -i -t --rm ghcr.io/steveiliop56/tinyauth:v5 user create --interactive` to generate
+No public IP at home? You need either a public IP _or_ a **streamproxy** arrangement—described in the install guide.
 
-[services.rathole]
-enabled = false # only useful if you have just one server with public ip. That one should run services.streamproxy
+## Documentation
 
-[services.filebrowser]
-enabled = true
+| Guide                                    | Who it’s for                                            |
+| ---------------------------------------- | ------------------------------------------------------- |
+| **[Installation](docs/INSTALL.md)**      | Setting up Neo for the first time                       |
+| **[How it works](docs/ARCHITECTURE.md)** | Security, traffic, updates—plain language + diagrams    |
+| **[Plugins](docs/PLUGINS.md)**           | Adding extra apps and community plugins                 |
+| **[CLI](docs/CLI.md)**                   | Optional power-user tools (most people never need this) |
+| **[AGENTS.md](AGENTS.md)**               | Developers and automation agents working on Neo itself  |
 
-[services.backup]
-enabled = true
-remotePath = "yourservername"
-host = "zh1234.rsync.net"
-user = "zh1234"
-# sshKey defaults to the auto-generated homeserver key; override only if needed
-# extraOptions = ["-o", "StrictHostKeyChecking=accept-new"]
+## For contributors
 
-# Offload heavy Nix builds (system rebuilds, etc.) to a remote machine over SSH.
-# Authorize the homeserver public key (neo web UI / home/homeserver/.ssh/id_ed25519.pub)
-# on the remote user and add that user to nix.settings.trusted-users there.
-# [core.nix.remoteBuild]
-# enabled = true
-# host = "buildbox"
-# user = "builder"
-# maxJobs = 32
-# extraOptions = ["-o", "StrictHostKeyChecking=accept-new"]
-
-[services.tailscale]
-enabled = true
-authKey = "tskey-..."
-acceptRoutes = true
-advertiseExitNode = true
-
-[services.paperless]
-enabled = true
-
-[services.changedetection]
-enabled = true
-
-[services.pastebin]
-enabled = true
-
-[services.immich]
-enabled = true
-
-[services."immich-drop"]
-enabled = true
-
-[services.hermes]
-enabled = true
-telegramBotToken = "3473438487:AKRfdaei..." # Create a bot by sending @botfather /newbot
-telegramAllowedUserId = [825821185] # whitelist your own id
-xaiApiKey = "xai-DdjfkKJfIO..."
-defaultModel = "xai/grok-4.20-0309-reasoning"
-
-```
-
-## Available Services
-
-- **swag**: Nginx reverse proxy + Let's Encrypt
-- **tinyauth**: Lightweight auth gateway
-- **filebrowser**: Web file manager
-- **immich**: Photo and video backup
-- **paperless**: Document management
-- **changedetection**: Website change monitoring
-- **hermes**: AI assistant with Telegram integration
-- **rathole**: Secure tunnel (for exposing services)
-- **tailscale**: Zero-config VPN
-- **backup**: Automated rsync backups
-- And more (nextcloud, vaultwarden, pihole, etc.)
-
-## Management Commands
-
-Once deployed, use these commands:
-
-```bash
-neo init           # initialized nixos configurations with your settings properly
-neo update         # updates all dependencies
-neo build          # builds your current configuration
-neo activate       # activates your configuration
-neo nuke           # nukes the configuration, can be recovered with a fresh init
-```
-
-See `neo help` for all commands.
-
-## Updating
-
-The system auto-updates daily. To update manually:
-
-```bash
-neo update && neo activate
-```
-
-For more help, see the [neo repository](https://github.com/madebydamo/neo).
-Issues on Problems are appreciated.
+If you are changing Neo’s code or packaging, start at **[AGENTS.md](AGENTS.md)**.
 
 ---
 
-**Made with ❤️ using Nix + Rust**
+**Own your stack.** Issues and contributions welcome.
