@@ -3,7 +3,8 @@ use super::registry::{
 };
 use super::repl::NixEvaluator;
 use crate::commands::web::structs::{
-    IndexContext, NavigatorContext, OptionPaneContext, OptionSchema, RuntimeUnit, ServiceMeta,
+    ExtractedServiceGroups, IndexContext, NavigatorContext, OptionPaneContext, OptionSchema,
+    RuntimeUnit, ServiceMeta,
 };
 
 fn value_to_display(v: &serde_json::Value) -> String {
@@ -106,15 +107,15 @@ fn rename_scalar_core_option(section: &str, opts: &mut [OptionSchema]) {
 impl NixEvaluator {
     pub async fn extract_services(&mut self) -> IndexContext {
         let inner = format!("{} {{ neoFlake = f; }}", EXTRACT_SERVICES.load_name);
-        match self.query_json(&inner).await {
-            Ok(svcs) => IndexContext {
-                services: svcs,
+        match self.query_json::<ExtractedServiceGroups>(&inner).await {
+            Ok(groups) => IndexContext {
+                enabled: groups.enabled,
+                disabled: groups.disabled,
                 ..Default::default()
             },
             Err(e) => {
                 eprintln!("web: nix extract_services failed: {e}");
                 IndexContext {
-                    services: vec![],
                     error: Some(format!(
                         "Nix evaluator error or timeout (>{}s) while extracting service list: {}. \
                          This often means a long first-time eval, or a problem in the config flake (e.g. flake.lock has 'path' locked to a /nix/store/*-source that no longer exists after GC or because the lock was generated on a dev machine with local git+file paths). \

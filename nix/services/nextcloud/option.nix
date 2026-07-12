@@ -74,6 +74,7 @@
             }
             // lib.neo.mkSystemdUnits ["nextcloud-setup"]
             // lib.neo.mkServiceMeta {
+              category = "Files";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nextcloud.svg";
               description = ''
                 Nextcloud is an open source, self-hosted content collaboration platform that gives you a safe home for all your data.

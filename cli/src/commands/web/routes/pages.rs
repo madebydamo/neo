@@ -64,10 +64,7 @@ pub async fn services_grid(config: &State<Arc<AppConfig>>) -> Template {
 pub fn core_grid(_config: &State<Arc<AppConfig>>) -> Template {
     Template::render(
         "core_grid",
-        IndexContext {
-            services: vec![],
-            ..Default::default()
-        },
+        IndexContext::default(),
     )
 }
 

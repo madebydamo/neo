@@ -22,6 +22,7 @@
             }
             // lib.neo.mkSystemdUnits ["collabora-setup"]
             // lib.neo.mkServiceMeta {
+              category = "Files";
               icon = "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/collaboraonline.svg";
               description = ''
                 Collabora Online is a collaborative online office suite based on LibreOffice technology.

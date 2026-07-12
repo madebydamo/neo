@@ -45,6 +45,7 @@
               "paperless" = "ghcr.io/paperless-ngx/paperless-ngx:latest";
             }
             // lib.neo.mkServiceMeta {
+              category = "Files";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/paperless-ngx.svg";
               description = ''
                 Paperless-ngx is a community-supported document management system that transforms your physical documents into a searchable online archive.

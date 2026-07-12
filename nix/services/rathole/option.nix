@@ -39,6 +39,7 @@
               "rathole"
             ]
             // lib.neo.mkServiceMeta {
+              category = "Network";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/rathole.png";
               description = ''
                 Rathole is a lightweight, high-performance reverse proxy for NAT traversal, written in Rust as a fast and low-resource alternative to frp and ngrok.

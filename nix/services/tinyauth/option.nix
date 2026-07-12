@@ -44,6 +44,7 @@
               tinyauth = "ghcr.io/steveiliop56/tinyauth:v5";
             }
             // lib.neo.mkServiceMeta {
+              category = "Security";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/tinyauth.svg";
               description = ''
                 Tinyauth is the tiniest OpenID Connect (OIDC) authentication and authorization server for your self-hosted applications.

@@ -61,6 +61,7 @@
             }
             // lib.neo.mkSystemdUnits ["backup"]
             // lib.neo.mkServiceMeta {
+              category = "Files";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/borg.svg";
               description = ''
                 The backup service performs automated rsync-over-SSH snapshots of your critical Neo homeserver data (AppData, configs, etc.) to a remote server of your choice.

@@ -168,6 +168,7 @@
               "hermes-agent"
             ]
             // lib.neo.mkServiceMeta {
+              category = "AI";
               icon = "https://raw.githubusercontent.com/NousResearch/hermes-agent/main/website/static/img/logo.png";
               description = ''
                 Hermes Agent is the self-improving AI agent built by Nous Research. The only agent with a built-in learning loop — it creates skills from experience, improves them during use, nudges itself to persist knowledge, and builds a deepening model of who you are across sessions.

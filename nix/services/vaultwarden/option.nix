@@ -36,6 +36,7 @@
               vaultwarden = "vaultwarden/server:latest";
             }
             // lib.neo.mkServiceMeta {
+              category = "Security";
               icon = "https://raw.githubusercontent.com/dani-garcia/vaultwarden/main/resources/vaultwarden-icon.svg";
               description = ''
                 Vaultwarden is a lightweight alternative server implementation of the Bitwarden password manager API, written entirely in Rust for efficiency and security.

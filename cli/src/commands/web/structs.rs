@@ -60,11 +60,35 @@ pub struct Service {
     pub icon: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rank: Option<i64>,
+    /// Category from service meta (e.g. Core, Network, Media).
+    #[serde(default)]
+    pub category: String,
+}
+
+/// One category bucket in the services grid (enabled or disabled section).
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct ServiceCategoryGroup {
+    pub name: String,
+    pub services: Vec<Service>,
+}
+
+/// Shape returned by `extract_services.nix` before theme/error are filled in.
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct ExtractedServiceGroups {
+    #[serde(default)]
+    pub enabled: Vec<ServiceCategoryGroup>,
+    #[serde(default)]
+    pub disabled: Vec<ServiceCategoryGroup>,
 }
 
 #[derive(Serialize, Default)]
 pub struct IndexContext {
-    pub services: Vec<Service>,
+    /// Enabled services, grouped by category (preferred category order).
+    #[serde(default)]
+    pub enabled: Vec<ServiceCategoryGroup>,
+    /// Disabled / available services, grouped by category.
+    #[serde(default)]
+    pub disabled: Vec<ServiceCategoryGroup>,
     #[serde(default)]
     pub theme: String,
     /// If set, the nix evaluator hit an error/timeout (e.g. flake eval taking >10min or broken flake.lock referencing missing store paths). The UI shows this message instead of hanging.

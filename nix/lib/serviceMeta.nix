@@ -12,6 +12,8 @@
         screenshots ? [],
         rank ? null,
         iframeCompatible ? true,
+        # Suggested values: Core, Network, Security, Media, Files, Monitoring, Utilities, AI, Other
+        category ? "Other",
       } @ args:
         with lib; {
           meta = mkOption {
@@ -68,6 +70,11 @@
                   type = types.bool;
                   default = iframeCompatible;
                   description = "Whether this service can be loaded inside an iframe in the neo navigator UI.";
+                };
+                category = mkOption {
+                  type = types.str;
+                  default = category;
+                  description = "Category used to group this service in the neo web UI services grid (e.g. Core, Network, Security, Media, Files, Monitoring, Utilities, AI).";
                 };
               };
             };

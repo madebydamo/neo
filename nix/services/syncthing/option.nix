@@ -28,6 +28,7 @@
             }
             // lib.neo.mkSystemdUnits ["syncthing-config"]
             // lib.neo.mkServiceMeta {
+              category = "Files";
               icon = "https://raw.githubusercontent.com/syncthing/syncthing/main/assets/logo-only.svg";
               description = ''
                 Syncthing is a continuous file synchronization program that keeps files in sync across two or more computers in real time.

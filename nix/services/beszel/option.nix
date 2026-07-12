@@ -29,6 +29,7 @@
               beszel = "henrygd/beszel:latest";
             }
             // lib.neo.mkServiceMeta {
+              category = "Monitoring";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/beszel.svg";
               description = ''
                 Beszel is a simple, lightweight server monitoring platform that provides Docker and Podman stats, historical metrics, and configurable alerts for CPU, memory, disk, bandwidth, temperature and more.

@@ -134,6 +134,7 @@
             }
             // lib.neo.mkReverseProxyOptions {subdomain = "openclaw";}
             // lib.neo.mkServiceMeta {
+              category = "AI";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/openclaw.svg";
               description = ''
                 OpenClaw is a self-hosted personal AI assistant and multi-channel gateway you run on your own devices.

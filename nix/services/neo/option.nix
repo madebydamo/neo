@@ -53,6 +53,7 @@
               "neo-web"
             ]
             // lib.neo.mkServiceMeta {
+              category = "Core";
               icon = "/static/neo-icon.png";
               description = ''
                 The neo web UI gives you a live, in-browser editor for all your homeserver services.

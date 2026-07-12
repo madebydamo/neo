@@ -21,6 +21,7 @@
               "immich-drop" = "ghcr.io/nasogaa/immich-drop:latest";
             }
             // lib.neo.mkServiceMeta {
+              category = "Media";
               icon = "https://raw.githubusercontent.com/immich-app/immich/main/design/immich-logo.svg";
               description = ''
                 Immich Drop is a tiny, zero-login web app for collecting photos/videos from anyone into your Immich server.

@@ -36,6 +36,7 @@
               example = "filebrowser/filebrowser:latest";
             }
             // lib.neo.mkServiceMeta {
+              category = "Utilities";
               icon = "https://filebrowser.org/static/logo.png";
               description = ''
                 Example service. Replace with your own description.

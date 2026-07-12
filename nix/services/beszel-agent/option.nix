@@ -35,6 +35,7 @@
               "beszel-agent" = "henrygd/beszel-agent:latest";
             }
             // lib.neo.mkServiceMeta {
+              category = "Monitoring";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/beszel.svg";
               description = ''
                 Beszel agent is the lightweight companion to the Beszel monitoring hub.

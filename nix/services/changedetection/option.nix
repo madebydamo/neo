@@ -33,6 +33,7 @@
               "changedetection-webengine" = "selenium/standalone-chrome-debug:3.141.59";
             }
             // lib.neo.mkServiceMeta {
+              category = "Utilities";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/changedetection.svg";
               description = ''
                 Changedetection.io is the best and simplest open-source tool for website change detection, web page monitoring, and website change alerts.

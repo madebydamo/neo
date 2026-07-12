@@ -73,6 +73,7 @@
                 "rathole-server"
               ]
               // lib.neo.mkServiceMeta {
+                category = "Core";
                 icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nginx.svg";
                 description = ''
                   Streamproxy is a custom Neo homeserver component that runs Nginx (HTTP routing + SNI stream proxy for HTTPS) together with a Rathole server inside a NixOS container.

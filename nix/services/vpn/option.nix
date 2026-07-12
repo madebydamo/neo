@@ -63,6 +63,7 @@
               };
             }
             // lib.neo.mkServiceMeta {
+              category = "Network";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/gluetun.svg";
               description = ''
                 Gluetun is a lightweight Swiss-army-knife VPN client in a thin Docker container supporting dozens of providers via OpenVPN or WireGuard, with built-in DNS-over-TLS, kill switch firewall, and HTTP/SOCKS/Shadowsocks proxies.

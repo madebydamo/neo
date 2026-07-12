@@ -28,6 +28,7 @@
               pastebin = "wantguns/bin";
             }
             // lib.neo.mkServiceMeta {
+              category = "Utilities";
               icon = "https://raw.githubusercontent.com/wantguns/bin/master/static/media/android-chrome-512x512.png";
               description = ''
                 Bin (wantguns/bin) is a highly opinionated, minimal self-hosted pastebin that accepts both textual pastes and binary files such as images and PDFs.

@@ -78,6 +78,7 @@
               "tailscaled"
             ]
             // lib.neo.mkServiceMeta {
+              category = "Network";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/tailscale.svg";
               description = ''
                 Tailscale is the easiest, most secure way to use WireGuard for creating a mesh VPN (tailnet) that connects devices and services across networks with zero-config NAT traversal and identity-based access controls.

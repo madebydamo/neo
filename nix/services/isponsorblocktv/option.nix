@@ -23,6 +23,7 @@
               "isponsorblocktv-setup"
             ]
             // lib.neo.mkServiceMeta {
+              category = "Media";
               icon = "https://raw.githubusercontent.com/ajayyy/SponsorBlock/master/public/icons/LogoSponsorBlocker256px.png";
               description = ''
                 iSponsorBlockTV is a self-hosted SponsorBlock client for YouTube TV apps on smart TVs, streaming devices, and game consoles.

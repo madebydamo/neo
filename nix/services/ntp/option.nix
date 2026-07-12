@@ -25,6 +25,7 @@
               };
             }
             // lib.neo.mkServiceMeta {
+              category = "Network";
               icon = "https://api.iconify.design/mdi/clock-check-outline.svg";
               description = ''
                 Chrony is a versatile implementation of the Network Time Protocol (NTP) used for accurate system clock synchronization.

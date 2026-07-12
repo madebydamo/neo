@@ -30,6 +30,7 @@
               searxng = "docker.io/searxng/searxng:latest";
             }
             // lib.neo.mkServiceMeta {
+              category = "Utilities";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/searxng.svg";
               description = ''
                 SearXNG is a free internet metasearch engine which aggregates results from various search services and databases. Users are neither tracked nor profiled.

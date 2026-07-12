@@ -1,27 +1,81 @@
-<div id="services-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+<div id="services-grid" class="space-y-6">
   {{#if error}}
-    <div class="col-span-full alert alert-error text-xs">{{error}}</div>
+    <div class="alert alert-error text-xs">{{error}}</div>
   {{/if}}
-  {{#each services}}
-    <div
-      class="card bg-base-100 shadow-sm border border-base-300 hover:border-primary hover:shadow cursor-pointer p-1.5 flex items-center gap-1.5 transition-all active:scale-[0.985]"
-      hx-get="/option/{{name}}"
-      hx-target="#config-content"
-      hx-swap="innerHTML"
-      title="Edit {{name}} options">
-      {{#if icon}}
-        <img src="{{icon}}" class="w-5 h-5 object-contain flex-shrink-0" alt=""
-             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-        <span class="hidden text-lg leading-none flex-shrink-0">⚙</span>
-      {{else}}
-        <span class="text-lg leading-none flex-shrink-0 opacity-60">⚙</span>
-      {{/if}}
-      {{#if enabled}}
-        <span class="inline-block w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
-      {{else}}
-        <span class="inline-block w-2 h-2 rounded-full bg-base-300 flex-shrink-0"></span>
-      {{/if}}
-      <span class="font-mono text-xs truncate">{{name}}</span>
+
+  {{#if enabled}}
+  <section class="space-y-3">
+    <div class="flex items-center gap-2">
+      <span class="inline-block w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+      <h2 class="text-xs font-semibold uppercase tracking-wide opacity-70">Enabled</h2>
     </div>
-  {{/each}}
+    {{#each enabled}}
+    <div class="space-y-1.5">
+      <h3 class="text-xs font-medium text-base-content/50 px-0.5">{{name}}</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+        {{#each services}}
+        <div
+          class="card bg-base-100 shadow-sm border border-base-300 hover:border-primary hover:shadow cursor-pointer p-1.5 flex items-center gap-1.5 transition-all active:scale-[0.985]"
+          hx-get="/option/{{name}}"
+          hx-target="#config-content"
+          hx-swap="innerHTML"
+          title="Edit {{name}} options">
+          {{#if icon}}
+            <img src="{{icon}}" class="w-5 h-5 object-contain flex-shrink-0" alt=""
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+            <span class="hidden text-lg leading-none flex-shrink-0">⚙</span>
+          {{else}}
+            <span class="text-lg leading-none flex-shrink-0 opacity-60">⚙</span>
+          {{/if}}
+          <span class="inline-block w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+          <span class="font-mono text-xs truncate">{{name}}</span>
+        </div>
+        {{/each}}
+      </div>
+    </div>
+    {{/each}}
+  </section>
+  {{/if}}
+
+  {{#if disabled}}
+  <section class="space-y-3">
+    <div class="flex items-center gap-2">
+      <span class="inline-block w-2 h-2 rounded-full bg-base-300 flex-shrink-0"></span>
+      <h2 class="text-xs font-semibold uppercase tracking-wide opacity-70">Available</h2>
+    </div>
+    {{#each disabled}}
+    <div class="space-y-1.5">
+      <h3 class="text-xs font-medium text-base-content/50 px-0.5">{{name}}</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+        {{#each services}}
+        <div
+          class="card bg-base-100 shadow-sm border border-base-300 hover:border-primary hover:shadow cursor-pointer p-1.5 flex items-center gap-1.5 transition-all active:scale-[0.985] opacity-80"
+          hx-get="/option/{{name}}"
+          hx-target="#config-content"
+          hx-swap="innerHTML"
+          title="Edit {{name}} options">
+          {{#if icon}}
+            <img src="{{icon}}" class="w-5 h-5 object-contain flex-shrink-0" alt=""
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+            <span class="hidden text-lg leading-none flex-shrink-0">⚙</span>
+          {{else}}
+            <span class="text-lg leading-none flex-shrink-0 opacity-60">⚙</span>
+          {{/if}}
+          <span class="inline-block w-2 h-2 rounded-full bg-base-300 flex-shrink-0"></span>
+          <span class="font-mono text-xs truncate">{{name}}</span>
+        </div>
+        {{/each}}
+      </div>
+    </div>
+    {{/each}}
+  </section>
+  {{/if}}
+
+  {{#unless enabled}}
+  {{#unless disabled}}
+  {{#unless error}}
+    <div class="text-xs opacity-60 p-4 border border-dashed rounded">No services found.</div>
+  {{/unless}}
+  {{/unless}}
+  {{/unless}}
 </div>

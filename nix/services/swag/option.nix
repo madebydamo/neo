@@ -55,6 +55,7 @@
               "swag-patcher"
             ]
             // lib.neo.mkServiceMeta {
+              category = "Core";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nginx.svg";
               description = ''
                 SWAG (Secure Web Application Gateway) is the foundational reverse proxy and SSL termination layer for the Neo homeserver.

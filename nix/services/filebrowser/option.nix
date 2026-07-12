@@ -31,6 +31,7 @@
               filebrowser = "filebrowser/filebrowser:latest";
             }
             // lib.neo.mkServiceMeta {
+              category = "Files";
               icon = "https://filebrowser.org/static/logo.png";
               description = ''
                 Filebrowser provides a file management interface.
