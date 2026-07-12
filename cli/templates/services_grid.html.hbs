@@ -1,81 +1,134 @@
-<div id="services-grid" class="space-y-6">
+<div id="services-grid"
+     class="space-y-4"
+     x-data="{
+       status: 'all',
+       category: 'all',
+       matches(enabled, cat) {
+         const st = this.status === 'all'
+           || (this.status === 'installed' && enabled)
+           || (this.status === 'available' && !enabled);
+         return st && (this.category === 'all' || this.category === cat);
+       },
+       sectionVisible(cat, hasEn, hasDis) {
+         if (this.category !== 'all' && this.category !== cat) return false;
+         if (this.status === 'installed') return hasEn;
+         if (this.status === 'available') return hasDis;
+         return true;
+       },
+       anyVisible() {
+         {{#if groups}}
+         return {{#each groups}}this.sectionVisible('{{name}}', {{#if hasEnabled}}true{{else}}false{{/if}}, {{#if hasDisabled}}true{{else}}false{{/if}}) || {{/each}} false;
+         {{else}}
+         return false;
+         {{/if}}
+       }
+     }">
   {{#if error}}
     <div class="alert alert-error text-xs">{{error}}</div>
   {{/if}}
 
-  {{#if enabled}}
-  <section class="space-y-3">
-    <div class="flex items-center gap-2">
-      <span class="inline-block w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
-      <h2 class="text-xs font-semibold uppercase tracking-wide opacity-70">Enabled</h2>
+  {{#if groups}}
+  {{!-- Filters: install status + category --}}
+  <div class="flex flex-wrap items-center gap-2 sticky top-0 z-20 bg-base-300/90 backdrop-blur py-1.5 -mx-0.5 px-0.5">
+    <div class="join">
+      <button type="button"
+              class="btn btn-xs join-item"
+              :class="status === 'all' ? 'btn-primary' : 'btn-ghost'"
+              @click="status = 'all'">All</button>
+      <button type="button"
+              class="btn btn-xs join-item"
+              :class="status === 'installed' ? 'btn-primary' : 'btn-ghost'"
+              @click="status = 'installed'">Installed</button>
+      <button type="button"
+              class="btn btn-xs join-item"
+              :class="status === 'available' ? 'btn-primary' : 'btn-ghost'"
+              @click="status = 'available'">Available</button>
     </div>
-    {{#each enabled}}
-    <div class="space-y-1.5">
-      <h3 class="text-xs font-medium text-base-content/50 px-0.5">{{name}}</h3>
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-        {{#each services}}
+    <select class="select select-xs select-bordered min-w-[9rem]"
+            x-model="category"
+            aria-label="Filter by category">
+      <option value="all">All categories</option>
+      {{#each categories}}
+      <option value="{{this}}">{{this}}</option>
+      {{/each}}
+    </select>
+  </div>
+
+  {{#each groups}}
+  <section class="space-y-1.5"
+           x-show="sectionVisible('{{name}}', {{#if hasEnabled}}true{{else}}false{{/if}}, {{#if hasDisabled}}true{{else}}false{{/if}})">
+    <h3 class="text-xs font-semibold uppercase tracking-wide text-base-content/50 px-0.5">{{name}}</h3>
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+      {{#each services}}
+      <div class="relative"
+           x-show="matches({{#if enabled}}true{{else}}false{{/if}}, '{{category}}')">
+        {{!-- Main card (navigates to options) --}}
         <div
-          class="card bg-base-100 shadow-sm border border-base-300 hover:border-primary hover:shadow cursor-pointer p-1.5 flex items-center gap-1.5 transition-all active:scale-[0.985]"
+          class="card bg-base-100 shadow-sm border border-base-300 hover:border-primary hover:shadow-md cursor-pointer transition-all active:scale-[0.985] h-full {{#unless enabled}}opacity-75{{/unless}}"
           hx-get="/option/{{name}}"
           hx-target="#config-content"
           hx-swap="innerHTML"
-          title="Edit {{name}} options">
-          {{#if icon}}
-            <img src="{{icon}}" class="w-5 h-5 object-contain flex-shrink-0" alt=""
-                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-            <span class="hidden text-lg leading-none flex-shrink-0">⚙</span>
-          {{else}}
-            <span class="text-lg leading-none flex-shrink-0 opacity-60">⚙</span>
-          {{/if}}
-          <span class="inline-block w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
-          <span class="font-mono text-xs truncate">{{name}}</span>
+          title="Configure {{name}}">
+          <div class="card-body p-3 gap-2 items-center text-center min-h-[7.5rem]">
+            <div class="w-10 h-10 flex items-center justify-center flex-shrink-0">
+              {{#if icon}}
+                <img src="{{icon}}" class="max-w-full max-h-full object-contain" alt=""
+                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+                <span class="hidden text-3xl leading-none opacity-50">⚙</span>
+              {{else}}
+                <span class="text-3xl leading-none opacity-50">⚙</span>
+              {{/if}}
+            </div>
+            <div class="font-mono text-xs font-medium truncate w-full leading-tight">{{name}}</div>
+            {{#if enabled}}
+              <span class="badge badge-success badge-sm">Installed</span>
+            {{else}}
+              <span class="badge badge-ghost badge-sm">Available</span>
+            {{/if}}
+          </div>
         </div>
-        {{/each}}
-      </div>
-    </div>
-    {{/each}}
-  </section>
-  {{/if}}
 
-  {{#if disabled}}
-  <section class="space-y-3">
-    <div class="flex items-center gap-2">
-      <span class="inline-block w-2 h-2 rounded-full bg-base-300 flex-shrink-0"></span>
-      <h2 class="text-xs font-semibold uppercase tracking-wide opacity-70">Available</h2>
-    </div>
-    {{#each disabled}}
-    <div class="space-y-1.5">
-      <h3 class="text-xs font-medium text-base-content/50 px-0.5">{{name}}</h3>
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-        {{#each services}}
-        <div
-          class="card bg-base-100 shadow-sm border border-base-300 hover:border-primary hover:shadow cursor-pointer p-1.5 flex items-center gap-1.5 transition-all active:scale-[0.985] opacity-80"
-          hx-get="/option/{{name}}"
-          hx-target="#config-content"
-          hx-swap="innerHTML"
-          title="Edit {{name}} options">
-          {{#if icon}}
-            <img src="{{icon}}" class="w-5 h-5 object-contain flex-shrink-0" alt=""
-                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-            <span class="hidden text-lg leading-none flex-shrink-0">⚙</span>
-          {{else}}
-            <span class="text-lg leading-none flex-shrink-0 opacity-60">⚙</span>
-          {{/if}}
-          <span class="inline-block w-2 h-2 rounded-full bg-base-300 flex-shrink-0"></span>
-          <span class="font-mono text-xs truncate">{{name}}</span>
+        {{!-- Info popover (same pattern as option fields); stops click so card does not navigate --}}
+        <div class="absolute top-1 right-1 z-10"
+             @click.stop
+             @mousedown.stop>
+          <div class="dropdown dropdown-end dropdown-hover">
+            <span tabindex="0" role="button"
+                  class="btn btn-ghost btn-xs btn-circle min-h-0 h-6 w-6 text-base-content/40 hover:text-primary leading-none"
+                  title="About {{name}}"
+                  aria-label="About {{name}}">ⓘ</span>
+            <div tabindex="0"
+                 class="dropdown-content card card-sm bg-base-100 shadow-lg border border-base-300 z-30 w-72 text-left mt-1">
+              <div class="card-body p-3 gap-1.5 text-xs">
+                <div class="flex items-center gap-2 min-w-0">
+                  {{#if icon}}
+                    <img src="{{icon}}" class="w-5 h-5 object-contain flex-shrink-0" alt="" />
+                  {{/if}}
+                  <span class="font-mono font-semibold truncate">{{name}}</span>
+                </div>
+                <div class="text-[10px] opacity-60">{{category}} · {{#if enabled}}Installed{{else}}Available{{/if}}</div>
+                {{#if description}}
+                  <div class="mt-0.5 leading-relaxed text-base-content/80 whitespace-pre-line max-h-48 overflow-y-auto">{{description}}</div>
+                {{else}}
+                  <div class="opacity-50 italic">No description available.</div>
+                {{/if}}
+              </div>
+            </div>
+          </div>
         </div>
-        {{/each}}
       </div>
+      {{/each}}
     </div>
-    {{/each}}
   </section>
-  {{/if}}
+  {{/each}}
 
-  {{#unless enabled}}
-  {{#unless disabled}}
+  <div class="text-xs opacity-60 p-4 border border-dashed rounded text-center"
+       x-show="!anyVisible()">
+    No services match the current filters.
+  </div>
+  {{else}}
   {{#unless error}}
     <div class="text-xs opacity-60 p-4 border border-dashed rounded">No services found.</div>
   {{/unless}}
-  {{/unless}}
-  {{/unless}}
+  {{/if}}
 </div>

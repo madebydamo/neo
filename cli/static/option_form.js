@@ -501,10 +501,15 @@ function optionForm() {
   }
 }
 
-// Ensure Alpine picks up x-data etc. after HTMX outerHTML swaps of the options pane.
+// Ensure Alpine picks up x-data etc. after HTMX swaps (options pane + services grid).
 document.addEventListener('htmx:afterSettle', () => {
+  if (typeof Alpine === 'undefined') return;
   const pane = document.getElementById('options-pane');
-  if (pane && pane.hasAttribute('x-data') && typeof Alpine !== 'undefined') {
+  if (pane && pane.hasAttribute('x-data')) {
     Alpine.initTree(pane);
+  }
+  const grid = document.getElementById('services-grid');
+  if (grid && grid.hasAttribute('x-data')) {
+    Alpine.initTree(grid);
   }
 });

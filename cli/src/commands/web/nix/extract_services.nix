@@ -34,6 +34,7 @@
           if (meta.category or "") != ""
           then meta.category
           else "Other";
+        description = meta.description or "";
       })
       names
     else [];
@@ -51,7 +52,8 @@
     "Other"
   ];
 
-  sortServices = services: let
+  # Ranked first (asc), then unranked by name.
+  sortByRank = services: let
     ranked = builtins.filter (s: s.rank != null) services;
     unranked = builtins.filter (s: s.rank == null) services;
     sortedRanked = builtins.sort (a: b: a.rank < b.rank) ranked;
@@ -59,7 +61,14 @@
   in
     sortedRanked ++ sortedUnranked;
 
-  # Unique categories present in the given service list, ordered by categoryOrder then alpha.
+  # Within a category: installed first, then available; each group by rank/name.
+  sortServices = services: let
+    enabled = builtins.filter (s: s.enabled) services;
+    disabled = builtins.filter (s: !s.enabled) services;
+  in
+    sortByRank enabled ++ sortByRank disabled;
+
+  # Unique categories present, ordered by categoryOrder then alpha.
   orderedCategories = services: let
     present = builtins.attrNames (
       builtins.listToAttrs (
@@ -78,14 +87,15 @@
     known ++ unknown;
 
   groupByCategory = services:
-    map (cat: {
+    map (cat: let
+      svcs = sortServices (builtins.filter (s: s.category == cat) services);
+    in {
       name = cat;
-      services = sortServices (builtins.filter (s: s.category == cat) services);
+      services = svcs;
+      hasEnabled = builtins.any (s: s.enabled) svcs;
+      hasDisabled = builtins.any (s: !s.enabled) svcs;
     }) (orderedCategories services);
-
-  enabledSvcs = builtins.filter (s: s.enabled) raw;
-  disabledSvcs = builtins.filter (s: !s.enabled) raw;
 in {
-  enabled = groupByCategory enabledSvcs;
-  disabled = groupByCategory disabledSvcs;
+  groups = groupByCategory raw;
+  categories = orderedCategories raw;
 }

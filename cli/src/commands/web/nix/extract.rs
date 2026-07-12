@@ -108,9 +108,9 @@ impl NixEvaluator {
     pub async fn extract_services(&mut self) -> IndexContext {
         let inner = format!("{} {{ neoFlake = f; }}", EXTRACT_SERVICES.load_name);
         match self.query_json::<ExtractedServiceGroups>(&inner).await {
-            Ok(groups) => IndexContext {
-                enabled: groups.enabled,
-                disabled: groups.disabled,
+            Ok(extracted) => IndexContext {
+                groups: extracted.groups,
+                categories: extracted.categories,
                 ..Default::default()
             },
             Err(e) => {

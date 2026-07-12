@@ -63,32 +63,41 @@ pub struct Service {
     /// Category from service meta (e.g. Core, Network, Media).
     #[serde(default)]
     pub category: String,
+    /// Long-form intro from service meta (info popover on the grid card).
+    #[serde(default)]
+    pub description: String,
 }
 
-/// One category bucket in the services grid (enabled or disabled section).
+/// One category bucket in the services grid.
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct ServiceCategoryGroup {
     pub name: String,
     pub services: Vec<Service>,
+    /// At least one installed service in this group (for status filter UI).
+    #[serde(default, rename = "hasEnabled")]
+    pub has_enabled: bool,
+    /// At least one uninstalled service in this group.
+    #[serde(default, rename = "hasDisabled")]
+    pub has_disabled: bool,
 }
 
 /// Shape returned by `extract_services.nix` before theme/error are filled in.
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct ExtractedServiceGroups {
     #[serde(default)]
-    pub enabled: Vec<ServiceCategoryGroup>,
+    pub groups: Vec<ServiceCategoryGroup>,
     #[serde(default)]
-    pub disabled: Vec<ServiceCategoryGroup>,
+    pub categories: Vec<String>,
 }
 
 #[derive(Serialize, Default)]
 pub struct IndexContext {
-    /// Enabled services, grouped by category (preferred category order).
+    /// All services grouped by category (preferred category order).
     #[serde(default)]
-    pub enabled: Vec<ServiceCategoryGroup>,
-    /// Disabled / available services, grouped by category.
+    pub groups: Vec<ServiceCategoryGroup>,
+    /// Category names for filter chips (same order as groups).
     #[serde(default)]
-    pub disabled: Vec<ServiceCategoryGroup>,
+    pub categories: Vec<String>,
     #[serde(default)]
     pub theme: String,
     /// If set, the nix evaluator hit an error/timeout (e.g. flake eval taking >10min or broken flake.lock referencing missing store paths). The UI shows this message instead of hanging.
