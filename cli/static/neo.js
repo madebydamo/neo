@@ -377,3 +377,10 @@ if (sidebar) {
 
 // Initial indicator sync (in case of any pre-existing state)
 updateWarmIndicators();
+
+// Sidebar service buttons are loaded via htmx after the page shell; re-sync warm dots then.
+document.body.addEventListener('htmx:afterSwap', function (evt) {
+  if (evt.detail && evt.detail.target && evt.detail.target.id === 'nav-services') {
+    updateWarmIndicators();
+  }
+});

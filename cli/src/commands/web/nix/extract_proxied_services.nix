@@ -48,8 +48,15 @@
 
   sortedRanked = builtins.sort (a: b: a.rank < b.rank) ranked;
   sortedUnranked = builtins.sort (a: b: a.name < b.name) unranked;
+  theme = let
+    t = (services.neo or {}).theme or "lofi";
+  in
+    if builtins.isString t
+    then t
+    else "lofi";
 in {
   domain = domain;
   hostname = hostname;
+  theme = theme;
   services = sortedRanked ++ sortedUnranked;
 }

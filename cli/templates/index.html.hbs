@@ -1,6 +1,6 @@
 <html>
   <head>
-    <title>neo{{#if hostname}} — {{hostname}}{{/if}}</title>
+    <title>neo</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
     <link rel="icon" href="/static/favicon/favicon.ico" sizes="any">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
@@ -10,46 +10,21 @@
     <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
     <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <link rel="stylesheet" href="/static/neo.css" />
   </head>
-  <body class="bg-base-300 text-base-content h-dvh min-h-dvh overflow-hidden overscroll-none" data-theme="{{theme}}">
-    {{#if error}}
-      <div class="alert alert-error m-2 text-sm">
-        <span><strong>Eval timeout / error:</strong> {{error}}</span>
-        <button class="btn btn-sm btn-ghost" onclick="location.reload()">Reload</button>
-      </div>
-    {{/if}}
+  <body class="bg-base-300 text-base-content h-dvh min-h-dvh overflow-hidden overscroll-none" data-theme="lofi">
+    <div id="nav-error" class="hidden"></div>
     <div class="flex h-full">
-      <!-- Slim icon sidebar (icon-bar style) -->
+      <!-- Slim icon sidebar (icon-bar style); services load via htmx so index never blocks on nix-eval -->
       <div class="w-16 bg-base-200 border-r border-base-300 flex flex-col items-center py-2 gap-y-1 overflow-y-auto flex-shrink-0 h-dvh">
-        <!-- Proxied services -->
-        {{#each services}}
-          <button
-            class="nav-btn svc-btn w-12 h-10 rounded-xl flex items-center justify-center text-base-content/80 hover:text-base-content"
-            title="{{name}} (https://{{subdomain}}.{{domain}})"
-            data-sub="{{subdomain}}"
-            data-name="{{name}}"
-            data-iframe-compatible="{{iframeCompatible}}"
-            onclick="handleSidebarClick(event, '{{subdomain}}', '{{domain}}', this)">
-            <div class="relative w-8 h-8 flex items-center justify-center">
-              {{#if icon}}
-                <img src="{{icon}}" class="w-8 h-8 object-contain" alt=""
-                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-                <span class="hidden text-3xl leading-none">⚙</span>
-              {{else}}
-                <span class="text-3xl leading-none">⚙</span>
-              {{/if}}
-              <span class="absolute -bottom-px -right-px text-[7px] font-black bg-base-100 text-base-content px-0.5 leading-none rounded-sm ring-1 ring-base-300/70 font-mono">
-                {{initials}}
-              </span>
-            </div>
-          </button>
-        {{/each}}
-
-        {{#unless services}}
-          <div class="text-[10px] opacity-40 text-center px-1 mt-2">No<br>proxied<br>services</div>
-        {{/unless}}
-
+        <div id="nav-services"
+             hx-get="/nav-services"
+             hx-trigger="load"
+             hx-swap="innerHTML"
+             class="flex flex-col items-center gap-y-1 w-full">
+          <span class="loading loading-spinner loading-xs opacity-40 mt-2" title="Loading services…"></span>
+        </div>
       </div>
 
       <!-- Main viewer area -->
@@ -77,11 +52,7 @@
               <img src="/static/neo-icon.png" class="w-12 h-12 mx-auto mb-3 opacity-30 object-contain rounded" alt="neo">
               <div class="font-semibold mb-1">Select a service</div>
               <p class="text-xs opacity-60">Click an icon on the left to load its web UI in this view.</p>
-              {{#if domain}}
-                <p class="text-[10px] opacity-40 mt-3 font-mono">Base domain: {{domain}}</p>
-              {{else}}
-                <p class="text-[10px] text-warning mt-3">No swag.domain configured — set it to enable links.</p>
-              {{/if}}
+              <p id="welcome-domain" class="text-[10px] opacity-40 mt-3">Loading domain…</p>
             </div>
           </div>
 

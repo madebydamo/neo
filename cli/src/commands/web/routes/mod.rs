@@ -14,6 +14,7 @@ use rocket::routes;
 pub fn routes() -> Vec<rocket::Route> {
     routes![
         pages::index,
+        pages::nav_services,
         pages::configuration,
         pages::option_pane,
         pages::services_grid,

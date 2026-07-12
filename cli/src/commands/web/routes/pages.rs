@@ -3,18 +3,28 @@ use std::sync::Arc;
 use rocket::{get, State};
 use rocket_dyn_templates::Template;
 
-use crate::commands::web::structs::{AppConfig, IndexContext};
+use crate::commands::web::structs::{AppConfig, IndexContext, NavigatorContext};
 
+/// Instant shell for the navigator — no nix-eval. Services load via `/nav-services` (htmx).
 #[get("/")]
-pub async fn index(config: &State<Arc<AppConfig>>) -> Template {
-    let (mut data, theme) = {
+pub fn index() -> Template {
+    Template::render(
+        "index",
+        NavigatorContext {
+            theme: "lofi".to_string(),
+            ..Default::default()
+        },
+    )
+}
+
+/// Proxied service icons for the navigator sidebar (nix-eval; loaded after the page shell).
+#[get("/nav-services")]
+pub async fn nav_services(config: &State<Arc<AppConfig>>) -> Template {
+    let data = {
         let mut ev = config.evaluator.lock().await;
-        let data = ev.extract_proxied_services().await;
-        let theme = ev.extract_neo_theme().await;
-        (data, theme)
+        ev.extract_proxied_services().await
     };
-    data.theme = theme;
-    Template::render("index", data)
+    Template::render("nav_services", data)
 }
 
 #[get("/configuration")]

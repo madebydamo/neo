@@ -1,0 +1,55 @@
+{{!-- Fragment for navigator sidebar (loaded via htmx after index shell is shown). --}}
+{{#if error}}
+  <div id="nav-error" class="alert alert-error m-2 text-sm" hx-swap-oob="true">
+    <span><strong>Eval timeout / error:</strong> {{error}}</span>
+    <button class="btn btn-sm btn-ghost" onclick="location.reload()">Reload</button>
+  </div>
+{{else}}
+  <div id="nav-error" class="hidden" hx-swap-oob="true"></div>
+{{/if}}
+
+{{#if domain}}
+  <p id="welcome-domain" class="text-[10px] opacity-40 mt-3 font-mono" hx-swap-oob="true">Base domain: {{domain}}</p>
+{{else}}
+  <p id="welcome-domain" class="text-[10px] text-warning mt-3" hx-swap-oob="true">No swag.domain configured — set it to enable links.</p>
+{{/if}}
+
+{{#each services}}
+  <button
+    class="nav-btn svc-btn w-12 h-10 rounded-xl flex items-center justify-center text-base-content/80 hover:text-base-content"
+    title="{{name}} (https://{{subdomain}}.{{domain}})"
+    data-sub="{{subdomain}}"
+    data-name="{{name}}"
+    data-iframe-compatible="{{iframeCompatible}}"
+    onclick="handleSidebarClick(event, '{{subdomain}}', '{{domain}}', this)">
+    <div class="relative w-8 h-8 flex items-center justify-center">
+      {{#if icon}}
+        <img src="{{icon}}" class="w-8 h-8 object-contain" alt=""
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+        <span class="hidden text-3xl leading-none">⚙</span>
+      {{else}}
+        <span class="text-3xl leading-none">⚙</span>
+      {{/if}}
+      <span class="absolute -bottom-px -right-px text-[7px] font-black bg-base-100 text-base-content px-0.5 leading-none rounded-sm ring-1 ring-base-300/70 font-mono">
+        {{initials}}
+      </span>
+    </div>
+  </button>
+{{/each}}
+
+{{#unless services}}
+  {{#unless error}}
+    <div class="text-[10px] opacity-40 text-center px-1 mt-2">No<br>proxied<br>services</div>
+  {{/unless}}
+{{/unless}}
+
+{{!-- Apply shell metadata once services (and domain/theme) are known --}}
+<script>
+  (function () {
+    var theme = {{#if theme}}"{{theme}}"{{else}}"lofi"{{/if}};
+    document.body.setAttribute('data-theme', theme);
+    {{#if hostname}}
+    document.title = 'neo — {{hostname}}';
+    {{/if}}
+  })();
+</script>
