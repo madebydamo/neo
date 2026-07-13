@@ -88,7 +88,9 @@ function hardResetCurrent() {
   setTimeout(() => {
     if (key === '__config') {
       const btn = document.querySelector('.svc-btn[data-sub="neo"]');
-      loadConfig(btn);
+      const sub = (btn && btn.dataset && btn.dataset.sub) || 'neo';
+      const domain = (btn && btn.dataset && btn.dataset.domain) || '';
+      loadConfig(btn, sub, domain);
     } else {
       // Parse subdomain + domain from the stored full URL
       try {
@@ -177,13 +179,38 @@ function showOnly(key) {
   updateWarmIndicators();
 }
 
+// Absolute URL for the neo config editor on the service subdomain.
+// Relative /configuration would stay on whatever host opened the navigator (e.g. a
+// custom top-level domain), where websockets/SSE often fail; neo.subdomain.domain works.
+function configTargetUrl(subdomain, domain) {
+  const sub = subdomain || 'neo';
+  if (domain) {
+    return `https://${sub}.${domain}/configuration`;
+  }
+  return '/configuration';
+}
+
+// Prefer a cached deep link only when it is already on the expected neo origin.
+function resolveConfigUrl(subdomain, domain) {
+  const key = '__config';
+  const expected = (subdomain && domain) ? `https://${subdomain}.${domain}` : null;
+  const cached = lastUrls[key];
+  if (cached && expected && cached.startsWith(expected)) {
+    return cached;
+  }
+  if (cached && cached.startsWith('https://') && !expected) {
+    return cached;
+  }
+  return configTargetUrl(subdomain, domain);
+}
+
 // Public handler for sidebar clicks (supports shift/ctrl/cmd+click to open in new tab)
 function handleSidebarClick(e, subOrKey, domain, btn) {
   if (e.shiftKey || e.ctrlKey || e.metaKey) {
     // Modifier+click: open in new tab (like the top-right button)
     let url;
     if (subOrKey === 'neo') {
-      url = lastUrls['__config'] || '/configuration';
+      url = resolveConfigUrl(subOrKey, domain);
     } else {
       url = lastUrls[subOrKey] || (domain ? `https://${subOrKey}.${domain}/` : null);
     }
@@ -201,6 +228,7 @@ function loadService(subdomain, domain, btn) {
   const key = subdomain;
   const svcName = (btn && btn.dataset && btn.dataset.name) || '';
   const isNeo = subdomain === 'neo' || svcName.toLowerCase() === 'neo';
+  domain = domain || (btn && btn.dataset && btn.dataset.domain) || '';
 
   if (!subdomain || (!isNeo && !domain)) {
     alert('Missing domain or subdomain configuration');
@@ -216,7 +244,7 @@ function loadService(subdomain, domain, btn) {
   currentBlockedUrl = '';
 
   if (isNeo) {
-    loadConfig(btn);
+    loadConfig(btn, subdomain, domain);
     return;
   }
 
@@ -250,25 +278,39 @@ function loadService(subdomain, domain, btn) {
   }
 }
 
-function loadConfig(btn) {
+function loadConfig(btn, subdomain, domain) {
   const urlEl = document.getElementById('current-url');
   const status = document.getElementById('status');
 
   hideAllOverlays();
   currentBlockedUrl = '';
 
-  const key = '__config';
-  const cached = lastUrls[key] || '/configuration';
+  subdomain = subdomain || (btn && btn.dataset && btn.dataset.sub) || 'neo';
+  domain = domain || (btn && btn.dataset && btn.dataset.domain) || '';
 
-  const iframe = getOrCreateIframe(key, cached);
+  const key = '__config';
+  const targetUrl = resolveConfigUrl(subdomain, domain);
+
+  // Drop a warm iframe that still points at the wrong origin (e.g. relative
+  // /configuration resolved against a custom top-level domain).
+  const existing = serviceIframes[key];
+  if (existing && subdomain && domain) {
+    const expected = `https://${subdomain}.${domain}`;
+    const src = existing.src || '';
+    if (src && !src.startsWith(expected)) {
+      hardEvictService(key);
+    }
+  }
+
+  const iframe = getOrCreateIframe(key, targetUrl);
   if (!iframe) return;
 
-  lastUrls[key] = cached;
+  lastUrls[key] = targetUrl;
   persistLastUrls();
 
   showOnly(key);
 
-  urlEl.textContent = cached;
+  urlEl.textContent = targetUrl;
   status.textContent = 'Loading config editor...';
 
   setActive(btn);
