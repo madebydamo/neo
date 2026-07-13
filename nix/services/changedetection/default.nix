@@ -24,6 +24,7 @@
               PGID = toString config.neo.core.gid;
               TZ = config.neo.core.timeZone;
               WEBDRIVER_URL = "http://changedetection-webengine:4444/wd/hub";
+              ALLOW_IANA_RESTRICTED_ADDRESSES = toString true;
             };
             volumes = [
               "${appdata}:/datastore"
