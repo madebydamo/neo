@@ -3,6 +3,8 @@ use std::fs;
 use std::path::PathBuf;
 use toml_edit::{Array, DocumentMut, Item, Table};
 
+use crate::commands::toml_sort::sort_document_alphabetically;
+
 pub fn migrate(config_path: &str, source_settings: &PathBuf, dry_run: bool) -> Result<()> {
     let live = PathBuf::from(config_path).join("settings.toml");
     let target = if live.exists() {
@@ -22,6 +24,7 @@ pub fn migrate(config_path: &str, source_settings: &PathBuf, dry_run: bool) -> R
         }
         let mut doc = DocumentMut::new();
         apply_migrations(&mut doc);
+        sort_document_alphabetically(&mut doc);
         fs::write(&target, doc.to_string()).context("write initial settings with migrations")?;
         println!("Initialized migrations marker in {}", target.display());
         return Ok(());
@@ -30,6 +33,8 @@ pub fn migrate(config_path: &str, source_settings: &PathBuf, dry_run: bool) -> R
     let mut doc: DocumentMut = content.parse().context("parse settings.toml")?;
     let changed = apply_migrations(&mut doc);
     if changed {
+        // Same ordering as web saves so update→migrate does not unsort the file.
+        sort_document_alphabetically(&mut doc);
         fs::write(&target, doc.to_string()).context("write migrated settings.toml")?;
         println!("Migrations applied to {}", target.display());
     } else {
