@@ -11,7 +11,7 @@ use crate::commands::web::structs::AppConfig;
 use crate::commands::web::units::{
     normalize_container_unit, perform_unit_action, render_unit_controls, run_container_pull,
     schedule_unit_refresh_burst, try_begin_pull, unit_controls_oob_fragment, unit_name_valid,
-    update_out_oob,
+    update_out_oob, UnitAction,
 };
 use crate::commands::web::util::{escape_html, sudo_cmd};
 
@@ -27,6 +27,12 @@ pub fn unit_status(unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String
 
 #[get("/unit/logs/<unit>")]
 pub fn unit_logs(unit: &str) -> RawHtml<String> {
+    if !unit_name_valid(unit) {
+        return RawHtml(
+            r#"<pre class="text-[10px] bg-base-300 p-1 mt-1 max-h-64 overflow-auto font-mono whitespace-pre-wrap">invalid unit</pre>"#
+                .into(),
+        );
+    }
     let sudo = sudo_cmd();
     let out = Command::new(&sudo)
         .args([
@@ -60,7 +66,7 @@ pub fn unit_logs(unit: &str) -> RawHtml<String> {
 /// Shared post-action path: kick systemctl, push OOB once, then burst-refresh while it settles.
 /// Buttons use hx-swap="none"; the returned OOB still updates the controls row.
 fn unit_action_response(
-    action: &str,
+    action: UnitAction,
     unit: &str,
     config: &State<Arc<AppConfig>>,
 ) -> RawHtml<String> {
@@ -76,17 +82,17 @@ fn unit_action_response(
 
 #[post("/unit/restart/<unit>")]
 pub fn unit_restart(unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    unit_action_response("restart", unit, config)
+    unit_action_response(UnitAction::Restart, unit, config)
 }
 
 #[post("/unit/start/<unit>")]
 pub fn unit_start(unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    unit_action_response("start", unit, config)
+    unit_action_response(UnitAction::Start, unit, config)
 }
 
 #[post("/unit/stop/<unit>")]
 pub fn unit_stop(unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    unit_action_response("stop", unit, config)
+    unit_action_response(UnitAction::Stop, unit, config)
 }
 
 /// Kick off an async docker pull+restart. Returns immediately with OOB status +
@@ -131,11 +137,9 @@ pub fn container_update(container: &str, config: &State<Arc<AppConfig>>) -> RawH
 pub async fn sse_logs(unit: &str) -> EventStream![] {
     let unit = unit.to_string();
     EventStream! {
-        let valid = unit.chars().all(|c| c.is_alphanumeric() || "-@._".contains(c));
-        if !valid {
+        if !unit_name_valid(&unit) {
             yield Event::data("invalid unit name for logs");
-        }
-        if valid {
+        } else {
             let sudo = sudo_cmd();
             let spawn_res = AsyncCommand::new(&sudo)
                 .args([
@@ -153,7 +157,7 @@ pub async fn sse_logs(unit: &str) -> EventStream![] {
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
                 .spawn();
-            let mut child_opt = match spawn_res {
+            let child_opt = match spawn_res {
                 Ok(c) => Some(c),
                 Err(e) => {
                     yield Event::data(format!("spawn error: {}", e));
@@ -161,19 +165,25 @@ pub async fn sse_logs(unit: &str) -> EventStream![] {
                 }
             };
             if let Some(mut child) = child_opt {
-                let stdout = child.stdout.take().expect("piped stdout");
-                let mut lines = AsyncBufReader::new(stdout).lines();
+                match child.stdout.take() {
+                    Some(stdout) => {
+                        let mut lines = AsyncBufReader::new(stdout).lines();
 
-                loop {
-                    match lines.next_line().await {
-                        Ok(Some(line)) => {
-                            yield Event::data(escape_html(&line));
+                        loop {
+                            match lines.next_line().await {
+                                Ok(Some(line)) => {
+                                    yield Event::data(escape_html(&line));
+                                }
+                                Ok(None) => break,
+                                Err(e) => {
+                                    yield Event::data(format!("[read err] {}", e));
+                                    break;
+                                }
+                            }
                         }
-                        Ok(None) => break,
-                        Err(e) => {
-                            yield Event::data(format!("[read err] {}", e));
-                            break;
-                        }
+                    }
+                    None => {
+                        yield Event::data("spawn error: missing piped stdout");
                     }
                 }
                 // child auto-killed by kill_on_drop on drop

@@ -7,14 +7,36 @@ use tokio::io::{AsyncReadExt, BufReader as AsyncBufReader};
 use tokio::process::Command as AsyncCommand;
 
 use super::structs::AppConfig;
-use super::util::{escape_html, sudo_cmd};
+use super::util::{escape_attr, escape_html, sudo_cmd};
 
-pub fn unit_name_valid(unit: &str) -> bool {
-    !unit.is_empty()
-        && unit.len() <= 256
-        && unit
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "-@._".contains(c))
+pub use super::util::unit_name_valid;
+
+/// systemctl action allowed from the web UI.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnitAction {
+    Start,
+    Stop,
+    Restart,
+}
+
+impl UnitAction {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            UnitAction::Start => "start",
+            UnitAction::Stop => "stop",
+            UnitAction::Restart => "restart",
+        }
+    }
+
+    /// Parse a systemctl action string; only start/stop/restart are accepted.
+    pub fn parse(action: &str) -> Option<Self> {
+        match action {
+            "start" => Some(UnitAction::Start),
+            "stop" => Some(UnitAction::Stop),
+            "restart" => Some(UnitAction::Restart),
+            _ => None,
+        }
+    }
 }
 
 pub fn is_pull_in_flight(config: &AppConfig, unit: &str) -> bool {
@@ -46,20 +68,23 @@ pub fn end_pull(config: &AppConfig, unit: &str) {
     }
 }
 
+/// Normalize systemctl is-active stdout into a state string.
+fn parse_active_state_stdout(stdout: &[u8]) -> String {
+    let s = String::from_utf8_lossy(stdout).trim().to_string();
+    if s.is_empty() {
+        "unknown".into()
+    } else {
+        s
+    }
+}
+
 /// Query systemctl is-active for a unit (sync; used from HTTP handlers and render).
 pub fn unit_active_state(unit: &str) -> String {
     let sudo = sudo_cmd();
     Command::new(&sudo)
         .args(["systemctl", "is-active", unit])
         .output()
-        .map(|o| {
-            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if s.is_empty() {
-                "unknown".into()
-            } else {
-                s
-            }
-        })
+        .map(|o| parse_active_state_stdout(&o.stdout))
         .unwrap_or_else(|_| "unknown".into())
 }
 
@@ -70,14 +95,7 @@ pub async fn unit_active_state_async(unit: &str) -> String {
         .output()
         .await
     {
-        Ok(o) => {
-            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if s.is_empty() {
-                "unknown".into()
-            } else {
-                s
-            }
-        }
+        Ok(o) => parse_active_state_stdout(&o.stdout),
         Err(_) => "unknown".into(),
     }
 }
@@ -91,7 +109,7 @@ pub fn update_out_oob(unit: &str, inner: &str, title: &str) -> String {
         r#"<div id="update-out-{}" class="{}" title="{}" hx-swap-oob="true">{}</div>"#,
         escape_html(unit),
         UPDATE_OUT_CLASSES,
-        escape_html(title),
+        escape_attr(title),
         inner
     )
 }
@@ -127,6 +145,14 @@ pub fn broadcast_update_out(unit: &str, inner: &str, title: &str, config: &AppCo
     let _ = config.unit_updates.send(update_out_oob(unit, inner, title));
 }
 
+/// Push an error status for a container pull, clear in-flight, and refresh controls.
+fn fail_pull(unit: &str, msg: &str, config: &AppConfig) {
+    let (inner, title) = status_err(msg);
+    broadcast_update_out(unit, &inner, &title, config);
+    end_pull(config, unit);
+    broadcast_unit_update(unit, config);
+}
+
 /// Build the inner content (dot + state + buttons) for a unit controls area.
 /// Used for OOB WS pushes and composed into full divs.
 ///
@@ -152,42 +178,41 @@ pub fn render_unit_controls_content_with_state(unit: &str, active: &str, pulling
     let mut inner = String::new();
     inner.push_str(&format!(
         r#"<span class="inline-block w-2 h-2 rounded-full flex-shrink-0 {}" title="{}"></span>"#,
-        dot_cls, u
+        dot_cls,
+        escape_attr(unit)
     ));
     inner.push_str(&format!(
         r#"<span class="text-[10px] opacity-60 font-mono min-w-[4.5rem]" title="ActiveState">{}</span>"#,
         state_label
     ));
 
+    let start_btn = format!(
+        r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/start/{u}" hx-swap="none" title="systemctl start">▶</button>"##,
+        u = u
+    );
+    let restart_btn = format!(
+        r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/restart/{u}" hx-swap="none" title="systemctl restart">⟳</button>"##,
+        u = u
+    );
+    let stop_btn = format!(
+        r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/stop/{u}" hx-swap="none" title="systemctl stop">⏹</button>"##,
+        u = u
+    );
+
     // Stable control set: inactive/failed → start; anything running/transitional → stop+restart.
     // failed also keeps restart so a retry is one click.
     match active {
         "inactive" => {
-            inner.push_str(&format!(
-                r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/start/{u}" hx-swap="none" title="systemctl start">▶</button>"##,
-                u = u
-            ));
+            inner.push_str(&start_btn);
         }
         "failed" => {
-            inner.push_str(&format!(
-                r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/start/{u}" hx-swap="none" title="systemctl start">▶</button>"##,
-                u = u
-            ));
-            inner.push_str(&format!(
-                r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/restart/{u}" hx-swap="none" title="systemctl restart">⟳</button>"##,
-                u = u
-            ));
+            inner.push_str(&start_btn);
+            inner.push_str(&restart_btn);
         }
         _ => {
             // active | activating | deactivating | reloading | unknown
-            inner.push_str(&format!(
-                r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/stop/{u}" hx-swap="none" title="systemctl stop">⏹</button>"##,
-                u = u
-            ));
-            inner.push_str(&format!(
-                r##"<button class="btn btn-ghost btn-xs h-5 min-h-0 px-1.5" hx-post="/unit/restart/{u}" hx-swap="none" title="systemctl restart">⟳</button>"##,
-                u = u
-            ));
+            inner.push_str(&stop_btn);
+            inner.push_str(&restart_btn);
         }
     }
 
@@ -223,7 +248,7 @@ pub fn render_unit_controls(unit: &str, config: &AppConfig) -> RawHtml<String> {
     let u = escape_html(unit);
     RawHtml(format!(
         r#"<div id="unit-controls-{u}" class="unit-controls flex items-center gap-1 flex-shrink-0" data-active-state="{}">{content}</div>"#,
-        escape_html(&active)
+        escape_attr(&active)
     ))
 }
 
@@ -238,7 +263,7 @@ pub fn unit_controls_oob_fragment_with_state(unit: &str, active: &str, pulling: 
     format!(
         r#"<div id="unit-controls-{}" class="unit-controls flex items-center gap-1 flex-shrink-0" data-active-state="{}" hx-swap-oob="true">{}</div>"#,
         escape_html(unit),
-        escape_html(active),
+        escape_attr(active),
         render_unit_controls_content_with_state(unit, active, pulling)
     )
 }
@@ -265,13 +290,19 @@ pub fn schedule_unit_refresh_burst(unit: String, config: Arc<AppConfig>) {
     });
 }
 
-pub fn perform_unit_action(action: &str, unit: &str) {
+pub fn perform_unit_action(action: UnitAction, unit: &str) {
     if !unit_name_valid(unit) {
         return;
     }
     let sudo = sudo_cmd();
     let _ = Command::new(&sudo)
-        .args(["systemctl", action, unit, "--no-block", "--no-ask-password"])
+        .args([
+            "systemctl",
+            action.as_str(),
+            unit,
+            "--no-block",
+            "--no-ask-password",
+        ])
         .status();
 }
 
@@ -349,28 +380,18 @@ pub async fn run_container_pull(unit: String, cname: String, config: Arc<AppConf
         Ok(o) if o.status.success() => {
             let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
             if s.is_empty() {
-                let (inner, title) = status_err("no image from inspect");
-                push(inner, title);
-                end_pull(&config, &unit);
-                broadcast_unit_update(&unit, &config);
+                fail_pull(&unit, "no image from inspect", &config);
                 return;
             }
             s
         }
         Ok(o) => {
             let err = String::from_utf8_lossy(&o.stderr);
-            let msg = format!("inspect failed: {}", err.trim());
-            let (inner, title) = status_err(&msg);
-            push(inner, title);
-            end_pull(&config, &unit);
-            broadcast_unit_update(&unit, &config);
+            fail_pull(&unit, &format!("inspect failed: {}", err.trim()), &config);
             return;
         }
         Err(e) => {
-            let (inner, title) = status_err(&format!("docker error: {}", e));
-            push(inner, title);
-            end_pull(&config, &unit);
-            broadcast_unit_update(&unit, &config);
+            fail_pull(&unit, &format!("docker error: {}", e), &config);
             return;
         }
     };
@@ -389,10 +410,7 @@ pub async fn run_container_pull(unit: String, cname: String, config: Arc<AppConf
     {
         Ok(c) => c,
         Err(e) => {
-            let (inner, title) = status_err(&format!("pull spawn: {}", e));
-            push(inner, title);
-            end_pull(&config, &unit);
-            broadcast_unit_update(&unit, &config);
+            fail_pull(&unit, &format!("pull spawn: {}", e), &config);
             return;
         }
     };
@@ -478,16 +496,14 @@ pub async fn run_container_pull(unit: String, cname: String, config: Arc<AppConf
             schedule_unit_refresh_burst(unit, config);
         }
         Ok(s) => {
-            let (inner, title) = status_err(&format!("pull exit {}", s.code().unwrap_or(-1)));
-            push(inner, title);
-            end_pull(&config, &unit);
-            broadcast_unit_update(&unit, &config);
+            fail_pull(
+                &unit,
+                &format!("pull exit {}", s.code().unwrap_or(-1)),
+                &config,
+            );
         }
         Err(e) => {
-            let (inner, title) = status_err(&format!("pull wait: {}", e));
-            push(inner, title);
-            end_pull(&config, &unit);
-            broadcast_unit_update(&unit, &config);
+            fail_pull(&unit, &format!("pull wait: {}", e), &config);
         }
     }
 }
