@@ -1,0 +1,12 @@
+{{!-- Sticky Save/Discard strip: stays under the main navbar while scrolling long option forms. --}}
+<div class="sticky z-20 -mx-2 px-2 sm:-mx-4 sm:px-4 bg-base-100/95 backdrop-blur border-b border-base-300 py-2 mb-3 flex flex-wrap items-center justify-between gap-2"
+     style="top: calc(var(--neo-sticky-bar-top, 1.5rem) + 4rem);">
+  <div class="flex items-center gap-2 min-w-0">
+    <span class="font-mono text-sm font-semibold truncate">{{service}}</span>
+    <span class="text-[10px] opacity-50 hidden sm:inline">options</span>
+    <span x-cloak
+          x-show="Object.keys(originals||{}).some(k => !isAtOriginal(k))"
+          class="badge badge-warning badge-xs shrink-0">unsaved</span>
+  </div>
+  {{> pane/save_actions}}
+</div>

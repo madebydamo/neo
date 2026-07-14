@@ -1,14 +1,11 @@
 {{#if options}}
-  <div class="mb-4">
-    {{> pane/save_actions}}
-  </div>
-
   <div class="space-y-4">
     {{#each options}}
       {{> options/field}}
     {{/each}}
   </div>
 
+  {{!-- End-of-form actions (sticky bar covers top while scrolling). --}}
   <div class="mt-4">
     {{> pane/save_actions}}
   </div>

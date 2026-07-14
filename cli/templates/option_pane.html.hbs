@@ -16,6 +16,10 @@
       Values loaded from flake evaluation (current where set in your nixosConfiguration).
     </div>
 
+    {{#if options}}
+      {{> pane/sticky_save}}
+    {{/if}}
     {{> pane/options_list}}
   </div>
 </div>
+
