@@ -501,7 +501,6 @@ function optionForm() {
             htmx.ajax('GET', loadUrl, {
               target: '#config-content',
               swap: 'innerHTML',
-              indicator: '#config-load-indicator',
             });
           } else {
             setTimeout(() => { if (this.saveFlash === 'ok') this.saveFlash = ''; }, 1500);

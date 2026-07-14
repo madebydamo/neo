@@ -123,7 +123,6 @@ window.configShell = function configShell() {
       var opts = {
         target: '#config-content',
         swap: 'innerHTML',
-        indicator: '#config-load-indicator',
       };
       if (helper) {
         opts.source = helper;
@@ -167,9 +166,23 @@ window.configShell = function configShell() {
 };
 
 (function () {
-  /** True when this HTMX request would replace the main config content (options pane / grids). */
+  /** Instant navbar spinner (no CSS fade — ms requests must not feel like 200ms). */
+  function setNavBusy(on) {
+    var el = document.getElementById('nav-busy');
+    if (!el) return;
+    el.classList.toggle('is-busy', !!on);
+    el.setAttribute('aria-hidden', on ? 'false' : 'true');
+  }
+
+  /** Resolve #config-content whether detail.target is an element or a selector string. */
   function isConfigContentTarget(target) {
-    return !!(target && target.id === 'config-content');
+    if (!target) return false;
+    if (typeof target === 'string') {
+      return target === '#config-content' || target === 'config-content';
+    }
+    if (target.id === 'config-content') return true;
+    // htmx sometimes reports the requesting elt; treat swaps into #config-content as nav.
+    return !!(target.getAttribute && target.getAttribute('hx-target') === '#config-content');
   }
 
   // Guard attribute-based (and other) HTMX navigations that replace #config-content.
@@ -177,30 +190,44 @@ window.configShell = function configShell() {
   // After a successful save, option_form updates originals before reload, so dirty is false.
   document.body.addEventListener('htmx:beforeRequest', function (evt) {
     try {
-      var t = evt.detail && evt.detail.target;
-      if (!isConfigContentTarget(t)) return;
-      var ind = document.getElementById('config-load-indicator');
-      if (ind) ind.classList.add('htmx-request');
+      var d = evt.detail || {};
+      var t = d.target;
+      var isNav = isConfigContentTarget(t) || isConfigContentTarget(d.elt);
+      if (!isNav && d.requestConfig && d.requestConfig.target) {
+        isNav = isConfigContentTarget(d.requestConfig.target);
+      }
+      if (!isNav) return;
+      setNavBusy(true);
       if (window.neoAllowNextConfigNav) {
         window.neoAllowNextConfigNav = false;
         return;
       }
       if (!window.neoConfirmLeaveConfigForm()) {
-        if (ind) ind.classList.remove('htmx-request');
+        setNavBusy(false);
         evt.preventDefault();
       }
     } catch (e) {}
   });
 
-  // Hide load indicator when a #config-content request finishes (success or error).
-  document.body.addEventListener('htmx:afterRequest', function (evt) {
+  // Always clear nav spinner when a config-content request finishes (or errors / aborts).
+  function clearNavBusyIfConfig(evt) {
     try {
-      var t = evt.detail && evt.detail.target;
-      if (!isConfigContentTarget(t)) return;
-      var ind = document.getElementById('config-load-indicator');
-      if (ind) ind.classList.remove('htmx-request');
-    } catch (e) {}
-  });
+      var d = evt.detail || {};
+      var t = d.target;
+      var isNav = isConfigContentTarget(t) || isConfigContentTarget(d.elt);
+      if (!isNav && d.requestConfig && d.requestConfig.target) {
+        isNav = isConfigContentTarget(d.requestConfig.target);
+      }
+      if (!isNav) return;
+      setNavBusy(false);
+    } catch (e) {
+      setNavBusy(false);
+    }
+  }
+  document.body.addEventListener('htmx:afterRequest', clearNavBusyIfConfig);
+  document.body.addEventListener('htmx:afterSwap', clearNavBusyIfConfig);
+  document.body.addEventListener('htmx:responseError', clearNavBusyIfConfig);
+  document.body.addEventListener('htmx:sendError', clearNavBusyIfConfig);
 
   // Browser leave / hard navigation while the option form has unsaved edits.
   window.addEventListener('beforeunload', function (e) {

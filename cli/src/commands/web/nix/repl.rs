@@ -56,10 +56,12 @@ impl NixEvaluator {
             neo_input: neo_input.to_string(),
             eval_dir,
             busy: busy.clone(),
-            last_config_mtime: current_config_mtime(neo_input),
+            // Set after initialize so getFlake / first force cannot look "stale".
+            last_config_mtime: SystemTime::UNIX_EPOCH,
         };
 
         this.initialize_repl(stderr).await?;
+        this.last_config_mtime = current_config_mtime(neo_input);
 
         Ok(this)
     }
@@ -94,6 +96,54 @@ impl NixEvaluator {
         Ok((c, stdin, stdout, stderr))
     }
 
+    /// Wait until stdout contains `marker` (or overall deadline). Does not abort on short silence.
+    async fn wait_for_marker(&mut self, marker: &str, overall: Duration) -> Result<String> {
+        let mut collected = String::new();
+        let mut line = String::new();
+        let deadline = tokio::time::Instant::now() + overall;
+        while tokio::time::Instant::now() < deadline {
+            line.clear();
+            match timeout(Duration::from_millis(250), self.stdout.read_line(&mut line)).await {
+                Ok(Ok(0)) => break,
+                Ok(Ok(_)) => {
+                    collected.push_str(&line);
+                    if line.trim_end().contains(marker) {
+                        return Ok(collected);
+                    }
+                }
+                // Short read timeout: keep waiting (getFlake / module eval often silent on stdout).
+                _ => {}
+            }
+        }
+        anyhow::bail!(
+            "timeout waiting for marker {marker}; output so far: {}",
+            &collected.chars().rev().take(2000).collect::<String>().chars().rev().collect::<String>()
+        )
+    }
+
+    /// Queue a top-level binding (may be long/silent), then a marker print.
+    /// The marker only evaluates after the binding finishes — so we truly wait for getFlake.
+    /// Caller owns `busy` (used during initialize_repl / refresh).
+    async fn bind_then_marker(&mut self, bind_cmd: &str, marker: &str, overall: Duration) -> Result<()> {
+        self.stdin.write_all(bind_cmd.as_bytes()).await?;
+        self.stdin.write_all(b"\n").await?;
+        self.stdin
+            .write_all(format!(r#":p "{marker}""#).as_bytes())
+            .await?;
+        self.stdin.write_all(b"\n").await?;
+        self.stdin.flush().await?;
+        self.wait_for_marker(marker, overall).await.map(|_| ())
+    }
+
+    async fn print_marker(&mut self, marker: &str, overall: Duration) -> Result<()> {
+        self.stdin
+            .write_all(format!(r#":p "{marker}""#).as_bytes())
+            .await?;
+        self.stdin.write_all(b"\n").await?;
+        self.stdin.flush().await?;
+        self.wait_for_marker(marker, overall).await.map(|_| ())
+    }
+
     async fn initialize_repl(&mut self, err_reader: BufReader<ChildStderr>) -> Result<()> {
         tokio::spawn(async move {
             let mut line = String::new();
@@ -124,59 +174,50 @@ impl NixEvaluator {
             }
         }
 
-        let _ = self.execute(r#":p "REPL_READY_FOR_BINDINGS""#).await;
+        self.print_marker("REPL_READY_FOR_BINDINGS", Duration::from_secs(30))
+            .await
+            .context("repl handshake")?;
 
-        let config_dir = &self.neo_input;
-        let _ = self
-            .execute(&format!(r#"configDir = "{}""#, config_dir))
-            .await;
-        let _ = self
-            .execute(r#"f = builtins.getFlake (builtins.toString (/. + configDir))"#)
-            .await;
-        let _ = self.execute(r#":p "F_BOUND""#).await;
+        let config_dir = self.neo_input.clone();
+        // Top-level REPL bindings (persist for the life of this process).
+        self.bind_then_marker(
+            &format!(r#"configDir = "{}""#, config_dir),
+            "CONFIG_DIR_BOUND",
+            Duration::from_secs(30),
+        )
+        .await
+        .context("bind configDir")?;
+
+        // getFlake is often silent on stdout for a long time. Marker is queued *after*
+        // the assignment so we only proceed once f is actually bound in the repl.
+        println!("web: binding flake f via builtins.getFlake (once per repl process)…");
+        self.bind_then_marker(
+            r#"f = builtins.getFlake (builtins.toString (/. + configDir))"#,
+            "F_BOUND",
+            Duration::from_secs(600),
+        )
+        .await
+        .context("bind flake f")?;
+        println!("web: flake f bound (memoized in this nix repl process until config mtime refresh)");
 
         let import_dir = self.eval_dir.display().to_string();
         for e in NIX_EXTRACTORS {
-            let _ = self
-                .execute(&format!(
-                    "{} = import {}/{}",
-                    e.load_name, import_dir, e.file_name
-                ))
-                .await;
+            let marker = format!("LOADED_{}", e.load_name);
+            self.bind_then_marker(
+                &format!("{} = import {}/{}", e.load_name, import_dir, e.file_name),
+                &marker,
+                Duration::from_secs(60),
+            )
+            .await
+            .with_context(|| format!("import {}", e.file_name))?;
         }
 
-        let _ = self.execute(r#":p "NEO_REPL_READY""#).await;
+        self.print_marker("NEO_REPL_READY", Duration::from_secs(30))
+            .await
+            .context("repl ready")?;
         self.busy.store(false, Ordering::Relaxed);
 
         Ok(())
-    }
-
-    async fn execute(&mut self, cmd: &str) -> Result<String> {
-        self.busy.store(true, Ordering::Relaxed);
-        self.stdin.write_all(cmd.as_bytes()).await?;
-        self.stdin.write_all(b"\n").await?;
-        self.stdin.flush().await?;
-        let mut collected = String::new();
-        let mut line = String::new();
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(90);
-        while tokio::time::Instant::now() < deadline {
-            line.clear();
-            match timeout(Duration::from_millis(150), self.stdout.read_line(&mut line)).await {
-                Ok(Ok(0)) => break,
-                Ok(Ok(_)) => {
-                    collected.push_str(&line);
-                    let trimmed = line.trim_end();
-                    if trimmed.contains("nix-repl>")
-                        || (collected.len() > 2 && line.trim().is_empty())
-                    {
-                        break;
-                    }
-                }
-                _ => break,
-            }
-        }
-        self.busy.store(false, Ordering::Relaxed);
-        Ok(collected)
     }
 
     pub(crate) async fn query_json<T: serde::de::DeserializeOwned>(
@@ -203,11 +244,13 @@ impl NixEvaluator {
         self.stdin.write_all(full.as_bytes()).await?;
         self.stdin.write_all(b"\n").await?;
         self.stdin.flush().await?;
-        println!("web: starting nix evaluation");
+        println!("web: starting nix evaluation (uses bound flake f; full getFlake only after config mtime change)");
         let mut collected = String::new();
         let mut line = String::new();
         let mut found: Option<String> = None;
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(600); // 10 minutes; first-time flake evals (full module system + many services) or after nix gc / stale locks can legitimately take a long time. We surface errors gracefully instead of hanging the UI.
+        // 10 minutes: first-time flake evals (full module system + many services)
+        // or after nix gc / stale locks can legitimately take a long time.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(600);
         while tokio::time::Instant::now() < deadline {
             line.clear();
             match timeout(Duration::from_millis(250), self.stdout.read_line(&mut line)).await {
@@ -246,8 +289,12 @@ impl NixEvaluator {
         let current = current_config_mtime(&self.neo_input);
         let stale = current > self.last_config_mtime;
         if stale {
-            println!("web: detected updated config files on disk -- restarting nix repl process before serving results");
-            let _ = self.refresh().await;
+            println!(
+                "web: config-folder mtime advanced — restarting nix repl and rebinding f (was {:?}, now {:?})",
+                self.last_config_mtime, current
+            );
+            // On failure leave last_config_mtime unchanged so the next request retries.
+            self.refresh().await?;
         }
         Ok(())
     }

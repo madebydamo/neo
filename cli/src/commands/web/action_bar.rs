@@ -18,6 +18,7 @@ fn action_bar_signature(config: &AppConfig) -> String {
     format!("{busy}|{act}|{upd}|{dirty}")
 }
 
+/// Compact spinner in the sticky navbar (same visual language as client-side `#nav-busy`).
 pub fn render_nix_busy_html(config: &AppConfig) -> String {
     if config.eval_busy.load(Ordering::Relaxed) {
         r#"<span class="inline-flex items-center gap-1 text-[10px] text-info opacity-90" title="Nix evaluator working"><span class="loading loading-spinner loading-xs"></span><span class="hidden sm:inline">eval</span></span>"#.to_string()

@@ -21,15 +21,9 @@
       }
       /* Hide Alpine-bound chrome until Alpine initializes. */
       [x-cloak] { display: none !important; }
-      /* Config content load indicator (manual htmx-request toggle). */
-      #config-load-indicator {
-        opacity: 0;
-        transition: opacity 200ms ease;
-        pointer-events: none;
-      }
-      #config-load-indicator.htmx-request {
-        opacity: 1;
-      }
+      /* Navbar load spinner: explicit display so it always hides (no Tailwind utility clash). */
+      #nav-busy { display: none; }
+      #nav-busy.is-busy { display: inline-flex; }
     </style>
   </head>
   <body class="bg-base-300 text-base-content p-6 min-h-dvh" data-theme="{{theme}}">
@@ -64,9 +58,18 @@
                   x-cloak
                   :title="detail"></span>
           </div>
-          {{!-- Action bar: dynamic middle (busy / pending / reset);
-               Update + Activate stay pinned on the right. --}}
+          {{!-- Activity + action bar: nav spinner (client, instant) sits next to
+               server-driven eval/pending/reset; Update + Activate stay on the right. --}}
           <div class="flex-none flex items-center gap-2 pr-2">
+            {{!-- Nav busy: toggled via .is-busy (not Tailwind `hidden`+`inline-flex` — those fight and stay visible). --}}
+            <span id="nav-busy"
+                  class="items-center gap-1 text-[10px] text-info opacity-90"
+                  title="Loading…"
+                  aria-live="polite"
+                  aria-hidden="true">
+              <span class="loading loading-spinner loading-xs"></span>
+              <span class="hidden sm:inline">load</span>
+            </span>
             <div id="action-bar-dynamic"
                  class="flex items-center gap-2"
                  hx-get="/changes/action-bar"
@@ -114,19 +117,15 @@
           <span class="opacity-40 select-none" aria-hidden="true">›</span>
           <span class="font-mono text-xs font-medium truncate" x-text="detail"></span>
         </div>
-        {{!-- Load bar outside #config-content so it survives HTMX swaps. --}}
-        <div id="config-load-indicator" class="h-1 mb-1" aria-hidden="true">
-          <progress class="progress progress-primary w-full h-1"></progress>
-        </div>
         {{!--
           Source for shell nav: htmx.ajax ignores context.push; history only updates from
           hx-push-url on the source element. navigateContent() passes this as `source`.
+          Loading feedback is #nav-busy in the navbar (not a progress bar).
         --}}
         <span id="config-nav-helper"
               class="hidden"
               aria-hidden="true"
-              hx-push-url="true"
-              hx-indicator="#config-load-indicator"></span>
+              hx-push-url="true"></span>
         {{!-- hx-history-elt: history snapshots restore into this pane, not the whole body. --}}
         <div id="config-content"
              hx-history-elt
@@ -134,7 +133,6 @@
              hx-trigger="load"
              hx-swap="innerHTML"
              hx-push-url="false"
-             hx-indicator="#config-load-indicator"
              class="min-h-[100px]">
           <div class="text-xs opacity-60 p-4 border border-dashed rounded">Loading...</div>
         </div>
