@@ -491,11 +491,18 @@ function optionForm() {
           });
           this.saveBusy = false;
           this.saveFlash = 'ok';
+          if (typeof window.neoToast === 'function') {
+            window.neoToast('Settings saved', 'success');
+          }
           // Keep success feedback visible before the pane reload (nix re-eval).
           await new Promise((r) => setTimeout(r, 900));
           const loadUrl = pane?.dataset?.loadUrl;
           if (loadUrl) {
-            htmx.ajax('GET', loadUrl, {target: '#config-content', swap: 'innerHTML'});
+            htmx.ajax('GET', loadUrl, {
+              target: '#config-content',
+              swap: 'innerHTML',
+              indicator: '#config-load-indicator',
+            });
           } else {
             setTimeout(() => { if (this.saveFlash === 'ok') this.saveFlash = ''; }, 1500);
           }
@@ -504,11 +511,17 @@ function optionForm() {
           this.saveBusy = false;
           this.saveFlash = 'err';
           this.saveError = (txt || ('HTTP ' + res.status)).slice(0, 240);
+          if (typeof window.neoToast === 'function') {
+            window.neoToast(this.saveError, 'error');
+          }
         }
       } catch (e) {
         this.saveBusy = false;
         this.saveFlash = 'err';
         this.saveError = String(e);
+        if (typeof window.neoToast === 'function') {
+          window.neoToast(this.saveError.slice(0, 240), 'error');
+        }
       }
     }
   }

@@ -21,6 +21,15 @@
       }
       /* Hide Alpine-bound chrome until Alpine initializes. */
       [x-cloak] { display: none !important; }
+      /* Config content load indicator (manual htmx-request toggle). */
+      #config-load-indicator {
+        opacity: 0;
+        transition: opacity 200ms ease;
+        pointer-events: none;
+      }
+      #config-load-indicator.htmx-request {
+        opacity: 1;
+      }
     </style>
   </head>
   <body class="bg-base-300 text-base-content p-6 min-h-dvh" data-theme="{{theme}}">
@@ -92,6 +101,10 @@
           <span class="opacity-40 select-none" aria-hidden="true">›</span>
           <span class="font-mono text-xs font-medium truncate" x-text="detail"></span>
         </div>
+        {{!-- Load bar outside #config-content so it survives HTMX swaps. --}}
+        <div id="config-load-indicator" class="h-1 mb-1" aria-hidden="true">
+          <progress class="progress progress-primary w-full h-1"></progress>
+        </div>
         {{!-- hx-history-elt: history snapshots restore into this pane, not the whole body. --}}
         <div id="config-content"
              hx-history-elt
@@ -99,11 +112,15 @@
              hx-trigger="load"
              hx-swap="innerHTML"
              hx-push-url="false"
+             hx-indicator="#config-load-indicator"
              class="min-h-[100px]">
           <div class="text-xs opacity-60 p-4 border border-dashed rounded">Loading...</div>
         </div>
       </div>
     </div>
+
+    {{!-- Global toast host (outside #config-content so it is never swapped away). --}}
+    <div id="toast-host" class="toast toast-top toast-end z-[60] fixed top-4 right-4"></div>
 
     <dialog id="changes-modal" class="modal">
       <div class="modal-box max-w-4xl">

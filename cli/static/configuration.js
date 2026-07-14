@@ -4,6 +4,47 @@
 // Loaded only by configuration.html.hbs.
 
 /**
+ * Show a transient DaisyUI alert toast outside #config-content.
+ * @param {string} message
+ * @param {'success'|'error'|'info'|'warning'} [type]
+ */
+window.neoToast = function neoToast(message, type) {
+  var host = document.getElementById('toast-host');
+  if (!host) return;
+  var kind = type || 'info';
+  var alertClass =
+    kind === 'success'
+      ? 'alert-success'
+      : kind === 'error'
+        ? 'alert-error'
+        : kind === 'warning'
+          ? 'alert-warning'
+          : 'alert-info';
+  var el = document.createElement('div');
+  el.className = 'alert ' + alertClass + ' shadow-lg text-sm max-w-sm';
+  el.setAttribute('role', 'status');
+
+  var msg = document.createElement('span');
+  msg.textContent = String(message == null ? '' : message);
+  el.appendChild(msg);
+
+  var dismiss = document.createElement('button');
+  dismiss.type = 'button';
+  dismiss.className = 'btn btn-ghost btn-xs btn-circle';
+  dismiss.setAttribute('aria-label', 'Dismiss');
+  dismiss.textContent = '✕';
+  dismiss.addEventListener('click', function () {
+    if (el.parentNode) el.parentNode.removeChild(el);
+  });
+  el.appendChild(dismiss);
+
+  host.appendChild(el);
+  setTimeout(function () {
+    if (el.parentNode) el.parentNode.removeChild(el);
+  }, 4000);
+};
+
+/**
  * True when #options-pane exists and any option field differs from its original value.
  * Uses Alpine.$data(pane) (optionForm: values / originals / isAtOriginal).
  */
@@ -74,7 +115,12 @@ window.configShell = function configShell() {
       this.detail = null;
       var url = this.tabUrl(tab);
       window.neoAllowNextConfigNav = true;
-      htmx.ajax('GET', url, { target: '#config-content', swap: 'innerHTML', push: url });
+      htmx.ajax('GET', url, {
+        target: '#config-content',
+        swap: 'innerHTML',
+        push: url,
+        indicator: '#config-load-indicator',
+      });
     },
 
     /** Leave the option pane and return to the parent grid for the current tab. */
@@ -83,7 +129,12 @@ window.configShell = function configShell() {
       this.detail = null;
       var url = this.tabUrl(this.tab);
       window.neoAllowNextConfigNav = true;
-      htmx.ajax('GET', url, { target: '#config-content', swap: 'innerHTML', push: url });
+      htmx.ajax('GET', url, {
+        target: '#config-content',
+        swap: 'innerHTML',
+        push: url,
+        indicator: '#config-load-indicator',
+      });
     },
   };
 };
@@ -101,13 +152,26 @@ window.configShell = function configShell() {
     try {
       var t = evt.detail && evt.detail.target;
       if (!isConfigContentTarget(t)) return;
+      var ind = document.getElementById('config-load-indicator');
+      if (ind) ind.classList.add('htmx-request');
       if (window.neoAllowNextConfigNav) {
         window.neoAllowNextConfigNav = false;
         return;
       }
       if (!window.neoConfirmLeaveConfigForm()) {
+        if (ind) ind.classList.remove('htmx-request');
         evt.preventDefault();
       }
+    } catch (e) {}
+  });
+
+  // Hide load indicator when a #config-content request finishes (success or error).
+  document.body.addEventListener('htmx:afterRequest', function (evt) {
+    try {
+      var t = evt.detail && evt.detail.target;
+      if (!isConfigContentTarget(t)) return;
+      var ind = document.getElementById('config-load-indicator');
+      if (ind) ind.classList.remove('htmx-request');
     } catch (e) {}
   });
 
