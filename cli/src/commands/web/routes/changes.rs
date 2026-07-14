@@ -1,11 +1,8 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use rocket::response::content::RawHtml;
 use rocket::{get, post, State};
-use toml_edit::DocumentMut;
 
-use crate::commands::paste_settings::paste_settings;
 use crate::commands::web::action_bar::{
     broadcast_action_bar, render_action_bar_dynamic_inner, render_pending_changes_html,
     render_reset_button_html,
@@ -13,9 +10,10 @@ use crate::commands::web::action_bar::{
 use crate::commands::web::git_ops::{
     get_settings_toml_diff, settings_toml_has_diff, worktree_changed_and_summary,
 };
+use crate::commands::web::settings::restore_settings_from_applied;
 use crate::commands::web::structs::AppConfig;
 use crate::commands::web::trigger::trigger_activation;
-use crate::commands::web::util::{config_dir, escape_html};
+use crate::commands::web::util::{alert_html, changes_actions_row, escape_html, AlertKind};
 
 #[get("/changes/action-bar")]
 pub fn changes_action_bar(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
@@ -43,11 +41,9 @@ pub fn changes_summary(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
         format!(
             "<div class=\"mb-2 text-warning text-sm\">Pending changes to settings.toml (git diff)</div>\
              <pre class=\"text-xs overflow-auto max-h-[50vh] bg-base-300 p-2 rounded whitespace-pre\">{}</pre>\
-             <div class=\"mt-4 flex flex-nowrap items-center justify-end gap-2\" data-dialog-actions>\
-               <button type=\"button\" hx-post=\"/changes/revert\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" class=\"btn btn-sm btn-ghost\">Revert</button>\
-               <button type=\"button\" hx-post=\"/changes/apply\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" hx-confirm=\"Run full activation (write-flake + nixos-rebuild)? This can take several minutes.\" class=\"btn btn-sm btn-error\">Apply (activate)</button>\
-             </div>",
-            esc
+             {}",
+            esc,
+            changes_actions_row()
         )
     } else {
         let (changed, summary) = worktree_changed_and_summary(&config);
@@ -56,11 +52,9 @@ pub fn changes_summary(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
             format!(
                 "<div class=\"mb-2 text-warning text-sm\">Other files changed in working tree</div>\
                  <pre class=\"text-xs overflow-auto max-h-[50vh] bg-base-300 p-2 rounded whitespace-pre\">{}</pre>\
-                 <div class=\"mt-4 flex flex-nowrap items-center justify-end gap-2\" data-dialog-actions>\
-                   <button type=\"button\" hx-post=\"/changes/revert\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" class=\"btn btn-sm btn-ghost\">Revert</button>\
-                   <button type=\"button\" hx-post=\"/changes/apply\" hx-target=\"#changes-body\" hx-swap=\"innerHTML\" hx-confirm=\"Run full activation (write-flake + nixos-rebuild)? This can take several minutes.\" class=\"btn btn-sm btn-error\">Apply (activate)</button>\
-                 </div>",
-                esc
+                 {}",
+                esc,
+                changes_actions_row()
             )
         } else {
             "<div class=\"text-sm\">Working tree clean. No pending changes.</div>".to_string()
@@ -71,34 +65,26 @@ pub fn changes_summary(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
 
 #[post("/changes/revert")]
 pub fn revert_settings(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    let dir = config_dir(&config);
-    let dir_str = dir.to_str().unwrap_or(".");
-    let source = PathBuf::from("/etc/neo/settings.toml");
-    let dummy = DocumentMut::new();
-    let res = paste_settings(dir_str, &source, &dummy, false, &config.nix_cmd);
-    if res.is_ok() {
-        let ev = config.evaluator.clone();
-        tokio::spawn(async move {
-            let mut g = ev.lock().await;
-            let _ = g.refresh().await;
-        });
-        broadcast_action_bar(&config);
-    }
-    match res {
-        Ok(()) => RawHtml(
-            "<div class=\"alert alert-success text-sm\">Reverted via paste-settings. Close and reload options to see state.</div>"
-                .to_string(),
-        ),
-        Err(e) => RawHtml(format!(
-            "<div class=\"alert alert-error text-sm\">Revert failed: {}</div>",
-            e
+    match restore_settings_from_applied(&config) {
+        Ok(()) => RawHtml(alert_html(
+            AlertKind::Success,
+            "Reverted via paste-settings. Close and reload options to see state.",
+        )),
+        Err(e) => RawHtml(alert_html(
+            AlertKind::Error,
+            &format!("Revert failed: {}", e),
         )),
     }
 }
 
+/// Shared with `/actions/activate`: trigger activation oneshot and refresh action bar.
+pub fn apply_or_activate(config: &AppConfig) -> RawHtml<String> {
+    let html = trigger_activation(config);
+    broadcast_action_bar(config);
+    html
+}
+
 #[post("/changes/apply")]
 pub fn apply_settings(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    let html = trigger_activation(&config);
-    broadcast_action_bar(&config);
-    html
+    apply_or_activate(&config)
 }

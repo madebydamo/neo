@@ -97,10 +97,11 @@ fn core_grid_template() -> Template {
     Template::render("core_grid", IndexContext::default())
 }
 
-/// Configuration home — full shell for browser navigation; services grid partial for HTMX.
-/// Canonical services URL is `/configuration` (breadcrumb / logo go here, not `/configuration/services`).
-#[get("/configuration")]
-pub async fn configuration(config: &State<Arc<AppConfig>>, htmx: Htmx) -> Template {
+/// Shared body for `/configuration` and `/configuration/services` (identical UX).
+async fn configuration_services_body(
+    config: &State<Arc<AppConfig>>,
+    htmx: Htmx,
+) -> Template {
     if htmx.is_htmx() {
         services_grid_template(config).await
     } else {
@@ -108,14 +109,17 @@ pub async fn configuration(config: &State<Arc<AppConfig>>, htmx: Htmx) -> Templa
     }
 }
 
+/// Configuration home — full shell for browser navigation; services grid partial for HTMX.
+/// Canonical services URL is `/configuration` (breadcrumb / logo go here, not `/configuration/services`).
+#[get("/configuration")]
+pub async fn configuration(config: &State<Arc<AppConfig>>, htmx: Htmx) -> Template {
+    configuration_services_body(config, htmx).await
+}
+
 /// Services grid — full shell for browser navigation, partial for HTMX.
 #[get("/configuration/services")]
 pub async fn configuration_services(config: &State<Arc<AppConfig>>, htmx: Htmx) -> Template {
-    if htmx.is_htmx() {
-        services_grid_template(config).await
-    } else {
-        configuration_shell(config, "/configuration", "services", None).await
-    }
+    configuration_services_body(config, htmx).await
 }
 
 /// Core settings grid — full shell or partial.

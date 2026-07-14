@@ -3,8 +3,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::activation;
-use super::git_ops::{settings_toml_has_diff, worktree_changed_and_summary};
+use super::git_ops::dirty_state;
 use super::structs::AppConfig;
+use super::util::{activation_id_ok, escape_html};
 
 /// Compact signature of action-bar state so the watcher only pushes on real changes.
 fn action_bar_signature(config: &AppConfig) -> String {
@@ -12,7 +13,8 @@ fn action_bar_signature(config: &AppConfig) -> String {
     let busy = config.eval_busy.load(Ordering::Relaxed);
     let act = activation::find_recent_in_progress_activation().unwrap_or_default();
     let upd = activation::find_recent_in_progress_update().unwrap_or_default();
-    let dirty = settings_toml_has_diff(config) || worktree_changed_and_summary(config).0;
+    let d = dirty_state(config);
+    let dirty = d.settings_dirty || d.worktree_dirty;
     format!("{busy}|{act}|{upd}|{dirty}")
 }
 
@@ -24,22 +26,46 @@ pub fn render_nix_busy_html(config: &AppConfig) -> String {
     }
 }
 
+fn progress_button(kind_label: &str, title: &str, path_prefix: &str, id: &str, btn_class: &str) -> String {
+    if !activation_id_ok(id) {
+        return format!(
+            r#"<button class="btn {} btn-xs animate-pulse">{} — view</button>"#,
+            btn_class, kind_label
+        );
+    }
+    let esc = escape_html(id);
+    format!(
+        "<button class=\"btn {btn_class} btn-xs animate-pulse\" onclick=\"var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='{title}';m.showModal();htmx.ajax('GET','{path_prefix}/{esc}',{{target:'#changes-body',swap:'innerHTML'}})\">{kind_label} — view</button>",
+        btn_class = btn_class,
+        title = title,
+        path_prefix = path_prefix,
+        esc = esc,
+        kind_label = kind_label,
+    )
+}
+
 pub fn render_pending_changes_html(config: &AppConfig) -> String {
     activation::gc_old_activations();
     if let Some(id) = activation::find_recent_in_progress_activation() {
-        return format!(
-            "<button class=\"btn btn-warning btn-xs animate-pulse\" onclick=\"var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Activation progress';m.showModal();htmx.ajax('GET','/activation/monitor/{}',{{target:'#changes-body',swap:'innerHTML'}})\">Activation — view</button>",
-            id
+        return progress_button(
+            "Activation",
+            "Activation progress",
+            "/activation/monitor",
+            &id,
+            "btn-warning",
         );
     }
     if let Some(id) = activation::find_recent_in_progress_update() {
-        return format!(
-            "<button class=\"btn btn-info btn-xs animate-pulse\" onclick=\"var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Update progress';m.showModal();htmx.ajax('GET','/update/monitor/{}',{{target:'#changes-body',swap:'innerHTML'}})\">Update — view</button>",
-            id
+        return progress_button(
+            "Update",
+            "Update progress",
+            "/update/monitor",
+            &id,
+            "btn-info",
         );
     }
-    let (changed, _) = worktree_changed_and_summary(config);
-    if changed {
+    let d = dirty_state(config);
+    if d.worktree_dirty {
         "<button class=\"btn btn-warning btn-xs\" onclick=\"var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Pending changes';m.showModal();htmx.ajax('GET','/changes/summary',{target:'#changes-body',swap:'innerHTML'})\">Changes — review</button>".to_string()
     } else {
         "<span class=\"text-[10px] opacity-40\">clean</span>".to_string()
@@ -47,8 +73,8 @@ pub fn render_pending_changes_html(config: &AppConfig) -> String {
 }
 
 pub fn render_reset_button_html(config: &AppConfig) -> String {
-    let dirty = settings_toml_has_diff(config) || worktree_changed_and_summary(config).0;
-    if !dirty {
+    let d = dirty_state(config);
+    if !(d.settings_dirty || d.worktree_dirty) {
         return String::new();
     }
     // After-request only opens the modal; action-bar refresh is pushed over WS.
