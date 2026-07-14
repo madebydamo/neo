@@ -1,0 +1,19 @@
+{{!-- Save / discard controls (used at top and bottom of the options list). --}}
+<div class="flex flex-wrap items-center gap-2">
+  <button type="button"
+          @click="save()"
+          class="btn btn-sm"
+          :class="saveFlash === 'ok' ? 'btn-success' : (saveFlash === 'err' ? 'btn-error' : 'btn-primary')"
+          :disabled="saveBusy || saveFlash === 'ok'"
+          :aria-busy="saveBusy">
+    <span x-show="saveBusy" class="loading loading-spinner loading-xs" aria-hidden="true"></span>
+    <span x-text="saveBusy ? 'Saving…' : (saveFlash === 'ok' ? 'Saved!' : (saveFlash === 'err' ? 'Save failed' : 'Save'))">Save</span>
+  </button>
+  <button type="button"
+          @click="revertAll()"
+          class="btn btn-sm btn-ghost"
+          :disabled="saveBusy || saveFlash === 'ok'">Discard changes</button>
+  <span x-show="saveFlash === 'err' && saveError"
+        class="text-xs text-error max-w-md"
+        x-text="saveError"></span>
+</div>

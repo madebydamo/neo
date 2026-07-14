@@ -12,6 +12,9 @@ function optionForm() {
     serviceName: '',
     isCore: false,
     helperBusy: false,
+    saveBusy: false,
+    saveFlash: '', // '' | 'ok' | 'err'
+    saveError: '',
 
     cloneValue(v) {
       if (v === null || v === undefined) return v;
@@ -461,6 +464,7 @@ function optionForm() {
     },
 
     async save() {
+      if (this.saveBusy) return;
       const svc = this.serviceName || 'service';
       const pane = document.getElementById('options-pane');
       const ep = (pane && pane.dataset && pane.dataset.saveEndpoint) || `/save/${encodeURIComponent(svc)}`;
@@ -470,6 +474,10 @@ function optionForm() {
           toSave[k] = this.values[k];
         }
       });
+
+      this.saveBusy = true;
+      this.saveFlash = '';
+      this.saveError = '';
       try {
         const res = await fetch(ep, {
           method: 'POST',
@@ -481,21 +489,26 @@ function optionForm() {
           Object.keys(this.values || {}).forEach((k) => {
             this.originals[k] = this.cloneValue(this.values[k]);
           });
-          const orig = event?.target?.innerText;
-          if (event?.target) event.target.innerText = 'Saved!';
-          setTimeout(() => {
-            if (event?.target) event.target.innerText = orig || 'Save';
-          }, 1200);
+          this.saveBusy = false;
+          this.saveFlash = 'ok';
+          // Keep success feedback visible before the pane reload (nix re-eval).
+          await new Promise((r) => setTimeout(r, 900));
           const loadUrl = pane?.dataset?.loadUrl;
           if (loadUrl) {
             htmx.ajax('GET', loadUrl, {target: '#config-content', swap: 'innerHTML'});
+          } else {
+            setTimeout(() => { if (this.saveFlash === 'ok') this.saveFlash = ''; }, 1500);
           }
         } else {
           const txt = await res.text().catch(() => '');
-          alert('Save failed: ' + (txt || res.status));
+          this.saveBusy = false;
+          this.saveFlash = 'err';
+          this.saveError = (txt || ('HTTP ' + res.status)).slice(0, 240);
         }
       } catch (e) {
-        alert('Save error: ' + e);
+        this.saveBusy = false;
+        this.saveFlash = 'err';
+        this.saveError = String(e);
       }
     }
   }
