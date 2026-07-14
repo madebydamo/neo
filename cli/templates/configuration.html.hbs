@@ -19,6 +19,8 @@
       :root {
         --neo-sticky-bar-top: 1.5rem;
       }
+      /* Hide Alpine-bound chrome until Alpine initializes. */
+      [x-cloak] { display: none !important; }
     </style>
   </head>
   <body class="bg-base-300 text-base-content p-6 min-h-dvh" data-theme="{{theme}}">
@@ -51,26 +53,41 @@
         </div>
       </div>
 
-      <div x-data="{ tab: 'services' }">
+      <div id="config-shell" x-data="configShell()">
         <div class="tabs tabs-bordered mb-2 text-sm">
           <button
+            type="button"
             class="tab"
             :class="{ 'tab-active': tab === 'services' }"
-            @click="tab = 'services'; htmx.ajax('GET', '/services-grid', {target: '#config-content', swap: 'innerHTML'})">
+            @click="loadTab('services')">
             Services
           </button>
           <button
+            type="button"
             class="tab"
             :class="{ 'tab-active': tab === 'settings' }"
-            @click="tab = 'settings'; htmx.ajax('GET', '/core-grid', {target: '#config-content', swap: 'innerHTML'})">
+            @click="loadTab('settings')">
             Settings
           </button>
           <button
+            type="button"
             class="tab"
             :class="{ 'tab-active': tab === 'versioning' }"
-            @click="tab = 'versioning'; htmx.ajax('GET', '/branches', {target: '#config-content', swap: 'innerHTML'})">
+            @click="loadTab('versioning')">
             Versioning
           </button>
+        </div>
+        {{!-- Persistent breadcrumb chrome (outside #config-content swap target). --}}
+        <div class="flex items-center gap-1.5 text-sm mb-3 min-h-[1.5rem]"
+             x-show="detail"
+             x-cloak>
+          <button type="button"
+                  class="btn btn-ghost btn-xs gap-1 px-1.5"
+                  @click="goUp()">
+            ← <span x-text="sectionLabel()"></span>
+          </button>
+          <span class="opacity-40 select-none" aria-hidden="true">›</span>
+          <span class="font-mono text-xs font-medium truncate" x-text="detail"></span>
         </div>
         <div id="config-content"
              hx-get="/services-grid"

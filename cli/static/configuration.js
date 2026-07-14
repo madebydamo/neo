@@ -1,8 +1,81 @@
 // configuration.js
 // Client helpers for the homeserver config page: activation resume, live unit logs (SSE),
-// and WebSocket unit-watch registration. Loaded only by configuration.html.hbs.
+// WebSocket unit-watch registration, and the Alpine config shell (tabs + breadcrumb).
+// Loaded only by configuration.html.hbs.
+
+/** Alpine shell for the config page: tabs, detail breadcrumb, and up navigation. */
+window.configShell = function configShell() {
+  return {
+    tab: 'services', // 'services' | 'settings' | 'versioning'
+    detail: null, // null | service/core section name when option pane is open
+
+    sectionLabel() {
+      if (this.tab === 'settings') return 'Settings';
+      if (this.tab === 'versioning') return 'Versioning';
+      return 'Services';
+    },
+
+    setDetail(name) {
+      this.detail = name || null;
+    },
+
+    clearDetail() {
+      this.detail = null;
+    },
+
+    /** Switch tab, clear detail, and load the corresponding grid/branches into #config-content. */
+    loadTab(tab) {
+      this.tab = tab;
+      this.detail = null;
+      var url = '/services-grid';
+      if (tab === 'settings') url = '/core-grid';
+      else if (tab === 'versioning') url = '/branches';
+      htmx.ajax('GET', url, { target: '#config-content', swap: 'innerHTML' });
+    },
+
+    /** Leave the option pane and return to the parent grid for the current tab. */
+    goUp() {
+      this.detail = null;
+      var url = '/services-grid';
+      if (this.tab === 'settings') url = '/core-grid';
+      else if (this.tab === 'versioning') url = '/branches';
+      htmx.ajax('GET', url, { target: '#config-content', swap: 'innerHTML' });
+    },
+  };
+};
 
 (function () {
+  /** Sync shell.detail / shell.tab after HTMX swaps into #config-content. */
+  function syncConfigShellFromContent() {
+    try {
+      var shell = document.getElementById('config-shell');
+      if (!shell || typeof Alpine === 'undefined' || !Alpine.$data) return;
+      var data = Alpine.$data(shell);
+      if (!data) return;
+      var content = document.getElementById('config-content');
+      var pane = content && content.querySelector('#options-pane');
+      if (pane) {
+        data.setDetail(pane.getAttribute('data-service'));
+        data.tab = pane.getAttribute('data-is-core') === 'true' ? 'settings' : 'services';
+      } else {
+        data.clearDetail();
+      }
+    } catch (e) {}
+  }
+
+  document.body.addEventListener('htmx:afterSettle', function (evt) {
+    try {
+      var t = evt.detail && evt.detail.target;
+      if (!t) return;
+      if (
+        t.id === 'config-content' ||
+        (t.closest && t.closest('#config-content') && t.id === 'options-pane')
+      ) {
+        syncConfigShellFromContent();
+      }
+    } catch (e) {}
+  });
+
   function resume() {
     try {
       const raw = localStorage.getItem('neo.pendingActivation');
