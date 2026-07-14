@@ -3,13 +3,23 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::commands::log;
-use crate::commands::web::util::escape_html;
+use crate::commands::web::util::{activation_id_ok, escape_html};
 
 pub fn activation_dir() -> PathBuf {
     log::operations_dir()
 }
 
+fn invalid_id_fragment(id: &str) -> String {
+    format!(
+        r#"<div class="alert alert-error text-sm">invalid activation id: {}</div>"#,
+        escape_html(id)
+    )
+}
+
 pub fn load_activation_state(id: &str) -> Option<serde_json::Value> {
+    if !activation_id_ok(id) {
+        return None;
+    }
     let p = activation_dir().join(format!("{}.json", id));
     if let Ok(s) = fs::read_to_string(&p) {
         if let Ok(v) = serde_json::from_str(&s) {
@@ -20,6 +30,9 @@ pub fn load_activation_state(id: &str) -> Option<serde_json::Value> {
 }
 
 pub fn load_log_tail(id: &str, n: usize) -> String {
+    if !activation_id_ok(id) {
+        return "(invalid id)".to_string();
+    }
     let p = activation_dir().join(format!("{}.log", id));
     if let Ok(content) = fs::read_to_string(&p) {
         let lines: Vec<&str> = content.lines().collect();
@@ -83,6 +96,9 @@ pub fn find_recent_in_progress_update() -> Option<String> {
     find_recent_in_progress("update_")
 }
 
+/// Drop ops older than 7 days, then keep only the 10 newest files.
+/// Called from the action-bar watcher and once at op trigger start — not from
+/// per-poll monitor/status/log fragment builders (those are on the hot path).
 pub fn gc_old_activations() {
     let dir = activation_dir();
     if !dir.exists() {
@@ -108,10 +124,10 @@ pub fn gc_old_activations() {
             }
         }
     }
-    let mut files: Vec<_> = fs::read_dir(&dir)
-        .unwrap_or_else(|_| fs::read_dir(&dir).unwrap())
-        .flatten()
-        .collect();
+    let mut files: Vec<_> = match fs::read_dir(&dir) {
+        Ok(rd) => rd.flatten().collect(),
+        Err(_) => return,
+    };
     if files.len() > 10 {
         files.sort_by_key(|e| {
             e.metadata()
@@ -264,6 +280,9 @@ fn state_fields(id: &str) -> (String, String, String, String) {
 /// Must re-emit the same `id` and `hx-*` attributes on every response: the monitor uses
 /// `hx-swap="outerHTML"`, so dropping them after the first poll permanently kills updates.
 fn build_status_fragment_for(kind: OpKind, id: &str) -> String {
+    if !activation_id_ok(id) {
+        return invalid_id_fragment(id);
+    }
     let (status, phase, branch, _) = state_fields(id);
     let steps = kind.steps();
     let max = steps.labels.len().saturating_sub(1);
@@ -365,16 +384,19 @@ fn build_status_fragment_for(kind: OpKind, id: &str) -> String {
 }
 
 fn build_monitor_fragment_for(kind: OpKind, id: &str) -> String {
-    gc_old_activations();
+    // GC intentionally not called here — see gc_old_activations docs.
+    if !activation_id_ok(id) {
+        return invalid_id_fragment(id);
+    }
     let (status, _phase, branch, err) = state_fields(id);
     let mut html = String::new();
     html.push_str(&format!(
         r#"<div id="{}" data-id="{}" class="p-2 bg-base-200 rounded">
 <div class="text-sm font-semibold">{} {}</div>"#,
         kind.monitor_id(),
-        id,
+        escape_html(id),
         kind.title(),
-        id,
+        escape_html(id),
     ));
     match (kind, status.as_str()) {
         (OpKind::Activation, "in_progress") => {
@@ -435,6 +457,9 @@ pub fn build_update_status_fragment(id: &str) -> String {
 }
 
 pub fn build_log_fragment(id: &str) -> String {
+    if !activation_id_ok(id) {
+        return invalid_id_fragment(id);
+    }
     let tail = load_log_tail(id, 300);
     format!(
         "<pre class=\"whitespace-pre-wrap\">{}</pre>",

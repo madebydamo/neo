@@ -8,7 +8,7 @@ use crate::commands::git_cmd;
 use crate::commands::web::activation;
 use crate::commands::web::git_ops::{get_activation_graph, list_activation_branches};
 use crate::commands::web::structs::{AppConfig, BranchesContext};
-use crate::commands::web::util::config_dir;
+use crate::commands::web::util::{branch_ok, config_dir, escape_html};
 
 /// Shared branches partial template (used by `/branches` and `/configuration/versioning`).
 pub fn branches_template(config: &AppConfig) -> Template {
@@ -33,6 +33,12 @@ pub fn branches(config: &State<Arc<AppConfig>>) -> Template {
 
 #[post("/git/switch/<br>")]
 pub fn git_switch(config: &State<Arc<AppConfig>>, br: &str) -> RawHtml<String> {
+    if !branch_ok(br) {
+        return RawHtml(format!(
+            r#"<span class="text-error text-xs">invalid branch: {}</span>"#,
+            escape_html(br)
+        ));
+    }
     if activation::is_activation_in_progress() {
         return RawHtml(
             "<span class=\"text-error text-xs\">activation in progress — cannot switch</span>"
@@ -43,12 +49,12 @@ pub fn git_switch(config: &State<Arc<AppConfig>>, br: &str) -> RawHtml<String> {
     let dir_str = dir.to_str().unwrap_or(".");
     match git_cmd(dir_str, &["switch", br]) {
         Ok(()) => RawHtml(format!(
-            "<span class=\"text-success text-xs\">switched to {}</span>",
-            br
+            r#"<span class="text-success text-xs">switched to {}</span>"#,
+            escape_html(br)
         )),
         Err(e) => RawHtml(format!(
-            "<span class=\"text-error text-xs\">switch failed: {}</span>",
-            e
+            r#"<span class="text-error text-xs">switch failed: {}</span>"#,
+            escape_html(&e.to_string())
         )),
     }
 }
