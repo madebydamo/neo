@@ -40,32 +40,42 @@
       </div>
     {{/if}}
     <div class="max-w-7xl mx-auto" hx-ext="ws" ws-connect="/ws/status">
-      {{!-- Sticky config bar: title + action buttons stay visible while scrolling. --}}
-      <div class="navbar h-16 min-h-16 bg-base-100/95 backdrop-blur rounded-box mb-6 shadow sticky z-30"
-           style="top: var(--neo-sticky-bar-top)">
-        <div class="flex-1 min-w-0">
-          <span class="text-2xl font-bold px-4">neo</span>
-          <span class="text-sm opacity-60">homeserver config</span>
-        </div>
-        {{!-- Action bar: dynamic middle (busy / pending / reset) grows into flex-1 space;
-             Update + Activate stay pinned on the right so appear/disappear never shifts them. --}}
-        <div class="flex-none flex items-center gap-2 pr-2">
-          <div id="action-bar-dynamic"
-               class="flex items-center gap-2"
-               hx-get="/changes/action-bar"
-               hx-trigger="load"
-               hx-swap="outerHTML"></div>
-          <div class="join">
-            <button hx-post="/flake/update" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Run flake update + template refresh?" hx-on::after-request="var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Update progress';m.showModal();" class="btn btn-xs join-item btn-ghost">↻<span class="hidden sm:inline ml-1">Update</span></button>
-            <button hx-post="/actions/activate" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Trigger full activation now (via service)?" hx-on::after-request="var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Activation progress';m.showModal();" class="btn btn-xs join-item btn-error">▶<span class="hidden sm:inline ml-1">Activate</span></button>
-          </div>
-        </div>
-      </div>
-
+      {{!-- Shell owns navbar + tabs + breadcrumb so Alpine can drive chrome outside swaps. --}}
       <div id="config-shell"
            x-data="configShell()"
            data-initial-tab="{{#if initial_tab}}{{initial_tab}}{{else}}services{{/if}}"
            data-initial-detail="{{#if initial_detail}}{{initial_detail}}{{/if}}">
+        {{!-- Sticky config bar: title reflects current service when editing. --}}
+        <div class="navbar h-16 min-h-16 bg-base-100/95 backdrop-blur rounded-box mb-6 shadow sticky z-30"
+             style="top: var(--neo-sticky-bar-top)">
+          <div class="flex-1 min-w-0 flex items-center gap-2 px-4">
+            <span class="text-2xl font-bold flex-shrink-0">neo</span>
+            {{!-- Default subtitle when on a grid/tab. --}}
+            <span class="text-sm opacity-60 truncate"
+                  x-show="!detail"
+                  x-cloak>homeserver config</span>
+            {{!-- Active service/section name while editing options. --}}
+            <span class="text-sm font-mono font-semibold truncate min-w-0"
+                  x-show="detail"
+                  x-text="detail"
+                  x-cloak
+                  :title="detail"></span>
+          </div>
+          {{!-- Action bar: dynamic middle (busy / pending / reset);
+               Update + Activate stay pinned on the right. --}}
+          <div class="flex-none flex items-center gap-2 pr-2">
+            <div id="action-bar-dynamic"
+                 class="flex items-center gap-2"
+                 hx-get="/changes/action-bar"
+                 hx-trigger="load"
+                 hx-swap="outerHTML"></div>
+            <div class="join">
+              <button hx-post="/flake/update" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Run flake update + template refresh?" hx-on::after-request="var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Update progress';m.showModal();" class="btn btn-xs join-item btn-ghost">↻<span class="hidden sm:inline ml-1">Update</span></button>
+              <button hx-post="/actions/activate" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Trigger full activation now (via service)?" hx-on::after-request="var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Activation progress';m.showModal();" class="btn btn-xs join-item btn-error">▶<span class="hidden sm:inline ml-1">Activate</span></button>
+            </div>
+          </div>
+        </div>
+
         <div class="tabs tabs-bordered mb-2 text-sm">
           <button
             type="button"
@@ -89,7 +99,7 @@
             Versioning
           </button>
         </div>
-        {{!-- Persistent breadcrumb chrome (outside #config-content swap target). --}}
+        {{!-- Persistent breadcrumb (outside #config-content); goUp() pushes the parent URL. --}}
         <div class="flex items-center gap-1.5 text-sm mb-3 min-h-[1.5rem]"
              x-show="detail"
              x-cloak>

@@ -108,33 +108,33 @@ window.configShell = function configShell() {
       return '/configuration/services';
     },
 
+    /**
+     * Navigate #config-content and push the URL into history (same as hx-push-url="true").
+     * Uses push:true so the request path becomes location (consistent with declarative nav).
+     */
+    navigateContent(url) {
+      window.neoAllowNextConfigNav = true;
+      htmx.ajax('GET', url, {
+        target: '#config-content',
+        swap: 'innerHTML',
+        push: true,
+        indicator: '#config-load-indicator',
+      });
+    },
+
     /** Switch tab, clear detail, and load the corresponding grid/branches into #config-content. */
     loadTab(tab) {
       if (!window.neoConfirmLeaveConfigForm()) return;
       this.tab = tab;
       this.detail = null;
-      var url = this.tabUrl(tab);
-      window.neoAllowNextConfigNav = true;
-      htmx.ajax('GET', url, {
-        target: '#config-content',
-        swap: 'innerHTML',
-        push: url,
-        indicator: '#config-load-indicator',
-      });
+      this.navigateContent(this.tabUrl(tab));
     },
 
-    /** Leave the option pane and return to the parent grid for the current tab. */
+    /** Leave the option pane and return to the parent grid for the current tab (updates URL). */
     goUp() {
       if (!window.neoConfirmLeaveConfigForm()) return;
       this.detail = null;
-      var url = this.tabUrl(this.tab);
-      window.neoAllowNextConfigNav = true;
-      htmx.ajax('GET', url, {
-        target: '#config-content',
-        swap: 'innerHTML',
-        push: url,
-        indicator: '#config-load-indicator',
-      });
+      this.navigateContent(this.tabUrl(this.tab));
     },
   };
 };

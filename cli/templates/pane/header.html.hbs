@@ -11,23 +11,6 @@
     <div class="min-w-0 flex-1">
       <div class="flex items-center justify-between gap-2 flex-wrap">
         <div class="flex items-center gap-2 flex-wrap min-w-0">
-          {{#if is_core}}
-            <button type="button"
-                    class="btn btn-ghost btn-xs flex-shrink-0"
-                    hx-get="/configuration/settings"
-                    hx-target="#config-content"
-                    hx-swap="innerHTML"
-                    hx-push-url="true"
-                    title="Back to Settings">← Settings</button>
-          {{else}}
-            <button type="button"
-                    class="btn btn-ghost btn-xs flex-shrink-0"
-                    hx-get="/configuration/services"
-                    hx-target="#config-content"
-                    hx-swap="innerHTML"
-                    hx-push-url="true"
-                    title="Back to Services">← Services</button>
-          {{/if}}
           <h1 class="card-title font-mono text-xl">{{service}}</h1>
           {{#if meta.projectUrl}}
             <a href="{{meta.projectUrl}}" target="_blank" class="btn btn-xs btn-outline no-underline">Project ↗</a>
