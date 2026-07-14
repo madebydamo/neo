@@ -1,27 +1,91 @@
-use std::process::Command;
+use std::path::Path;
+use std::process::{Command, Output};
 
 use crate::commands::get_current_branch;
 
 use super::structs::{AppConfig, BranchInfo};
 use super::util::config_dir;
 
+fn git_output(dir: &Path, args: &[&str]) -> Result<Output, String> {
+    Command::new("git")
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .map_err(|e| format!("git {}: {}", args.join(" "), e))
+}
+
+/// True when staged or unstaged changes exist (`pathspec` limits the check when set).
+fn git_dirty(dir: &Path, pathspec: Option<&str>) -> bool {
+    let is_dirty = |cached: bool| {
+        let mut args: Vec<&str> = vec!["diff"];
+        if cached {
+            args.push("--cached");
+        }
+        args.push("--quiet");
+        if let Some(p) = pathspec {
+            args.push("--");
+            args.push(p);
+        }
+        git_output(dir, &args)
+            .map(|o| !o.status.success())
+            .unwrap_or(false)
+    };
+    is_dirty(true) || is_dirty(false)
+}
+
+fn worktree_summary(dir: &Path) -> String {
+    let mut text = String::new();
+    if let Ok(o) = git_output(dir, &["status", "--porcelain", "-b", "--short"]) {
+        text.push_str(&String::from_utf8_lossy(&o.stdout));
+    }
+    text.push('\n');
+    if let Ok(o) = git_output(dir, &["diff", "--stat", "--no-color"]) {
+        text.push_str(&String::from_utf8_lossy(&o.stdout));
+    }
+    text
+}
+
+/// Combined dirty flags for action-bar / changes UI (one pass of git checks).
+pub struct DirtyState {
+    pub settings_dirty: bool,
+    pub worktree_dirty: bool,
+    pub summary: String,
+}
+
+/// Run settings + worktree dirty checks efficiently (summary only when worktree dirty).
+pub fn dirty_state(cfg: &AppConfig) -> DirtyState {
+    let dir = config_dir(cfg);
+    let settings_dirty = git_dirty(&dir, Some("settings.toml"));
+    let worktree_dirty = git_dirty(&dir, None);
+    let summary = if worktree_dirty {
+        worktree_summary(&dir)
+    } else {
+        String::new()
+    };
+    DirtyState {
+        settings_dirty,
+        worktree_dirty,
+        summary,
+    }
+}
+
 pub fn list_activation_branches(config_path: &str) -> Vec<BranchInfo> {
-    let names: Vec<String> = Command::new("git")
-        .current_dir(config_path)
-        .args([
+    let names: Vec<String> = git_output(
+        Path::new(config_path),
+        &[
             "for-each-ref",
             "--format=%(refname:short)",
             "--sort=-committerdate",
             "refs/heads/activation_*",
-        ])
-        .output()
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .map(|s| s.to_string())
-                .collect()
-        })
-        .unwrap_or_default();
+        ],
+    )
+    .map(|o| {
+        String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .map(|s| s.to_string())
+            .collect()
+    })
+    .unwrap_or_default();
     let cur = get_current_branch(config_path).unwrap_or_default();
     names
         .into_iter()
@@ -33,9 +97,9 @@ pub fn list_activation_branches(config_path: &str) -> Vec<BranchInfo> {
 }
 
 pub fn get_activation_graph(config_path: &str) -> String {
-    let out = Command::new("git")
-        .current_dir(config_path)
-        .args([
+    match git_output(
+        Path::new(config_path),
+        &[
             "log",
             "--graph",
             "--no-color",
@@ -43,9 +107,8 @@ pub fn get_activation_graph(config_path: &str) -> String {
             "--decorate",
             "-25",
             "--branches=activation_*",
-        ])
-        .output();
-    match out {
+        ],
+    ) {
         Ok(o) => {
             let mut t = String::from_utf8_lossy(&o.stdout).into_owned();
             if !o.stderr.is_empty() {
@@ -58,66 +121,18 @@ pub fn get_activation_graph(config_path: &str) -> String {
 }
 
 pub fn worktree_changed_and_summary(cfg: &AppConfig) -> (bool, String) {
-    let dir = config_dir(cfg);
-    let staged = Command::new("git")
-        .current_dir(&dir)
-        .args(["diff", "--cached", "--quiet"])
-        .status()
-        .map(|s| !s.success())
-        .unwrap_or(false);
-    let unstaged = Command::new("git")
-        .current_dir(&dir)
-        .args(["diff", "--quiet"])
-        .status()
-        .map(|s| !s.success())
-        .unwrap_or(false);
-    let changed = staged || unstaged;
-    if !changed {
-        return (false, String::new());
-    }
-    let status = Command::new("git")
-        .current_dir(&dir)
-        .args(["status", "--porcelain", "-b", "--short"])
-        .output();
-    let stat = Command::new("git")
-        .current_dir(&dir)
-        .args(["diff", "--stat", "--no-color"])
-        .output();
-    let mut text = String::new();
-    if let Ok(o) = status {
-        text.push_str(&String::from_utf8_lossy(&o.stdout));
-    }
-    text.push_str("\n");
-    if let Ok(o) = stat {
-        text.push_str(&String::from_utf8_lossy(&o.stdout));
-    }
-    (true, text)
+    let d = dirty_state(cfg);
+    (d.worktree_dirty, d.summary)
 }
 
 pub fn settings_toml_has_diff(cfg: &AppConfig) -> bool {
     let dir = config_dir(cfg);
-    let unstaged = Command::new("git")
-        .current_dir(&dir)
-        .args(["diff", "--quiet", "--", "settings.toml"])
-        .status()
-        .map(|s| !s.success())
-        .unwrap_or(false);
-    let staged = Command::new("git")
-        .current_dir(&dir)
-        .args(["diff", "--cached", "--quiet", "--", "settings.toml"])
-        .status()
-        .map(|s| !s.success())
-        .unwrap_or(false);
-    unstaged || staged
+    git_dirty(&dir, Some("settings.toml"))
 }
 
 pub fn get_settings_toml_diff(cfg: &AppConfig) -> String {
     let dir = config_dir(cfg);
-    let output = Command::new("git")
-        .current_dir(&dir)
-        .args(["diff", "--no-color", "HEAD", "--", "settings.toml"])
-        .output();
-    match output {
+    match git_output(&dir, &["diff", "--no-color", "HEAD", "--", "settings.toml"]) {
         Ok(o) => {
             let mut t = String::from_utf8_lossy(&o.stdout).into_owned();
             let e = String::from_utf8_lossy(&o.stderr);
