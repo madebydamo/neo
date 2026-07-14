@@ -3,6 +3,39 @@
 // WebSocket unit-watch registration, and the Alpine config shell (tabs + breadcrumb).
 // Loaded only by configuration.html.hbs.
 
+/**
+ * True when #options-pane exists and any option field differs from its original value.
+ * Uses Alpine.$data(pane) (optionForm: values / originals / isAtOriginal).
+ */
+window.neoIsConfigFormDirty = function neoIsConfigFormDirty() {
+  try {
+    var pane = document.getElementById('options-pane');
+    if (!pane) return false;
+    if (typeof Alpine === 'undefined' || !Alpine.$data) return false;
+    var data = Alpine.$data(pane);
+    if (!data || !data.values || typeof data.isAtOriginal !== 'function') return false;
+    var names = Object.keys(data.values);
+    for (var i = 0; i < names.length; i++) {
+      if (!data.isAtOriginal(names[i])) return true;
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+};
+
+/**
+ * If the option form is dirty, ask the user to discard unsaved changes.
+ * Returns true when navigation may proceed (not dirty, or user confirmed discard).
+ */
+window.neoConfirmLeaveConfigForm = function neoConfirmLeaveConfigForm() {
+  if (!window.neoIsConfigFormDirty()) return true;
+  return window.confirm('You have unsaved changes. Discard them?');
+};
+
+// One-shot: loadTab/goUp confirm first, then set this so htmx:beforeRequest does not re-prompt.
+window.neoAllowNextConfigNav = false;
+
 /** Alpine shell for the config page: tabs, detail breadcrumb, and up navigation. */
 window.configShell = function configShell() {
   var el = document.getElementById('config-shell');
@@ -36,22 +69,57 @@ window.configShell = function configShell() {
 
     /** Switch tab, clear detail, and load the corresponding grid/branches into #config-content. */
     loadTab(tab) {
+      if (!window.neoConfirmLeaveConfigForm()) return;
       this.tab = tab;
       this.detail = null;
       var url = this.tabUrl(tab);
+      window.neoAllowNextConfigNav = true;
       htmx.ajax('GET', url, { target: '#config-content', swap: 'innerHTML', push: url });
     },
 
     /** Leave the option pane and return to the parent grid for the current tab. */
     goUp() {
+      if (!window.neoConfirmLeaveConfigForm()) return;
       this.detail = null;
       var url = this.tabUrl(this.tab);
+      window.neoAllowNextConfigNav = true;
       htmx.ajax('GET', url, { target: '#config-content', swap: 'innerHTML', push: url });
     },
   };
 };
 
 (function () {
+  /** True when this HTMX request would replace the main config content (options pane / grids). */
+  function isConfigContentTarget(target) {
+    return !!(target && target.id === 'config-content');
+  }
+
+  // Guard attribute-based (and other) HTMX navigations that replace #config-content.
+  // Skip modals, action bar, unit controls, changes-body, etc. (other targets).
+  // After a successful save, option_form updates originals before reload, so dirty is false.
+  document.body.addEventListener('htmx:beforeRequest', function (evt) {
+    try {
+      var t = evt.detail && evt.detail.target;
+      if (!isConfigContentTarget(t)) return;
+      if (window.neoAllowNextConfigNav) {
+        window.neoAllowNextConfigNav = false;
+        return;
+      }
+      if (!window.neoConfirmLeaveConfigForm()) {
+        evt.preventDefault();
+      }
+    } catch (e) {}
+  });
+
+  // Browser leave / hard navigation while the option form has unsaved edits.
+  window.addEventListener('beforeunload', function (e) {
+    try {
+      if (!window.neoIsConfigFormDirty()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    } catch (err) {}
+  });
+
   /** Sync shell.detail / shell.tab after HTMX swaps into #config-content. */
   function syncConfigShellFromContent() {
     try {
