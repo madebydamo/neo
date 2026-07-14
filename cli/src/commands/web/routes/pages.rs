@@ -1,9 +1,22 @@
+// Full-page and HTMX partial routes for the navigator and configuration UI.
 use std::sync::Arc;
 
+use rocket::response::{Redirect, Responder};
 use rocket::{get, State};
 use rocket_dyn_templates::Template;
 
-use crate::commands::web::structs::{AppConfig, IndexContext, NavigatorContext};
+use crate::commands::web::routes::branches::branches_template;
+use crate::commands::web::structs::{
+    AppConfig, ConfigurationPageContext, IndexContext, NavigatorContext,
+};
+use crate::commands::web::util::Htmx;
+
+/// Full shell template or a fragment / redirect (non-HTMX deep links).
+#[derive(Responder)]
+pub enum ShellOrPartial {
+    Template(Template),
+    Redirect(Redirect),
+}
 
 /// Instant shell for the navigator — no nix-eval. Services load via `/nav-services` (htmx).
 #[get("/")]
@@ -27,19 +40,28 @@ pub async fn nav_services(config: &State<Arc<AppConfig>>) -> Template {
     Template::render("nav_services", data)
 }
 
-#[get("/configuration")]
-pub async fn configuration(config: &State<Arc<AppConfig>>) -> Template {
+async fn configuration_shell(
+    config: &State<Arc<AppConfig>>,
+    initial_content_url: &str,
+    initial_tab: &str,
+    initial_detail: Option<String>,
+) -> Template {
     let ctx = {
         let mut ev = config.evaluator.lock().await;
-        let mut ctx = ev.extract_services().await;
-        ctx.theme = ev.extract_neo_theme().await;
-        ctx
+        let services = ev.extract_services().await;
+        let theme = ev.extract_neo_theme().await;
+        ConfigurationPageContext {
+            theme,
+            error: services.error,
+            initial_content_url: initial_content_url.to_string(),
+            initial_tab: initial_tab.to_string(),
+            initial_detail,
+        }
     };
     Template::render("configuration", ctx)
 }
 
-#[get("/option/<service>")]
-pub async fn option_pane(config: &State<Arc<AppConfig>>, service: &str) -> Template {
+async fn option_pane_template(config: &State<Arc<AppConfig>>, service: &str) -> Template {
     let pane = {
         let mut ev = config.evaluator.lock().await;
         ev.extract_service_options(service).await
@@ -51,25 +73,7 @@ pub async fn option_pane(config: &State<Arc<AppConfig>>, service: &str) -> Templ
     Template::render("option_pane", pane)
 }
 
-#[get("/services-grid")]
-pub async fn services_grid(config: &State<Arc<AppConfig>>) -> Template {
-    let ctx = {
-        let mut ev = config.evaluator.lock().await;
-        ev.extract_services().await
-    };
-    Template::render("services_grid", ctx)
-}
-
-#[get("/core-grid")]
-pub fn core_grid(_config: &State<Arc<AppConfig>>) -> Template {
-    Template::render(
-        "core_grid",
-        IndexContext::default(),
-    )
-}
-
-#[get("/core/<section>")]
-pub async fn core_pane(config: &State<Arc<AppConfig>>, section: &str) -> Template {
+async fn core_pane_template(config: &State<Arc<AppConfig>>, section: &str) -> Template {
     let pane = {
         let mut ev = config.evaluator.lock().await;
         ev.extract_neo_section(section).await
@@ -79,4 +83,140 @@ pub async fn core_pane(config: &State<Arc<AppConfig>>, section: &str) -> Templat
         cache.put(true, section, pane.options.clone());
     }
     Template::render("option_pane", pane)
+}
+
+async fn services_grid_template(config: &State<Arc<AppConfig>>) -> Template {
+    let ctx = {
+        let mut ev = config.evaluator.lock().await;
+        ev.extract_services().await
+    };
+    Template::render("services_grid", ctx)
+}
+
+fn core_grid_template() -> Template {
+    Template::render("core_grid", IndexContext::default())
+}
+
+/// Default configuration shell (services grid on first paint).
+#[get("/configuration")]
+pub async fn configuration(config: &State<Arc<AppConfig>>) -> Template {
+    configuration_shell(config, "/configuration/services", "services", None).await
+}
+
+/// Services grid — full shell for browser navigation, partial for HTMX.
+#[get("/configuration/services")]
+pub async fn configuration_services(config: &State<Arc<AppConfig>>, htmx: Htmx) -> Template {
+    if htmx.is_htmx() {
+        services_grid_template(config).await
+    } else {
+        configuration_shell(config, "/configuration/services", "services", None).await
+    }
+}
+
+/// Core settings grid — full shell or partial.
+#[get("/configuration/settings")]
+pub async fn configuration_settings(config: &State<Arc<AppConfig>>, htmx: Htmx) -> Template {
+    if htmx.is_htmx() {
+        core_grid_template()
+    } else {
+        configuration_shell(config, "/configuration/settings", "settings", None).await
+    }
+}
+
+/// Versioning / branches — full shell or partial.
+#[get("/configuration/versioning")]
+pub async fn configuration_versioning(config: &State<Arc<AppConfig>>, htmx: Htmx) -> Template {
+    if htmx.is_htmx() {
+        branches_template(config)
+    } else {
+        configuration_shell(config, "/configuration/versioning", "versioning", None).await
+    }
+}
+
+/// Service option pane — full shell or partial.
+#[get("/configuration/option/<service>")]
+pub async fn configuration_option(
+    config: &State<Arc<AppConfig>>,
+    service: &str,
+    htmx: Htmx,
+) -> Template {
+    if htmx.is_htmx() {
+        option_pane_template(config, service).await
+    } else {
+        configuration_shell(
+            config,
+            &format!("/configuration/option/{service}"),
+            "services",
+            Some(service.to_string()),
+        )
+        .await
+    }
+}
+
+/// Core section option pane — full shell or partial.
+#[get("/configuration/core/<section>")]
+pub async fn configuration_core(
+    config: &State<Arc<AppConfig>>,
+    section: &str,
+    htmx: Htmx,
+) -> Template {
+    if htmx.is_htmx() {
+        core_pane_template(config, section).await
+    } else {
+        configuration_shell(
+            config,
+            &format!("/configuration/core/{section}"),
+            "settings",
+            Some(section.to_string()),
+        )
+        .await
+    }
+}
+
+/// Legacy partial alias; non-HTMX browsers redirect to the canonical shell URL.
+#[get("/option/<service>")]
+pub async fn option_pane(
+    config: &State<Arc<AppConfig>>,
+    service: &str,
+    htmx: Htmx,
+) -> ShellOrPartial {
+    if htmx.is_htmx() {
+        ShellOrPartial::Template(option_pane_template(config, service).await)
+    } else {
+        ShellOrPartial::Redirect(Redirect::to(format!("/configuration/option/{service}")))
+    }
+}
+
+/// Legacy services grid partial (HTMX); non-HTMX → shell.
+#[get("/services-grid")]
+pub async fn services_grid(config: &State<Arc<AppConfig>>, htmx: Htmx) -> ShellOrPartial {
+    if htmx.is_htmx() {
+        ShellOrPartial::Template(services_grid_template(config).await)
+    } else {
+        ShellOrPartial::Redirect(Redirect::to("/configuration/services"))
+    }
+}
+
+/// Legacy core grid partial (HTMX); non-HTMX → shell.
+#[get("/core-grid")]
+pub fn core_grid(htmx: Htmx) -> ShellOrPartial {
+    if htmx.is_htmx() {
+        ShellOrPartial::Template(core_grid_template())
+    } else {
+        ShellOrPartial::Redirect(Redirect::to("/configuration/settings"))
+    }
+}
+
+/// Legacy core section partial; non-HTMX → shell.
+#[get("/core/<section>")]
+pub async fn core_pane(
+    config: &State<Arc<AppConfig>>,
+    section: &str,
+    htmx: Htmx,
+) -> ShellOrPartial {
+    if htmx.is_htmx() {
+        ShellOrPartial::Template(core_pane_template(config, section).await)
+    } else {
+        ShellOrPartial::Redirect(Redirect::to(format!("/configuration/core/{section}")))
+    }
 }

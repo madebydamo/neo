@@ -65,9 +65,10 @@
         {{!-- Main card (navigates to options) --}}
         <div
           class="card bg-base-100 shadow-sm border border-base-300 hover:border-primary hover:shadow-md cursor-pointer transition-all active:scale-[0.985] h-full {{#unless enabled}}opacity-75{{/unless}}"
-          hx-get="/option/{{name}}"
+          hx-get="/configuration/option/{{name}}"
           hx-target="#config-content"
           hx-swap="innerHTML"
+          hx-push-url="true"
           title="Configure {{name}}">
           <div class="card-body p-3 gap-2 items-center text-center min-h-[7.5rem]">
             <div class="w-10 h-10 flex items-center justify-center flex-shrink-0">

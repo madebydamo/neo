@@ -15,7 +15,14 @@ pub fn routes() -> Vec<rocket::Route> {
     routes![
         pages::index,
         pages::nav_services,
+        // Canonical configuration URLs (more specific paths before legacy aliases).
         pages::configuration,
+        pages::configuration_services,
+        pages::configuration_settings,
+        pages::configuration_versioning,
+        pages::configuration_option,
+        pages::configuration_core,
+        // Legacy partial aliases (still used as fallbacks; non-HTMX redirects).
         pages::option_pane,
         pages::services_grid,
         pages::core_grid,

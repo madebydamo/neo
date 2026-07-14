@@ -105,6 +105,34 @@ pub struct IndexContext {
     pub error: Option<String>,
 }
 
+/// Full configuration shell page (not used by services_grid partial).
+#[derive(Serialize)]
+pub struct ConfigurationPageContext {
+    pub theme: String,
+    /// If set, the nix evaluator hit an error/timeout. Shown in the shell banner.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// Partial URL loaded into `#config-content` on first paint (HTMX GET).
+    pub initial_content_url: String,
+    /// Active tab seed: services | settings | versioning.
+    pub initial_tab: String,
+    /// Optional breadcrumb detail (service/section name) before first swap settles.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub initial_detail: Option<String>,
+}
+
+impl Default for ConfigurationPageContext {
+    fn default() -> Self {
+        Self {
+            theme: String::new(),
+            error: None,
+            initial_content_url: "/configuration/services".to_string(),
+            initial_tab: "services".to_string(),
+            initial_detail: None,
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct BranchInfo {
     pub name: String,

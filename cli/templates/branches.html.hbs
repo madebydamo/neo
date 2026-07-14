@@ -16,7 +16,7 @@
         hx-target="#branch-status"
         hx-swap="innerHTML"
         hx-confirm="Switch working tree to {{name}} (affects visible settings and future actions until next switch)?"
-        hx-on::after-request="htmx.ajax('GET','/branches',{target:'#config-content',swap:'innerHTML'})">
+        hx-on::after-request="htmx.ajax('GET','/configuration/versioning',{target:'#config-content',swap:'innerHTML',push:'/configuration/versioning'})">
         <div class="font-mono flex items-center gap-2 truncate">
           <span>{{name}}</span>
           {{#if is_current}}

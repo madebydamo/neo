@@ -5,9 +5,13 @@
 
 /** Alpine shell for the config page: tabs, detail breadcrumb, and up navigation. */
 window.configShell = function configShell() {
+  var el = document.getElementById('config-shell');
+  var initialTab = (el && el.getAttribute('data-initial-tab')) || 'services';
+  var initialDetail = el && el.getAttribute('data-initial-detail');
+  if (initialDetail === '') initialDetail = null;
   return {
-    tab: 'services', // 'services' | 'settings' | 'versioning'
-    detail: null, // null | service/core section name when option pane is open
+    tab: initialTab, // 'services' | 'settings' | 'versioning'
+    detail: initialDetail || null, // null | service/core section name when option pane is open
 
     sectionLabel() {
       if (this.tab === 'settings') return 'Settings';
@@ -23,23 +27,26 @@ window.configShell = function configShell() {
       this.detail = null;
     },
 
+    /** Canonical tab content URL under /configuration/... */
+    tabUrl(tab) {
+      if (tab === 'settings') return '/configuration/settings';
+      if (tab === 'versioning') return '/configuration/versioning';
+      return '/configuration/services';
+    },
+
     /** Switch tab, clear detail, and load the corresponding grid/branches into #config-content. */
     loadTab(tab) {
       this.tab = tab;
       this.detail = null;
-      var url = '/services-grid';
-      if (tab === 'settings') url = '/core-grid';
-      else if (tab === 'versioning') url = '/branches';
-      htmx.ajax('GET', url, { target: '#config-content', swap: 'innerHTML' });
+      var url = this.tabUrl(tab);
+      htmx.ajax('GET', url, { target: '#config-content', swap: 'innerHTML', push: url });
     },
 
     /** Leave the option pane and return to the parent grid for the current tab. */
     goUp() {
       this.detail = null;
-      var url = '/services-grid';
-      if (this.tab === 'settings') url = '/core-grid';
-      else if (this.tab === 'versioning') url = '/branches';
-      htmx.ajax('GET', url, { target: '#config-content', swap: 'innerHTML' });
+      var url = this.tabUrl(this.tab);
+      htmx.ajax('GET', url, { target: '#config-content', swap: 'innerHTML', push: url });
     },
   };
 };
@@ -59,6 +66,10 @@ window.configShell = function configShell() {
         data.tab = pane.getAttribute('data-is-core') === 'true' ? 'settings' : 'services';
       } else {
         data.clearDetail();
+        // Infer active tab from grid/branches partials (Back/Forward history restore).
+        if (content && content.querySelector('#core-grid')) data.tab = 'settings';
+        else if (content && content.querySelector('#branches-section')) data.tab = 'versioning';
+        else if (content && content.querySelector('#services-grid')) data.tab = 'services';
       }
     } catch (e) {}
   }

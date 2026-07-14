@@ -53,7 +53,10 @@
         </div>
       </div>
 
-      <div id="config-shell" x-data="configShell()">
+      <div id="config-shell"
+           x-data="configShell()"
+           data-initial-tab="{{#if initial_tab}}{{initial_tab}}{{else}}services{{/if}}"
+           data-initial-detail="{{#if initial_detail}}{{initial_detail}}{{/if}}">
         <div class="tabs tabs-bordered mb-2 text-sm">
           <button
             type="button"
@@ -89,10 +92,13 @@
           <span class="opacity-40 select-none" aria-hidden="true">›</span>
           <span class="font-mono text-xs font-medium truncate" x-text="detail"></span>
         </div>
+        {{!-- hx-history-elt: history snapshots restore into this pane, not the whole body. --}}
         <div id="config-content"
-             hx-get="/services-grid"
+             hx-history-elt
+             hx-get="{{#if initial_content_url}}{{initial_content_url}}{{else}}/configuration/services{{/if}}"
              hx-trigger="load"
              hx-swap="innerHTML"
+             hx-push-url="false"
              class="min-h-[100px]">
           <div class="text-xs opacity-60 p-4 border border-dashed rounded">Loading...</div>
         </div>

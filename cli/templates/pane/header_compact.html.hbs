@@ -4,16 +4,18 @@
     {{#if is_core}}
       <button type="button"
               class="btn btn-ghost btn-xs flex-shrink-0"
-              hx-get="/core-grid"
+              hx-get="/configuration/settings"
               hx-target="#config-content"
               hx-swap="innerHTML"
+              hx-push-url="true"
               title="Back to Settings">← Settings</button>
     {{else}}
       <button type="button"
               class="btn btn-ghost btn-xs flex-shrink-0"
-              hx-get="/services-grid"
+              hx-get="/configuration/services"
               hx-target="#config-content"
               hx-swap="innerHTML"
+              hx-push-url="true"
               title="Back to Services">← Services</button>
     {{/if}}
     <h1 class="card-title font-mono">{{service}}</h1>

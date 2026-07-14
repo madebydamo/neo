@@ -10,9 +10,9 @@ use crate::commands::web::git_ops::{get_activation_graph, list_activation_branch
 use crate::commands::web::structs::{AppConfig, BranchesContext};
 use crate::commands::web::util::config_dir;
 
-#[get("/branches")]
-pub fn branches(config: &State<Arc<AppConfig>>) -> Template {
-    let dir = config_dir(&config);
+/// Shared branches partial template (used by `/branches` and `/configuration/versioning`).
+pub fn branches_template(config: &AppConfig) -> Template {
+    let dir = config_dir(config);
     let dir_str = dir.to_str().unwrap_or(".");
     let graph = get_activation_graph(dir_str);
     let brs = list_activation_branches(dir_str);
@@ -23,6 +23,12 @@ pub fn branches(config: &State<Arc<AppConfig>>) -> Template {
             branches: brs,
         },
     )
+}
+
+/// Legacy partial alias (same fragment as `/configuration/versioning` with HX-Request).
+#[get("/branches")]
+pub fn branches(config: &State<Arc<AppConfig>>) -> Template {
+    branches_template(config)
 }
 
 #[post("/git/switch/<br>")]
