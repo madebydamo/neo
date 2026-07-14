@@ -97,10 +97,15 @@ fn core_grid_template() -> Template {
     Template::render("core_grid", IndexContext::default())
 }
 
-/// Default configuration shell (services grid on first paint).
+/// Configuration home — full shell for browser navigation; services grid partial for HTMX.
+/// Canonical services URL is `/configuration` (breadcrumb / logo go here, not `/configuration/services`).
 #[get("/configuration")]
-pub async fn configuration(config: &State<Arc<AppConfig>>) -> Template {
-    configuration_shell(config, "/configuration/services", "services", None).await
+pub async fn configuration(config: &State<Arc<AppConfig>>, htmx: Htmx) -> Template {
+    if htmx.is_htmx() {
+        services_grid_template(config).await
+    } else {
+        configuration_shell(config, "/configuration", "services", None).await
+    }
 }
 
 /// Services grid — full shell for browser navigation, partial for HTMX.
@@ -109,7 +114,7 @@ pub async fn configuration_services(config: &State<Arc<AppConfig>>, htmx: Htmx) 
     if htmx.is_htmx() {
         services_grid_template(config).await
     } else {
-        configuration_shell(config, "/configuration/services", "services", None).await
+        configuration_shell(config, "/configuration", "services", None).await
     }
 }
 
@@ -193,7 +198,7 @@ pub async fn services_grid(config: &State<Arc<AppConfig>>, htmx: Htmx) -> ShellO
     if htmx.is_htmx() {
         ShellOrPartial::Template(services_grid_template(config).await)
     } else {
-        ShellOrPartial::Redirect(Redirect::to("/configuration/services"))
+        ShellOrPartial::Redirect(Redirect::to("/configuration"))
     }
 }
 

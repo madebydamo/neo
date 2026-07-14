@@ -105,21 +105,40 @@ window.configShell = function configShell() {
     tabUrl(tab) {
       if (tab === 'settings') return '/configuration/settings';
       if (tab === 'versioning') return '/configuration/versioning';
-      return '/configuration/services';
+      // Prefer /configuration (not /configuration/services) as the services home URL.
+      return '/configuration';
     },
 
     /**
-     * Navigate #config-content and push the URL into history (same as hx-push-url="true").
-     * Uses push:true so the request path becomes location (consistent with declarative nav).
+     * Navigate #config-content and push the URL into history.
+     *
+     * htmx 1.9 `htmx.ajax(..., { push })` is ignored — history only comes from
+     * `hx-push-url` on the *source* element. Pass #config-nav-helper as source
+     * (it has hx-push-url="true") so the request path is pushed like card nav.
      */
     navigateContent(url) {
+      if (typeof htmx === 'undefined' || !htmx.ajax) return;
       window.neoAllowNextConfigNav = true;
-      htmx.ajax('GET', url, {
+      var helper = document.getElementById('config-nav-helper');
+      var opts = {
         target: '#config-content',
         swap: 'innerHTML',
-        push: true,
         indicator: '#config-load-indicator',
-      });
+      };
+      if (helper) {
+        opts.source = helper;
+      }
+      var p = htmx.ajax('GET', url, opts);
+      // If helper is missing, still update the location bar after the swap.
+      if (!helper && p && typeof p.then === 'function') {
+        p.then(function () {
+          try {
+            if (location.pathname + location.search !== url) {
+              history.pushState({ htmx: true }, '', url);
+            }
+          } catch (e) {}
+        });
+      }
     },
 
     /** Switch tab, clear detail, and load the corresponding grid/branches into #config-content. */
@@ -135,6 +154,14 @@ window.configShell = function configShell() {
       if (!window.neoConfirmLeaveConfigForm()) return;
       this.detail = null;
       this.navigateContent(this.tabUrl(this.tab));
+    },
+
+    /** Logo / home: services tab at /configuration. */
+    goHome() {
+      if (!window.neoConfirmLeaveConfigForm()) return;
+      this.tab = 'services';
+      this.detail = null;
+      this.navigateContent('/configuration');
     },
   };
 };

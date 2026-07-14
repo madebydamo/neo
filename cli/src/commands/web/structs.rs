@@ -126,7 +126,7 @@ impl Default for ConfigurationPageContext {
         Self {
             theme: String::new(),
             error: None,
-            initial_content_url: "/configuration/services".to_string(),
+            initial_content_url: "/configuration".to_string(),
             initial_tab: "services".to_string(),
             initial_detail: None,
         }

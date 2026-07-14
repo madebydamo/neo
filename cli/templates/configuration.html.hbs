@@ -49,13 +49,16 @@
         <div class="navbar h-16 min-h-16 bg-base-100/95 backdrop-blur rounded-box mb-6 shadow sticky z-30"
              style="top: var(--neo-sticky-bar-top)">
           <div class="flex-1 min-w-0 flex items-center gap-2 px-4">
-            <span class="text-2xl font-bold flex-shrink-0">neo</span>
+            <button type="button"
+                    class="text-2xl font-bold flex-shrink-0 hover:opacity-80 transition-opacity"
+                    @click="goHome()"
+                    title="Back to configuration home">neo</button>
             {{!-- Default subtitle when on a grid/tab. --}}
-            <span class="text-sm opacity-60 truncate"
+            <span class="text-sm opacity-50 truncate"
                   x-show="!detail"
                   x-cloak>homeserver config</span>
-            {{!-- Active service/section name while editing options. --}}
-            <span class="text-sm font-mono font-semibold truncate min-w-0"
+            {{!-- Active service/section while editing (light, not bold). --}}
+            <span class="text-sm font-mono font-normal opacity-70 truncate min-w-0"
                   x-show="detail"
                   x-text="detail"
                   x-cloak
@@ -115,10 +118,19 @@
         <div id="config-load-indicator" class="h-1 mb-1" aria-hidden="true">
           <progress class="progress progress-primary w-full h-1"></progress>
         </div>
+        {{!--
+          Source for shell nav: htmx.ajax ignores context.push; history only updates from
+          hx-push-url on the source element. navigateContent() passes this as `source`.
+        --}}
+        <span id="config-nav-helper"
+              class="hidden"
+              aria-hidden="true"
+              hx-push-url="true"
+              hx-indicator="#config-load-indicator"></span>
         {{!-- hx-history-elt: history snapshots restore into this pane, not the whole body. --}}
         <div id="config-content"
              hx-history-elt
-             hx-get="{{#if initial_content_url}}{{initial_content_url}}{{else}}/configuration/services{{/if}}"
+             hx-get="{{#if initial_content_url}}{{initial_content_url}}{{else}}/configuration{{/if}}"
              hx-trigger="load"
              hx-swap="innerHTML"
              hx-push-url="false"
