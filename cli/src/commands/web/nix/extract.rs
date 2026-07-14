@@ -6,6 +6,7 @@ use crate::commands::web::structs::{
     ExtractedServiceGroups, IndexContext, NavigatorContext, OptionPaneContext, OptionSchema,
     RuntimeUnit, ServiceMeta,
 };
+use crate::commands::web::util::{escape_nix_string, service_name_ok};
 
 fn value_to_display(v: &serde_json::Value) -> String {
     match v {
@@ -128,12 +129,40 @@ impl NixEvaluator {
         }
     }
 
+    fn invalid_pane(target: &PaneTarget, reason: &str) -> OptionPaneContext {
+        OptionPaneContext {
+            service: target.label().to_string(),
+            meta: None,
+            options: vec![],
+            options_json: "[]".to_string(),
+            save_endpoint: target.save_endpoint(),
+            is_core: target.is_core(),
+            error: Some(reason.to_string()),
+            units: vec![],
+            containers: std::collections::HashMap::new(),
+        }
+    }
+
     async fn extract_pane(&mut self, target: PaneTarget) -> OptionPaneContext {
+        // Same charset as service names (alnum, `-`, `_`); rejects empty, path
+        // separators, and the literal fallback "service".
+        if !service_name_ok(target.label()) {
+            return Self::invalid_pane(
+                &target,
+                &format!("Invalid {} name for nix extract", if target.is_core() {
+                    "section"
+                } else {
+                    "service"
+                }),
+            );
+        }
+
         let (arg_name, arg_val) = target.nix_arg();
         let label = target.label();
+        let escaped = escape_nix_string(arg_val);
         let inner = format!(
             r#"{} {{ neoFlake = f; {} = "{}"; }}"#,
-            EXTRACT_SERVICE_OPTIONS.load_name, arg_name, arg_val
+            EXTRACT_SERVICE_OPTIONS.load_name, arg_name, escaped
         );
         let raw: RawPane = match self.query_json(&inner).await {
             Ok(v) => v,

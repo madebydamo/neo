@@ -38,29 +38,11 @@ pub fn json_to_toml_value(v: &serde_json::Value) -> Option<Value> {
     }
 }
 
+/// Convert JSON to a TOML item. Objects become nested tables; other values
+/// reuse [`json_to_toml_value`].
 pub fn json_to_toml_item(v: &serde_json::Value) -> Option<Item> {
     match v {
         serde_json::Value::Null => None,
-        serde_json::Value::Bool(b) => Some(Item::Value(Value::from(*b))),
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                Some(Item::Value(Value::from(i)))
-            } else if let Some(f) = n.as_f64() {
-                Some(Item::Value(Value::from(f)))
-            } else {
-                None
-            }
-        }
-        serde_json::Value::String(s) => Some(Item::Value(Value::from(s.clone()))),
-        serde_json::Value::Array(arr) => {
-            let mut tarr = toml_edit::Array::new();
-            for item in arr {
-                if let Some(tv) = json_to_toml_value(item) {
-                    tarr.push(tv);
-                }
-            }
-            Some(Item::Value(Value::from(tarr)))
-        }
         serde_json::Value::Object(obj) => {
             let mut ttable = Table::new();
             for (k, val) in obj {
@@ -70,6 +52,7 @@ pub fn json_to_toml_item(v: &serde_json::Value) -> Option<Item> {
             }
             Some(Item::Table(ttable))
         }
+        other => json_to_toml_value(other).map(Item::Value),
     }
 }
 

@@ -3,13 +3,14 @@ use std::sync::Arc;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{post, State};
-use toml_edit::{Item, Table};
+use toml_edit::{DocumentMut, Item, Table};
 
 use crate::commands::web::settings::json_to_toml_value;
 use crate::commands::web::settings::save::{
     apply_payload_to_table, finish_save_state, load_settings_doc,
 };
 use crate::commands::web::structs::AppConfig;
+use crate::commands::web::util::{core_section_ok, service_name_ok};
 
 #[post("/save/<service>", data = "<payload>")]
 pub fn save_service(
@@ -17,9 +18,7 @@ pub fn save_service(
     service: &str,
     payload: Json<serde_json::Value>,
 ) -> Status {
-    // Guard against the client accidentally sending the literal fallback value
-    // (or an empty service). This used to result in [services.service] in the TOML.
-    if service.trim().is_empty() || service == "service" {
+    if !service_name_ok(service) {
         eprintln!("web: refusing save for invalid service name {:?}", service);
         return Status::BadRequest;
     }
@@ -59,100 +58,163 @@ pub fn save_service(
     finish_save_state(settings_path, &mut doc, config)
 }
 
+/// Core sub-keys that live as tables/scalars under `[core]` (not top-level sections).
+const CORE_NESTED_SECTIONS: &[&str] = &[
+    "ssh",
+    "volumes",
+    "timeZone",
+    "uid",
+    "gid",
+    "hostname",
+    "hashedLinuxPassword",
+    "core",
+];
+
 #[post("/save-core/<section>", data = "<payload>")]
 pub fn save_core_section(
     config: &State<Arc<AppConfig>>,
     section: &str,
     payload: Json<serde_json::Value>,
 ) -> Status {
-    if section.trim().is_empty() {
+    if !core_section_ok(section) {
+        eprintln!("web: refusing save for unknown core section {:?}", section);
         return Status::BadRequest;
     }
+
     let settings_path = &config.settings_path;
     let mut doc = match load_settings_doc(settings_path) {
         Ok(d) => d,
         Err(s) => return s,
     };
-    let core_sections = [
-        "ssh",
-        "volumes",
-        "timeZone",
-        "uid",
-        "gid",
-        "hostname",
-        "hashedLinuxPassword",
-        "core",
-    ];
-    let is_core = core_sections.contains(&section);
+
+    let is_core_nested = CORE_NESTED_SECTIONS.contains(&section);
+
     // Remove possible old top-level location (for renames/migrations).
     // For the aggregate "core" we merge deltas instead of replacing/removing.
     if section != "core" {
         doc.remove(section);
     }
-    if is_core {
-        // Ensure [core] table
-        if !doc.contains_key("core") || !doc.get("core").map_or(false, |c| c.is_table()) {
-            doc.insert("core", Item::Table(Table::new()));
-        }
-        let core_table = doc.get_mut("core").unwrap().as_table_mut().unwrap();
-        if section != "core" {
-            core_table.remove(section);
-        }
-        let payload_map = match payload.as_object() {
-            Some(m) if !m.is_empty() => m,
-            _ => {
-                if section == "core" {
-                    // No deltas sent for aggregate core (e.g. all at defaults). Leave existing [core] intact.
-                    // If we just ensured an empty one, clean it up.
-                    if let Some(t) = doc.get("core").and_then(|c| c.as_table()) {
-                        if t.is_empty() {
-                            doc.remove("core");
-                        }
-                    }
-                    return finish_save_state(settings_path, &mut doc, config);
-                }
-                core_table.remove(section);
-                return finish_save_state(settings_path, &mut doc, config);
-            }
-        };
-        // Scalars under core (timeZone, uid, gid, hostname, hashedLinuxPassword) are values under [core]
-        // not bare at root. The extract renames the single field name to the section for them.
-        // The aggregate "core" (for the cleaned grid) merges all its fields (scalars + dotted subs) without clearing siblings.
-        if payload_map.len() == 1 && payload_map.contains_key(section) {
-            if let Some(v) = payload_map.get(section) {
-                if let Some(tval) = json_to_toml_value(v) {
-                    if section != "core" {
-                        core_table.insert(section, Item::Value(tval));
-                    }
-                }
-            }
-        } else {
-            let mut tbl = Table::new();
-            apply_payload_to_table(&mut tbl, payload_map);
-            if !tbl.is_empty() {
-                if section == "core" {
-                    // Merge deltas (scalars + dotted sub keys like "volumes.root", "ssh.authorizedKeys")
-                    // directly into the core table. This supports editing all core options in one pane
-                    // without losing unsent (default) siblings.
-                    for (k, item) in tbl.iter() {
-                        core_table.insert(k, item.clone());
-                    }
-                } else {
-                    core_table.insert(section, Item::Table(tbl));
-                }
-            }
-        }
+
+    let status = if is_core_nested {
+        apply_core_nested_section(&mut doc, section, &payload)
     } else {
-        // Top-level sections: neo-service, neo-cli, disko (and the aggregate "core" is handled in is_core branch)
-        let payload_map = match payload.as_object() {
-            Some(m) if !m.is_empty() => m,
-            _ => return finish_save_state(settings_path, &mut doc, config),
-        };
-        let mut tbl = Table::new();
-        apply_payload_to_table(&mut tbl, payload_map);
-        if !tbl.is_empty() {
-            doc.insert(section, Item::Table(tbl));
+        // Top-level sections: neo-service, neo-cli, disko
+        save_toplevel_section(&mut doc, section, &payload)
+    };
+
+    match status {
+        Ok(()) => finish_save_state(settings_path, &mut doc, config),
+        Err(s) => s,
+    }
+}
+
+/// Ensure `[core]` exists and return a mutable reference, or InternalServerError.
+fn ensure_core_table(doc: &mut DocumentMut) -> Result<&mut Table, Status> {
+    if !doc.contains_key("core") || !doc.get("core").map_or(false, |c| c.is_table()) {
+        doc.insert("core", Item::Table(Table::new()));
+    }
+    doc.get_mut("core")
+        .and_then(|c| c.as_table_mut())
+        .ok_or(Status::InternalServerError)
+}
+
+fn drop_empty_core(doc: &mut DocumentMut) {
+    if let Some(t) = doc.get("core").and_then(|c| c.as_table()) {
+        if t.is_empty() {
+            doc.remove("core");
         }
     }
-    finish_save_state(settings_path, &mut doc, config)
+}
+
+fn apply_core_nested_section(
+    doc: &mut DocumentMut,
+    section: &str,
+    payload: &serde_json::Value,
+) -> Result<(), Status> {
+    let payload_map = match payload.as_object() {
+        Some(m) if !m.is_empty() => m,
+        _ => {
+            // Empty payload: clear nested key (when != "core"), drop empty [core].
+            {
+                let core_table = ensure_core_table(doc)?;
+                if section != "core" {
+                    core_table.remove(section);
+                }
+            }
+            drop_empty_core(doc);
+            return Ok(());
+        }
+    };
+
+    let core_table = ensure_core_table(doc)?;
+    if section != "core" {
+        core_table.remove(section);
+    }
+
+    // Scalars under core (timeZone, uid, …) arrive as a single-key payload named after the section.
+    // Aggregate "core" and nested tables (ssh, volumes) use multi-key / table payloads.
+    if payload_map.len() == 1 && payload_map.contains_key(section) {
+        if let Some(v) = payload_map.get(section) {
+            save_core_scalar(core_table, section, v);
+        }
+    } else if section == "core" {
+        save_core_aggregate(core_table, payload_map);
+    } else {
+        save_core_subtable(core_table, section, payload_map);
+    }
+    Ok(())
+}
+
+/// Insert a scalar value under `[core].<section>` (timeZone, uid, gid, hostname, hashedLinuxPassword).
+fn save_core_scalar(core_table: &mut Table, section: &str, value: &serde_json::Value) {
+    if section == "core" {
+        // Single-key payload named "core" is not a scalar; treat as no-op (matches prior behavior).
+        return;
+    }
+    if let Some(tval) = json_to_toml_value(value) {
+        core_table.insert(section, Item::Value(tval));
+    }
+}
+
+/// Merge aggregate core deltas (scalars + dotted sub keys) into `[core]`.
+fn save_core_aggregate(
+    core_table: &mut Table,
+    payload_map: &serde_json::Map<String, serde_json::Value>,
+) {
+    let mut tbl = Table::new();
+    apply_payload_to_table(&mut tbl, payload_map);
+    for (k, item) in tbl.iter() {
+        core_table.insert(k, item.clone());
+    }
+}
+
+/// Insert a nested table under `[core].<section>` (ssh, volumes).
+fn save_core_subtable(
+    core_table: &mut Table,
+    section: &str,
+    payload_map: &serde_json::Map<String, serde_json::Value>,
+) {
+    let mut tbl = Table::new();
+    apply_payload_to_table(&mut tbl, payload_map);
+    if !tbl.is_empty() {
+        core_table.insert(section, Item::Table(tbl));
+    }
+}
+
+/// Top-level sections outside `[core]`: neo-service, neo-cli, disko.
+fn save_toplevel_section(
+    doc: &mut DocumentMut,
+    section: &str,
+    payload: &serde_json::Value,
+) -> Result<(), Status> {
+    let payload_map = match payload.as_object() {
+        Some(m) if !m.is_empty() => m,
+        _ => return Ok(()),
+    };
+    let mut tbl = Table::new();
+    apply_payload_to_table(&mut tbl, payload_map);
+    if !tbl.is_empty() {
+        doc.insert(section, Item::Table(tbl));
+    }
+    Ok(())
 }

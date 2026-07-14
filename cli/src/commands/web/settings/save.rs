@@ -116,14 +116,26 @@ pub fn apply_payload_to_table(
     }
 }
 
-/// After a successful settings write: refresh nix evaluator and push action-bar state.
-pub fn after_save(config: &AppConfig) {
+/// Refresh evaluator, action bar, and schema cache after settings.toml changes
+/// (save or restore). Safe to call from routes that rewrite settings without
+/// going through [`finish_save`].
+pub fn refresh_after_settings_change(config: &AppConfig) {
     let ev = config.evaluator.clone();
     tokio::spawn(async move {
         let mut g = ev.lock().await;
         let _ = g.refresh().await;
     });
     broadcast_action_bar(config);
+    let cache = config.schema_cache.clone();
+    tokio::spawn(async move {
+        let mut c = cache.write().await;
+        c.invalidate_all();
+    });
+}
+
+/// After a successful settings write: refresh nix evaluator, action bar, schema cache.
+pub fn after_save(config: &AppConfig) {
+    refresh_after_settings_change(config);
 }
 
 pub fn finish_save(path: &Path, doc: &mut DocumentMut, config: &AppConfig) -> Status {

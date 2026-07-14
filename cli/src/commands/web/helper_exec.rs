@@ -29,12 +29,15 @@ pub async fn run_helper_script(
     if !script.is_absolute() {
         bail!("helper script path must be absolute");
     }
-    // Defense-in-depth: only store paths (or allow non-store for local dev if needed).
+    // Defense-in-depth: release builds only run store-resident helpers.
     // Primary trust is that `script` came from server-side schema, never the client.
+    // Debug builds still allow absolute non-store paths for local dev.
     let script_s = script.to_string_lossy();
-    if !script_s.starts_with("/nix/store/") && !cfg!(debug_assertions) {
-        // In release, prefer store paths; still allow if absolute and re-resolved from schema.
-        // Keep check soft: only reject empty/relative (already handled).
+    if !cfg!(debug_assertions) && !script_s.starts_with("/nix/store/") {
+        bail!(
+            "helper script must be under /nix/store/ in release builds (got {})",
+            script_s
+        );
     }
 
     let bash = std::env::var("NEO_HELPER_BASH").unwrap_or_else(|_| "bash".to_string());

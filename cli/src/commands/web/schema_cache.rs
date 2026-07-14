@@ -46,7 +46,6 @@ impl SchemaCache {
         );
     }
 
-    #[allow(dead_code)]
     pub fn invalidate_all(&mut self) {
         self.entries.clear();
     }
