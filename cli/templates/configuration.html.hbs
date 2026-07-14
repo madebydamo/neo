@@ -14,6 +14,12 @@
     <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
     <script src="https://unpkg.com/alpinejs" defer></script>
     <script src="/static/option_form.js"></script>
+    <style>
+      /* Sticky action bar offset (matches body p-6). */
+      :root {
+        --neo-sticky-bar-top: 1.5rem;
+      }
+    </style>
   </head>
   <body class="bg-base-300 text-base-content p-6 min-h-dvh" data-theme="{{theme}}">
     {{#if error}}
@@ -23,7 +29,9 @@
       </div>
     {{/if}}
     <div class="max-w-7xl mx-auto" hx-ext="ws" ws-connect="/ws/status">
-      <div class="navbar bg-base-100 rounded-box mb-6 shadow">
+      {{!-- Sticky config bar: title + action buttons stay visible while scrolling. --}}
+      <div class="navbar h-16 min-h-16 bg-base-100/95 backdrop-blur rounded-box mb-6 shadow sticky z-30"
+           style="top: var(--neo-sticky-bar-top)">
         <div class="flex-1 min-w-0">
           <span class="text-2xl font-bold px-4">neo</span>
           <span class="text-sm opacity-60">homeserver config</span>
