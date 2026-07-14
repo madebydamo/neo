@@ -28,6 +28,7 @@
             // lib.neo.mkContainerDefinitions {
               beszel = "henrygd/beszel:latest";
             }
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/beszel"
             // lib.neo.mkServiceMeta {
               category = "Monitoring";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/beszel.svg";

@@ -1,6 +1,10 @@
 # SWAG reverse proxy service options.
 {...}: {
-  flake.modules.nixos.swag-option = {lib, ...}:
+  flake.modules.nixos.swag-option = {
+    config,
+    lib,
+    ...
+  }:
     with lib;
     with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.swag = mkOption {
@@ -49,11 +53,12 @@
             }
             // lib.neo.mkContainerDefinitions {
               swag = "lscr.io/linuxserver/swag:latest";
+              extraUnits = [
+                "swag-cert-reloader"
+                "swag-patcher"
+              ];
             }
-            // lib.neo.mkSystemdUnits [
-              "swag-cert-reloader"
-              "swag-patcher"
-            ]
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/swag"
             // lib.neo.mkServiceMeta {
               category = "Core";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nginx.svg";

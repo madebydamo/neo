@@ -117,14 +117,26 @@ impl NixEvaluator {
         }
         anyhow::bail!(
             "timeout waiting for marker {marker}; output so far: {}",
-            &collected.chars().rev().take(2000).collect::<String>().chars().rev().collect::<String>()
+            &collected
+                .chars()
+                .rev()
+                .take(2000)
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect::<String>()
         )
     }
 
     /// Queue a top-level binding (may be long/silent), then a marker print.
     /// The marker only evaluates after the binding finishes — so we truly wait for getFlake.
     /// Caller owns `busy` (used during initialize_repl / refresh).
-    async fn bind_then_marker(&mut self, bind_cmd: &str, marker: &str, overall: Duration) -> Result<()> {
+    async fn bind_then_marker(
+        &mut self,
+        bind_cmd: &str,
+        marker: &str,
+        overall: Duration,
+    ) -> Result<()> {
         self.stdin.write_all(bind_cmd.as_bytes()).await?;
         self.stdin.write_all(b"\n").await?;
         self.stdin
@@ -198,7 +210,9 @@ impl NixEvaluator {
         )
         .await
         .context("bind flake f")?;
-        println!("web: flake f bound (memoized in this nix repl process until config mtime refresh)");
+        println!(
+            "web: flake f bound (memoized in this nix repl process until config mtime refresh)"
+        );
 
         let import_dir = self.eval_dir.display().to_string();
         for e in NIX_EXTRACTORS {

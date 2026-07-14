@@ -19,8 +19,8 @@
             }
             // lib.neo.mkContainerDefinitions {
               collabora = "collabora/code";
+              extraUnits = ["collabora-setup"];
             }
-            // lib.neo.mkSystemdUnits ["collabora-setup"]
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = "https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/collaboraonline.svg";

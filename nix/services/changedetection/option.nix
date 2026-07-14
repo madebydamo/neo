@@ -32,6 +32,7 @@
               changedetection = "dgtlmoon/changedetection.io";
               "changedetection-webengine" = "selenium/standalone-chrome-debug:3.141.59";
             }
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/changedetection"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/changedetection.svg";

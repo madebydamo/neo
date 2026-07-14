@@ -1,4 +1,4 @@
-# Container and systemd unit helpers for image configurability, auto-updates, and neo web UI status/logs.
+# Container, systemd unit, and appdata helpers for image configurability, auto-updates, and neo web UI.
 {lib, ...}: {
   libExtensions.containers = {
     neo = {
@@ -28,6 +28,19 @@
             default = units;
             internal = true;
             description = "Systemd unit names (without .service) managed by this service for neo web UI status/logs/control.";
+          };
+        };
+
+      # Declares the host directory that holds this service's mutable app data.
+      # Neo web uses it for "Clear appdata" (stop units → rm -rf → start units).
+      # Pass an absolute path, typically "${config.neo.core.volumes.appdata}/<name>".
+      mkAppdata = path:
+        with lib; {
+          appdata = mkOption {
+            type = types.nullOr types.str;
+            default = path;
+            internal = true;
+            description = "Host path of this service's appdata directory; used by neo web UI clear-appdata (stop related units, remove recursively, start again).";
           };
         };
 

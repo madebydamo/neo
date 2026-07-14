@@ -25,8 +25,9 @@
             }
             // lib.neo.mkContainerDefinitions {
               syncthing = "linuxserver/syncthing:latest";
+              extraUnits = ["syncthing-config"];
             }
-            // lib.neo.mkSystemdUnits ["syncthing-config"]
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/syncthing"
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = "https://raw.githubusercontent.com/syncthing/syncthing/main/assets/logo-only.svg";

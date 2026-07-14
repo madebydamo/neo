@@ -29,6 +29,10 @@ struct RawPane {
     #[serde(default)]
     containers: std::collections::HashMap<String, String>,
     #[serde(default)]
+    appdata: Option<String>,
+    #[serde(default, rename = "appdataRoot")]
+    appdata_root: Option<String>,
+    #[serde(default)]
     error: Option<String>,
 }
 
@@ -140,6 +144,8 @@ impl NixEvaluator {
             error: Some(reason.to_string()),
             units: vec![],
             containers: std::collections::HashMap::new(),
+            appdata: None,
+            appdata_root: None,
         }
     }
 
@@ -149,11 +155,14 @@ impl NixEvaluator {
         if !service_name_ok(target.label()) {
             return Self::invalid_pane(
                 &target,
-                &format!("Invalid {} name for nix extract", if target.is_core() {
-                    "section"
-                } else {
-                    "service"
-                }),
+                &format!(
+                    "Invalid {} name for nix extract",
+                    if target.is_core() {
+                        "section"
+                    } else {
+                        "service"
+                    }
+                ),
             );
         }
 
@@ -184,6 +193,8 @@ impl NixEvaluator {
                     options: vec![],
                     units: vec![],
                     containers: std::collections::HashMap::new(),
+                    appdata: None,
+                    appdata_root: None,
                     error: Some(msg),
                 }
             }
@@ -205,6 +216,8 @@ impl NixEvaluator {
             error: raw.error,
             units,
             containers: raw.containers,
+            appdata: raw.appdata.filter(|p| !p.is_empty()),
+            appdata_root: raw.appdata_root.filter(|p| !p.is_empty()),
         }
     }
 

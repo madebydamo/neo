@@ -65,7 +65,12 @@ pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &s
             eval_busy: busy,
             unit_updates: unit_tx,
             pulls_in_flight: Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
-            schema_cache: Arc::new(tokio::sync::RwLock::new(schema_cache::SchemaCache::default())),
+            clear_appdata_in_flight: Arc::new(std::sync::Mutex::new(
+                std::collections::HashSet::new(),
+            )),
+            schema_cache: Arc::new(tokio::sync::RwLock::new(
+                schema_cache::SchemaCache::default(),
+            )),
         });
         eprintln!(
             "web: config dir {} settings {:?}",
@@ -106,4 +111,3 @@ pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &s
     })?;
     Ok(())
 }
-

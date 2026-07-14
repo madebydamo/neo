@@ -1,6 +1,10 @@
 # Vaultwarden service options.
 {...}: {
-  flake.modules.nixos.vaultwarden-option = {lib, ...}:
+  flake.modules.nixos.vaultwarden-option = {
+    config,
+    lib,
+    ...
+  }:
     with lib;
     with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.services.vaultwarden = mkOption {
@@ -35,6 +39,7 @@
             // lib.neo.mkContainerDefinitions {
               vaultwarden = "vaultwarden/server:latest";
             }
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/vaultwarden"
             // lib.neo.mkServiceMeta {
               category = "Security";
               icon = "https://raw.githubusercontent.com/dani-garcia/vaultwarden/main/resources/vaultwarden-icon.svg";

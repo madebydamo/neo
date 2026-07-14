@@ -8,10 +8,12 @@ use tokio::process::Command as AsyncCommand;
 
 use crate::commands::web::structs::AppConfig;
 use crate::commands::web::units::{
-    normalize_container_unit, perform_unit_action, run_container_pull, schedule_unit_refresh_burst,
-    try_begin_pull, unit_controls_oob_fragment, unit_name_valid, update_out_oob, UnitAction,
+    clear_appdata_btn_oob, clear_appdata_out_oob, is_safe_appdata_path, normalize_container_unit,
+    perform_unit_action, run_clear_appdata, run_container_pull, schedule_unit_refresh_burst,
+    try_begin_clear_appdata, try_begin_pull, unit_controls_oob_fragment, unit_name_valid,
+    update_out_oob, UnitAction,
 };
-use crate::commands::web::util::{escape_html, sudo_cmd};
+use crate::commands::web::util::{escape_html, service_name_ok, sudo_cmd};
 
 /// Shared post-action path: kick systemctl, push OOB once, then burst-refresh while it settles.
 /// Buttons use hx-swap="none"; the returned OOB still updates the controls row.
@@ -79,6 +81,77 @@ pub fn container_update(container: &str, config: &State<Arc<AppConfig>>) -> RawH
     });
 
     RawHtml(format!("{out}{ctl}"))
+}
+
+/// Clear a service's appdata: stop all related units, rm -rf the declared path, start again.
+/// Path and units come from trusted flake evaluation (never from the client).
+#[post("/service/<service>/clear-appdata")]
+pub async fn clear_appdata(service: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
+    if !service_name_ok(service) {
+        return RawHtml(String::new());
+    }
+
+    let pane = {
+        let mut ev = config.evaluator.lock().await;
+        ev.extract_service_options(service).await
+    };
+
+    if let Some(err) = pane.error.as_ref() {
+        let (inner, title) = (
+            format!(
+                r#"<span class="text-error truncate">✗ {}</span>"#,
+                escape_html(&format!("eval failed: {}", err))
+            ),
+            format!("eval failed: {}", err),
+        );
+        return RawHtml(clear_appdata_out_oob(service, &inner, &title));
+    }
+
+    let appdata = match pane.appdata.as_ref() {
+        Some(p) if !p.is_empty() => p.clone(),
+        _ => {
+            let msg = "no appdata path declared for this service";
+            let inner = format!(r#"<span class="text-error truncate">✗ {}</span>"#, msg);
+            return RawHtml(clear_appdata_out_oob(service, &inner, msg));
+        }
+    };
+
+    if !is_safe_appdata_path(&appdata, pane.appdata_root.as_deref()) {
+        let msg = format!("refusing unsafe appdata path: {}", appdata);
+        let inner = format!(
+            r#"<span class="text-error truncate">✗ {}</span>"#,
+            escape_html(&msg)
+        );
+        return RawHtml(clear_appdata_out_oob(service, &inner, &msg));
+    }
+
+    if !try_begin_clear_appdata(config, service) {
+        let out = clear_appdata_out_oob(
+            service,
+            r#"<span class="inline-flex items-center gap-1 text-info"><span class="loading loading-spinner loading-xs"></span><span>already clearing…</span></span>"#,
+            "clear appdata already in progress",
+        );
+        let btn = clear_appdata_btn_oob(service, &appdata, true);
+        return RawHtml(format!("{out}{btn}"));
+    }
+
+    let units: Vec<String> = pane.units.iter().map(|u| u.name.clone()).collect();
+    let out = clear_appdata_out_oob(
+        service,
+        r#"<span class="inline-flex items-center gap-1 text-info"><span class="loading loading-spinner loading-xs"></span><span>starting…</span></span>"#,
+        "starting clear appdata",
+    );
+    let btn = clear_appdata_btn_oob(service, &appdata, true);
+    let _ = config.unit_updates.send(out.clone());
+    let _ = config.unit_updates.send(btn.clone());
+
+    let cfg = Arc::clone(config);
+    let svc = service.to_string();
+    tokio::spawn(async move {
+        run_clear_appdata(svc, appdata, units, cfg).await;
+    });
+
+    RawHtml(format!("{out}{btn}"))
 }
 
 /// SSE endpoint for live journalctl follow in the logs dialog.

@@ -44,6 +44,7 @@
               "paperless-db" = "postgres:16";
               "paperless" = "ghcr.io/paperless-ngx/paperless-ngx:latest";
             }
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/paperless"
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/paperless-ngx.svg";

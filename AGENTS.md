@@ -82,7 +82,9 @@ in {
 - Options: `enabled = mkEnableOption "…";`, snake_case attrs (`neo.services.*`), camelCase locals.
 - Reverse proxy: `// neo.mkReverseProxyOptions { … }` (or `lib.neo…` where used that way).
 - Containers: `// lib.neo.mkContainerDefinitions { name = "image:tag"; };` then `image = cfg.containers.name;`.
-- Units only: `// lib.neo.mkSystemdUnits [ "unit" ];`.
+  Extra non-docker units: `extraUnits = [ "my-setup" ];` inside `mkContainerDefinitions` (do not call `mkSystemdUnits` after it — that overwrites docker units).
+- Units only (no containers): `// lib.neo.mkSystemdUnits [ "unit" ];`.
+- Appdata (for web UI “Clear appdata”): `// lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/<name>";`.
 - Volumes: `config.neo.core.volumes.appdata` (etc.), not hard-coded paths.
 - Internal services: Docker `networks = ["internal"];`, `restart` always where applicable.
 - Option UI helpers (tokens, bcrypt, mkpasswd): `helper = lib.neo.helpers.…` — see `nix/lib/helpers/`.

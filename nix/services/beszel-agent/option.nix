@@ -34,6 +34,7 @@
             // lib.neo.mkContainerDefinitions {
               "beszel-agent" = "henrygd/beszel-agent:latest";
             }
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/beszel-agent"
             // lib.neo.mkServiceMeta {
               category = "Monitoring";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/beszel.svg";

@@ -29,6 +29,7 @@
               "searxng-redis" = "docker.io/valkey/valkey:8-alpine";
               searxng = "docker.io/searxng/searxng:latest";
             }
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/searxng"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/searxng.svg";

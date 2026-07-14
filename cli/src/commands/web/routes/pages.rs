@@ -98,10 +98,7 @@ fn core_grid_template() -> Template {
 }
 
 /// Shared body for `/configuration` and `/configuration/services` (identical UX).
-async fn configuration_services_body(
-    config: &State<Arc<AppConfig>>,
-    htmx: Htmx,
-) -> Template {
+async fn configuration_services_body(config: &State<Arc<AppConfig>>, htmx: Htmx) -> Template {
     if htmx.is_htmx() {
         services_grid_template(config).await
     } else {

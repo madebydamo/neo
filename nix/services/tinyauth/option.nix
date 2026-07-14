@@ -43,6 +43,7 @@
             // lib.neo.mkContainerDefinitions {
               tinyauth = "ghcr.io/steveiliop56/tinyauth:v5";
             }
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/tinyauth"
             // lib.neo.mkServiceMeta {
               category = "Security";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/tinyauth.svg";

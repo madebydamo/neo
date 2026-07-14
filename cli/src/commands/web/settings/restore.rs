@@ -14,8 +14,7 @@ pub fn restore_settings_from_applied(config: &AppConfig) -> Result<(), String> {
     let dir_str = dir.to_str().unwrap_or(".");
     let source = PathBuf::from("/etc/neo/settings.toml");
     let dummy = DocumentMut::new();
-    paste_settings(dir_str, &source, &dummy, false, &config.nix_cmd)
-        .map_err(|e| e.to_string())?;
+    paste_settings(dir_str, &source, &dummy, false, &config.nix_cmd).map_err(|e| e.to_string())?;
     refresh_after_settings_change(config);
     Ok(())
 }

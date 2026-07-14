@@ -30,6 +30,7 @@
             // lib.neo.mkContainerDefinitions {
               filebrowser = "filebrowser/filebrowser:latest";
             }
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/filebrowser"
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = "https://filebrowser.org/static/logo.png";

@@ -158,6 +158,8 @@ pub struct AppConfig {
     pub unit_updates: tokio::sync::broadcast::Sender<String>,
     /// Systemd unit names with an in-flight docker pull+restart (dedup + disable ↻ UI).
     pub pulls_in_flight: Arc<Mutex<HashSet<String>>>,
+    /// Service names with an in-flight clear-appdata operation (stop → rm → start).
+    pub clear_appdata_in_flight: Arc<Mutex<HashSet<String>>>,
     /// Process-local option schema cache for helper resolution (avoids re-taking eval mutex).
     pub schema_cache: Arc<tokio::sync::RwLock<super::schema_cache::SchemaCache>>,
 }
@@ -294,4 +296,10 @@ pub struct OptionPaneContext {
     /// Current container name -> image map for this service (from containers registry; editable in form).
     #[serde(default)]
     pub containers: std::collections::HashMap<String, String>,
+    /// Host path of this service's appdata directory (from mkAppdata); enables Clear appdata in the UI.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appdata: Option<String>,
+    /// Global AppData volume root (`neo.core.volumes.appdata`); used to validate clear-appdata paths.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appdata_root: Option<String>,
 }

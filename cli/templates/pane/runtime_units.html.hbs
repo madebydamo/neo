@@ -2,9 +2,22 @@
   {{!-- Runtime unit rows: live ActiveState + controls are pushed over /ws/status
        after the configuration page registers these units (watch_replace). --}}
   <div class="mb-3 p-2 bg-base-200/60 rounded border border-base-300" id="runtime-units" data-units="{{#each units}}{{name}}{{#unless @last}} {{/unless}}{{/each}}">
-    <div class="text-xs font-semibold mb-1.5 flex items-center gap-2">
+    <div class="text-xs font-semibold mb-1.5 flex items-center gap-2 flex-wrap">
       <span>Runtime units</span>
       <span class="text-[10px] font-normal opacity-50">live via websocket</span>
+      {{#if appdata}}
+        <div class="flex-1"></div>
+        <button id="clear-appdata-btn-{{service}}"
+                class="btn btn-error btn-xs"
+                title="Delete {{appdata}}"
+                hx-post="/service/{{service}}/clear-appdata"
+                hx-swap="none"
+                hx-confirm="Stop all related units, permanently delete {{appdata}} and all contents, then start the units again? This cannot be undone."
+                hx-disabled-elt="this">
+          Clear appdata
+        </button>
+        <div id="clear-appdata-out-{{service}}" class="clear-appdata-out text-[10px] flex-shrink-0 max-w-[18rem] truncate" title=""></div>
+      {{/if}}
     </div>
     <div class="space-y-0.5">
       {{#each units}}
@@ -19,4 +32,25 @@
       {{/each}}
     </div>
   </div>
+{{else}}
+  {{#if appdata}}
+    {{!-- Appdata-only services (no declared runtime units) still get clear controls. --}}
+    <div class="mb-3 p-2 bg-base-200/60 rounded border border-base-300" id="runtime-units">
+      <div class="text-xs font-semibold mb-0 flex items-center gap-2 flex-wrap">
+        <span>Appdata</span>
+        <span class="text-[10px] font-normal opacity-50 font-mono truncate max-w-[14rem]" title="{{appdata}}">{{appdata}}</span>
+        <div class="flex-1"></div>
+        <button id="clear-appdata-btn-{{service}}"
+                class="btn btn-error btn-xs"
+                title="Delete {{appdata}}"
+                hx-post="/service/{{service}}/clear-appdata"
+                hx-swap="none"
+                hx-confirm="Permanently delete {{appdata}} and all contents? This cannot be undone."
+                hx-disabled-elt="this">
+          Clear appdata
+        </button>
+        <div id="clear-appdata-out-{{service}}" class="clear-appdata-out text-[10px] flex-shrink-0 max-w-[18rem] truncate" title=""></div>
+      </div>
+    </div>
+  {{/if}}
 {{/if}}

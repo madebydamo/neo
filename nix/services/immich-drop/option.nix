@@ -20,6 +20,7 @@
             // lib.neo.mkContainerDefinitions {
               "immich-drop" = "ghcr.io/nasogaa/immich-drop:latest";
             }
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/immich-drop"
             // lib.neo.mkServiceMeta {
               category = "Media";
               icon = "https://raw.githubusercontent.com/immich-app/immich/main/design/immich-logo.svg";

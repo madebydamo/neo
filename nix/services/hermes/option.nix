@@ -167,6 +167,7 @@
               "hermes-dashboard"
               "hermes-agent"
             ]
+            // lib.neo.mkAppdata config.neo.services.hermes.stateDir
             // lib.neo.mkServiceMeta {
               category = "AI";
               icon = "https://raw.githubusercontent.com/NousResearch/hermes-agent/main/website/static/img/logo.png";

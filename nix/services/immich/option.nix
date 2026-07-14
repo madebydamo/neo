@@ -28,6 +28,7 @@
               "immich-redis" = "docker.io/valkey/valkey:8@sha256:81db6d39e1bba3b3ff32bd3a1b19a6d69690f94a3954ec131277b9a26b95b3aa";
               "immich-database" = "ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23";
             }
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/immich"
             // lib.neo.mkServiceMeta {
               category = "Media";
               icon = "https://raw.githubusercontent.com/immich-app/immich/main/design/immich-logo.svg";

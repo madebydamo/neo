@@ -1,3 +1,4 @@
+use std::path::{Component, Path};
 use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -26,7 +27,6 @@ impl UnitAction {
             UnitAction::Restart => "restart",
         }
     }
-
 }
 
 pub fn is_pull_in_flight(config: &AppConfig, unit: &str) -> bool {
@@ -483,5 +483,331 @@ pub async fn run_container_pull(unit: String, cname: String, config: Arc<AppConf
         Err(e) => {
             fail_pull(&unit, &format!("pull wait: {}", e), &config);
         }
+    }
+}
+
+// --- Clear appdata (stop units → rm -rf → start units) ---
+
+pub fn is_clear_appdata_in_flight(config: &AppConfig, service: &str) -> bool {
+    config
+        .clear_appdata_in_flight
+        .lock()
+        .map(|s| s.contains(service))
+        .unwrap_or(false)
+}
+
+/// Mark service as clearing appdata. Returns false if already in flight.
+pub fn try_begin_clear_appdata(config: &AppConfig, service: &str) -> bool {
+    match config.clear_appdata_in_flight.lock() {
+        Ok(mut s) => {
+            if s.contains(service) {
+                false
+            } else {
+                s.insert(service.to_string());
+                true
+            }
+        }
+        Err(_) => false,
+    }
+}
+
+pub fn end_clear_appdata(config: &AppConfig, service: &str) {
+    if let Ok(mut s) = config.clear_appdata_in_flight.lock() {
+        s.remove(service);
+    }
+}
+
+const CLEAR_APPDATA_OUT_CLASSES: &str =
+    "clear-appdata-out text-[10px] ml-1 flex-shrink-0 max-w-[18rem] truncate";
+
+/// OOB fragment for the per-service clear-appdata status slot.
+pub fn clear_appdata_out_oob(service: &str, inner: &str, title: &str) -> String {
+    format!(
+        r#"<div id="clear-appdata-out-{}" class="{}" title="{}" hx-swap-oob="true">{}</div>"#,
+        escape_html(service),
+        CLEAR_APPDATA_OUT_CLASSES,
+        escape_attr(title),
+        inner
+    )
+}
+
+/// OOB fragment for the Clear appdata button (disabled while in flight).
+pub fn clear_appdata_btn_oob(service: &str, appdata: &str, busy: bool) -> String {
+    let svc = escape_html(service);
+    let path = escape_attr(appdata);
+    let confirm = escape_attr(&format!(
+        "Stop all related units, permanently delete {} and all contents, then start the units again? This cannot be undone.",
+        appdata
+    ));
+    if busy {
+        format!(
+            r#"<button id="clear-appdata-btn-{svc}" class="btn btn-error btn-xs btn-disabled" disabled title="{path}" hx-swap-oob="true"><span class="loading loading-spinner loading-xs"></span> Clearing…</button>"#,
+            svc = svc,
+            path = path,
+        )
+    } else {
+        format!(
+            r##"<button id="clear-appdata-btn-{svc}" class="btn btn-error btn-xs" title="Delete {path}" hx-post="/service/{svc}/clear-appdata" hx-swap="none" hx-confirm="{confirm}" hx-disabled-elt="this" hx-swap-oob="true">Clear appdata</button>"##,
+            svc = svc,
+            path = path,
+            confirm = confirm,
+        )
+    }
+}
+
+fn clear_status_pulling(msg: &str) -> (String, String) {
+    let title = msg.to_string();
+    let inner = format!(
+        r#"<span class="inline-flex items-center gap-1 text-info max-w-full"><span class="loading loading-spinner loading-xs flex-shrink-0"></span><span class="truncate">{}</span></span>"#,
+        escape_html(msg)
+    );
+    (inner, title)
+}
+
+fn clear_status_ok(msg: &str) -> (String, String) {
+    let title = msg.to_string();
+    let inner = format!(
+        r#"<span class="text-success truncate">✓ {}</span>"#,
+        escape_html(msg)
+    );
+    (inner, title)
+}
+
+fn clear_status_err(msg: &str) -> (String, String) {
+    let title = msg.to_string();
+    let inner = format!(
+        r#"<span class="text-error truncate">✗ {}</span>"#,
+        escape_html(msg)
+    );
+    (inner, title)
+}
+
+/// Whether `path` is safe to recursively delete as service appdata.
+/// Path must come from trusted nix evaluation; this is defense-in-depth.
+pub fn is_safe_appdata_path(path: &str, appdata_root: Option<&str>) -> bool {
+    if path.is_empty() || path.contains('\0') || !path.starts_with('/') {
+        return false;
+    }
+    let p = Path::new(path);
+    if p.components()
+        .any(|c| matches!(c, Component::ParentDir | Component::CurDir))
+    {
+        return false;
+    }
+    // At least three normal components: /var/lib/openclaw or /var/neo/DATA/AppData/foo
+    let depth = p
+        .components()
+        .filter(|c| matches!(c, Component::Normal(_)))
+        .count();
+    if depth < 3 {
+        return false;
+    }
+    const FORBIDDEN: &[&str] = &[
+        "/", "/bin", "/boot", "/dev", "/etc", "/home", "/lib", "/nix", "/proc", "/root", "/run",
+        "/sys", "/tmp", "/usr", "/var", "/var/lib", "/var/log", "/var/neo",
+    ];
+    if FORBIDDEN.contains(&path) {
+        return false;
+    }
+    if let Some(root) = appdata_root {
+        if path == root {
+            // Never wipe the entire AppData volume.
+            return false;
+        }
+        // Preferred: strict child of the AppData volume.
+        let prefix = if root.ends_with('/') {
+            root.to_string()
+        } else {
+            format!("{}/", root)
+        };
+        if path.starts_with(&prefix) {
+            return true;
+        }
+    }
+    // Paths outside the volume (e.g. openclaw /var/lib/openclaw) still allowed when
+    // declared by the service option and deep enough (checked above).
+    true
+}
+
+fn unit_is_stopped(state: &str) -> bool {
+    matches!(state, "inactive" | "failed" | "dead" | "not-found")
+}
+
+async fn wait_units_stopped(units: &[String], timeout: Duration) -> Result<(), String> {
+    if units.is_empty() {
+        return Ok(());
+    }
+    let deadline = Instant::now() + timeout;
+    loop {
+        let mut pending = Vec::new();
+        for u in units {
+            let state = unit_active_state_async(u).await;
+            if !unit_is_stopped(&state) {
+                pending.push(format!("{}={}", u, state));
+            }
+        }
+        if pending.is_empty() {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "timeout waiting for units to stop ({})",
+                pending.join(", ")
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
+async fn systemctl_action_blocking(action: &str, unit: &str) -> Result<(), String> {
+    let sudo = sudo_cmd();
+    let out = AsyncCommand::new(&sudo)
+        .args(["systemctl", action, unit, "--no-ask-password"])
+        .output()
+        .await
+        .map_err(|e| format!("systemctl {} {}: {}", action, unit, e))?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        let err = String::from_utf8_lossy(&out.stderr);
+        // stop of an already-inactive unit is fine
+        if action == "stop" && err.contains("not loaded") {
+            return Ok(());
+        }
+        Err(format!(
+            "systemctl {} {} failed: {}",
+            action,
+            unit,
+            err.trim()
+        ))
+    }
+}
+
+async fn rm_rf_path(path: &str) -> Result<(), String> {
+    let p = Path::new(path);
+    if !p.exists() {
+        return Ok(());
+    }
+    let sudo = sudo_cmd();
+    let out = AsyncCommand::new(&sudo)
+        .args(["rm", "-rf", "--", path])
+        .output()
+        .await
+        .map_err(|e| format!("rm -rf: {}", e))?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        let err = String::from_utf8_lossy(&out.stderr);
+        Err(format!("rm -rf failed: {}", err.trim()))
+    }
+}
+
+fn finish_clear_appdata(
+    service: &str,
+    appdata: &str,
+    units: &[String],
+    config: &Arc<AppConfig>,
+    inner: String,
+    title: String,
+) {
+    let frag = clear_appdata_out_oob(service, &inner, &title);
+    let _ = config.unit_updates.send(frag);
+    let btn = clear_appdata_btn_oob(service, appdata, false);
+    let _ = config.unit_updates.send(btn);
+    end_clear_appdata(config, service);
+    for u in units {
+        broadcast_unit_update(u, config);
+        schedule_unit_refresh_burst(u.clone(), Arc::clone(config));
+    }
+}
+
+/// Background: stop all service units, wait until stopped, rm -rf appdata, start units again.
+pub async fn run_clear_appdata(
+    service: String,
+    appdata: String,
+    units: Vec<String>,
+    config: Arc<AppConfig>,
+) {
+    let units: Vec<String> = units.into_iter().filter(|u| unit_name_valid(u)).collect();
+
+    let push = |inner: String, title: String| {
+        let frag = clear_appdata_out_oob(&service, &inner, &title);
+        let _ = config.unit_updates.send(frag);
+    };
+
+    {
+        let (inner, title) = clear_status_pulling("stopping units…");
+        push(inner, title);
+    }
+
+    for u in &units {
+        if let Err(e) = systemctl_action_blocking("stop", u).await {
+            // Continue stopping others; wait_units_stopped surfaces stuck units.
+            eprintln!("web: clear-appdata stop {}: {}", u, e);
+        }
+        broadcast_unit_update(u, &config);
+    }
+
+    if let Err(e) = wait_units_stopped(&units, Duration::from_secs(90)).await {
+        let (inner, title) = clear_status_err(&e);
+        finish_clear_appdata(&service, &appdata, &units, &config, inner, title);
+        return;
+    }
+
+    {
+        let (inner, title) = clear_status_pulling("removing appdata…");
+        push(inner, title);
+    }
+
+    if let Err(e) = rm_rf_path(&appdata).await {
+        let (inner, title) = clear_status_err(&e);
+        // Best-effort restart so services are not left down after a failed delete.
+        for u in &units {
+            let _ = systemctl_action_blocking("start", u).await;
+        }
+        finish_clear_appdata(&service, &appdata, &units, &config, inner, title);
+        return;
+    }
+
+    {
+        let (inner, title) = clear_status_pulling("starting units…");
+        push(inner, title);
+    }
+
+    for u in &units {
+        if let Err(e) = systemctl_action_blocking("start", u).await {
+            eprintln!("web: clear-appdata start {}: {}", u, e);
+        }
+        broadcast_unit_update(u, &config);
+    }
+
+    let (inner, title) = clear_status_ok("appdata cleared");
+    finish_clear_appdata(&service, &appdata, &units, &config, inner, title);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_safe_appdata_path;
+
+    #[test]
+    fn appdata_path_under_volume() {
+        let root = "/var/neo/DATA/AppData";
+        assert!(is_safe_appdata_path(
+            "/var/neo/DATA/AppData/vaultwarden",
+            Some(root)
+        ));
+        assert!(!is_safe_appdata_path(root, Some(root)));
+        assert!(!is_safe_appdata_path(
+            "/var/neo/DATA/AppData/../etc",
+            Some(root)
+        ));
+        assert!(!is_safe_appdata_path("/", Some(root)));
+        assert!(!is_safe_appdata_path("/var/lib", Some(root)));
+    }
+
+    #[test]
+    fn appdata_path_outside_volume_deep() {
+        assert!(is_safe_appdata_path("/var/lib/openclaw", None));
+        assert!(!is_safe_appdata_path("/var/lib", None));
     }
 }

@@ -49,6 +49,7 @@ pub fn routes() -> Vec<rocket::Route> {
         units::unit_start,
         units::unit_stop,
         units::container_update,
+        units::clear_appdata,
         units::sse_logs,
         ws::ws_status,
         ssh::ssh_public_key_card,

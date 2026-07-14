@@ -71,8 +71,9 @@
               "nextcloud-redis" = "redis:alpine";
               "nextcloud" = "nextcloud:apache";
               "nextcloud-cron" = "nextcloud:apache";
+              extraUnits = ["nextcloud-setup"];
             }
-            // lib.neo.mkSystemdUnits ["nextcloud-setup"]
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/nextcloud"
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nextcloud.svg";

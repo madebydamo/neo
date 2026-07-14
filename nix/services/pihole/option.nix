@@ -40,7 +40,7 @@
               pihole = "pihole/pihole:latest";
               extraUnits = ["pihole-update-gravity"];
             }
-            // lib.neo.mkSystemdUnits ["pihole-update-gravity"]
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/pihole"
             // lib.neo.mkServiceMeta {
               category = "Network";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/pi-hole.svg";

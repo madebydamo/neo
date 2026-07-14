@@ -27,6 +27,7 @@
             // lib.neo.mkContainerDefinitions {
               pastebin = "wantguns/bin";
             }
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/pastebin"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = "https://raw.githubusercontent.com/wantguns/bin/master/static/media/android-chrome-512x512.png";

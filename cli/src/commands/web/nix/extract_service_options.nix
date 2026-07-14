@@ -484,6 +484,10 @@
   meta = tryOr {} (configRoot.meta or {});
   units = tryOr [] (configRoot.systemdUnits or []);
   containers = tryOr {} (configRoot.containers or {});
+  appdata = tryOr null (configRoot.appdata or null);
+  appdataRoot = tryOr null (
+    f.nixosConfigurations.${cfg}.config.neo.core.volumes.appdata or null
+  );
 in {
   meta =
     if meta == {}
@@ -492,4 +496,6 @@ in {
   options = sorted;
   units = units;
   containers = containers;
+  appdata = appdata;
+  appdataRoot = appdataRoot;
 }

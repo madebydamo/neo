@@ -27,7 +27,13 @@ pub fn render_nix_busy_html(config: &AppConfig) -> String {
     }
 }
 
-fn progress_button(kind_label: &str, title: &str, path_prefix: &str, id: &str, btn_class: &str) -> String {
+fn progress_button(
+    kind_label: &str,
+    title: &str,
+    path_prefix: &str,
+    id: &str,
+    btn_class: &str,
+) -> String {
     if !activation_id_ok(id) {
         return format!(
             r#"<button class="btn {} btn-xs animate-pulse">{} — view</button>"#,
@@ -75,12 +81,7 @@ pub fn render_action_bar_dynamic_inner(config: &AppConfig) -> String {
     } else {
         String::new()
     };
-    format!(
-        r#"{}{}{}"#,
-        render_nix_busy_html(config),
-        pending,
-        reset,
-    )
+    format!(r#"{}{}{}"#, render_nix_busy_html(config), pending, reset,)
 }
 
 /// Full OOB fragment for the action bar middle section (htmx ws extension applies it).

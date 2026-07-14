@@ -133,6 +133,7 @@
               };
             }
             // lib.neo.mkReverseProxyOptions {subdomain = "openclaw";}
+            // lib.neo.mkAppdata config.neo.services.openclaw.stateDir
             // lib.neo.mkServiceMeta {
               category = "AI";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/openclaw.svg";

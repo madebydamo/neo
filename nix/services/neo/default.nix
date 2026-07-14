@@ -97,7 +97,8 @@
             (secRuleBuilder pkgs.nixos-rebuild "nixos-rebuild")
             ++ (secRuleBuilder pkgs.systemd "systemctl")
             ++ (secRuleBuilder pkgs.systemd "journalctl")
-            ++ (secRuleBuilder pkgs.systemd "systemd-run");
+            ++ (secRuleBuilder pkgs.systemd "systemd-run")
+            ++ (secRuleBuilder pkgs.coreutils "rm");
         }
       ];
     };
