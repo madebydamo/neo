@@ -91,26 +91,16 @@ fn trigger_oneshot(kind: OneshotKind) -> OperationLog {
 
 pub fn trigger_activation(_config: &AppConfig) -> RawHtml<String> {
     activation::gc_old_activations();
-    let ts = crate::commands::get_timestamp();
-    let op = OperationLog::new_activation(&ts);
-    op.init_for_web_trigger(&ts);
     if let Some(other) = activation::find_recent_in_progress_activation() {
-        if other != op.id() {
-            return RawHtml(alert_html(
-                AlertKind::Error,
-                &format!(
-                    "Another activation {} in progress (or auto-update). Wait.",
-                    other
-                ),
-            ));
-        }
+        return RawHtml(alert_html(
+            AlertKind::Error,
+            &format!(
+                "Another activation {} in progress (or auto-update). Wait.",
+                other
+            ),
+        ));
     }
-    trigger_systemd_run(
-        OneshotKind::Activate.subcommand(),
-        OneshotKind::Activate.env_var(),
-        op.suffix(),
-        op.log_path(),
-    );
+    let op = trigger_oneshot(OneshotKind::Activate);
     RawHtml(activation::build_monitor_fragment(op.id()))
 }
 

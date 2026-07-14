@@ -28,15 +28,6 @@ impl UnitAction {
         }
     }
 
-    /// Parse a systemctl action string; only start/stop/restart are accepted.
-    pub fn parse(action: &str) -> Option<Self> {
-        match action {
-            "start" => Some(UnitAction::Start),
-            "stop" => Some(UnitAction::Stop),
-            "restart" => Some(UnitAction::Restart),
-            _ => None,
-        }
-    }
 }
 
 pub fn is_pull_in_flight(config: &AppConfig, unit: &str) -> bool {

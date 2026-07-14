@@ -126,7 +126,6 @@ pub enum AlertKind {
     Success,
     Error,
     Info,
-    Warning,
 }
 
 impl AlertKind {
@@ -135,7 +134,6 @@ impl AlertKind {
             AlertKind::Success => "alert-success",
             AlertKind::Error => "alert-error",
             AlertKind::Info => "alert-info",
-            AlertKind::Warning => "alert-warning",
         }
     }
 }

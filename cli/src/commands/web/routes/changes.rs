@@ -7,9 +7,7 @@ use crate::commands::web::action_bar::{
     broadcast_action_bar, render_action_bar_dynamic_inner, render_pending_changes_html,
     render_reset_button_html,
 };
-use crate::commands::web::git_ops::{
-    get_settings_toml_diff, settings_toml_has_diff, worktree_changed_and_summary,
-};
+use crate::commands::web::git_ops::{dirty_state, get_settings_toml_diff};
 use crate::commands::web::settings::restore_settings_from_applied;
 use crate::commands::web::structs::AppConfig;
 use crate::commands::web::trigger::trigger_activation;
@@ -35,7 +33,8 @@ pub fn reset_button(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
 
 #[get("/changes/summary")]
 pub fn changes_summary(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    let body = if settings_toml_has_diff(&config) {
+    let d = dirty_state(&config);
+    let body = if d.settings_dirty {
         let diff = get_settings_toml_diff(&config);
         let esc = escape_html(&diff);
         format!(
@@ -45,20 +44,17 @@ pub fn changes_summary(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
             esc,
             changes_actions_row()
         )
+    } else if d.worktree_dirty {
+        let esc = escape_html(&d.summary);
+        format!(
+            "<div class=\"mb-2 text-warning text-sm\">Other files changed in working tree</div>\
+             <pre class=\"text-xs overflow-auto max-h-[50vh] bg-base-300 p-2 rounded whitespace-pre\">{}</pre>\
+             {}",
+            esc,
+            changes_actions_row()
+        )
     } else {
-        let (changed, summary) = worktree_changed_and_summary(&config);
-        if changed {
-            let esc = escape_html(&summary);
-            format!(
-                "<div class=\"mb-2 text-warning text-sm\">Other files changed in working tree</div>\
-                 <pre class=\"text-xs overflow-auto max-h-[50vh] bg-base-300 p-2 rounded whitespace-pre\">{}</pre>\
-                 {}",
-                esc,
-                changes_actions_row()
-            )
-        } else {
-            "<div class=\"text-sm\">Working tree clean. No pending changes.</div>".to_string()
-        }
+        "<div class=\"text-sm\">Working tree clean. No pending changes.</div>".to_string()
     };
     RawHtml(body)
 }

@@ -67,49 +67,43 @@ pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &s
             pulls_in_flight: Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
             schema_cache: Arc::new(tokio::sync::RwLock::new(schema_cache::SchemaCache::default())),
         });
-        println!("{:?}", app_config);
+        eprintln!(
+            "web: config dir {} settings {:?}",
+            app_config.neo_input, app_config.settings_path
+        );
 
         // Push action-bar OOB updates (pending changes, reset, nix-busy) over the shared WS
         // whenever state changes — replaces the old client-side every-20s polling.
         start_action_bar_watcher(app_config.clone());
 
-        // Background warm-up: the heavy evaluation (builtins.getFlake on the real on-disk
-        // configuration directory + full nixosConfiguration module system + readFile of the
-        // live settings.toml via templates/homeserver/modules/settings.nix + walking options
-        // for types/defaults/rank/icon/enabled in the extract_*.nix files) used to happen
-        // synchronously inside NixEvaluator::new(). That blocked for 30-120s and prevented
-        // the "Rocket has launched" line from ever appearing promptly.
-        //
-        // We now spawn it as a background task *after* printing AppConfig and *before*
-        // awaiting the rocket launch. Result:
-        //   - "started (pid ...)"
-        //   - AppConfig { ... }
-        //   - "Rocket has launched from http://127.0.0.1:8000"
-        // appear quickly (matching the sequence the user wants).
-        // The first browser request may still experience the cost if it arrives before the
-        // task finishes (the Mutex will serialize it), but once the warm-up completes all
-        // subsequent extracts (index, grids, panes, etc.) are fast because the repl has
-        // memoized the results under `f`. On error/timeout we now return explicit error HTML (with reload) instead of silent empty data or indefinite spinners.
+        // Background warm-up: full homeserver flake + settings + option walking can take
+        // 30s–10min the first time. Spawn after start so Rocket can bind promptly; first
+        // request may still wait on the evaluator mutex if warm-up is incomplete.
         let evaluator_for_warmup = app_config.evaluator.clone();
         tokio::spawn(async move {
-            eprintln!("web: starting background warm-up of nix evaluator (full homeserver flake + settings.toml read + option walking; this can take 30s-10min the first time or after GC/stale locks)...");
+            eprintln!("web: starting background warm-up of nix evaluator…");
             {
                 let mut ev = evaluator_for_warmup.lock().await;
-                let _ = ev.extract_proxied_services().await;
+                let nav = ev.extract_proxied_services().await;
+                if let Some(err) = nav.error.as_ref() {
+                    eprintln!("web: warm-up navigator extract failed: {err}");
+                }
                 let _ = ev.extract_neo_theme().await;
             }
-            eprintln!("web: background warm-up complete. The web UI should now load fast.");
+            eprintln!("web: background warm-up complete.");
         });
 
-        let _ = rocket::build()
+        rocket::build()
             .manage(app_config)
             .attach(Template::fairing())
             .configure(rocket::Config::figment().merge(("template_dir", template_dir)))
             .mount("/static", FileServer::from(static_dir))
             .mount("/", routes())
             .launch()
-            .await;
+            .await
+            .map_err(|e| anyhow::anyhow!("rocket launch failed: {e}"))?;
         Ok::<(), anyhow::Error>(())
     })?;
     Ok(())
 }
+
