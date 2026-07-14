@@ -64,16 +64,11 @@ pub fn refresh_after_settings_change(config: &AppConfig) {
     });
 }
 
-/// After a successful settings write: refresh nix evaluator, action bar, schema cache.
-pub fn after_save(config: &AppConfig) {
-    refresh_after_settings_change(config);
-}
-
 pub fn finish_save(path: &Path, doc: &mut DocumentMut, config: &AppConfig) -> Status {
     if write_settings_doc(path, doc).is_err() {
         return Status::InternalServerError;
     }
-    after_save(config);
+    refresh_after_settings_change(config);
     Status::Ok
 }
 

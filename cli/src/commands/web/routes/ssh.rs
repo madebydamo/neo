@@ -5,11 +5,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 
-use rocket::http::{ContentType, Status};
 use rocket::response::content::RawHtml;
-use rocket::serde::json::Json;
 use rocket::{get, post};
-use serde::Serialize;
 
 use crate::commands::web::util::escape_html;
 
@@ -17,12 +14,6 @@ const PUB_KEY_PATH: &str = "/home/homeserver/.ssh/id_ed25519.pub";
 const KEY_PATH: &str = "/home/homeserver/.ssh/id_ed25519";
 /// Installed by base.nix; same binary activation uses for `ensure`.
 const ENSURE_CMD: &str = "/run/current-system/sw/bin/neo-homeserver-ssh-key";
-
-#[derive(Serialize)]
-pub struct SshPublicKeyResponse {
-    pub public_key: String,
-    pub path: String,
-}
 
 fn read_public_key() -> Result<String, String> {
     let path = Path::new(PUB_KEY_PATH);
@@ -150,27 +141,6 @@ fn card_err(msg: &str) -> String {
   </div>
 </div>"##
     )
-}
-
-/// GET /ssh/public-key — JSON `{ "public_key": "...", "path": "..." }`.
-#[get("/ssh/public-key")]
-pub fn ssh_public_key() -> Result<Json<SshPublicKeyResponse>, (Status, String)> {
-    match read_public_key() {
-        Ok(public_key) => Ok(Json(SshPublicKeyResponse {
-            public_key,
-            path: PUB_KEY_PATH.to_string(),
-        })),
-        Err(msg) => Err((Status::NotFound, msg)),
-    }
-}
-
-/// GET /ssh/public-key.txt — raw public key line for curl/copy.
-#[get("/ssh/public-key.txt")]
-pub fn ssh_public_key_txt() -> Result<(ContentType, String), (Status, String)> {
-    match read_public_key() {
-        Ok(public_key) => Ok((ContentType::Plain, format!("{public_key}\n"))),
-        Err(msg) => Err((Status::NotFound, msg)),
-    }
 }
 
 /// GET /ssh/public-key-card — HTML fragment for the config UI.

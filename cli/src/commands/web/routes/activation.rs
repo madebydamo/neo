@@ -35,15 +35,6 @@ pub fn activation_status(id: &str) -> RawHtml<String> {
     RawHtml(activation::build_status_fragment(id))
 }
 
-#[get("/activation/current")]
-pub fn activation_current() -> RawHtml<String> {
-    if let Some(id) = activation::find_recent_in_progress_activation() {
-        RawHtml(activation::build_monitor_fragment(&id))
-    } else {
-        RawHtml("<div class=\"text-xs\">no active activation</div>".to_string())
-    }
-}
-
 #[get("/update/monitor/<id>")]
 pub fn update_monitor(id: &str) -> RawHtml<String> {
     if !activation_id_ok(id) {

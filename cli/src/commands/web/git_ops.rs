@@ -120,16 +120,6 @@ pub fn get_activation_graph(config_path: &str) -> String {
     }
 }
 
-pub fn worktree_changed_and_summary(cfg: &AppConfig) -> (bool, String) {
-    let d = dirty_state(cfg);
-    (d.worktree_dirty, d.summary)
-}
-
-pub fn settings_toml_has_diff(cfg: &AppConfig) -> bool {
-    let dir = config_dir(cfg);
-    git_dirty(&dir, Some("settings.toml"))
-}
-
 pub fn get_settings_toml_diff(cfg: &AppConfig) -> String {
     let dir = config_dir(cfg);
     match git_output(&dir, &["diff", "--no-color", "HEAD", "--", "settings.toml"]) {

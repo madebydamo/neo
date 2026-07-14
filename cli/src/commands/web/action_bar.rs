@@ -44,43 +44,6 @@ fn progress_button(kind_label: &str, title: &str, path_prefix: &str, id: &str, b
     )
 }
 
-pub fn render_pending_changes_html(config: &AppConfig) -> String {
-    if let Some(id) = activation::find_recent_in_progress_activation() {
-        return progress_button(
-            "Activation",
-            "Activation progress",
-            "/activation/monitor",
-            &id,
-            "btn-warning",
-        );
-    }
-    if let Some(id) = activation::find_recent_in_progress_update() {
-        return progress_button(
-            "Update",
-            "Update progress",
-            "/update/monitor",
-            &id,
-            "btn-info",
-        );
-    }
-    let d = dirty_state(config);
-    if d.worktree_dirty || d.settings_dirty {
-        "<button class=\"btn btn-warning btn-xs\" onclick=\"var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Pending changes';m.showModal();htmx.ajax('GET','/changes/summary',{target:'#changes-body',swap:'innerHTML'})\">Changes — review</button>".to_string()
-    } else {
-        "<span class=\"text-[10px] opacity-40\">clean</span>".to_string()
-    }
-}
-
-pub fn render_reset_button_html(config: &AppConfig) -> String {
-    let d = dirty_state(config);
-    if !(d.settings_dirty || d.worktree_dirty) {
-        return String::new();
-    }
-    // After-request only opens the modal; action-bar refresh is pushed over WS.
-    // Use r## so embedded "#id" attributes do not terminate the raw string.
-    r##"<button hx-post="/actions/reset" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Reset settings from last applied (/etc/neo)?" hx-on::after-request="var m=document.getElementById('changes-modal');if(m){m.querySelector('h3').textContent='Reset';m.showModal();}" class="btn btn-xs btn-ghost">↩<span class="hidden sm:inline ml-1">Reset</span></button>"##.to_string()
-}
-
 /// Inner HTML of `#action-bar-dynamic` (appearing middle section: busy, pending, reset).
 /// Uses a single dirty_state pass for pending + reset.
 pub fn render_action_bar_dynamic_inner(config: &AppConfig) -> String {

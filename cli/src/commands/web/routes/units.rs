@@ -1,4 +1,3 @@
-use std::process::Command;
 use std::sync::Arc;
 
 use rocket::response::content::RawHtml;
@@ -9,59 +8,10 @@ use tokio::process::Command as AsyncCommand;
 
 use crate::commands::web::structs::AppConfig;
 use crate::commands::web::units::{
-    normalize_container_unit, perform_unit_action, render_unit_controls, run_container_pull,
-    schedule_unit_refresh_burst, try_begin_pull, unit_controls_oob_fragment, unit_name_valid,
-    update_out_oob, UnitAction,
+    normalize_container_unit, perform_unit_action, run_container_pull, schedule_unit_refresh_burst,
+    try_begin_pull, unit_controls_oob_fragment, unit_name_valid, update_out_oob, UnitAction,
 };
 use crate::commands::web::util::{escape_html, sudo_cmd};
-
-#[get("/unit/status/<unit>")]
-pub fn unit_status(unit: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    if !unit_name_valid(unit) {
-        return RawHtml(
-            r#"<div class="unit-controls text-[10px] text-error">invalid unit</div>"#.into(),
-        );
-    }
-    render_unit_controls(unit, config)
-}
-
-#[get("/unit/logs/<unit>")]
-pub fn unit_logs(unit: &str) -> RawHtml<String> {
-    if !unit_name_valid(unit) {
-        return RawHtml(
-            r#"<pre class="text-[10px] bg-base-300 p-1 mt-1 max-h-64 overflow-auto font-mono whitespace-pre-wrap">invalid unit</pre>"#
-                .into(),
-        );
-    }
-    let sudo = sudo_cmd();
-    let out = Command::new(&sudo)
-        .args([
-            "journalctl",
-            "-u",
-            unit,
-            "--no-pager",
-            "-n",
-            "100",
-            "-o",
-            "short-iso",
-        ])
-        .output();
-    let text = match out {
-        Ok(o) => {
-            let mut t = String::from_utf8_lossy(&o.stdout).to_string();
-            if !o.stderr.is_empty() {
-                t.push_str("\n[stderr]\n");
-                t.push_str(&String::from_utf8_lossy(&o.stderr));
-            }
-            t
-        }
-        Err(e) => format!("journalctl error: {}", e),
-    };
-    RawHtml(format!(
-        r#"<pre class="text-[10px] bg-base-300 p-1 mt-1 max-h-64 overflow-auto font-mono whitespace-pre-wrap">{}</pre>"#,
-        escape_html(&text)
-    ))
-}
 
 /// Shared post-action path: kick systemctl, push OOB once, then burst-refresh while it settles.
 /// Buttons use hx-swap="none"; the returned OOB still updates the controls row.

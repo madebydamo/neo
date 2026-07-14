@@ -11,9 +11,10 @@ use serde::{Deserialize, Serialize};
 use crate::commands::web::helper_exec::{parse_helper_value, run_helper_script};
 use crate::commands::web::structs::{AppConfig, OptionHelper, OptionSchema};
 
+/// Where to apply a helper result in nested option forms.
+/// `key` is client-only (attrsOf map entry); serde ignores unknown client fields.
 #[derive(Deserialize, Default)]
 pub struct HelperApplyTarget {
-    pub key: Option<String>,
     pub index: Option<usize>,
     pub field: Option<String>,
 }

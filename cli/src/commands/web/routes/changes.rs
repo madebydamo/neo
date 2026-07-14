@@ -3,10 +3,7 @@ use std::sync::Arc;
 use rocket::response::content::RawHtml;
 use rocket::{get, post, State};
 
-use crate::commands::web::action_bar::{
-    broadcast_action_bar, render_action_bar_dynamic_inner, render_pending_changes_html,
-    render_reset_button_html,
-};
+use crate::commands::web::action_bar::{broadcast_action_bar, render_action_bar_dynamic_inner};
 use crate::commands::web::git_ops::{dirty_state, get_settings_toml_diff};
 use crate::commands::web::settings::restore_settings_from_applied;
 use crate::commands::web::structs::AppConfig;
@@ -19,16 +16,6 @@ pub fn changes_action_bar(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
         r#"<div id="action-bar-dynamic" class="flex items-center gap-2">{}</div>"#,
         render_action_bar_dynamic_inner(&config)
     ))
-}
-
-#[get("/changes/indicator")]
-pub fn changes_indicator(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    RawHtml(render_pending_changes_html(&config))
-}
-
-#[get("/changes/reset-button")]
-pub fn reset_button(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    RawHtml(render_reset_button_html(&config))
 }
 
 #[get("/changes/summary")]

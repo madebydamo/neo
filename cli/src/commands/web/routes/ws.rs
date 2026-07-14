@@ -67,7 +67,7 @@ pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel
             let mut last_pulling: HashMap<String, bool> = HashMap::new();
             let mut tick = tokio::time::interval(Duration::from_millis(500));
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-            // Don't fire immediately; first poll after 500ms (bootstrap GET already filled UI).
+            // Don't fire immediately; first poll after 500ms (watch handlers push a snapshot).
             tick.tick().await;
 
             loop {

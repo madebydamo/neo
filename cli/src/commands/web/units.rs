@@ -2,7 +2,6 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use rocket::response::content::RawHtml;
 use tokio::io::{AsyncReadExt, BufReader as AsyncBufReader};
 use tokio::process::Command as AsyncCommand;
 
@@ -69,7 +68,7 @@ fn parse_active_state_stdout(stdout: &[u8]) -> String {
     }
 }
 
-/// Query systemctl is-active for a unit (sync; used from HTTP handlers and render).
+/// Query systemctl is-active for a unit (sync; used when building OOB control fragments).
 pub fn unit_active_state(unit: &str) -> String {
     let sudo = sudo_cmd();
     Command::new(&sudo)
@@ -229,18 +228,6 @@ pub fn render_unit_controls_content_with_state(unit: &str, active: &str, pulling
     }
 
     inner
-}
-
-/// Full unit-controls div (with id) for bootstrap GET.
-pub fn render_unit_controls(unit: &str, config: &AppConfig) -> RawHtml<String> {
-    let active = unit_active_state(unit);
-    let pulling = is_pull_in_flight(config, unit);
-    let content = render_unit_controls_content_with_state(unit, &active, pulling);
-    let u = escape_html(unit);
-    RawHtml(format!(
-        r#"<div id="unit-controls-{u}" class="unit-controls flex items-center gap-1 flex-shrink-0" data-active-state="{}">{content}</div>"#,
-        escape_attr(&active)
-    ))
 }
 
 /// OOB fragment for htmx ws (and action HTTP responses).
