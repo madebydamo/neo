@@ -109,6 +109,9 @@ pub struct IndexContext {
     /// Offer the "Repair Nix store" button for remediable store failures.
     #[serde(default)]
     pub can_store_repair: bool,
+    /// Offer "Update flake inputs" when the lock/inputs look stale or machine-local.
+    #[serde(default)]
+    pub can_flake_update: bool,
 }
 
 /// Full configuration shell page (not used by services_grid partial).
@@ -122,6 +125,8 @@ pub struct ConfigurationPageContext {
     pub error_kind: Option<String>,
     #[serde(default)]
     pub can_store_repair: bool,
+    #[serde(default)]
+    pub can_flake_update: bool,
     /// Partial URL loaded into `#config-content` on first paint (HTMX GET).
     pub initial_content_url: String,
     /// Active tab seed: services | settings | versioning.
@@ -138,6 +143,7 @@ impl Default for ConfigurationPageContext {
             error: None,
             error_kind: None,
             can_store_repair: false,
+            can_flake_update: false,
             initial_content_url: "/configuration".to_string(),
             initial_tab: "services".to_string(),
             initial_detail: None,
@@ -254,6 +260,8 @@ pub struct NavigatorContext {
     pub error_kind: Option<String>,
     #[serde(default)]
     pub can_store_repair: bool,
+    #[serde(default)]
+    pub can_flake_update: bool,
 }
 
 /// Rich presentation metadata for a service (shown in the option pane header).
@@ -310,6 +318,8 @@ pub struct OptionPaneContext {
     pub error_kind: Option<String>,
     #[serde(default)]
     pub can_store_repair: bool,
+    #[serde(default)]
+    pub can_flake_update: bool,
     /// Systemd units (without .service) declared for this neo service (for status/logs/control UI).
     #[serde(default)]
     pub units: Vec<RuntimeUnit>,

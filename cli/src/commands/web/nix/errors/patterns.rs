@@ -80,6 +80,26 @@ fn summary_network(_text: &str, _paths: &[String]) -> String {
     "Failed to download a flake input or fixed-output source (network or remote error)".to_string()
 }
 
+fn summary_sqlite(_text: &str, _paths: &[String]) -> String {
+    "Nix database is busy or locked (another nix process may be running)".to_string()
+}
+
+fn summary_flake_attr(_text: &str, _paths: &[String]) -> String {
+    "Flake does not provide the expected attribute (check flake outputs / inputs)".to_string()
+}
+
+fn summary_import(_text: &str, _paths: &[String]) -> String {
+    "Nix could not import a file or module referenced by the configuration".to_string()
+}
+
+fn summary_coerce(_text: &str, _paths: &[String]) -> String {
+    "Type error during evaluation (cannot coerce or unexpected value type)".to_string()
+}
+
+fn summary_ssl(_text: &str, _paths: &[String]) -> String {
+    "TLS/SSL failure while fetching a remote flake input".to_string()
+}
+
 fn summary_infinite(_text: &str, _paths: &[String]) -> String {
     "Nix hit infinite recursion while evaluating the configuration".to_string()
 }
@@ -150,6 +170,20 @@ const RULES: &[Rule] = &[
         summary: summary_missing_path,
     },
     Rule {
+        priority: 10,
+        kind: NixErrorKind::MissingStorePath,
+        needles: &["no such file or directory"],
+        extra: Some(|t| t.contains("/nix/store/")),
+        summary: summary_missing_path,
+    },
+    Rule {
+        priority: 10,
+        kind: NixErrorKind::MissingStorePath,
+        needles: &["is not valid"],
+        extra: Some(|t| t.contains("/nix/store/")),
+        summary: summary_missing_path,
+    },
+    Rule {
         priority: 15,
         kind: NixErrorKind::HashMismatch,
         needles: &["hash mismatch"],
@@ -159,42 +193,128 @@ const RULES: &[Rule] = &[
     Rule {
         priority: 15,
         kind: NixErrorKind::HashMismatch,
-        needles: &["specified:", "got:"],
-        extra: Some(|t| t.to_lowercase().contains("hash") || t.contains("sha256")),
+        needles: &["narhashmismatch"],
+        extra: None,
         summary: summary_hash,
     },
     Rule {
-        priority: 20,
+        priority: 15,
+        kind: NixErrorKind::HashMismatch,
+        needles: &["specified:", "got:"],
+        extra: Some(|t| {
+            let l = t.to_lowercase();
+            l.contains("hash") || t.contains("sha256") || l.contains("nar")
+        }),
+        summary: summary_hash,
+    },
+    Rule {
+        priority: 15,
+        kind: NixErrorKind::HashMismatch,
+        needles: &["fixed-output derivation produced path"],
+        extra: Some(|t| t.to_lowercase().contains("hash")),
+        summary: summary_hash,
+    },
+    Rule {
+        priority: 18,
         kind: NixErrorKind::NetworkFetchFailed,
         needles: &["unable to download"],
         extra: None,
         summary: summary_network,
     },
     Rule {
-        priority: 20,
+        priority: 18,
         kind: NixErrorKind::NetworkFetchFailed,
         needles: &["http error"],
         extra: None,
         summary: summary_network,
     },
     Rule {
-        priority: 20,
+        priority: 18,
         kind: NixErrorKind::NetworkFetchFailed,
         needles: &["connection refused"],
         extra: None,
         summary: summary_network,
     },
     Rule {
-        priority: 20,
+        priority: 18,
         kind: NixErrorKind::NetworkFetchFailed,
         needles: &["could not download"],
         extra: None,
         summary: summary_network,
     },
     Rule {
+        priority: 18,
+        kind: NixErrorKind::NetworkFetchFailed,
+        needles: &["failed to fetch"],
+        extra: None,
+        summary: summary_network,
+    },
+    Rule {
+        priority: 18,
+        kind: NixErrorKind::NetworkFetchFailed,
+        needles: &["network is unreachable"],
+        extra: None,
+        summary: summary_network,
+    },
+    Rule {
+        priority: 18,
+        kind: NixErrorKind::NetworkFetchFailed,
+        needles: &["temporary failure in name resolution"],
+        extra: None,
+        summary: summary_network,
+    },
+    Rule {
+        priority: 18,
+        kind: NixErrorKind::NetworkFetchFailed,
+        needles: &["could not resolve host"],
+        extra: None,
+        summary: summary_network,
+    },
+    Rule {
+        priority: 18,
+        kind: NixErrorKind::NetworkFetchFailed,
+        needles: &["ssl"],
+        extra: Some(|t| {
+            let l = t.to_lowercase();
+            l.contains("certificate") || l.contains("handshake") || l.contains("tls")
+        }),
+        summary: summary_ssl,
+    },
+    Rule {
+        priority: 18,
+        kind: NixErrorKind::NetworkFetchFailed,
+        needles: &["tls"],
+        extra: Some(|t| {
+            let l = t.to_lowercase();
+            l.contains("error") || l.contains("handshake") || l.contains("certificate")
+        }),
+        summary: summary_ssl,
+    },
+    Rule {
+        priority: 22,
+        kind: NixErrorKind::PermissionDenied,
+        needles: &["sqlite database is busy"],
+        extra: None,
+        summary: summary_sqlite,
+    },
+    Rule {
+        priority: 22,
+        kind: NixErrorKind::PermissionDenied,
+        needles: &["database is locked"],
+        extra: Some(|t| t.to_lowercase().contains("sqlite") || t.to_lowercase().contains("nix")),
+        summary: summary_sqlite,
+    },
+    Rule {
         priority: 25,
         kind: NixErrorKind::InfiniteRecursion,
         needles: &["infinite recursion"],
+        extra: None,
+        summary: summary_infinite,
+    },
+    Rule {
+        priority: 25,
+        kind: NixErrorKind::InfiniteRecursion,
+        needles: &["circular import"],
         extra: None,
         summary: summary_infinite,
     },
@@ -220,6 +340,48 @@ const RULES: &[Rule] = &[
         summary: summary_permission,
     },
     Rule {
+        priority: 28,
+        kind: NixErrorKind::EvalAssertion,
+        needles: &["does not provide attribute"],
+        extra: None,
+        summary: summary_flake_attr,
+    },
+    Rule {
+        priority: 28,
+        kind: NixErrorKind::EvalAssertion,
+        needles: &["flake '", "does not provide"],
+        extra: None,
+        summary: summary_flake_attr,
+    },
+    Rule {
+        priority: 28,
+        kind: NixErrorKind::EvalAssertion,
+        needles: &["cannot import"],
+        extra: None,
+        summary: summary_import,
+    },
+    Rule {
+        priority: 28,
+        kind: NixErrorKind::EvalAssertion,
+        needles: &["cannot coerce"],
+        extra: None,
+        summary: summary_coerce,
+    },
+    Rule {
+        priority: 28,
+        kind: NixErrorKind::EvalAssertion,
+        needles: &["value is a function while a set was expected"],
+        extra: None,
+        summary: summary_coerce,
+    },
+    Rule {
+        priority: 28,
+        kind: NixErrorKind::EvalAssertion,
+        needles: &["value is a string while a set was expected"],
+        extra: None,
+        summary: summary_coerce,
+    },
+    Rule {
         priority: 30,
         kind: NixErrorKind::EvalAssertion,
         needles: &["assertion"],
@@ -227,6 +389,13 @@ const RULES: &[Rule] = &[
             let l = t.to_lowercase();
             l.contains("failed") || l.contains("assertion")
         }),
+        summary: summary_assert,
+    },
+    Rule {
+        priority: 30,
+        kind: NixErrorKind::EvalAssertion,
+        needles: &["error: throw"],
+        extra: None,
         summary: summary_assert,
     },
     Rule {
@@ -250,6 +419,31 @@ const RULES: &[Rule] = &[
         extra: None,
         summary: summary_died,
     },
+    // path:/ git+file: locks from another machine (often without flake.lock in the message).
+    Rule {
+        priority: 35,
+        kind: NixErrorKind::FlakeLockStale,
+        needles: &["git+file:"],
+        extra: Some(|t| {
+            let l = t.to_lowercase();
+            l.contains("does not exist")
+                || l.contains("no such file")
+                || l.contains("error:")
+                || l.contains("failed")
+        }),
+        summary: summary_lock,
+    },
+    Rule {
+        priority: 35,
+        kind: NixErrorKind::FlakeLockStale,
+        needles: &["path:"],
+        extra: Some(|t| {
+            let l = t.to_lowercase();
+            (l.contains("does not exist") || l.contains("no such file"))
+                && (l.contains("flake") || l.contains("input") || l.contains("lock"))
+        }),
+        summary: summary_lock,
+    },
     // flake.lock + missing path is already MissingStorePath; this catches lock wording alone.
     Rule {
         priority: 40,
@@ -257,7 +451,20 @@ const RULES: &[Rule] = &[
         needles: &["flake.lock"],
         extra: Some(|t| {
             let l = t.to_lowercase();
-            l.contains("does not exist") || l.contains("no such file") || l.contains("locked")
+            l.contains("does not exist")
+                || l.contains("no such file")
+                || l.contains("locked")
+                || l.contains("outdated")
+        }),
+        summary: summary_lock,
+    },
+    Rule {
+        priority: 40,
+        kind: NixErrorKind::FlakeLockStale,
+        needles: &["locked input"],
+        extra: Some(|t| {
+            let l = t.to_lowercase();
+            l.contains("does not exist") || l.contains("error") || l.contains("failed")
         }),
         summary: summary_lock,
     },
@@ -370,5 +577,38 @@ error:
     fn unknown_fallback() {
         let e = classify("something completely unexpected from nix");
         assert_eq!(e.kind, NixErrorKind::Unknown);
+    }
+
+    #[test]
+    fn classifies_sqlite_busy() {
+        let e = classify("error: SQLite database is busy");
+        assert_eq!(e.kind, NixErrorKind::PermissionDenied);
+    }
+
+    #[test]
+    fn classifies_dns_failure() {
+        let e = classify("error: unable to download 'https://github.com/x': Could not resolve host");
+        // "unable to download" matches Network first
+        assert_eq!(e.kind, NixErrorKind::NetworkFetchFailed);
+    }
+
+    #[test]
+    fn classifies_git_file_lock() {
+        let e = classify(
+            "error: getting status of 'git+file:///home/dev/neo': No such file or directory",
+        );
+        assert_eq!(e.kind, NixErrorKind::FlakeLockStale);
+    }
+
+    #[test]
+    fn classifies_cannot_coerce() {
+        let e = classify("error: cannot coerce a set to a string");
+        assert_eq!(e.kind, NixErrorKind::EvalAssertion);
+    }
+
+    #[test]
+    fn classifies_missing_flake_attr() {
+        let e = classify("error: flake 'github:foo/bar' does not provide attribute 'nixosModules.default'");
+        assert_eq!(e.kind, NixErrorKind::EvalAssertion);
     }
 }

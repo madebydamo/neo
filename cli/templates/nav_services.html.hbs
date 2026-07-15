@@ -14,6 +14,17 @@
           Repair store
         </button>
       {{/if}}
+      {{#if can_flake_update}}
+        <button type="button"
+                class="btn btn-xs btn-info"
+                hx-post="/flake/update"
+                hx-target="#changes-body"
+                hx-swap="innerHTML"
+                hx-confirm="Run flake update + template refresh?"
+                hx-on::after-request="var m=document.getElementById('changes-modal');if(m){m.querySelector('h3').textContent='Update progress';m.showModal();}">
+          Update inputs
+        </button>
+      {{/if}}
       <button class="btn btn-sm btn-ghost" onclick="location.reload()">Reload</button>
     </div>
   </div>

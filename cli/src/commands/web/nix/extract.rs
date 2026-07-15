@@ -1,4 +1,4 @@
-use super::errors::{offers_store_repair, plan_for, NixError};
+use super::errors::{offers_flake_update, offers_store_repair, plan_for, NixError};
 use super::registry::{
     EXTRACT_NEO_THEME, EXTRACT_PROXIED_SERVICES, EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
 };
@@ -13,6 +13,7 @@ struct FormattedNixFailure {
     message: String,
     kind_id: String,
     can_store_repair: bool,
+    can_flake_update: bool,
 }
 
 /// Map an anyhow/nix failure into a stable UI string with kind + summary.
@@ -28,6 +29,7 @@ fn format_nix_failure(context: &str, err: &anyhow::Error) -> FormattedNixFailure
         message: format!("{context}: {}.{hint}", nix_err.display_message()),
         kind_id: nix_err.kind.id().to_string(),
         can_store_repair: offers_store_repair(nix_err.kind),
+        can_flake_update: offers_flake_update(nix_err.kind),
     }
 }
 
@@ -155,6 +157,7 @@ impl NixEvaluator {
                     error: Some(f.message),
                     error_kind: Some(f.kind_id),
                     can_store_repair: f.can_store_repair,
+                    can_flake_update: f.can_flake_update,
                     ..Default::default()
                 }
             }
@@ -172,6 +175,7 @@ impl NixEvaluator {
             error: Some(reason.to_string()),
             error_kind: None,
             can_store_repair: false,
+            can_flake_update: false,
             units: vec![],
             containers: std::collections::HashMap::new(),
             appdata: None,
@@ -223,6 +227,7 @@ impl NixEvaluator {
                     error: Some(f.message),
                     error_kind: Some(f.kind_id),
                     can_store_repair: f.can_store_repair,
+                    can_flake_update: f.can_flake_update,
                     units: vec![],
                     containers: std::collections::HashMap::new(),
                     appdata: None,
@@ -247,6 +252,7 @@ impl NixEvaluator {
             error: raw.error,
             error_kind: None,
             can_store_repair: false,
+            can_flake_update: false,
             units,
             containers: raw.containers,
             appdata: raw.appdata.filter(|p| !p.is_empty()),
@@ -278,6 +284,7 @@ impl NixEvaluator {
                     error: Some(f.message),
                     error_kind: Some(f.kind_id),
                     can_store_repair: f.can_store_repair,
+                    can_flake_update: f.can_flake_update,
                     ..Default::default()
                 }
             }

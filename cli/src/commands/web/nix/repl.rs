@@ -341,7 +341,23 @@ impl NixEvaluator {
         // refresh() clears busy; re-assert for the actual query.
         self.busy.store(true, Ordering::Relaxed);
 
-        let result = self.query_json_once(inner).await;
+        let mut result = self.query_json_once(inner).await;
+
+        // Transient network/fetch failures: one automatic retry before surfacing.
+        if let Err(ref e) = result {
+            let kind = super::errors::NixError::classify(&format!("{e:#}")).kind;
+            if kind == super::errors::NixErrorKind::NetworkFetchFailed {
+                println!(
+                    "web: network/fetch failure during eval; retrying once after short backoff…"
+                );
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                // Keep busy true across the retry.
+                result = self.query_json_once(inner).await;
+                if result.is_ok() {
+                    println!("web: eval succeeded on network retry");
+                }
+            }
+        }
 
         match &result {
             Ok(_) => {

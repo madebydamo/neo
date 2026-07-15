@@ -55,6 +55,7 @@ async fn configuration_shell(
             error: services.error,
             error_kind: services.error_kind,
             can_store_repair: services.can_store_repair,
+            can_flake_update: services.can_flake_update,
             initial_content_url: initial_content_url.to_string(),
             initial_tab: initial_tab.to_string(),
             initial_detail,

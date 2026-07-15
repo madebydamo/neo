@@ -52,8 +52,8 @@ pub fn plan_for(kind: NixErrorKind) -> RemediationPlan {
             help: "flake.lock points at something unavailable here. Refresh inputs or re-lock on this host.",
         },
         NixErrorKind::NetworkFetchFailed => RemediationPlan {
-            actions: vec![],
-            help: "Check network / DNS / proxy, then reload the page to retry evaluation.",
+            actions: vec![RemediationAction::FlakeUpdate],
+            help: "neo-web already retries a network fetch once. If it still fails, check network / DNS / proxy, or update flake inputs to pin reachable revisions.",
         },
         NixErrorKind::Timeout | NixErrorKind::ProcessDied => RemediationPlan {
             actions: vec![],
@@ -80,4 +80,10 @@ pub fn offers_store_repair(kind: NixErrorKind) -> bool {
     plan_for(kind)
         .actions
         .contains(&RemediationAction::StoreVerifyRepair)
+}
+
+pub fn offers_flake_update(kind: NixErrorKind) -> bool {
+    plan_for(kind)
+        .actions
+        .contains(&RemediationAction::FlakeUpdate)
 }

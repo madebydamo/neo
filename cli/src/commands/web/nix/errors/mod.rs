@@ -3,7 +3,9 @@ mod patterns;
 mod remediate;
 
 pub use patterns::classify;
-pub use remediate::{offers_store_repair, plan_for, RemediationAction, RemediationPlan};
+pub use remediate::{
+    offers_flake_update, offers_store_repair, plan_for, RemediationAction, RemediationPlan,
+};
 
 /// Stable categories operators and remediation code can switch on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
