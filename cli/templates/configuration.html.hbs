@@ -37,7 +37,7 @@
                     hx-post="/nix/repair"
                     hx-target="#changes-body"
                     hx-swap="innerHTML"
-                    hx-confirm="Run sudo nix-store --verify --check-contents --repair? This can take several minutes."
+                    hx-confirm="Run sudo nix-store --verify --repair? This can take a few minutes."
                     hx-on::after-request="var m=document.getElementById('changes-modal');if(m){m.querySelector('h3').textContent='Nix store repair';m.showModal();}">
               Repair Nix store
             </button>

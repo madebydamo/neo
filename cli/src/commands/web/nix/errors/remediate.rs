@@ -4,7 +4,7 @@ use super::NixErrorKind;
 /// A single operator-facing action the UI may offer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemediationAction {
-    /// `sudo nix-store --verify --check-contents --repair`
+    /// `sudo -n nix-store --verify --repair`
     StoreVerifyRepair,
     /// Trigger flake/input update (existing web action).
     FlakeUpdate,

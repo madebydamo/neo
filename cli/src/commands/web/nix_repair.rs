@@ -151,14 +151,11 @@ async fn run_store_verify_repair(config: Arc<AppConfig>, id: String) {
         }
     };
 
+    // Use sudo -n (non-interactive). Do not pass --no-ask-password: that is a
+    // systemctl flag, not a sudo option. Skip --check-contents (full content
+    // rehash is very slow); path existence + repair is enough for missing store paths.
     let mut child = match TokioCommand::new(&sudo)
-        .args([
-            "--no-ask-password",
-            &nix_store,
-            "--verify",
-            "--check-contents",
-            "--repair",
-        ])
+        .args(["-n", &nix_store, "--verify", "--repair"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -201,7 +198,10 @@ async fn run_store_verify_repair(config: Arc<AppConfig>, id: String) {
 
     match status {
         Ok(st) if st.success() => {
-            append_log(&log_file, "nix-store --verify --check-contents --repair completed OK");
+            append_log(
+                &log_file,
+                "nix-store --verify --repair completed OK",
+            );
             write_state(&id, "in_progress", "refresh-repl", None);
             // Restart the persistent repl and warm extracts so the UI can recover.
             {
