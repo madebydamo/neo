@@ -260,6 +260,21 @@ window.configShell = function configShell() {
     } catch (e) {}
   }
 
+  /** Scroll the config page (and parent iframe, if embedded) back to the top. */
+  function resetConfigViewport() {
+    try {
+      window.scrollTo(0, 0);
+      if (document.documentElement) document.documentElement.scrollTop = 0;
+      if (document.body) document.body.scrollTop = 0;
+      // When neo config is shown inside the navigator iframe, also reset the outer frame.
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.scrollTo(0, 0);
+        }
+      } catch (e) {}
+    } catch (e) {}
+  }
+
   document.body.addEventListener('htmx:afterSettle', function (evt) {
     try {
       var t = evt.detail && evt.detail.target;
@@ -269,6 +284,9 @@ window.configShell = function configShell() {
         (t.closest && t.closest('#config-content') && t.id === 'options-pane')
       ) {
         syncConfigShellFromContent();
+        // Opening/closing the option pane (or switching tabs) replaces the main
+        // content while preserving document scroll — always start at the top.
+        resetConfigViewport();
       }
     } catch (e) {}
   });
