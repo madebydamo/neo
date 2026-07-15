@@ -1,3 +1,4 @@
+# Neo CLI package (crane) and systemPackages for the homeserver.
 {
   lib,
   self,

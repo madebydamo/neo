@@ -24,7 +24,7 @@ NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) plus a R
 |------|------|
 | `flake.nix` | Inputs + `flake-parts` + `import-tree ./nix` |
 | `nix/lib/` | `lib.neo` (activation, reverseProxy, containers, helpers, …) |
-| `nix/modules/` | core, bootstrap, disko, flakeparts |
+| `nix/modules/` | core, cli, disko, flakeparts |
 | `nix/services/<name>/` | Built-in services |
 | `nix/output/` | nixos configs, templates registration, devshell, systems |
 | `cli/` | Rust `neo` + static/templates for web UI |

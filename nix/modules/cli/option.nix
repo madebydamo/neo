@@ -1,6 +1,6 @@
 # Neo CLI configuration: shared options + local/server profiles (configPath differs by default).
 {...}: {
-  flake.modules.nixos.bootstrap-option = {
+  flake.modules.nixos.cli-option = {
     config,
     lib,
     ...
