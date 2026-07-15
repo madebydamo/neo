@@ -90,6 +90,9 @@
         ];
       };
 
+      # neo-web runs as homeserver and uses `sudo -n` for privileged ops
+      # (units, activate via systemd-run, store repair). Keep NOPASSWD in sync
+      # with every binary the web UI may invoke under sudo.
       security.sudo.extraRules = [
         {
           users = ["homeserver"];
@@ -98,7 +101,18 @@
             ++ (secRuleBuilder pkgs.systemd "systemctl")
             ++ (secRuleBuilder pkgs.systemd "journalctl")
             ++ (secRuleBuilder pkgs.systemd "systemd-run")
-            ++ (secRuleBuilder pkgs.coreutils "rm");
+            ++ (secRuleBuilder pkgs.coreutils "rm")
+            # Store repair from the web UI (`sudo -n nix-store --verify --repair`).
+            ++ (secRuleBuilder pkgs.nix "nix-store")
+            ++ [
+              {
+                command = "/nix/store/*-nix-*/bin/nix-store";
+                options = [
+                  "NOPASSWD"
+                  "SETENV"
+                ];
+              }
+            ];
         }
       ];
     };

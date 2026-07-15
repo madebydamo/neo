@@ -128,6 +128,28 @@
               "SETENV"
             ];
           }
+          # Also used by neo-web store repair; keep available whenever updater is on.
+          {
+            command = "${pkgs.nix}/bin/nix-store";
+            options = [
+              "NOPASSWD"
+              "SETENV"
+            ];
+          }
+          {
+            command = "/run/current-system/sw/bin/nix-store";
+            options = [
+              "NOPASSWD"
+              "SETENV"
+            ];
+          }
+          {
+            command = "/nix/store/*-nix-*/bin/nix-store";
+            options = [
+              "NOPASSWD"
+              "SETENV"
+            ];
+          }
           {
             command = "/run/current-system/sw/bin/systemctl";
             options = [
