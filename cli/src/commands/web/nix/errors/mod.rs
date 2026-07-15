@@ -1,7 +1,9 @@
 // Classify raw Nix evaluator / stderr text into stable error kinds for the UI.
 mod patterns;
+mod remediate;
 
 pub use patterns::classify;
+pub use remediate::{offers_store_repair, plan_for, RemediationAction, RemediationPlan};
 
 /// Stable categories operators and remediation code can switch on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

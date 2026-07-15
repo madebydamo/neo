@@ -1,8 +1,21 @@
 {{!-- Fragment for navigator sidebar (loaded via htmx after index shell is shown). --}}
 {{#if error}}
-  <div id="nav-error" class="alert alert-error m-2 text-sm" hx-swap-oob="true">
-    <span><strong>Eval timeout / error:</strong> {{error}}</span>
-    <button class="btn btn-sm btn-ghost" onclick="location.reload()">Reload</button>
+  <div id="nav-error" class="alert alert-error m-2 text-sm flex flex-col gap-2" hx-swap-oob="true">
+    <span class="whitespace-pre-wrap"><strong>Eval error{{#if error_kind}} ({{error_kind}}){{/if}}:</strong> {{error}}</span>
+    <div class="flex flex-wrap gap-1">
+      {{#if can_store_repair}}
+        <button type="button"
+                class="btn btn-xs btn-warning"
+                hx-post="/nix/repair"
+                hx-target="#changes-body"
+                hx-swap="innerHTML"
+                hx-confirm="Run sudo nix-store --verify --check-contents --repair?"
+                hx-on::after-request="var m=document.getElementById('changes-modal');if(m){m.querySelector('h3').textContent='Nix store repair';m.showModal();}">
+          Repair store
+        </button>
+      {{/if}}
+      <button class="btn btn-sm btn-ghost" onclick="location.reload()">Reload</button>
+    </div>
   </div>
 {{else}}
   <div id="nav-error" class="hidden" hx-swap-oob="true"></div>

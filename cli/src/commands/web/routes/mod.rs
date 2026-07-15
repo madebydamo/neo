@@ -3,6 +3,7 @@ mod activation;
 mod branches;
 mod changes;
 mod helpers;
+mod nix_repair;
 mod pages;
 mod save;
 mod ssh;
@@ -45,6 +46,10 @@ pub fn routes() -> Vec<rocket::Route> {
         activation::update_monitor,
         activation::update_log,
         activation::update_status,
+        nix_repair::nix_repair_start,
+        nix_repair::nix_repair_monitor,
+        nix_repair::nix_repair_log,
+        nix_repair::nix_repair_status,
         units::unit_restart,
         units::unit_start,
         units::unit_stop,

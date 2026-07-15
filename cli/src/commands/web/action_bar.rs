@@ -4,8 +4,9 @@ use std::time::Duration;
 
 use super::activation;
 use super::git_ops::dirty_state;
+use super::nix_repair;
 use super::structs::AppConfig;
-use super::util::{activation_id_ok, escape_html};
+use super::util::{activation_id_ok, escape_html, repair_id_ok};
 
 /// Compact signature of action-bar state so the watcher only pushes on real changes.
 fn action_bar_signature(config: &AppConfig) -> String {
@@ -13,9 +14,10 @@ fn action_bar_signature(config: &AppConfig) -> String {
     let busy = config.eval_busy.load(Ordering::Relaxed);
     let act = activation::find_recent_in_progress_activation().unwrap_or_default();
     let upd = activation::find_recent_in_progress_update().unwrap_or_default();
+    let rep = nix_repair::find_recent_in_progress_repair().unwrap_or_default();
     let d = dirty_state(config);
     let dirty = d.settings_dirty || d.worktree_dirty;
-    format!("{busy}|{act}|{upd}|{dirty}")
+    format!("{busy}|{act}|{upd}|{rep}|{dirty}")
 }
 
 /// Compact spinner in the sticky navbar (same visual language as client-side `#nav-busy`).
@@ -34,7 +36,8 @@ fn progress_button(
     id: &str,
     btn_class: &str,
 ) -> String {
-    if !activation_id_ok(id) {
+    let id_ok = activation_id_ok(id) || repair_id_ok(id);
+    if !id_ok {
         return format!(
             r#"<button class="btn {} btn-xs animate-pulse">{} — view</button>"#,
             btn_class, kind_label
@@ -70,6 +73,14 @@ pub fn render_action_bar_dynamic_inner(config: &AppConfig) -> String {
             "/update/monitor",
             &id,
             "btn-info",
+        )
+    } else if let Some(id) = nix_repair::find_recent_in_progress_repair() {
+        progress_button(
+            "Store repair",
+            "Nix store repair",
+            "/nix/repair/monitor",
+            &id,
+            "btn-warning",
         )
     } else if d.worktree_dirty || d.settings_dirty {
         "<button class=\"btn btn-warning btn-xs\" onclick=\"var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Pending changes';m.showModal();htmx.ajax('GET','/changes/summary',{target:'#changes-body',swap:'innerHTML'})\">Changes — review</button>".to_string()

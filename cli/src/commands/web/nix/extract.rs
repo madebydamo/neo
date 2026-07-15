@@ -1,4 +1,4 @@
-use super::errors::NixError;
+use super::errors::{offers_store_repair, plan_for, NixError};
 use super::registry::{
     EXTRACT_NEO_THEME, EXTRACT_PROXIED_SERVICES, EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
 };
@@ -9,25 +9,26 @@ use crate::commands::web::structs::{
 };
 use crate::commands::web::util::{escape_nix_string, service_name_ok};
 
+struct FormattedNixFailure {
+    message: String,
+    kind_id: String,
+    can_store_repair: bool,
+}
+
 /// Map an anyhow/nix failure into a stable UI string with kind + summary.
-fn format_nix_failure(context: &str, err: &anyhow::Error) -> String {
+fn format_nix_failure(context: &str, err: &anyhow::Error) -> FormattedNixFailure {
     let nix_err = NixError::classify(&format!("{err:#}"));
-    format!(
-        "{context}: {}.{}",
-        nix_err.display_message(),
-        match nix_err.kind {
-            super::errors::NixErrorKind::MissingStorePath => {
-                " Try repairing the store (nix-store --verify --repair) or refreshing flake inputs if the lock came from another machine."
-            }
-            super::errors::NixErrorKind::Timeout => {
-                " The evaluator aborted without a result; check neo-web logs and config flake health."
-            }
-            super::errors::NixErrorKind::NetworkFetchFailed => {
-                " Check network connectivity and that flake input URLs are reachable."
-            }
-            _ => "",
-        }
-    )
+    let plan = plan_for(nix_err.kind);
+    let hint = if plan.help.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", plan.help)
+    };
+    FormattedNixFailure {
+        message: format!("{context}: {}.{hint}", nix_err.display_message()),
+        kind_id: nix_err.kind.id().to_string(),
+        can_store_repair: offers_store_repair(nix_err.kind),
+    }
 }
 
 fn value_to_display(v: &serde_json::Value) -> String {
@@ -149,11 +150,11 @@ impl NixEvaluator {
             },
             Err(e) => {
                 eprintln!("web: nix extract_services failed: {e:#}");
+                let f = format_nix_failure("Nix error while extracting service list", &e);
                 IndexContext {
-                    error: Some(format_nix_failure(
-                        "Nix error while extracting service list",
-                        &e,
-                    )),
+                    error: Some(f.message),
+                    error_kind: Some(f.kind_id),
+                    can_store_repair: f.can_store_repair,
                     ..Default::default()
                 }
             }
@@ -169,6 +170,8 @@ impl NixEvaluator {
             save_endpoint: target.save_endpoint(),
             is_core: target.is_core(),
             error: Some(reason.to_string()),
+            error_kind: None,
+            can_store_repair: false,
             units: vec![],
             containers: std::collections::HashMap::new(),
             appdata: None,
@@ -209,15 +212,22 @@ impl NixEvaluator {
                 } else {
                     format!("Nix error for service options ({label})")
                 };
-                RawPane {
+                let f = format_nix_failure(&ctx, &e);
+                return OptionPaneContext {
+                    service: label.to_string(),
                     meta: None,
                     options: vec![],
+                    options_json: "[]".to_string(),
+                    save_endpoint: target.save_endpoint(),
+                    is_core: target.is_core(),
+                    error: Some(f.message),
+                    error_kind: Some(f.kind_id),
+                    can_store_repair: f.can_store_repair,
                     units: vec![],
                     containers: std::collections::HashMap::new(),
                     appdata: None,
                     appdata_root: None,
-                    error: Some(format_nix_failure(&ctx, &e)),
-                }
+                };
             }
         };
         let mut opts = raw.options;
@@ -235,6 +245,8 @@ impl NixEvaluator {
             save_endpoint: target.save_endpoint(),
             is_core: target.is_core(),
             error: raw.error,
+            error_kind: None,
+            can_store_repair: false,
             units,
             containers: raw.containers,
             appdata: raw.appdata.filter(|p| !p.is_empty()),
@@ -258,14 +270,14 @@ impl NixEvaluator {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("web: nix extract_proxied_services failed: {e:#}");
+                let f = format_nix_failure("Nix error while building navigator", &e);
                 NavigatorContext {
                     domain: None,
                     services: vec![],
                     theme: String::new(),
-                    error: Some(format_nix_failure(
-                        "Nix error while building navigator",
-                        &e,
-                    )),
+                    error: Some(f.message),
+                    error_kind: Some(f.kind_id),
+                    can_store_repair: f.can_store_repair,
                     ..Default::default()
                 }
             }

@@ -24,7 +24,23 @@
        }
      }">
   {{#if error}}
-    <div class="alert alert-error text-xs">{{error}}</div>
+    <div class="alert alert-error text-xs flex flex-col gap-2">
+      <span class="whitespace-pre-wrap">{{error}}</span>
+      <div class="flex flex-wrap gap-2">
+        {{#if can_store_repair}}
+          <button type="button"
+                  class="btn btn-xs btn-warning"
+                  hx-post="/nix/repair"
+                  hx-target="#changes-body"
+                  hx-swap="innerHTML"
+                  hx-confirm="Run sudo nix-store --verify --check-contents --repair?"
+                  hx-on::after-request="var m=document.getElementById('changes-modal');if(m){m.querySelector('h3').textContent='Nix store repair';m.showModal();}">
+            Repair Nix store
+          </button>
+        {{/if}}
+        <button class="btn btn-xs btn-ghost" onclick="location.reload()">Reload</button>
+      </div>
+    </div>
   {{/if}}
 
   {{#if groups}}

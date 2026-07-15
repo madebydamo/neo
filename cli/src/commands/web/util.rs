@@ -80,6 +80,18 @@ pub fn activation_id_ok(id: &str) -> bool {
         .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
+/// Store-repair job ids (`repair_*`) under the same ops dir.
+pub fn repair_id_ok(id: &str) -> bool {
+    if id.is_empty() || id.len() > 200 {
+        return false;
+    }
+    if !id.starts_with("repair_") {
+        return false;
+    }
+    id.chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
 /// Git branch names allowed for web UI switch (activation history only).
 pub fn branch_ok(br: &str) -> bool {
     if br.is_empty() || br.len() > 200 {

@@ -53,6 +53,8 @@ async fn configuration_shell(
         ConfigurationPageContext {
             theme,
             error: services.error,
+            error_kind: services.error_kind,
+            can_store_repair: services.can_store_repair,
             initial_content_url: initial_content_url.to_string(),
             initial_tab: initial_tab.to_string(),
             initial_detail,

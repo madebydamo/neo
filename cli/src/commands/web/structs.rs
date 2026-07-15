@@ -103,6 +103,12 @@ pub struct IndexContext {
     /// If set, the nix evaluator hit an error/timeout (e.g. flake eval taking >10min or broken flake.lock referencing missing store paths). The UI shows this message instead of hanging.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Stable kind id from the classifier (e.g. missing-store-path).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<String>,
+    /// Offer the "Repair Nix store" button for remediable store failures.
+    #[serde(default)]
+    pub can_store_repair: bool,
 }
 
 /// Full configuration shell page (not used by services_grid partial).
@@ -112,6 +118,10 @@ pub struct ConfigurationPageContext {
     /// If set, the nix evaluator hit an error/timeout. Shown in the shell banner.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<String>,
+    #[serde(default)]
+    pub can_store_repair: bool,
     /// Partial URL loaded into `#config-content` on first paint (HTMX GET).
     pub initial_content_url: String,
     /// Active tab seed: services | settings | versioning.
@@ -126,6 +136,8 @@ impl Default for ConfigurationPageContext {
         Self {
             theme: String::new(),
             error: None,
+            error_kind: None,
+            can_store_repair: false,
             initial_content_url: "/configuration".to_string(),
             initial_tab: "services".to_string(),
             initial_detail: None,
@@ -238,6 +250,10 @@ pub struct NavigatorContext {
     /// If set, the nix evaluator hit an error/timeout (e.g. flake eval taking >10min or broken flake.lock referencing missing store paths). The UI shows this message instead of hanging.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<String>,
+    #[serde(default)]
+    pub can_store_repair: bool,
 }
 
 /// Rich presentation metadata for a service (shown in the option pane header).
@@ -290,6 +306,10 @@ pub struct OptionPaneContext {
     /// If set, the nix evaluator hit an error/timeout (e.g. flake eval taking >10min or broken flake.lock referencing missing store paths). The UI shows this message instead of hanging or empty pane.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<String>,
+    #[serde(default)]
+    pub can_store_repair: bool,
     /// Systemd units (without .service) declared for this neo service (for status/logs/control UI).
     #[serde(default)]
     pub units: Vec<RuntimeUnit>,

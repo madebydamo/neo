@@ -14,6 +14,7 @@ mod activation;
 mod git_ops;
 mod helper_exec;
 mod nix;
+mod nix_repair;
 mod routes;
 mod schema_cache;
 mod settings;
