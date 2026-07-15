@@ -1,17 +1,24 @@
+// Persistent `nix repl` used by neo-web for fast extract queries.
+// Stderr is collected and drives fail-fast on evaluation errors so the UI never
+// waits the full marker timeout while a hard Nix error already completed.
 use std::fs;
 use std::mem;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStderr, Command as TokioCommand};
 use tokio::time::timeout;
 
 use super::registry::NIX_EXTRACTORS;
+
+/// How long to keep reading stderr after the first `error:` line so multi-line
+/// Nix traces finish before we abort the wait.
+const STDERR_ERROR_SETTLE: Duration = Duration::from_millis(200);
 
 pub struct NixEvaluator {
     child: Child,
@@ -22,6 +29,8 @@ pub struct NixEvaluator {
     eval_dir: PathBuf,
     busy: Arc<AtomicBool>,
     last_config_mtime: SystemTime,
+    /// Append-only buffer of all stderr from the current repl process.
+    stderr_buf: Arc<Mutex<String>>,
 }
 
 impl std::fmt::Debug for NixEvaluator {
@@ -47,6 +56,7 @@ impl NixEvaluator {
         let eval_dir = std::env::temp_dir().join(format!("neo-nix-repl-{}", pid));
         write_extract_files(&eval_dir)?;
 
+        let stderr_buf = Arc::new(Mutex::new(String::new()));
         let (child, stdin, stdout, stderr) = Self::spawn_repl_process(nix_cmd)?;
         let mut this = NixEvaluator {
             child,
@@ -58,6 +68,7 @@ impl NixEvaluator {
             busy: busy.clone(),
             // Set after initialize so getFlake / first force cannot look "stale".
             last_config_mtime: SystemTime::UNIX_EPOCH,
+            stderr_buf,
         };
 
         this.initialize_repl(stderr).await?;
@@ -96,35 +107,104 @@ impl NixEvaluator {
         Ok((c, stdin, stdout, stderr))
     }
 
-    /// Wait until stdout contains `marker` (or overall deadline). Does not abort on short silence.
+    fn stderr_len(&self) -> usize {
+        self.stderr_buf
+            .lock()
+            .map(|b| b.len())
+            .unwrap_or(0)
+    }
+
+    fn stderr_since(&self, from: usize) -> String {
+        self.stderr_buf
+            .lock()
+            .map(|b| {
+                if from >= b.len() {
+                    String::new()
+                } else {
+                    b[from..].to_string()
+                }
+            })
+            .unwrap_or_default()
+    }
+
+    fn clear_stderr(&self) {
+        if let Ok(mut b) = self.stderr_buf.lock() {
+            b.clear();
+        }
+    }
+
+    /// Wait until stdout contains `marker` (or overall deadline).
+    /// Aborts early when Nix writes a terminal `error:` to stderr, or when the process dies.
     async fn wait_for_marker(&mut self, marker: &str, overall: Duration) -> Result<String> {
         let mut collected = String::new();
         let mut line = String::new();
         let deadline = tokio::time::Instant::now() + overall;
+        let stderr_start = self.stderr_len();
+        let mut error_seen_at: Option<tokio::time::Instant> = None;
+
         while tokio::time::Instant::now() < deadline {
+            // Fail-fast: once stderr shows a terminal error, settle briefly then abort.
+            let stderr_slice = self.stderr_since(stderr_start);
+            if looks_like_terminal_nix_error(&stderr_slice) {
+                match error_seen_at {
+                    None => {
+                        error_seen_at = Some(tokio::time::Instant::now());
+                    }
+                    Some(t) if t.elapsed() >= STDERR_ERROR_SETTLE => {
+                        let detail = trim_for_error(&stderr_slice);
+                        println!(
+                            "web: nix stderr error during wait for {marker}: {}",
+                            detail
+                        );
+                        bail!("nix error: {}", detail);
+                    }
+                    Some(_) => {}
+                }
+            }
+
             line.clear();
             match timeout(Duration::from_millis(250), self.stdout.read_line(&mut line)).await {
-                Ok(Ok(0)) => break,
+                Ok(Ok(0)) => {
+                    // Process exited (or stdout closed) without the marker.
+                    let stderr_slice = self.stderr_since(stderr_start);
+                    if looks_like_terminal_nix_error(&stderr_slice) {
+                        let detail = trim_for_error(&stderr_slice);
+                        bail!("nix error: {}", detail);
+                    }
+                    bail!(
+                        "nix repl stdout closed while waiting for {marker}; stderr: {}",
+                        trim_for_error(&stderr_slice)
+                    );
+                }
                 Ok(Ok(_)) => {
                     collected.push_str(&line);
                     if line.trim_end().contains(marker) {
                         return Ok(collected);
+                    }
+                    // Rare: error text on stdout instead of stderr.
+                    if looks_like_terminal_nix_error(&collected) && !collected.contains(marker) {
+                        if error_seen_at.is_none() {
+                            error_seen_at = Some(tokio::time::Instant::now());
+                        }
                     }
                 }
                 // Short read timeout: keep waiting (getFlake / module eval often silent on stdout).
                 _ => {}
             }
         }
-        anyhow::bail!(
-            "timeout waiting for marker {marker}; output so far: {}",
-            &collected
-                .chars()
-                .rev()
-                .take(2000)
-                .collect::<String>()
-                .chars()
-                .rev()
-                .collect::<String>()
+
+        let stderr_slice = self.stderr_since(stderr_start);
+        if looks_like_terminal_nix_error(&stderr_slice) {
+            let detail = trim_for_error(&stderr_slice);
+            bail!("nix error: {}", detail);
+        }
+        if looks_like_terminal_nix_error(&collected) {
+            bail!("nix error: {}", trim_for_error(&collected));
+        }
+        bail!(
+            "timeout waiting for marker {marker}; output so far: {}; stderr: {}",
+            tail_chars(&collected, 2000),
+            trim_for_error(&stderr_slice)
         )
     }
 
@@ -157,6 +237,8 @@ impl NixEvaluator {
     }
 
     async fn initialize_repl(&mut self, err_reader: BufReader<ChildStderr>) -> Result<()> {
+        self.clear_stderr();
+        let buf = self.stderr_buf.clone();
         tokio::spawn(async move {
             let mut line = String::new();
             let mut err_reader = err_reader;
@@ -168,6 +250,10 @@ impl NixEvaluator {
                         let trimmed = line.trim_end();
                         if !trimmed.is_empty() {
                             println!("[nix] {}", trimmed);
+                            if let Ok(mut b) = buf.lock() {
+                                b.push_str(trimmed);
+                                b.push('\n');
+                            }
                         }
                     }
                     Err(_) => break,
@@ -176,6 +262,15 @@ impl NixEvaluator {
         });
 
         self.busy.store(true, Ordering::Relaxed);
+        let init_result = self.initialize_repl_inner().await;
+        if init_result.is_err() {
+            self.busy.store(false, Ordering::Relaxed);
+        }
+        // On success, initialize_repl_inner leaves busy=false via the ready marker path.
+        init_result
+    }
+
+    async fn initialize_repl_inner(&mut self) -> Result<()> {
         for _ in 0..40 {
             let mut line = String::new();
             if timeout(Duration::from_millis(30), self.stdout.read_line(&mut line))
@@ -243,7 +338,31 @@ impl NixEvaluator {
         if let Err(e) = self.auto_refresh_if_stale().await {
             println!("web: auto mtime-based refresh check failed: {e}");
         }
+        // refresh() clears busy; re-assert for the actual query.
+        self.busy.store(true, Ordering::Relaxed);
 
+        let result = self.query_json_once(inner).await;
+
+        match &result {
+            Ok(_) => {
+                self.busy.store(false, Ordering::Relaxed);
+            }
+            Err(e) => {
+                println!(
+                    "web: nix evaluation failed ({e:#}); restarting repl so the next request is not stuck"
+                );
+                if let Err(re) = self.refresh().await {
+                    println!("web: repl refresh after eval failure also failed: {re:#}");
+                    self.busy.store(false, Ordering::Relaxed);
+                }
+                // refresh() success path clears busy in initialize_repl.
+            }
+        }
+
+        result
+    }
+
+    async fn query_json_once<T: serde::de::DeserializeOwned>(&mut self, inner: &str) -> Result<T> {
         let marker = format!(
             "__NEO_EVAL_{}",
             SystemTime::now()
@@ -255,20 +374,52 @@ impl NixEvaluator {
             r#":p (builtins.toJSON ({{ __marker = "{}"; result = ({}); }}))"#,
             marker, inner
         );
+        let stderr_start = self.stderr_len();
         self.stdin.write_all(full.as_bytes()).await?;
         self.stdin.write_all(b"\n").await?;
         self.stdin.flush().await?;
-        println!("web: starting nix evaluation (uses bound flake f; full getFlake only after config mtime change)");
+        println!(
+            "web: starting nix evaluation (uses bound flake f; full getFlake only after config mtime change)"
+        );
+
         let mut collected = String::new();
         let mut line = String::new();
         let mut found: Option<String> = None;
+        let mut error_seen_at: Option<tokio::time::Instant> = None;
         // 10 minutes: first-time flake evals (full module system + many services)
         // or after nix gc / stale locks can legitimately take a long time.
         let deadline = tokio::time::Instant::now() + Duration::from_secs(600);
+
         while tokio::time::Instant::now() < deadline {
+            let stderr_slice = self.stderr_since(stderr_start);
+            if looks_like_terminal_nix_error(&stderr_slice) {
+                match error_seen_at {
+                    None => {
+                        error_seen_at = Some(tokio::time::Instant::now());
+                    }
+                    Some(t) if t.elapsed() >= STDERR_ERROR_SETTLE => {
+                        let detail = trim_for_error(&stderr_slice);
+                        println!("web: nix returned error during evaluation: {}", detail);
+                        bail!("nix error: {}", detail);
+                    }
+                    Some(_) => {}
+                }
+            }
+
             line.clear();
             match timeout(Duration::from_millis(250), self.stdout.read_line(&mut line)).await {
-                Ok(Ok(0)) => break,
+                Ok(Ok(0)) => {
+                    let stderr_slice = self.stderr_since(stderr_start);
+                    if looks_like_terminal_nix_error(&stderr_slice) {
+                        let detail = trim_for_error(&stderr_slice);
+                        println!("web: nix returned error during evaluation: {}", detail);
+                        bail!("nix error: {}", detail);
+                    }
+                    bail!(
+                        "nix repl stdout closed during evaluation; stderr: {}",
+                        trim_for_error(&stderr_slice)
+                    );
+                }
                 Ok(Ok(_)) => {
                     collected.push_str(&line);
                     let trimmed = line.trim_end();
@@ -281,16 +432,30 @@ impl NixEvaluator {
                 _ => {}
             }
         }
-        self.busy.store(false, Ordering::Relaxed);
+
         let json_line = match found {
             Some(l) => l,
             None => {
-                if collected.contains("error:") {
-                    println!("web: nix returned error during evaluation: {}", &collected);
-                    anyhow::bail!("nix error: {}", &collected);
+                let stderr_slice = self.stderr_since(stderr_start);
+                if looks_like_terminal_nix_error(&stderr_slice) {
+                    let detail = trim_for_error(&stderr_slice);
+                    println!("web: nix returned error during evaluation: {}", detail);
+                    bail!("nix error: {}", detail);
                 }
-                println!("web: nix evaluation FAILED to find marker within deadline. Output so far (last 2k): {}", &collected.chars().rev().take(2000).collect::<String>().chars().rev().collect::<String>());
-                anyhow::bail!("no marker from repl, output: {}", &collected);
+                if looks_like_terminal_nix_error(&collected) {
+                    println!("web: nix returned error on stdout: {}", &collected);
+                    bail!("nix error: {}", trim_for_error(&collected));
+                }
+                println!(
+                    "web: nix evaluation FAILED to find marker within deadline. Output so far (last 2k): {}; stderr: {}",
+                    tail_chars(&collected, 2000),
+                    trim_for_error(&stderr_slice)
+                );
+                bail!(
+                    "no marker from repl, output: {}; stderr: {}",
+                    collected,
+                    trim_for_error(&stderr_slice)
+                );
             }
         };
         let v: serde_json::Value = serde_json::from_str(&json_line).context("parse marked json")?;
@@ -335,6 +500,42 @@ impl NixEvaluator {
         self.last_config_mtime = current_config_mtime(&self.neo_input);
         Ok(())
     }
+}
+
+/// True when `text` looks like a finished Nix evaluation error (not a progress line).
+pub(crate) fn looks_like_terminal_nix_error(text: &str) -> bool {
+    for line in text.lines() {
+        let t = line.trim_start();
+        // Primary form Nix uses for evaluation failures.
+        if t.starts_with("error:") {
+            return true;
+        }
+        // Nested / secondary form in multi-line traces.
+        if t.starts_with("error: ") || t.contains("error: path ") {
+            return true;
+        }
+    }
+    false
+}
+
+fn trim_for_error(s: &str) -> String {
+    let t = s.trim();
+    if t.len() <= 4000 {
+        t.to_string()
+    } else {
+        // Prefer the end of the trace (leaf error).
+        tail_chars(t, 4000)
+    }
+}
+
+fn tail_chars(s: &str, n: usize) -> String {
+    s.chars()
+        .rev()
+        .take(n)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect()
 }
 
 fn write_extract_files(dir: &Path) -> Result<()> {
@@ -395,5 +596,26 @@ fn walk_mtime(p: &Path, max_t: &mut SystemTime) {
                 walk_mtime(&entry.path(), max_t);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::looks_like_terminal_nix_error;
+
+    #[test]
+    fn detects_missing_store_path_trace() {
+        let sample = r#"
+error:
+       … while calling the 'toJSON' builtin
+       error: path '/nix/store/z10yq3qjir82v7jb3nakx5hm3hr0qv9r-source/flake.nix' does not exist
+"#;
+        assert!(looks_like_terminal_nix_error(sample));
+    }
+
+    #[test]
+    fn ignores_innocent_text() {
+        assert!(!looks_like_terminal_nix_error("evaluating…\nbuilding…\n"));
+        assert!(!looks_like_terminal_nix_error("warning: Git tree is dirty\n"));
     }
 }
