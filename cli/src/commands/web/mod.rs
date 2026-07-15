@@ -26,23 +26,20 @@ use action_bar::start_action_bar_watcher;
 use routes::routes;
 use structs::AppConfig;
 
-pub fn web(doc: &DocumentMut, settings_path: PathBuf, nix_cmd: &str, section: &str) -> Result<()> {
-    let raw_config_dir = doc
-        .get(&section)
-        .and_then(|t| t.get("configPath"))
-        .and_then(|u| u.as_str())
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_string())
-        .unwrap_or(".".to_string());
-
-    // Use the raw configuration directory (ground truth) directly.
+pub fn web(
+    _doc: &DocumentMut,
+    settings_path: PathBuf,
+    nix_cmd: &str,
+    config_path: &str,
+) -> Result<()> {
+    // Use the resolved configuration directory for the active profile.
     // We evaluate it (not via git+file wrapper) so that saves to settings.toml
     // and any other on-disk changes are seen by the next getFlake.
     // Canonicalize so the path passed to the repl is absolute and stable
     // for expressions like (/. + configDir).
-    let neo_input_for_eval = std::fs::canonicalize(&raw_config_dir)
+    let neo_input_for_eval = std::fs::canonicalize(config_path)
         .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or(raw_config_dir.clone());
+        .unwrap_or_else(|_| config_path.to_string());
 
     let rt = Runtime::new().context("create runtime")?;
     let template_dir = option_env!("TEMPLATE_DIR")

@@ -8,9 +8,12 @@
     if builtins.pathExists settingsPath
     then builtins.fromTOML (builtins.readFile settingsPath)
     else {};
-  neoService = raw."neo-service" or raw.nixos or {};
-  neoInput = neoService.neoInput or "github:madebydamo/neo";
-  plugins = neoService.plugins or [];
+  core = raw.core or {};
+  neoCli = raw."neo-cli" or {};
+  # Legacy: neo-service / nixos before migration 003.
+  legacyService = raw."neo-service" or raw.nixos or {};
+  neoInput = neoCli.neoInput or legacyService.neoInput or "github:madebydamo/neo";
+  plugins = core.plugins or legacyService.plugins or [];
 in {
   flake-file.inputs =
     {

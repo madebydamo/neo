@@ -28,7 +28,7 @@ Know a great plugin? Open an issue or PR on Neo to get it listed.
 ## Install a plugin (web UI)
 
 1. Open **Neo web**.
-2. Go to **Settings → neo-service → plugins**.
+2. Go to **Settings → core → plugins**.
 3. Add a plugin entry (remote or local—examples below).
 4. Apply / activate when the UI asks you to (so the new apps appear).
 5. Enable the services you want under **Services** (same place as built-in apps).
@@ -71,7 +71,7 @@ If you want to package services or Nix config for yourself or others:
    ```
 
 2. Replace the example service under `modules/services/` with your app (options, container or systemd unit, optional reverse-proxy snippet)—same patterns as core services in this repo.
-3. Publish the flake (GitHub, etc.) or keep it on a path and add it under **Settings → neo-service → plugins**.
+3. Publish the flake (GitHub, etc.) or keep it on a path and add it under **Settings → core → plugins**.
 
 Developers implementing services: see [AGENTS.md](../AGENTS.md) and existing modules under `nix/services/`. Users of Neo do not need that level of detail.
 

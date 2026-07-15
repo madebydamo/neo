@@ -6,6 +6,7 @@ use std::process::Command;
 use toml_edit::DocumentMut;
 
 pub mod commands;
+use crate::commands::profile::{resolve_config_path, resolve_profile};
 use crate::commands::{
     activate::activate, build::build, edit::edit, execute_command,
     generate_hardware::generate_hardware, git::git, init::init, migrate::migrate, nuke::nuke,
@@ -17,7 +18,7 @@ struct Cli {
     /// Path to settings.toml. If /etc/neo/settings.toml exists it is used as the default
     /// source (esp. for `paste-settings`, which writes merged config to configPath/settings.toml).
     /// Falls back to ./settings.toml (if present) or baked Nix defaults. The TOML (or defaults)
-    /// defines configPath per section.
+    /// defines configPath per local/server profile under [neo-cli].
     #[arg(long, value_name = "FILE", global = true)]
     settings: Option<PathBuf>,
 
@@ -37,9 +38,13 @@ struct Cli {
     #[arg(long, env = "NEO_REMOTE_URL", global = true)]
     remote_url: Option<String>,
 
-    /// Which settings section to use as base defaults ("neo-cli" or "neo-service").
-    /// If omitted, defaults to "neo-service" if /etc/neo/settings.toml available, else "neo-cli".
-    /// Program arg or NEO_SECTION= still overrides (e.g. to force neo-cli on full install).
+    /// CLI profile: `local` (laptop / nix run) or `server` (homeserver).
+    /// Default: server if /etc/neo/settings.toml exists, else local. Env: NEO_PROFILE.
+    #[arg(long, env = "NEO_PROFILE", default_value = "", global = true)]
+    profile: String,
+
+    /// Alias for --profile. Also accepts legacy names neo-cli (→ local) and neo-service (→ server).
+    /// Env: NEO_SECTION.
     #[arg(long, env = "NEO_SECTION", default_value = "", global = true)]
     section: String,
 
@@ -81,7 +86,7 @@ enum Commands {
     },
 }
 
-pub fn load_or_default_settings(path: &PathBuf, _section: &str) -> Result<DocumentMut> {
+pub fn load_or_default_settings(path: &PathBuf, _profile: &str) -> Result<DocumentMut> {
     let default_str = option_env!("DEFAULT_SETTINGS_TOML").unwrap_or("");
     let mut doc = if !default_str.is_empty() {
         default_str.parse().context("parse default TOML")?
@@ -102,7 +107,16 @@ fn merge_into(base: &mut DocumentMut, overlay: &DocumentMut) {
             toml_edit::Item::Table(t) => {
                 if let Some(b) = base.get_mut(k).and_then(|x| x.as_table_mut()) {
                     for (ik, iv) in t.iter() {
-                        b.insert(ik, iv.clone());
+                        // Nested profile tables (local/server): merge keys, do not replace whole table.
+                        if let (Some(bt), Some(ot)) =
+                            (b.get_mut(ik).and_then(|x| x.as_table_mut()), iv.as_table())
+                        {
+                            for (nk, nv) in ot.iter() {
+                                bt.insert(nk, nv.clone());
+                            }
+                        } else {
+                            b.insert(ik, iv.clone());
+                        }
                     }
                 } else {
                     base.insert(k, toml_edit::Item::Table(t.clone()));
@@ -141,76 +155,39 @@ fn run(cli: Cli) -> Result<()> {
         PathBuf::from("settings.toml")
     };
 
-    let section = if !cli.section.is_empty() {
-        cli.section.clone()
-    } else if etc_settings.exists() {
-        "neo-service".to_string()
-    } else {
-        "neo-cli".to_string()
-    };
+    let profile = resolve_profile(&cli.profile, &cli.section, etc_settings.exists());
 
-    if section == "neo-service" && env::var("USER").unwrap_or_default() != "homeserver" {
+    // On a full install, run as homeserver so configPath ownership and git identity match.
+    if etc_settings.exists() && env::var("USER").unwrap_or_default() != "homeserver" {
         let sudo_bin = cli.sudo_path.as_deref().unwrap_or("sudo");
         execute_command(Command::new(sudo_bin).arg("-u")
             .arg("homeserver")
             .arg(
-                "--preserve-env=NEO_NEO_INPUT,NEO_TEMPLATE,NEO_REMOTE_URL,NIX_BINARY_PATH,SUDO_BINARY_PATH,NEO_ACTIVATION_SUFFIX,NEO_UPDATE_SUFFIX",
+                "--preserve-env=NEO_NEO_INPUT,NEO_TEMPLATE,NEO_REMOTE_URL,NIX_BINARY_PATH,SUDO_BINARY_PATH,NEO_ACTIVATION_SUFFIX,NEO_UPDATE_SUFFIX,NEO_SECTION,NEO_PROFILE",
             )
             .args(env::args()), "sudo -u homeserver")?;
         return Ok(());
     }
 
-    let mut doc = load_or_default_settings(&settings_path, &section)?;
-    // Merge CLI overrides (safe)
+    let mut doc = load_or_default_settings(&settings_path, &profile)?;
+    // Merge CLI overrides into shared neo-cli
     if let Some(v) = cli.neo_input {
-        if let Some(table) = doc.get_mut("neo-service").and_then(|t| t.as_table_mut()) {
-            table.insert("neoInput", toml_edit::value(v.clone()));
-        }
         if let Some(table) = doc.get_mut("neo-cli").and_then(|t| t.as_table_mut()) {
-            table.insert("neoInput", toml_edit::value(v.clone()));
+            table.insert("neoInput", toml_edit::value(v));
         }
     }
     if let Some(v) = cli.template {
-        if let Some(table) = doc.get_mut("neo-service").and_then(|t| t.as_table_mut()) {
-            table.insert("template", toml_edit::value(v.clone()));
-        }
         if let Some(table) = doc.get_mut("neo-cli").and_then(|t| t.as_table_mut()) {
-            table.insert("template", toml_edit::value(v.clone()));
+            table.insert("template", toml_edit::value(v));
         }
     }
     if let Some(v) = cli.remote_url {
-        if let Some(table) = doc.get_mut("neo-service").and_then(|t| t.as_table_mut()) {
-            table.insert("repoUrl", toml_edit::value(v.clone()));
-        }
         if let Some(table) = doc.get_mut("neo-cli").and_then(|t| t.as_table_mut()) {
-            table.insert("repoUrl", toml_edit::value(v.clone()));
+            table.insert("repoUrl", toml_edit::value(v));
         }
     }
 
-    let config_path = {
-        let primary = if section == "neo-service" {
-            "neo-service"
-        } else {
-            "neo-cli"
-        };
-        let legacy = if section == "neo-service" {
-            "nixos"
-        } else {
-            "cli"
-        };
-        let from_legacy = doc
-            .get(legacy)
-            .and_then(|t| t.get("configPath"))
-            .and_then(|v| v.as_str());
-        let from_primary = doc
-            .get(primary)
-            .and_then(|t| t.get("configPath"))
-            .and_then(|v| v.as_str());
-        from_legacy
-            .or(from_primary)
-            .unwrap_or("./build")
-            .to_string()
-    };
+    let config_path = resolve_config_path(&doc, &profile);
 
     // The writable settings file lives under configPath (same as `neo edit` uses).
     // The original CLI --settings (or /etc/neo/settings.toml) is only the source we loaded from.
@@ -220,7 +197,10 @@ fn run(cli: Cli) -> Result<()> {
     let nix_cmd = cli.nix_path.as_deref().unwrap_or("nix");
     let sudo_cmd = cli.sudo_path.as_deref().unwrap_or("sudo");
     if dry_run {
-        println!("=== DRY-RUN ENABLED for {:?} ===", command);
+        println!(
+            "=== DRY-RUN ENABLED for {:?} (profile={}) ===",
+            command, profile
+        );
     }
 
     match command {
@@ -228,12 +208,12 @@ fn run(cli: Cli) -> Result<()> {
         Commands::PasteSettings => {
             paste_settings(&config_path, &settings_path, &doc, dry_run, nix_cmd)
         }
-        Commands::Init => init(&config_path, &doc, &section, dry_run, nix_cmd),
+        Commands::Init => init(&config_path, &doc, &profile, dry_run, nix_cmd),
         Commands::UpdateInputs => update_inputs(&config_path, dry_run, nix_cmd),
         Commands::Update { update_suffix } => update(
             &config_path,
             &doc,
-            &section,
+            &profile,
             dry_run,
             nix_cmd,
             update_suffix.as_deref(),
@@ -248,7 +228,7 @@ fn run(cli: Cli) -> Result<()> {
             activation_suffix.as_deref(),
         ),
         Commands::Nuke => nuke(&config_path, dry_run, nix_cmd),
-        Commands::Web => web(&doc, web_settings_path, nix_cmd, &section),
+        Commands::Web => web(&doc, web_settings_path, nix_cmd, &config_path),
         Commands::Edit => edit(&config_path, dry_run),
         Commands::Git => git(&config_path, dry_run),
         Commands::Lg => git(&config_path, dry_run),

@@ -1,6 +1,6 @@
 # Neo web UI service implementation.
 # Launches the neo CLI with `web` subcommand (Rocket server) as a systemd service.
-# Runs as homeserver user (to match section=nixos logic and write access to configPath/settings.toml).
+# Runs as homeserver user (write access to configPath/settings.toml).
 # Listens on configurable port (default 8081) via ROCKET_* env vars; proxied locally via SWAG.
 {self, ...}: {
   flake.modules.nixos.neo = {

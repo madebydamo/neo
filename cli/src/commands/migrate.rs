@@ -57,11 +57,175 @@ fn apply_migrations(doc: &mut DocumentMut) -> bool {
         apply_renames(doc, m.renames);
         applied.push(m.id.to_string());
     }
+    // Custom migrations that need more than path renames.
+    if !applied.iter().any(|a| a == "003-split-neo-service") {
+        println!("Applying migration: 003-split-neo-service");
+        migrate_003_split_neo_service(doc);
+        applied.push("003-split-neo-service".to_string());
+    }
+    if !applied
+        .iter()
+        .any(|a| a == "004-neo-cli-local-server-profiles")
+    {
+        println!("Applying migration: 004-neo-cli-local-server-profiles");
+        migrate_004_neo_cli_profiles(doc);
+        applied.push("004-neo-cli-local-server-profiles".to_string());
+    }
     let did_new = applied.len() > orig;
     if did_new {
         set_applied(doc, &applied);
     }
     did_new
+}
+
+/// Split legacy [neo-service] into core.plugins, services.system-updater, and neo-cli.
+fn migrate_003_split_neo_service(doc: &mut DocumentMut) {
+    let Some(svc_item) = remove_dotted(doc, "neo-service") else {
+        return;
+    };
+    let Some(svc) = svc_item.as_table() else {
+        return;
+    };
+
+    if let Some(plugins) = svc.get("plugins") {
+        insert_dotted(doc, "core.plugins", plugins.clone());
+    }
+
+    // system-updater.enabled from autoUpdateEnabled, else bootstrapEnabled
+    if let Some(v) = svc.get("autoUpdateEnabled") {
+        insert_dotted(doc, "services.system-updater.enabled", v.clone());
+    } else if let Some(v) = svc.get("bootstrapEnabled") {
+        insert_dotted(doc, "services.system-updater.enabled", v.clone());
+    }
+    if let Some(v) = svc.get("autoUpdateTimer") {
+        insert_dotted(doc, "services.system-updater.schedule", v.clone());
+    }
+    if let Some(v) = svc.get("garbageCollectOlderThen") {
+        insert_dotted(
+            doc,
+            "services.system-updater.garbageCollectOlderThen",
+            v.clone(),
+        );
+    }
+
+    // Server-side config path → neo-cli.server (004 also handles legacy top-level configPath).
+    if let Some(v) = svc.get("configPath") {
+        let already = doc
+            .get("neo-cli")
+            .and_then(|t| t.get("server"))
+            .and_then(|t| t.as_table())
+            .map(|t| t.contains_key("configPath"))
+            .unwrap_or(false);
+        if !already {
+            insert_dotted(doc, "neo-cli.server.configPath", v.clone());
+        }
+    }
+
+    // Shared CLI keys: fill neo-cli only when the key is not already set.
+    const CLI_KEYS: &[&str] = &[
+        "repoUrl",
+        "neoInput",
+        "template",
+        "bootstrapMethod",
+        "gitUserName",
+        "gitUserEmail",
+        "defaultBranch",
+        "rebuildBranchFormat",
+    ];
+    for key in CLI_KEYS {
+        let already = doc
+            .get("neo-cli")
+            .and_then(|t| t.as_table())
+            .map(|t| t.contains_key(key))
+            .unwrap_or(false);
+        if already {
+            continue;
+        }
+        if let Some(v) = svc.get(key) {
+            insert_dotted(doc, &format!("neo-cli.{key}"), v.clone());
+        }
+    }
+}
+
+/// Move top-level neo-cli.configPath into local/server profile tables.
+fn migrate_004_neo_cli_profiles(doc: &mut DocumentMut) {
+    let path_item = remove_dotted(doc, "neo-cli.configPath");
+    let path_str = path_item
+        .as_ref()
+        .and_then(|i| i.as_str())
+        .map(|s| s.to_string());
+
+    if let Some(path) = path_str {
+        let localish = is_local_config_path(&path);
+        let serverish = is_server_config_path(&path);
+
+        let has_local = doc
+            .get("neo-cli")
+            .and_then(|t| t.get("local"))
+            .and_then(|t| t.as_table())
+            .map(|t| t.contains_key("configPath"))
+            .unwrap_or(false);
+        let has_server = doc
+            .get("neo-cli")
+            .and_then(|t| t.get("server"))
+            .and_then(|t| t.as_table())
+            .map(|t| t.contains_key("configPath"))
+            .unwrap_or(false);
+
+        if serverish && !localish {
+            if !has_server {
+                insert_dotted(
+                    doc,
+                    "neo-cli.server.configPath",
+                    Item::Value(toml_edit::Value::from(path.as_str())),
+                );
+            }
+        } else if localish && !serverish {
+            if !has_local {
+                insert_dotted(
+                    doc,
+                    "neo-cli.local.configPath",
+                    Item::Value(toml_edit::Value::from(path.as_str())),
+                );
+            }
+        } else {
+            // Ambiguous: keep on both profiles if missing.
+            if !has_local {
+                insert_dotted(
+                    doc,
+                    "neo-cli.local.configPath",
+                    Item::Value(toml_edit::Value::from(path.as_str())),
+                );
+            }
+            if !has_server {
+                insert_dotted(
+                    doc,
+                    "neo-cli.server.configPath",
+                    Item::Value(toml_edit::Value::from(path.as_str())),
+                );
+            }
+        }
+    }
+}
+
+fn is_local_config_path(path: &str) -> bool {
+    let p = path.trim();
+    if p.is_empty() {
+        return false;
+    }
+    if p.starts_with("./") || p.starts_with("../") {
+        return true;
+    }
+    if !p.starts_with('/') {
+        return true; // relative
+    }
+    // Absolute under a home directory is typically laptop scaffolding.
+    p.starts_with("/home/") || p.starts_with("/Users/")
+}
+
+fn is_server_config_path(path: &str) -> bool {
+    let p = path.trim();
+    p.contains("/var/neo") || p.contains("AppData/configuration") || p.contains("/DATA/AppData/")
 }
 
 fn get_applied(doc: &DocumentMut) -> Vec<String> {

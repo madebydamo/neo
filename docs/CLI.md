@@ -15,7 +15,8 @@ neo --help
 | Flag / env | Purpose |
 |------------|---------|
 | `--settings FILE` | Path to settings. Default: `/etc/neo/settings.toml` if present, else `./settings.toml`. |
-| `--section neo-cli \| neo-service` | Which section supplies paths/template. Default: `neo-service` when system settings exist, else `neo-cli`. Env: `NEO_SECTION`. |
+| `--profile local \| server` | Which path profile to use. Default: `server` if `/etc/neo/settings.toml` exists, else `local`. Env: `NEO_PROFILE`. |
+| `--section …` | Alias for `--profile`. Legacy: `neo-cli` → local, `neo-service` → server. Env: `NEO_SECTION`. |
 | `--dry-run` | Print actions without applying. |
 | `--neo-input` / `NEO_NEO_INPUT` | Override Neo input URL. |
 | `--template` / `NEO_TEMPLATE` | Override template. |
@@ -23,7 +24,7 @@ neo --help
 | `--nix-path` / `NIX_BINARY_PATH` | Nix binary. |
 | `--sudo-path` / `SUDO_BINARY_PATH` | Sudo binary. |
 
-On a full install, commands under `neo-service` re-exec as the `homeserver` user when needed.
+On a full install (`/etc/neo/settings.toml` present), commands re-exec as the `homeserver` user when needed and default to the **server** profile (`neo-cli.server.configPath`). Laptop / `nix run` defaults to the **local** profile (`neo-cli.local.configPath`, default `./build`). Shared keys (template, neoInput, git identity, …) live under `[neo-cli]`.
 
 ## Commands (summary)
 

@@ -114,7 +114,7 @@ pub fn core_section_ok(section: &str) -> bool {
             | "hostname"
             | "hashedLinuxPassword"
             | "core"
-            | "neo-service"
+            | "plugins"
             | "neo-cli"
             | "disko"
     )

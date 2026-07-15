@@ -12,37 +12,24 @@
         (craneLib.filterCargoSources path type)
         || (lib.hasSuffix ".nix" path);
     };
+    neoCli = cfg."neo-cli" or {};
+    localCfg = neoCli.local or {};
+    serverCfg = neoCli.server or {};
+    defaultServerPath = "${cfg.core.volumes.appdata or "/var/neo/DATA/AppData"}/configuration";
     defaults = pkgs.writeText "default-settings.toml" ''
-      [neo-service]
-      enabled = ${
-        if (cfg."neo-service" or {}).enabled or false
-        then "true"
-        else "false"
-      }
-      configPath = "${(cfg."neo-service" or {}).configPath or "/var/neo/DATA/AppData/configuration"}"
-      neoInput = "${(cfg."neo-service" or {}).neoInput or "github:madebydamo/neo"}"
-      template = "${(cfg."neo-service" or {}).template or "github:madebydamo/neo#homeserver"}"
-      bootstrapEnabled = ${
-        if (cfg."neo-service" or {}).bootstrapEnabled or false
-        then "true"
-        else "false"
-      }
-      autoUpdateEnabled = ${
-        if (cfg."neo-service" or {}).autoUpdateEnabled or false
-        then "true"
-        else "false"
-      }
-      garbageCollectOlderThen = "${(cfg."neo-service" or {}).autoUpdateGcDeleteOlderThan or "60d"}"
-      bootstrapMethod = "${(cfg."neo-service" or {}).bootstrapMethod or "template"}"
-      repoUrl = "${(cfg."neo-service" or {}).repoUrl or ""}"
-      gitUserName = "${(cfg."neo-service" or {}).gitUserName or "Neo Bootstrap"}"
-      gitUserEmail = "${(cfg."neo-service" or {}).gitUserEmail or "neo@local"}"
-      defaultBranch = "${(cfg."neo-service" or {}).defaultBranch or "master"}"
       [neo-cli]
-      configPath = "${(cfg."neo-cli" or {}).configPath or "./build"}"
-      template = "${(cfg."neo-cli" or {}).template or "..#homeserver"}"
-      bootstrapMethod = "${(cfg."neo-cli" or {}).bootstrapMethod or "template"}"
-      repoUrl = "${(cfg."neo-cli" or {}).repoUrl or ""}"
+      neoInput = "${neoCli.neoInput or "github:madebydamo/neo"}"
+      template = "${neoCli.template or "github:madebydamo/neo#homeserver"}"
+      bootstrapMethod = "${neoCli.bootstrapMethod or "template"}"
+      repoUrl = "${neoCli.repoUrl or ""}"
+      gitUserName = "${neoCli.gitUserName or "Neo Bootstrap"}"
+      gitUserEmail = "${neoCli.gitUserEmail or "neo@local"}"
+      defaultBranch = "${neoCli.defaultBranch or "master"}"
+      rebuildBranchFormat = "${neoCli.rebuildBranchFormat or "%Y%m%d-%H%M%S"}"
+      [neo-cli.local]
+      configPath = "${localCfg.configPath or "./build"}"
+      [neo-cli.server]
+      configPath = "${serverCfg.configPath or defaultServerPath}"
       [disko]
       enabled = ${
         if cfg.disko.enabled or false

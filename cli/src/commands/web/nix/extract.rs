@@ -103,7 +103,14 @@ fn enrich_options(opts: &mut [OptionSchema]) {
 }
 
 fn rename_scalar_core_option(section: &str, opts: &mut [OptionSchema]) {
-    let scalar_sections = ["timeZone", "uid", "gid", "hostname", "hashedLinuxPassword"];
+    let scalar_sections = [
+        "timeZone",
+        "uid",
+        "gid",
+        "hostname",
+        "hashedLinuxPassword",
+        "plugins",
+    ];
     if scalar_sections.contains(&section) && opts.len() == 1 && opts[0].name.is_empty() {
         opts[0].name = section.to_string();
     }

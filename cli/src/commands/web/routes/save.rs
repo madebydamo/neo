@@ -67,6 +67,7 @@ const CORE_NESTED_SECTIONS: &[&str] = &[
     "gid",
     "hostname",
     "hashedLinuxPassword",
+    "plugins",
     "core",
 ];
 
@@ -98,7 +99,7 @@ pub fn save_core_section(
     let status = if is_core_nested {
         apply_core_nested_section(&mut doc, section, &payload)
     } else {
-        // Top-level sections: neo-service, neo-cli, disko
+        // Top-level sections: neo-cli, disko
         save_toplevel_section(&mut doc, section, &payload)
     };
 
@@ -201,7 +202,7 @@ fn save_core_subtable(
     }
 }
 
-/// Top-level sections outside `[core]`: neo-service, neo-cli, disko.
+/// Top-level sections outside `[core]`: neo-cli, disko.
 fn save_toplevel_section(
     doc: &mut DocumentMut,
     section: &str,

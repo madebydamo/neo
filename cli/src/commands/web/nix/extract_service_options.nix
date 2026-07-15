@@ -20,7 +20,7 @@
     then builtins.head cfgNames
     else null;
   servicesOpt = f.nixosConfigurations.${cfg}.options.neo.services or {};
-  coreSections = ["ssh" "volumes" "timeZone" "uid" "gid" "hostname" "hashedLinuxPassword"];
+  coreSections = ["ssh" "volumes" "timeZone" "uid" "gid" "hostname" "hashedLinuxPassword" "plugins"];
   # These are the leaf sections that live under neo.core.* (for individual panes or dotted names in aggregate "core" pane).
   # The aggregate "core" itself is looked up as neo.core (falls to the else branch).
   getNeoOpt = s:

@@ -106,23 +106,24 @@ mkdir -p ~/neo-homeserver && cd ~/neo-homeserver
 
 cat > settings.toml << 'EOF'
 [neo-cli]
-configPath = "./build"
 template = "github:madebydamo/neo#homeserver"
 bootstrapMethod = "template"
 
-[neo-service]
+# Optional: local defaults to ./build, server defaults to /var/neo/DATA/AppData/configuration
+# [neo-cli.local]
+# configPath = "./build"
+# [neo-cli.server]
+# configPath = "/var/neo/DATA/AppData/configuration"
+
+[services.system-updater]
 enabled = true
-bootstrapEnabled = true
-autoUpdateEnabled = true
-configPath = "/var/neo/DATA/AppData/configuration"
-template = "github:madebydamo/neo#homeserver"
 EOF
 
 nix run --extra-experimental-features "nix-command flakes" --refresh \
-  github:madebydamo/neo#neo -- --settings ./settings.toml --section neo-cli init
+  github:madebydamo/neo#neo -- --settings ./settings.toml init
 ```
 
-Configuration appears under `./build`.
+Configuration appears under `./build` (local profile). The same settings file carries a **server** profile path for the homeserver and system-updater — no manual path rewrite before install.
 
 ### 2. Fill in domain, keys, disks
 
@@ -136,7 +137,7 @@ Before installing, set at least:
 
 ```bash
 nix run --extra-experimental-features "nix-command flakes" \
-  github:madebydamo/neo#neo -- --settings ./settings.toml --section neo-cli web
+  github:madebydamo/neo#neo -- --settings ./settings.toml web
 ```
 
 Use the UI to fill domain, keys, Disko disk path, users, plugins, etc.
@@ -194,10 +195,12 @@ authorizedKeys = [
   "ssh-ed25519 AAAA... your-key",
 ]
 
-[neo-service]
+[neo-cli]
+template = "github:madebydamo/neo#homeserver"
+# local.configPath defaults to ./build; server.configPath defaults to appdata/configuration
+
+[services.system-updater]
 enabled = true
-bootstrapEnabled = true
-autoUpdateEnabled = true
 
 [services.swag]
 enabled = true
@@ -297,9 +300,9 @@ One public IP and one homeserver? Run SWAG on that IP and leave streamproxy off.
 ## After install
 
 1. Open **Neo web**  
-2. Enable services, set users, add [plugins](PLUGINS.md) under **Settings → neo-service → plugins**  
+2. Enable services, set users, add [plugins](PLUGINS.md) under **Settings → core → plugins**  
 3. **Activate** from the UI  
-4. Leave auto-update on if you want hands-off upgrades  
+4. Leave **system-updater** (and **docker-updater**) on if you want hands-off upgrades  
 
 Optional terminal tools: [CLI.md](CLI.md).
 

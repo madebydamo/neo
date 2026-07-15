@@ -4,18 +4,22 @@ use std::path::Path;
 use toml_edit::DocumentMut;
 
 use crate::commands::log::{resolve_suffix, OperationLog};
+use crate::commands::profile::neo_cli_get;
 use crate::commands::run_nix;
 
 pub fn update(
     config_path: &str,
     config: &DocumentMut,
-    section: &str,
+    profile: &str,
     dry_run: bool,
     nix_cmd: &str,
     update_suffix: Option<&str>,
 ) -> Result<()> {
     if dry_run {
-        println!("DRY-RUN: nix flake update in {}", config_path);
+        println!(
+            "DRY-RUN: nix flake update in {} (profile={})",
+            config_path, profile
+        );
         println!("DRY-RUN: would delete modules/ and run nix flake init -t <template> (refresh from neo template, if set as bootstrapMethod)");
         println!("DRY-RUN: would nix run .#neo -- migrate (from updated input)");
         return Ok(());
@@ -30,11 +34,7 @@ pub fn update(
     // (possibly newly updated) neo template, without clobbering user files like settings.toml or
     // the committed flake.nix (we temp-move it to let init succeed, then restore).
 
-    let bootstrap_method = config
-        .get(section)
-        .and_then(|t| t.get("bootstrapMethod"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("template");
+    let bootstrap_method = neo_cli_get(config, profile, "bootstrapMethod").unwrap_or("template");
 
     if bootstrap_method != "clone" {
         let modules_dir = Path::new(config_path).join("modules");
@@ -48,11 +48,8 @@ pub fn update(
             fs::rename(&flake_path, &flake_backup)
                 .context("backup flake.nix for template refresh init")?;
         }
-        let template = config
-            .get(section)
-            .and_then(|t| t.get("template"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("github:madebydamo/neo#homeserver");
+        let template =
+            neo_cli_get(config, profile, "template").unwrap_or("github:madebydamo/neo#homeserver");
 
         let init_result = op.step("flake init", || {
             run_nix(config_path, nix_cmd, &["flake", "init", "-t", template])

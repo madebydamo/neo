@@ -5,47 +5,29 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use toml_edit::DocumentMut;
 
+use crate::commands::profile::neo_cli_get;
 use crate::commands::{execute_command, git_cmd, has_staged_changes, run_nix};
 
 pub fn init(
     config_path: &str,
     config: &DocumentMut,
-    section: &str,
+    profile: &str,
     dry_run: bool,
     nix_cmd: &str,
 ) -> Result<()> {
     if dry_run {
-        println!("DRY-RUN: smart init at {}", config_path);
-        let repo_url = config
-            .get(section)
-            .and_then(|t| t.get("repoUrl"))
-            .and_then(|u| u.as_str())
-            .filter(|s| !s.is_empty());
-        let bootstrap_method = config
-            .get(section)
-            .and_then(|t| t.get("bootstrapMethod"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("template");
-        let template = config
-            .get(section)
-            .and_then(|t| t.get("template"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("github:madebydamo/neo#homeserver");
-        let git_user_name = config
-            .get(section)
-            .and_then(|t| t.get("gitUserName"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("Neo Bootstrap");
-        let git_user_email = config
-            .get(section)
-            .and_then(|t| t.get("gitUserEmail"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("neo@local");
-        let default_branch = config
-            .get(section)
-            .and_then(|t| t.get("defaultBranch"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("master");
+        println!(
+            "DRY-RUN: smart init at {} (profile={})",
+            config_path, profile
+        );
+        let repo_url = neo_cli_get(config, profile, "repoUrl").filter(|s| !s.is_empty());
+        let bootstrap_method =
+            neo_cli_get(config, profile, "bootstrapMethod").unwrap_or("template");
+        let template =
+            neo_cli_get(config, profile, "template").unwrap_or("github:madebydamo/neo#homeserver");
+        let git_user_name = neo_cli_get(config, profile, "gitUserName").unwrap_or("Neo Bootstrap");
+        let git_user_email = neo_cli_get(config, profile, "gitUserEmail").unwrap_or("neo@local");
+        let default_branch = neo_cli_get(config, profile, "defaultBranch").unwrap_or("master");
         println!("  bootstrapMethod: {}", bootstrap_method);
         if let Some(url) = repo_url {
             println!("  repoUrl: {}", url);
@@ -78,17 +60,10 @@ pub fn init(
     }
 
     if !has_flake {
-        let repo_url = config
-            .get(section)
-            .and_then(|t| t.get("repoUrl"))
-            .and_then(|u| u.as_str())
-            .filter(|s| !s.is_empty());
+        let repo_url = neo_cli_get(config, profile, "repoUrl").filter(|s| !s.is_empty());
 
-        let bootstrap_method = config
-            .get(section)
-            .and_then(|t| t.get("bootstrapMethod"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("template");
+        let bootstrap_method =
+            neo_cli_get(config, profile, "bootstrapMethod").unwrap_or("template");
 
         if repo_url.is_some() && bootstrap_method == "clone" {
             let desc = format!("git clone {} (in {})", repo_url.unwrap(), config_path);
@@ -101,10 +76,7 @@ pub fn init(
                 &desc,
             )?;
         } else {
-            let template = config
-                .get(section)
-                .and_then(|t| t.get("template"))
-                .and_then(|v| v.as_str())
+            let template = neo_cli_get(config, profile, "template")
                 .unwrap_or("github:madebydamo/neo#homeserver");
 
             run_nix(config_path, nix_cmd, &["flake", "init", "-t", template])?;
@@ -135,27 +107,15 @@ pub fn init(
     let mut cfg = repo.config().context("git config")?;
     cfg.set_str(
         "user.name",
-        config
-            .get(section)
-            .and_then(|t| t.get("gitUserName"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("Neo Bootstrap"),
+        neo_cli_get(config, profile, "gitUserName").unwrap_or("Neo Bootstrap"),
     )?;
     cfg.set_str(
         "user.email",
-        config
-            .get(section)
-            .and_then(|t| t.get("gitUserEmail"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("neo@local"),
+        neo_cli_get(config, profile, "gitUserEmail").unwrap_or("neo@local"),
     )?;
     cfg.set_str(
         "init.defaultBranch",
-        config
-            .get(section)
-            .and_then(|t| t.get("defaultBranch"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("master"),
+        neo_cli_get(config, profile, "defaultBranch").unwrap_or("master"),
     )?;
 
     crate::commands::generate_hardware::generate_hardware(config_path, &config, false, nix_cmd)?;

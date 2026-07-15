@@ -16,6 +16,13 @@
         rank = 0;
       };
 
+      options.neo.core.plugins = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        description = "List of plugin flake URLs (e.g. github:user/plugin or path:/path/to/plugin)";
+        rank = 5;
+      };
+
       options.neo.core.hostname = mkOption {
         type = types.str;
         default = "nixos";
