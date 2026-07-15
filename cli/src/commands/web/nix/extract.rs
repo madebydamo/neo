@@ -1,3 +1,4 @@
+use super::errors::NixError;
 use super::registry::{
     EXTRACT_NEO_THEME, EXTRACT_PROXIED_SERVICES, EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
 };
@@ -7,6 +8,27 @@ use crate::commands::web::structs::{
     RuntimeUnit, ServiceMeta,
 };
 use crate::commands::web::util::{escape_nix_string, service_name_ok};
+
+/// Map an anyhow/nix failure into a stable UI string with kind + summary.
+fn format_nix_failure(context: &str, err: &anyhow::Error) -> String {
+    let nix_err = NixError::classify(&format!("{err:#}"));
+    format!(
+        "{context}: {}.{}",
+        nix_err.display_message(),
+        match nix_err.kind {
+            super::errors::NixErrorKind::MissingStorePath => {
+                " Try repairing the store (nix-store --verify --repair) or refreshing flake inputs if the lock came from another machine."
+            }
+            super::errors::NixErrorKind::Timeout => {
+                " The evaluator aborted without a result; check neo-web logs and config flake health."
+            }
+            super::errors::NixErrorKind::NetworkFetchFailed => {
+                " Check network connectivity and that flake input URLs are reachable."
+            }
+            _ => "",
+        }
+    )
+}
 
 fn value_to_display(v: &serde_json::Value) -> String {
     match v {
@@ -126,13 +148,11 @@ impl NixEvaluator {
                 ..Default::default()
             },
             Err(e) => {
-                eprintln!("web: nix extract_services failed: {e}");
+                eprintln!("web: nix extract_services failed: {e:#}");
                 IndexContext {
-                    error: Some(format!(
-                        "Nix evaluator error or timeout (>{}s) while extracting service list: {}. \
-                         This often means a long first-time eval, or a problem in the config flake (e.g. flake.lock has 'path' locked to a /nix/store/*-source that no longer exists after GC or because the lock was generated on a dev machine with local git+file paths). \
-                         The server-side timeout is now 10min to allow completion; the UI will show this message instead of spinning.",
-                        600, e
+                    error: Some(format_nix_failure(
+                        "Nix error while extracting service list",
+                        &e,
                     )),
                     ..Default::default()
                 }
@@ -183,17 +203,11 @@ impl NixEvaluator {
         let raw: RawPane = match self.query_json(&inner).await {
             Ok(v) => v,
             Err(e) => {
-                eprintln!("web: nix extract_pane({label}) failed: {e}");
-                let msg = if target.is_core() {
-                    format!(
-                        "Nix eval error/timeout for core section ({}): {}. See logs.",
-                        label, e
-                    )
+                eprintln!("web: nix extract_pane({label}) failed: {e:#}");
+                let ctx = if target.is_core() {
+                    format!("Nix error for core section ({label})")
                 } else {
-                    format!(
-                        "Nix eval error/timeout for service options ({}): {}. See neo-web logs. Long timeout (10min) active.",
-                        label, e
-                    )
+                    format!("Nix error for service options ({label})")
                 };
                 RawPane {
                     meta: None,
@@ -202,7 +216,7 @@ impl NixEvaluator {
                     containers: std::collections::HashMap::new(),
                     appdata: None,
                     appdata_root: None,
-                    error: Some(msg),
+                    error: Some(format_nix_failure(&ctx, &e)),
                 }
             }
         };
@@ -243,16 +257,14 @@ impl NixEvaluator {
         let mut ctx: NavigatorContext = match self.query_json(&inner).await {
             Ok(v) => v,
             Err(e) => {
-                eprintln!("web: nix extract_proxied_services failed: {e}");
+                eprintln!("web: nix extract_proxied_services failed: {e:#}");
                 NavigatorContext {
                     domain: None,
                     services: vec![],
                     theme: String::new(),
-                    error: Some(format!(
-                        "Nix evaluator error or timeout (>{}s) while building navigator: {e}. \
-                         Common cause: flake.lock (in your config dir) references a now-missing /nix/store/*-source/flake.nix (from dev machine git+file or post-GC). \
-                         Long server timeout (10min) in effect; UI will display this instead of spinning.",
-                        600
+                    error: Some(format_nix_failure(
+                        "Nix error while building navigator",
+                        &e,
                     )),
                     ..Default::default()
                 }
