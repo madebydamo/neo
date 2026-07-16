@@ -76,13 +76,7 @@ pub fn render_action_bar_dynamic_inner(config: &AppConfig) -> String {
             "btn-warning",
         )
     } else if let Some(id) = activation::find_recent_in_progress_update() {
-        progress_button(
-            "Update",
-            "Update",
-            "/update/monitor",
-            &id,
-            "btn-info",
-        )
+        progress_button("Update", "Update", "/update/monitor", &id, "btn-info")
     } else if let Some(id) = nix_repair::find_recent_in_progress_repair() {
         progress_button(
             "Store repair",

@@ -1,8 +1,7 @@
 # Hermes service implementation.
-# Mirrors openclaw options for seamless migration
 # Uses the official hermes-agent NixOS module for declarative systemd service.
 #
-# Full sudo access + no sandboxing (matches OpenClaw exactly):
+# Full sudo access + no sandboxing:
 # - hermes user in wheel + docker groups
 # - passwordless sudo (NOPASSWD + SETENV) for ALL commands
 # - All hardening disabled (ProtectSystem, NoNewPrivileges, etc.)
@@ -168,7 +167,7 @@
           restartSec = 5;
         };
 
-        # Disable ALL sandboxing/hardening (full system access like OpenClaw)
+        # Disable ALL sandboxing/hardening (full system access)
         systemd.services.hermes-agent.serviceConfig = {
           ReadWritePaths = ["/"];
           NoNewPrivileges = lib.mkForce false;

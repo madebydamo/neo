@@ -57,14 +57,16 @@ fn extract_store_paths(text: &str) -> Vec<String> {
 }
 
 fn lower_contains_all(text_lower: &str, needles: &[&str]) -> bool {
-    needles.iter().all(|n| text_lower.contains(&n.to_lowercase()))
+    needles
+        .iter()
+        .all(|n| text_lower.contains(&n.to_lowercase()))
 }
 
 fn summary_missing_path(_text: &str, paths: &[String]) -> String {
     match paths.first() {
-        Some(p) => format!(
-            "Store path is missing (often after GC or a lock from another machine): {p}"
-        ),
+        Some(p) => {
+            format!("Store path is missing (often after GC or a lock from another machine): {p}")
+        }
         None => "A referenced Nix store path does not exist".to_string(),
     }
 }
@@ -144,11 +146,7 @@ fn summary_unknown(text: &str, _paths: &[String]) -> String {
             let t = text.trim();
             if t.len() > 200 {
                 // first 200 chars
-                let end = t
-                    .char_indices()
-                    .nth(200)
-                    .map(|(i, _)| i)
-                    .unwrap_or(t.len());
+                let end = t.char_indices().nth(200).map(|(i, _)| i).unwrap_or(t.len());
                 &t[..end]
             } else {
                 t
@@ -545,7 +543,10 @@ error:
 "#;
         let e = classify(sample);
         assert_eq!(e.kind, NixErrorKind::MissingStorePath);
-        assert!(e.paths.iter().any(|p| p.contains("z10yq3qjir82v7jb3nakx5hm3hr0qv9r")));
+        assert!(e
+            .paths
+            .iter()
+            .any(|p| p.contains("z10yq3qjir82v7jb3nakx5hm3hr0qv9r")));
         assert!(e.user_message().contains("missing-store-path"));
     }
 
@@ -587,7 +588,8 @@ error:
 
     #[test]
     fn classifies_dns_failure() {
-        let e = classify("error: unable to download 'https://github.com/x': Could not resolve host");
+        let e =
+            classify("error: unable to download 'https://github.com/x': Could not resolve host");
         // "unable to download" matches Network first
         assert_eq!(e.kind, NixErrorKind::NetworkFetchFailed);
     }
@@ -608,7 +610,9 @@ error:
 
     #[test]
     fn classifies_missing_flake_attr() {
-        let e = classify("error: flake 'github:foo/bar' does not provide attribute 'nixosModules.default'");
+        let e = classify(
+            "error: flake 'github:foo/bar' does not provide attribute 'nixosModules.default'",
+        );
         assert_eq!(e.kind, NixErrorKind::EvalAssertion);
     }
 }

@@ -88,7 +88,7 @@ Out of the box (enable what you need in the UI):
 | Search & utilities    | SearXNG, pastebin, change detection                    |
 | Privacy on the LAN    | Pi-hole                                                |
 | Backups & monitoring  | Automated backup, Beszel                               |
-| AI / assistants       | Hermes, Openclaw, and more                             |
+| AI / assistants       | Hermes, and more                                       |
 | Management            | **Neo web** — your control panel                       |
 
 Want a full **media / \*arr** stack (Jellyfin, Sonarr, Radarr, …)? That ships as the **[highsea.neo](https://github.com/madebydamo/highsea.neo)** plugin—same homeserver, extra apps. See [Plugins](docs/PLUGINS.md).

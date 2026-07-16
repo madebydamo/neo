@@ -108,10 +108,7 @@ impl NixEvaluator {
     }
 
     fn stderr_len(&self) -> usize {
-        self.stderr_buf
-            .lock()
-            .map(|b| b.len())
-            .unwrap_or(0)
+        self.stderr_buf.lock().map(|b| b.len()).unwrap_or(0)
     }
 
     fn stderr_since(&self, from: usize) -> String {
@@ -152,10 +149,7 @@ impl NixEvaluator {
                     }
                     Some(t) if t.elapsed() >= STDERR_ERROR_SETTLE => {
                         let detail = trim_for_error(&stderr_slice);
-                        println!(
-                            "web: nix stderr error during wait for {marker}: {}",
-                            detail
-                        );
+                        println!("web: nix stderr error during wait for {marker}: {}", detail);
                         bail!("nix error: {}", detail);
                     }
                     Some(_) => {}
@@ -632,6 +626,8 @@ error:
     #[test]
     fn ignores_innocent_text() {
         assert!(!looks_like_terminal_nix_error("evaluating…\nbuilding…\n"));
-        assert!(!looks_like_terminal_nix_error("warning: Git tree is dirty\n"));
+        assert!(!looks_like_terminal_nix_error(
+            "warning: Git tree is dirty\n"
+        ));
     }
 }

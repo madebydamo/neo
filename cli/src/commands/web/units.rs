@@ -594,7 +594,7 @@ pub fn is_safe_appdata_path(path: &str, appdata_root: Option<&str>) -> bool {
     {
         return false;
     }
-    // At least three normal components: /var/lib/openclaw or /var/neo/DATA/AppData/foo
+    // At least three normal components: /var/lib/example or /var/neo/DATA/AppData/foo
     let depth = p
         .components()
         .filter(|c| matches!(c, Component::Normal(_)))
@@ -624,7 +624,7 @@ pub fn is_safe_appdata_path(path: &str, appdata_root: Option<&str>) -> bool {
             return true;
         }
     }
-    // Paths outside the volume (e.g. openclaw /var/lib/openclaw) still allowed when
+    // Paths outside the volume (e.g. /var/lib/example) still allowed when
     // declared by the service option and deep enough (checked above).
     true
 }
@@ -807,7 +807,7 @@ mod tests {
 
     #[test]
     fn appdata_path_outside_volume_deep() {
-        assert!(is_safe_appdata_path("/var/lib/openclaw", None));
+        assert!(is_safe_appdata_path("/var/lib/example", None));
         assert!(!is_safe_appdata_path("/var/lib", None));
     }
 }

@@ -198,10 +198,7 @@ async fn run_store_verify_repair(config: Arc<AppConfig>, id: String) {
 
     match status {
         Ok(st) if st.success() => {
-            append_log(
-                &log_file,
-                "nix-store --verify --repair completed OK",
-            );
+            append_log(&log_file, "nix-store --verify --repair completed OK");
             write_state(&id, "in_progress", "refresh-repl", None);
             // Restart the persistent repl and warm extracts so the UI can recover.
             {

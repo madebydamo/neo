@@ -330,6 +330,15 @@ const MIGRATIONS: &[Migration] = &[
             },
         ],
     },
+    // OpenClaw is unmaintained and removed from Neo. Drop the whole table so
+    // secrets (gatewayToken, telegramBotToken, *ApiKey, etc.) leave settings.toml.
+    Migration {
+        id: "005-remove-openclaw",
+        renames: &[KeyRename {
+            from: "services.openclaw",
+            to: "",
+        }],
+    },
 ];
 
 fn apply_renames(doc: &mut DocumentMut, renames: &[KeyRename]) {
@@ -413,4 +422,83 @@ fn move_dotted(doc: &mut DocumentMut, from: &str, to: &str) -> bool {
         return true;
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migration_005_removes_openclaw_secrets() {
+        let raw = r#"
+[services.hermes]
+enabled = true
+xaiApiKey = "keep-me"
+
+[services.openclaw]
+enabled = true
+gatewayToken = "secret-gateway"
+telegramBotToken = "secret-telegram"
+anthropicApiKey = "secret-anthropic"
+openaiApiKey = "secret-openai"
+xaiApiKey = "secret-xai"
+"#;
+        let mut doc: DocumentMut = raw.parse().unwrap();
+        assert!(apply_migrations(&mut doc));
+
+        let services = doc.get("services").and_then(|s| s.as_table()).unwrap();
+        assert!(
+            !services.contains_key("openclaw"),
+            "services.openclaw must be removed"
+        );
+        assert!(
+            services.contains_key("hermes"),
+            "unrelated services must stay"
+        );
+
+        let applied = get_applied(&doc);
+        assert!(
+            applied.iter().any(|id| id == "005-remove-openclaw"),
+            "005-remove-openclaw must be recorded"
+        );
+
+        let out = doc.to_string();
+        for secret in [
+            "secret-gateway",
+            "secret-telegram",
+            "secret-anthropic",
+            "secret-openai",
+            "secret-xai",
+            "gatewayToken",
+            "telegramBotToken",
+            "anthropicApiKey",
+            "openaiApiKey",
+        ] {
+            assert!(
+                !out.contains(secret),
+                "migrated settings must not contain {secret:?}"
+            );
+        }
+        assert!(out.contains("keep-me"), "hermes secrets must remain");
+    }
+
+    #[test]
+    fn migration_005_is_idempotent() {
+        let raw = r#"
+[services.openclaw]
+xaiApiKey = "secret-xai"
+"#;
+        let mut doc: DocumentMut = raw.parse().unwrap();
+        assert!(apply_migrations(&mut doc));
+        assert!(
+            !apply_migrations(&mut doc),
+            "second run must report no further migrations"
+        );
+        assert!(!doc.to_string().contains("secret-xai"));
+        assert!(doc
+            .get("services")
+            .and_then(|s| s.as_table())
+            .map(|t| !t.contains_key("openclaw"))
+            .unwrap_or(true));
+    }
 }

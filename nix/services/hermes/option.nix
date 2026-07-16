@@ -1,5 +1,4 @@
-# Hermes service options. Mirrors openclaw options for easy migration
-# by renaming [services.openclaw] to [services.hermes] in settings.toml.
+# Hermes service options.
 {...}: {
   flake.modules.nixos.hermes-option = {
     config,
@@ -12,7 +11,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Hermes Agent service (replaces OpenClaw)" {rank = 0;};
+              enabled = mkEnableOption "Hermes Agent service" {rank = 0;};
 
               gatewayPort = mkOption {
                 type = types.port;
