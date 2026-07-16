@@ -319,13 +319,39 @@ fn build_timeline_html(kind: OpKind, labels: &[&str], idx: usize, status: &str) 
             String::new()
         };
 
+        // Active (running) step: wrap the label box in daisyUI aura so it
+        // stands out as a rotating border light around the stage.
+        //
+        // The status strip is hx-swapped every 1s (outerHTML), which remounts
+        // the node and would reset CSS animations. Negative animation-delay
+        // phase-locks to wall clock so the ring continues mid-cycle across
+        // remounts (daisyUI default aura period is 6s).
+        let end = if running {
+            let phase_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() % 6000)
+                .unwrap_or(0);
+            format!(
+                r#"<div class="timeline-end"><div class="aura aura-sm {color}" style="animation-delay:-{phase_ms}ms"><div class="{box_cls} bg-base-100 text-[10px] whitespace-nowrap">{label}</div></div></div>"#,
+                color = kind.active_color(),
+                phase_ms = phase_ms,
+                box_cls = box_cls,
+                label = label,
+            )
+        } else {
+            format!(
+                r#"<div class="timeline-end {box_cls} text-[10px] whitespace-nowrap">{label}</div>"#,
+                box_cls = box_cls,
+                label = label,
+            )
+        };
+
         items.push_str(&format!(
-            r#"<li>{hr_before}<div class="timeline-middle {icon_cls}">{icon}</div><div class="timeline-end {box_cls} text-[10px] whitespace-nowrap">{label}</div>{hr_after}</li>"#,
+            r#"<li>{hr_before}<div class="timeline-middle {icon_cls}">{icon}</div>{end}{hr_after}</li>"#,
             hr_before = hr_before,
             icon_cls = icon_cls,
             icon = icon,
-            box_cls = box_cls,
-            label = label,
+            end = end,
             hr_after = hr_after,
         ));
     }
