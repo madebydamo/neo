@@ -85,7 +85,7 @@ Out of the box (enable what you need in the UI):
 | Photos                | Immich, Immich Drop                                    |
 | Documents             | Paperless                                              |
 | Passwords             | Vaultwarden                                            |
-| Search & utilities    | SearXNG, pastebin, change detection                    |
+| Search & utilities    | SearXNG, pastebin, change detection, Karakeep          |
 | Privacy on the LAN    | Pi-hole                                                |
 | Backups & monitoring  | Automated backup, Beszel                               |
 | AI / assistants       | Hermes, and more                                       |
