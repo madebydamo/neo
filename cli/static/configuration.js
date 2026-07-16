@@ -140,18 +140,23 @@ window.configShell = function configShell() {
       }
     },
 
-    /** Switch tab, clear detail, and load the corresponding grid/branches into #config-content. */
+    /**
+     * Switch tab and load the corresponding grid/branches into #config-content.
+     * Do not clear `detail` here — breadcrumb chrome stays until afterSwap so the
+     * layout does not collapse while the option pane is still on screen.
+     */
     loadTab(tab) {
       if (!window.neoConfirmLeaveConfigForm()) return;
       this.tab = tab;
-      this.detail = null;
       this.navigateContent(this.tabUrl(tab));
     },
 
-    /** Leave the option pane and return to the parent grid for the current tab (updates URL). */
+    /**
+     * Leave the option pane and return to the parent grid for the current tab.
+     * Breadcrumb stays visible until the grid swap lands (see syncConfigShellFromContent).
+     */
     goUp() {
       if (!window.neoConfirmLeaveConfigForm()) return;
-      this.detail = null;
       this.navigateContent(this.tabUrl(this.tab));
     },
 
@@ -159,7 +164,6 @@ window.configShell = function configShell() {
     goHome() {
       if (!window.neoConfirmLeaveConfigForm()) return;
       this.tab = 'services';
-      this.detail = null;
       this.navigateContent('/configuration');
     },
   };
@@ -185,6 +189,24 @@ window.configShell = function configShell() {
     return !!(target.getAttribute && target.getAttribute('hx-target') === '#config-content');
   }
 
+  /**
+   * Hold #config-content's current height while a nav request is in flight so the
+   * document does not collapse when a tall option pane is swapped for a shorter grid
+   * (or while waiting for the response). Cleared after the swap settles.
+   */
+  function lockConfigContentHeight() {
+    var el = document.getElementById('config-content');
+    if (!el) return;
+    var h = el.offsetHeight;
+    if (h > 0) el.style.minHeight = h + 'px';
+  }
+
+  function unlockConfigContentHeight() {
+    var el = document.getElementById('config-content');
+    if (!el) return;
+    el.style.minHeight = '';
+  }
+
   // Guard attribute-based (and other) HTMX navigations that replace #config-content.
   // Skip modals, action bar, unit controls, changes-body, etc. (other targets).
   // After a successful save, option_form updates originals before reload, so dirty is false.
@@ -198,12 +220,14 @@ window.configShell = function configShell() {
       }
       if (!isNav) return;
       setNavBusy(true);
+      lockConfigContentHeight();
       if (window.neoAllowNextConfigNav) {
         window.neoAllowNextConfigNav = false;
         return;
       }
       if (!window.neoConfirmLeaveConfigForm()) {
         setNavBusy(false);
+        unlockConfigContentHeight();
         evt.preventDefault();
       }
     } catch (e) {}
@@ -226,8 +250,22 @@ window.configShell = function configShell() {
   }
   document.body.addEventListener('htmx:afterRequest', clearNavBusyIfConfig);
   document.body.addEventListener('htmx:afterSwap', clearNavBusyIfConfig);
-  document.body.addEventListener('htmx:responseError', clearNavBusyIfConfig);
-  document.body.addEventListener('htmx:sendError', clearNavBusyIfConfig);
+  document.body.addEventListener('htmx:responseError', function (evt) {
+    clearNavBusyIfConfig(evt);
+    try {
+      if (isConfigContentTarget((evt.detail || {}).target)) unlockConfigContentHeight();
+    } catch (e) {
+      unlockConfigContentHeight();
+    }
+  });
+  document.body.addEventListener('htmx:sendError', function (evt) {
+    clearNavBusyIfConfig(evt);
+    try {
+      if (isConfigContentTarget((evt.detail || {}).target)) unlockConfigContentHeight();
+    } catch (e) {
+      unlockConfigContentHeight();
+    }
+  });
 
   // Browser leave / hard navigation while the option form has unsaved edits.
   window.addEventListener('beforeunload', function (e) {
@@ -275,7 +313,11 @@ window.configShell = function configShell() {
     } catch (e) {}
   }
 
-  document.body.addEventListener('htmx:afterSettle', function (evt) {
+  // Sync chrome as soon as content lands (afterSwap), not afterSettle — so the
+  // breadcrumb is updated in the same paint cycle as the pane/grid swap.
+  // Then release the height lock and scroll on the next frame so Alpine can
+  // apply detail chrome before the document reflows (one layout change, not two).
+  document.body.addEventListener('htmx:afterSwap', function (evt) {
     try {
       var t = evt.detail && evt.detail.target;
       if (!t) return;
@@ -284,9 +326,12 @@ window.configShell = function configShell() {
         (t.closest && t.closest('#config-content') && t.id === 'options-pane')
       ) {
         syncConfigShellFromContent();
-        // Opening/closing the option pane (or switching tabs) replaces the main
-        // content while preserving document scroll — always start at the top.
-        resetConfigViewport();
+        requestAnimationFrame(function () {
+          unlockConfigContentHeight();
+          // Opening/closing the option pane (or switching tabs) replaces the main
+          // content while preserving document scroll — always start at the top.
+          resetConfigViewport();
+        });
       }
     } catch (e) {}
   });
