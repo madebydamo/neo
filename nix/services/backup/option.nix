@@ -68,7 +68,8 @@
                 It supports custom exclude lists, scheduled execution via systemd OnCalendar timers, detailed per-run logging, and extra SSH options for bastions or restricted keys.
                 A simple, reliable off-site backup solution that stays entirely under your control without third-party SaaS or cloud storage.
               '';
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Rsync backup service configuration";

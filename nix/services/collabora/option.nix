@@ -33,7 +33,8 @@
               projectUrl = "https://www.collaboraonline.com/code/";
               githubUrl = "https://github.com/CollaboraOnline/online";
               releaseUrl = "https://github.com/CollaboraOnline/online/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Collabora service configuration";

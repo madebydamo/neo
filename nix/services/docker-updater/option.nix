@@ -29,7 +29,8 @@
               description = ''
                 Periodically pulls newer images for every enabled service's declared Docker containers (from the central containers registry) and restarts the corresponding docker-* units when a newer image is downloaded. Provides a declarative, UI-integrated alternative to watchtower without extra runtime containers. Image tags are configurable per-container under each service's "containers" setting (applied on activate).
               '';
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Docker auto-updater configuration";

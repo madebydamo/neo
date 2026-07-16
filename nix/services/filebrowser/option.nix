@@ -41,7 +41,8 @@
               '';
               projectUrl = "https://filebrowser.org/";
               githubUrl = "https://github.com/filebrowser/filebrowser";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Filebrowser service configuration";

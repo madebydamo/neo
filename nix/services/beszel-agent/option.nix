@@ -45,7 +45,8 @@
               '';
               projectUrl = "https://beszel.dev/";
               githubUrl = "https://github.com/henrygd/beszel";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Beszel agent service configuration";

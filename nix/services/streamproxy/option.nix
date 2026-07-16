@@ -81,7 +81,8 @@
                   The computed dynamic ports (starting at 10000) and nginx config blocks are generated automatically from the entries; this provides centralized ingress without each homeserver needing dedicated public IPs, open ports, or complex DNS/HAProxy setups.
                 '';
                 githubUrl = "https://github.com/madebydamo/neo";
-              };
+              }
+              // lib.neo.mkSkillOptions {};
           }
         );
         default = {};

@@ -41,7 +41,8 @@
               projectUrl = "https://syncthing.net/";
               githubUrl = "https://github.com/syncthing/syncthing";
               releaseUrl = "https://github.com/syncthing/syncthing/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Syncthing service configuration";

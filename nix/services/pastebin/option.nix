@@ -39,7 +39,8 @@
               githubUrl = "https://github.com/wantguns/bin";
               releaseUrl = "https://github.com/wantguns/bin/releases";
               iframeCompatible = false;
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Pastebin service configuration";

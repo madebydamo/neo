@@ -51,7 +51,8 @@
               '';
               githubUrl = "https://github.com/dani-garcia/vaultwarden";
               releaseUrl = "https://github.com/dani-garcia/vaultwarden/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Vaultwarden service configuration";

@@ -37,7 +37,8 @@
                 When enabled, the config repo is initialized if missing and a systemd timer runs scheduled upgrades (with optional nix garbage collection).
                 CLI path/template settings live under neo-cli (this service always uses the server profile for configPath). This option only controls whether automatic system updates run.
               '';
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "System auto-updater configuration";

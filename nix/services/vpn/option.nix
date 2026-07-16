@@ -73,7 +73,8 @@
               projectUrl = "https://github.com/qdm12/gluetun-wiki";
               githubUrl = "https://github.com/passteque/gluetun";
               releaseUrl = "https://github.com/passteque/gluetun/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "VPN service configuration (gluetun)";

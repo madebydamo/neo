@@ -86,7 +86,8 @@
               githubUrl = "https://github.com/nextcloud/server";
               releaseUrl = "https://nextcloud.com/changelog/";
               iframeCompatible = false;
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Nextcloud service configuration";

@@ -88,7 +88,8 @@
               projectUrl = "https://tailscale.com/";
               githubUrl = "https://github.com/tailscale/tailscale";
               releaseUrl = "https://github.com/tailscale/tailscale/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Tailscale service configuration";

@@ -71,7 +71,8 @@
               projectUrl = "https://docs.linuxserver.io/general/swag/";
               githubUrl = "https://github.com/linuxserver/docker-swag";
               releaseUrl = "https://github.com/linuxserver/docker-swag/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Swag service configuration";

@@ -46,7 +46,8 @@
               projectUrl = "https://changedetection.io/";
               githubUrl = "https://github.com/dgtlmoon/changedetection.io";
               releaseUrl = "https://github.com/dgtlmoon/changedetection.io/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Changedetection service configuration";

@@ -62,7 +62,8 @@
               '';
               githubUrl = "https://github.com/madebydamo/neo";
               rank = 20;
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Neo web UI configuration";

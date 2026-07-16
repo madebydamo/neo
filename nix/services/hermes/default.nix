@@ -156,13 +156,8 @@
           extraDependencyGroups = ["all" "messaging" "homeassistant" "youtube" "voice"];
           environment = hermesEnv;
           environmentFiles = cfg.environmentFiles;
-          # Documents: map common ones. Expand as needed.
-          documents =
-            if (cfg.documents != null)
-            then {
-              "AGENTS.md" = "${cfg.documents}/AGENTS.md";
-            }
-            else {};
+          # Workspace AGENTS.md + skill tree: hermes/skills.nix.
+          # (cfg.documents is reserved/legacy; do not map blindly — missing files break activation.)
           restart = "always";
           restartSec = 5;
         };

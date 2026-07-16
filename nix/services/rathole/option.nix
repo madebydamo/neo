@@ -49,7 +49,8 @@
               '';
               githubUrl = "https://github.com/rathole-org/rathole";
               releaseUrl = "https://github.com/rathole-org/rathole/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Rathole client configuration";

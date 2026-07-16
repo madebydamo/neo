@@ -41,7 +41,8 @@
               projectUrl = "https://beszel.dev/";
               githubUrl = "https://github.com/henrygd/beszel";
               releaseUrl = "https://github.com/henrygd/beszel/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Beszel hub service configuration";

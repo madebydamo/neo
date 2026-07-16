@@ -57,7 +57,8 @@
               projectUrl = "https://docs.paperless-ngx.com/";
               githubUrl = "https://github.com/paperless-ngx/paperless-ngx";
               releaseUrl = "https://github.com/paperless-ngx/paperless-ngx/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Paperless service configuration";

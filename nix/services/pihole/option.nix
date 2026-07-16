@@ -54,7 +54,8 @@
               projectUrl = "https://pi-hole.net/";
               githubUrl = "https://github.com/pi-hole/pi-hole";
               releaseUrl = "https://github.com/pi-hole/pi-hole/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Pi-hole service configuration";

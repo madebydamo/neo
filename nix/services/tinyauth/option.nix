@@ -57,7 +57,8 @@
               githubUrl = "https://github.com/tinyauthapp/tinyauth";
               releaseUrl = "https://github.com/tinyauthapp/tinyauth/releases";
               rank = 30;
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Tinyauth forward authentication service configuration";

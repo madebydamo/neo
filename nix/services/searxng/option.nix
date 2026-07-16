@@ -42,7 +42,8 @@
               projectUrl = "https://searxng.org/";
               githubUrl = "https://github.com/searxng/searxng";
               releaseUrl = "https://github.com/searxng/searxng/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Searxng service configuration";

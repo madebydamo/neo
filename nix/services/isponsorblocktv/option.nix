@@ -34,7 +34,8 @@
               projectUrl = "https://github.com/dmunozv04/iSponsorBlockTV";
               githubUrl = "https://github.com/dmunozv04/iSponsorBlockTV";
               releaseUrl = "https://github.com/dmunozv04/iSponsorBlockTV/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "iSponsorBlockTV configuration";

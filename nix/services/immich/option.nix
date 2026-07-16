@@ -41,7 +41,8 @@
               projectUrl = "https://immich.app/";
               githubUrl = "https://github.com/immich-app/immich";
               releaseUrl = "https://github.com/immich-app/immich/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Immich service configuration";

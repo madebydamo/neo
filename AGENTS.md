@@ -85,9 +85,28 @@ in {
   Extra non-docker units: `extraUnits = [ "my-setup" ];` inside `mkContainerDefinitions` (do not call `mkSystemdUnits` after it — that overwrites docker units).
 - Units only (no containers): `// lib.neo.mkSystemdUnits [ "unit" ];`.
 - Appdata (for web UI “Clear appdata”): `// lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/<name>";`.
+- Hermes skill options: `// lib.neo.mkSkillOptions {};` on every service submodule (like reverse-proxy hooks).
 - Volumes: `config.neo.core.volumes.appdata` (etc.), not hard-coded paths.
 - Internal services: Docker `networks = ["internal"];`, `restart` always where applicable.
 - Option UI helpers (tokens, bcrypt, mkpasswd): `helper = lib.neo.helpers.…` — see `nix/lib/helpers/`.
+
+### Hermes skills (homeserver curriculum)
+
+Teach Hermes via three layers (not one mega prompt):
+
+| Layer | Where | Purpose |
+|-------|--------|---------|
+| SOUL.md | `$HERMES_HOME/SOUL.md` | Identity / safety (seeded once by Neo) |
+| AGENTS.md | Hermes workspace | Always-on map: volumes, domain, enabled services, skill index |
+| `/neo-*` skills | `skills.external_dirs` store tree | Per-service runbooks (CLI, architecture, credentials pointers) |
+
+- Per service: `nix/services/<name>/skills.nix` sets `neo.services.<name>.skill.conf` when enabled (parallel to `swag.nix` → `proxyConf`).
+- Collector: `nix/services/hermes/skills.nix` builds the skill tree, sets `services.hermes-agent.settings.skills.external_dirs`, force-writes workspace `AGENTS.md`, seeds SOUL.
+- Helpers: `lib.neo.mkSkillOptions`, `mkSkillMd`, `mkServiceSkill`, `getSkillServices` in `nix/lib/skills.nix`.
+- Prefer `mkServiceSkill { service = "…"; inherit cfg domain; description = "…"; body = ''…''; }` — auto-derives units, containers, subdomain, public URL, appdata, tinyauth, and **`meta.description`** (long product blurb for install guidance).
+- Skill names: `neo-<service>` plus meta `/neo-homeserver`.
+- Credentials: prefer settings keys + “where to create API tokens”; do not invent secrets Neo does not store.
+- Plugins: ship `skills.nix` the same way; auto-imported with the plugin module.
 
 ### Rust (`cli/src/`)
 
@@ -97,12 +116,13 @@ in {
 
 ## Workflow: add a service
 
-1. `nix/services/<name>/option.nix` — submodule + proxy/containers/units/meta as needed.
+1. `nix/services/<name>/option.nix` — submodule + proxy/containers/units/meta + `mkSkillOptions` as needed.
 2. `nix/services/<name>/default.nix` — `mkIf`, activation helpers, oci-container.
 3. `nix/services/<name>/swag.nix` if publicly proxied.
-4. New volume only if required → `nix/modules/core/`.
-5. `just format && just check`
-6. Optional: `just build && just launch` → `just exec 'systemctl status …'`
+4. `nix/services/<name>/skills.nix` — Hermes skill (`neo-<name>`) with CLI, architecture, credentials guidance.
+5. New volume only if required → `nix/modules/core/`.
+6. `just format && just check`
+7. Optional: `just build && just launch` → `just exec 'systemctl status …'`
 
 Plugins: same patterns inside a separate flake — [docs/PLUGINS.md](docs/PLUGINS.md).
 

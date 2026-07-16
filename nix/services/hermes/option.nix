@@ -125,9 +125,21 @@
                 default = null;
                 rank = 40;
                 description = ''
-                  Path to the documents directory containing AGENTS.md, SOUL.md, etc.
-                  These files configure the bot's personality and capabilities.
-                  For Hermes, files are copied to workingDirectory.
+                  Optional extra documents directory (legacy). Neo always generates
+                  workspace AGENTS.md and seeds HERMES_HOME SOUL.md from the skills collector.
+                  Prefer editing SOUL.md under appdata/hermes/.hermes after first boot,
+                  or set forceSoul to re-seed Neo's default identity.
+                '';
+              };
+
+              forceSoul = mkOption {
+                type = types.bool;
+                default = false;
+                rank = 41;
+                description = ''
+                  When true, overwrite $HERMES_HOME/SOUL.md with Neo's default co-pilot identity
+                  on every activation. When false (default), seed SOUL.md only if missing so
+                  operator edits are preserved.
                 '';
               };
 
@@ -178,7 +190,8 @@
               projectUrl = "https://hermes-agent.nousresearch.com/";
               githubUrl = "https://github.com/NousResearch/hermes-agent";
               releaseUrl = "https://github.com/NousResearch/hermes-agent/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Hermes Agent service configuration";

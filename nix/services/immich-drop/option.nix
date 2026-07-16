@@ -34,7 +34,8 @@
               projectUrl = "https://github.com/Nasogaa/immich-drop";
               githubUrl = "https://github.com/Nasogaa/immich-drop";
               releaseUrl = "https://github.com/Nasogaa/immich-drop/releases";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Immich-drop service configuration";

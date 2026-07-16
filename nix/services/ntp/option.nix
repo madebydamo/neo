@@ -34,7 +34,8 @@
               '';
               projectUrl = "https://chrony-project.org/";
               githubUrl = "https://github.com/mlichvar/chrony";
-            };
+            }
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "NTP server configuration";
