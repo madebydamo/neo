@@ -44,10 +44,19 @@ fn progress_button(
         );
     }
     let esc = escape_html(id);
+    // Timestamp suffix after activation_/update_ (or full id for repair).
+    let ts = id
+        .strip_prefix("activation_")
+        .or_else(|| id.strip_prefix("update_"))
+        .or_else(|| id.strip_prefix("repair_"))
+        .unwrap_or(id);
+    let ts = escape_html(ts);
+    // Title + fine timestamp; monitor response also OOBs #changes-modal-title.
     format!(
-        "<button class=\"btn {btn_class} btn-xs animate-pulse\" onclick=\"var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='{title}';m.showModal();htmx.ajax('GET','{path_prefix}/{esc}',{{target:'#changes-body',swap:'innerHTML'}})\">{kind_label} — view</button>",
+        "<button class=\"btn {btn_class} btn-xs animate-pulse\" onclick=\"var m=document.getElementById('changes-modal');var t=m.querySelector('#changes-modal-title')||m.querySelector('h3');t.innerHTML='{title} <span class=\\'font-normal text-sm opacity-50\\'>{ts}</span>';m.showModal();htmx.ajax('GET','{path_prefix}/{esc}',{{target:'#changes-body',swap:'innerHTML'}})\">{kind_label} — view</button>",
         btn_class = btn_class,
         title = title,
+        ts = ts,
         path_prefix = path_prefix,
         esc = esc,
         kind_label = kind_label,
@@ -61,7 +70,7 @@ pub fn render_action_bar_dynamic_inner(config: &AppConfig) -> String {
     let pending = if let Some(id) = activation::find_recent_in_progress_activation() {
         progress_button(
             "Activation",
-            "Activation progress",
+            "Activation",
             "/activation/monitor",
             &id,
             "btn-warning",
@@ -69,7 +78,7 @@ pub fn render_action_bar_dynamic_inner(config: &AppConfig) -> String {
     } else if let Some(id) = activation::find_recent_in_progress_update() {
         progress_button(
             "Update",
-            "Update progress",
+            "Update",
             "/update/monitor",
             &id,
             "btn-info",

@@ -147,7 +147,8 @@ enum OpKind {
     Update,
 }
 
-/// Ordered UI steps for an operation. Index maps onto a daisyUI range (`min=0`, `max=n-1`).
+/// Ordered UI steps for an operation. Last label is always "Finished" so the
+/// final working phase is never shown as a full bar (which reads as "done").
 struct ProgressSteps {
     labels: &'static [&'static str],
 }
@@ -159,6 +160,7 @@ const ACTIVATION_STEPS: ProgressSteps = ProgressSteps {
         "Build",
         "Save Checkpoints",
         "Switch",
+        "Finished",
     ],
 };
 
@@ -169,6 +171,7 @@ const UPDATE_STEPS: ProgressSteps = ProgressSteps {
         "Write Flake",
         "Update Dependencies",
         "Migrate",
+        "Finished",
     ],
 };
 
@@ -223,6 +226,7 @@ impl OpKind {
     }
 
     /// Map the JSON `phase` string written by activate/update onto a step index.
+    /// Terminal "complete*" phases land on the final "Finished" step.
     fn step_index(self, phase: &str) -> usize {
         match self {
             OpKind::Activation => match phase {
@@ -231,11 +235,8 @@ impl OpKind {
                 "toplevel-build" | "toplevel-built" => 2,
                 "git-add" | "build-branch" | "build-commit" | "branches-created" | "amend-add"
                 | "amend-commit" | "branch-failed" => 3,
-                "pre-rebuild"
-                | "rebuild-failed"
-                | "completed"
-                | "completed-with-warnings"
-                | "complete" => 4,
+                "pre-rebuild" | "rebuild-failed" => 4,
+                "completed" | "completed-with-warnings" | "complete" => 5,
                 _ => 0,
             },
             OpKind::Update => match phase {
@@ -243,11 +244,95 @@ impl OpKind {
                 "flake init" | "post-init restore" => 1,
                 "write-flake" => 2,
                 "flake update" => 3,
-                "migrate" | "complete" => 4,
+                "migrate" => 4,
+                "complete" => 5,
                 _ => 0,
             },
         }
     }
+
+    fn active_color(self) -> &'static str {
+        match self {
+            OpKind::Activation => "text-warning",
+            OpKind::Update => "text-info",
+        }
+    }
+}
+
+/// Checkmark icon for completed timeline steps.
+const ICON_DONE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" /></svg>"#;
+
+/// Hollow circle for pending timeline steps.
+const ICON_PENDING: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5 opacity-30"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 100-12 6 6 0 000 12z" clip-rule="evenodd" /></svg>"#;
+
+/// Error X for the failed step.
+const ICON_FAILED: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" /></svg>"#;
+
+const ICON_SPINNER: &str = r#"<span class="loading loading-ring loading-sm"></span>"#;
+
+/// Build a daisyUI horizontal timeline for the given step progress.
+fn build_timeline_html(kind: OpKind, labels: &[&str], idx: usize, status: &str) -> String {
+    let n = labels.len();
+    let mut items = String::new();
+    for (i, label) in labels.iter().enumerate() {
+        let done = status == "success" || i < idx;
+        let current = i == idx && status != "success";
+        let failed = current && status == "failed";
+        let running = current && status == "in_progress";
+
+        let (icon, icon_cls, box_cls) = if failed {
+            (ICON_FAILED, "text-error", "timeline-box border-error")
+        } else if done {
+            (ICON_DONE, "text-success", "timeline-box")
+        } else if running {
+            (
+                ICON_SPINNER,
+                kind.active_color(),
+                "timeline-box border-current",
+            )
+        } else {
+            (ICON_PENDING, "opacity-50", "timeline-box opacity-60")
+        };
+
+        // Connector only fills once this step is done (next bullet has started).
+        // Do not color while the current step is still running — that looked
+        // like progress had already advanced to the next step.
+        let hr_after = if i + 1 < n {
+            if done {
+                r#"<hr class="bg-success"/>"#.to_string()
+            } else {
+                "<hr/>".to_string()
+            }
+        } else {
+            String::new()
+        };
+
+        // Leading connector mirrors the previous step's trailing one.
+        let hr_before = if i > 0 {
+            let prev_done = status == "success" || i - 1 < idx;
+            if prev_done {
+                r#"<hr class="bg-success"/>"#.to_string()
+            } else {
+                "<hr/>".to_string()
+            }
+        } else {
+            String::new()
+        };
+
+        items.push_str(&format!(
+            r#"<li>{hr_before}<div class="timeline-middle {icon_cls}">{icon}</div><div class="timeline-end {box_cls} text-[10px] whitespace-nowrap">{label}</div>{hr_after}</li>"#,
+            hr_before = hr_before,
+            icon_cls = icon_cls,
+            icon = icon,
+            box_cls = box_cls,
+            label = label,
+            hr_after = hr_after,
+        ));
+    }
+    format!(
+        r#"<ul class="timeline timeline-horizontal timeline-compact w-full justify-center overflow-x-auto">{items}</ul>"#,
+        items = items
+    )
 }
 
 fn state_fields(id: &str) -> (String, String, String, String) {
@@ -275,7 +360,23 @@ fn state_fields(id: &str) -> (String, String, String, String) {
     (status, phase, branch, err)
 }
 
-/// Build the live status strip (phase label + daisyUI range).
+/// Suffix after `activation_` / `update_` (the op timestamp), or the full id.
+fn id_timestamp(id: &str) -> &str {
+    id.strip_prefix("activation_")
+        .or_else(|| id.strip_prefix("update_"))
+        .unwrap_or(id)
+}
+
+/// Dialog title HTML: bold label + fine timestamp (for `h3#changes-modal-title`).
+fn dialog_title_html(kind: OpKind, id: &str) -> String {
+    format!(
+        r#"{} <span class="font-normal text-sm opacity-50">{}</span>"#,
+        kind.title(),
+        escape_html(id_timestamp(id)),
+    )
+}
+
+/// Build the live status strip (daisyUI timeline only — phase text is redundant).
 ///
 /// Must re-emit the same `id` and `hx-*` attributes on every response: the monitor uses
 /// `hx-swap="outerHTML"`, so dropping them after the first poll permanently kills updates.
@@ -283,7 +384,7 @@ fn build_status_fragment_for(kind: OpKind, id: &str) -> String {
     if !activation_id_ok(id) {
         return invalid_id_fragment(id);
     }
-    let (status, phase, branch, _) = state_fields(id);
+    let (status, phase, _, _) = state_fields(id);
     let steps = kind.steps();
     let max = steps.labels.len().saturating_sub(1);
     let mut idx = kind.step_index(&phase);
@@ -293,56 +394,7 @@ fn build_status_fragment_for(kind: OpKind, id: &str) -> String {
         idx = max;
     }
 
-    let (label_class, range_color, headline) = match status.as_str() {
-        "success" => {
-            let msg = match kind {
-                OpKind::Activation => {
-                    let b = if branch.is_empty() {
-                        id
-                    } else {
-                        branch.as_str()
-                    };
-                    format!("complete: {}", escape_html(b))
-                }
-                OpKind::Update => "update complete".to_string(),
-            };
-            ("text-success", "range-success", msg)
-        }
-        "failed" => (
-            "text-error",
-            "range-error",
-            format!("failed in {}", escape_html(&phase)),
-        ),
-        "in_progress" => {
-            let color = match kind {
-                OpKind::Activation => "range-warning",
-                OpKind::Update => "range-info",
-            };
-            let cls = match kind {
-                OpKind::Activation => "text-warning",
-                OpKind::Update => "text-info",
-            };
-            (cls, color, format!("in progress: {}", escape_html(&phase)))
-        }
-        _ => (
-            "opacity-60",
-            "range-neutral",
-            format!("status: {}", escape_html(&status)),
-        ),
-    };
-
-    let ticks: String = steps
-        .labels
-        .iter()
-        .map(|_| "<span>|</span>")
-        .collect::<Vec<_>>()
-        .join("");
-    let labels: String = steps
-        .labels
-        .iter()
-        .map(|l| format!("<span>{}</span>", l))
-        .collect::<Vec<_>>()
-        .join("");
+    let timeline = build_timeline_html(kind, steps.labels, idx, &status);
 
     // While in progress, re-emit id + hx-* so outerHTML polling keeps working.
     // Terminal states drop hx-trigger so we stop hitting the server every second.
@@ -356,30 +408,10 @@ fn build_status_fragment_for(kind: OpKind, id: &str) -> String {
     };
 
     format!(
-        r#"
-        <div id="{id}"{hx_attrs} class="text-xs mt-1 space-y-1">
-            <div class="flex items-center justify-between gap-2">
-            <span class="{label_class}">{headline}</span>
-            <span class="opacity-60 tabular-nums">{step}/{total}</span>
-            </div>
-            <div class="w-full">
-            <input type="range" min="0" max="{max}" value="{idx}" step="1" class="w-full range range-xs {range_color} pointer-events-none" tabindex="-1" aria-label="Progress" />
-            <div class="flex justify-between px-1 mt-1 text-[10px] opacity-50">{ticks}</div>
-            <div class="flex justify-between px-1 text-[10px] opacity-70">{labels}</div>
-            </div>
-        </div>
-        "#,
+        r#"<div id="{id}"{hx_attrs} class="text-xs mt-1">{timeline}</div>"#,
         id = kind.status_div_id(),
         hx_attrs = hx_attrs,
-        label_class = label_class,
-        headline = headline,
-        step = idx + 1,
-        total = steps.labels.len(),
-        max = max,
-        idx = idx,
-        range_color = range_color,
-        ticks = ticks,
-        labels = labels,
+        timeline = timeline,
     )
 }
 
@@ -390,21 +422,17 @@ fn build_monitor_fragment_for(kind: OpKind, id: &str) -> String {
     }
     let (status, _phase, branch, err) = state_fields(id);
     let mut html = String::new();
+    // OOB: put the op timestamp in the dialog title (fine text, not bold).
     html.push_str(&format!(
-        r#"<div id="{}" data-id="{}" class="p-2 bg-base-200 rounded">
-<div class="text-sm font-semibold">{} {}</div>"#,
+        r#"<h3 id="changes-modal-title" class="font-bold text-lg mb-2" hx-swap-oob="true">{}</h3>"#,
+        dialog_title_html(kind, id),
+    ));
+    html.push_str(&format!(
+        r#"<div id="{}" data-id="{}" class="p-2 bg-base-200 rounded">"#,
         kind.monitor_id(),
-        escape_html(id),
-        kind.title(),
         escape_html(id),
     ));
     match (kind, status.as_str()) {
-        (OpKind::Activation, "in_progress") => {
-            html.push_str(r#"<div class="text-warning text-xs">Running (UI may restart during rebuild). Logs update live.</div>"#);
-        }
-        (OpKind::Update, "in_progress") => {
-            html.push_str(r#"<div class="text-info text-xs">Running. Logs update live.</div>"#);
-        }
         (OpKind::Activation, "success") => {
             html.push_str(&format!(
                 r#"<div class="alert alert-success text-sm">Success as {}</div>"#,

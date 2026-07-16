@@ -49,7 +49,7 @@
                     hx-target="#changes-body"
                     hx-swap="innerHTML"
                     hx-confirm="Run flake update + template refresh?"
-                    hx-on::after-request="var m=document.getElementById('changes-modal');if(m){m.querySelector('h3').textContent='Update progress';m.showModal();}">
+                    hx-on::after-request="var m=document.getElementById('changes-modal');if(m){m.querySelector('h3').textContent='Update';m.showModal();}">
               Update flake inputs
             </button>
           {{/if}}
@@ -100,8 +100,8 @@
                  hx-trigger="load"
                  hx-swap="outerHTML"></div>
             <div class="join">
-              <button hx-post="/flake/update" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Run flake update + template refresh?" hx-on::after-request="var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Update progress';m.showModal();" class="btn btn-xs join-item btn-ghost">↻<span class="hidden sm:inline ml-1">Update</span></button>
-              <button hx-post="/actions/activate" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Trigger full activation now (via service)?" hx-on::after-request="var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Activation progress';m.showModal();" class="btn btn-xs join-item btn-error">▶<span class="hidden sm:inline ml-1">Activate</span></button>
+              <button hx-post="/flake/update" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Run flake update + template refresh?" hx-on::after-request="var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Update';m.showModal();" class="btn btn-xs join-item btn-ghost">↻<span class="hidden sm:inline ml-1">Update</span></button>
+              <button hx-post="/actions/activate" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Trigger full activation now (via service)?" hx-on::after-request="var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Activation';m.showModal();" class="btn btn-xs join-item btn-error">▶<span class="hidden sm:inline ml-1">Activate</span></button>
             </div>
           </div>
         </div>
@@ -168,7 +168,7 @@
 
     <dialog id="changes-modal" class="modal">
       <div class="modal-box max-w-4xl">
-        <h3 class="font-bold text-lg mb-2">Pending changes summary</h3>
+        <h3 id="changes-modal-title" class="font-bold text-lg mb-2">Pending changes summary</h3>
         <div id="changes-body" class="max-h-[60vh] overflow-auto"></div>
         <div class="modal-action">
           <form method="dialog" class="flex flex-nowrap items-center gap-2">
