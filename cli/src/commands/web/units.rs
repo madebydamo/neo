@@ -536,7 +536,7 @@ pub fn clear_appdata_btn_oob(service: &str, appdata: &str, busy: bool) -> String
     let svc = escape_html(service);
     let path = escape_attr(appdata);
     let confirm = escape_attr(&format!(
-        "Stop all related units, permanently delete {} and all contents, then start the units again? This cannot be undone.",
+        "Stop all related units, permanently delete {} and all contents, then restart only units that were running? This cannot be undone.",
         appdata
     ));
     if busy {
@@ -633,6 +633,24 @@ fn unit_is_stopped(state: &str) -> bool {
     matches!(state, "inactive" | "failed" | "dead" | "not-found")
 }
 
+/// Whether a unit should be restarted after clear-appdata (was up before stop).
+/// Inactive / failed / not-found units are left stopped after the delete.
+fn unit_was_running(state: &str) -> bool {
+    matches!(state, "active" | "activating" | "reloading")
+}
+
+/// Snapshot units that are currently running (should be restarted after clear).
+async fn units_currently_running(units: &[String]) -> Vec<String> {
+    let mut running = Vec::new();
+    for u in units {
+        let state = unit_active_state_async(u).await;
+        if unit_was_running(&state) {
+            running.push(u.clone());
+        }
+    }
+    running
+}
+
 async fn wait_units_stopped(units: &[String], timeout: Duration) -> Result<(), String> {
     if units.is_empty() {
         return Ok(());
@@ -656,6 +674,15 @@ async fn wait_units_stopped(units: &[String], timeout: Duration) -> Result<(), S
             ));
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
+async fn start_units_best_effort(units: &[String], config: &Arc<AppConfig>) {
+    for u in units {
+        if let Err(e) = systemctl_action_blocking("start", u).await {
+            eprintln!("web: clear-appdata start {}: {}", u, e);
+        }
+        broadcast_unit_update(u, config);
     }
 }
 
@@ -721,7 +748,8 @@ fn finish_clear_appdata(
     }
 }
 
-/// Background: stop all service units, wait until stopped, rm -rf appdata, start units again.
+/// Background: stop all service units, wait until stopped, rm -rf appdata,
+/// then start only units that were running before the clear.
 pub async fn run_clear_appdata(
     service: String,
     appdata: String,
@@ -734,6 +762,9 @@ pub async fn run_clear_appdata(
         let frag = clear_appdata_out_oob(&service, &inner, &title);
         let _ = config.unit_updates.send(frag);
     };
+
+    // Only restart units that were up; stopped / missing units stay down.
+    let to_restart = units_currently_running(&units).await;
 
     {
         let (inner, title) = clear_status_pulling("stopping units…");
@@ -750,6 +781,10 @@ pub async fn run_clear_appdata(
 
     if let Err(e) = wait_units_stopped(&units, Duration::from_secs(90)).await {
         let (inner, title) = clear_status_err(&e);
+        // Best-effort: restore only units we stopped that were previously running.
+        if !to_restart.is_empty() {
+            start_units_best_effort(&to_restart, &config).await;
+        }
         finish_clear_appdata(&service, &appdata, &units, &config, inner, title);
         return;
     }
@@ -761,24 +796,18 @@ pub async fn run_clear_appdata(
 
     if let Err(e) = rm_rf_path(&appdata).await {
         let (inner, title) = clear_status_err(&e);
-        // Best-effort restart so services are not left down after a failed delete.
-        for u in &units {
-            let _ = systemctl_action_blocking("start", u).await;
+        // Best-effort restart so previously-running services are not left down.
+        if !to_restart.is_empty() {
+            start_units_best_effort(&to_restart, &config).await;
         }
         finish_clear_appdata(&service, &appdata, &units, &config, inner, title);
         return;
     }
 
-    {
+    if !to_restart.is_empty() {
         let (inner, title) = clear_status_pulling("starting units…");
         push(inner, title);
-    }
-
-    for u in &units {
-        if let Err(e) = systemctl_action_blocking("start", u).await {
-            eprintln!("web: clear-appdata start {}: {}", u, e);
-        }
-        broadcast_unit_update(u, &config);
+        start_units_best_effort(&to_restart, &config).await;
     }
 
     let (inner, title) = clear_status_ok("appdata cleared");
@@ -787,7 +816,7 @@ pub async fn run_clear_appdata(
 
 #[cfg(test)]
 mod tests {
-    use super::is_safe_appdata_path;
+    use super::{is_safe_appdata_path, unit_was_running};
 
     #[test]
     fn appdata_path_under_volume() {
@@ -809,5 +838,18 @@ mod tests {
     fn appdata_path_outside_volume_deep() {
         assert!(is_safe_appdata_path("/var/lib/example", None));
         assert!(!is_safe_appdata_path("/var/lib", None));
+    }
+
+    #[test]
+    fn unit_was_running_only_up_states() {
+        assert!(unit_was_running("active"));
+        assert!(unit_was_running("activating"));
+        assert!(unit_was_running("reloading"));
+        assert!(!unit_was_running("inactive"));
+        assert!(!unit_was_running("failed"));
+        assert!(!unit_was_running("dead"));
+        assert!(!unit_was_running("not-found"));
+        assert!(!unit_was_running("deactivating"));
+        assert!(!unit_was_running("unknown"));
     }
 }

@@ -83,7 +83,8 @@ pub fn container_update(container: &str, config: &State<Arc<AppConfig>>) -> RawH
     RawHtml(format!("{out}{ctl}"))
 }
 
-/// Clear a service's appdata: stop all related units, rm -rf the declared path, start again.
+/// Clear a service's appdata: stop all related units, rm -rf the declared path,
+/// then start only units that were running beforehand.
 /// Path and units come from trusted flake evaluation (never from the client).
 #[post("/service/<service>/clear-appdata")]
 pub async fn clear_appdata(service: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {

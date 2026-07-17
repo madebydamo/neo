@@ -176,7 +176,7 @@ pub struct AppConfig {
     pub unit_updates: tokio::sync::broadcast::Sender<String>,
     /// Systemd unit names with an in-flight docker pull+restart (dedup + disable ↻ UI).
     pub pulls_in_flight: Arc<Mutex<HashSet<String>>>,
-    /// Service names with an in-flight clear-appdata operation (stop → rm → start).
+    /// Service names with an in-flight clear-appdata operation (stop → rm → start if was running).
     pub clear_appdata_in_flight: Arc<Mutex<HashSet<String>>>,
     /// Process-local option schema cache for helper resolution (avoids re-taking eval mutex).
     pub schema_cache: Arc<tokio::sync::RwLock<super::schema_cache::SchemaCache>>,
