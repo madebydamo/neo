@@ -2,17 +2,24 @@
 {lib, ...}: {
   libExtensions.containers = {
     neo = {
+      # Declares a fixed set of container image options (containers.<name> : str).
+      # Only the image string is overridable; keys cannot be added or removed from settings.
       mkContainerDefinitions = argset:
         with lib; let
           extraUnits = argset.extraUnits or [];
           containers = removeAttrs argset ["extraUnits"];
           dockerUnits = map (n: "docker-${n}") (attrNames containers);
         in {
-          containers = mkOption {
-            type = types.attrsOf types.str;
-            default = containers;
-            description = "Docker container name to image mapping (name = \"repo:tag\"). Enables image switching via settings, auto-updates, and UI.";
-          };
+          containers =
+            mapAttrs (
+              name: image:
+                mkOption {
+                  type = types.str;
+                  default = image;
+                  description = "Docker image for container \"${name}\" (\"repo:tag\"). Enables image switching via settings, auto-updates, and UI.";
+                }
+            )
+            containers;
           systemdUnits = mkOption {
             type = types.listOf types.str;
             default = dockerUnits ++ extraUnits;
