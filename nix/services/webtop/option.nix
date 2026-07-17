@@ -36,6 +36,12 @@
               subdomain = "webtop";
               auth.enabled = true;
             }
+            // lib.neo.mkVpnOptions {
+              # Outbound desktop traffic via gluetun when vpn.enabled = true (default off).
+              containers = ["webtop"];
+              networks = ["internal"];
+              ports = [3000];
+            }
             // lib.neo.mkContainerDefinitions {
               # Lightweight Ubuntu + XFCE. Other distros/DEs: change the tag only
               # (see service description and neo-webtop skill). Examples:
@@ -64,6 +70,8 @@
                 container recreation; use proot-apps inside the desktop for persistent apps, or reinstall after upgrades.
 
                 Treat this as a powerful shell: passwordless sudo inside the desktop, so keep tinyauth (or another gate) enabled.
+
+                Optional VPN: set services.webtop.vpn.enabled = true to route the desktop container through the shared gluetun VPN (services.vpn). Off by default.
               '';
               projectUrl = "https://docs.linuxserver.io/images/docker-webtop/";
               githubUrl = "https://github.com/linuxserver/docker-webtop";

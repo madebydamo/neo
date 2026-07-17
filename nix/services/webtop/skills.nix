@@ -24,6 +24,7 @@
         - SWAG proxies HTTP **3000** (not the self-signed HTTPS 3001)
         - `--shm-size=1gb` set for Chromium/Electron stability
         - Edge auth via tinyauth (container has no PASSWORD by default)
+        - **VPN** (`services.webtop.vpn.enabled`, default false): routes `webtop` through gluetun. Requires the shared `services.vpn` stack. UI still reaches the container via the VPN network alias on `internal`.
 
         ## Switching distro / desktop (Docker tag only)
         Change `services.webtop.containers.webtop` image to the same repo with another tag, then re-apply.
@@ -72,9 +73,11 @@
         - Heavy DEs (KDE) need more RAM/CPU than XFCE/i3
         - Alpine tags: no Nvidia GPU path per LinuxServer docs
         - Blurry text: enable FullColor 4:4:4 in Selkies sidebar
+        - VPN on without a healthy `docker-vpn` breaks outbound browser/traffic and may block the session
 
         ## Verification
         - Desktop loads over HTTPS; keyboard/mouse work; session survives refresh
+        - With VPN: open a browser inside the desktop and confirm public IP matches the VPN exit
       '';
     };
   };
