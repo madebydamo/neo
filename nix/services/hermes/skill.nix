@@ -31,6 +31,9 @@
         sudo -u hermes env HERMES_HOME=<stateDir>/.hermes hermes --help
         # Skills UI in dashboard, or hermes skills list with HERMES_HOME set
         ```
+        When Hermes is enabled, Neo also installs agent-oriented host CLIs
+        (jq, yq, rg, fd, tree, htmlq, gron, jo, bat, eza, gh, docker-compose, …)
+        on system PATH and on the hermes user/gateway PATH.
 
         ## Credentials
         - Required: `services.hermes.dashboardPassword` (Generate helper); optional `gatewayToken`, Telegram bot token

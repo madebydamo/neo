@@ -67,6 +67,46 @@
     dashboardPasswordSet =
       cfg.dashboardPassword != null && cfg.dashboardPassword != "";
 
+    # CLI tools useful for Hermes (and operators) when the agent is installed.
+    # Hermes itself already wraps ripgrep/git/ffmpeg/nodejs; these fill common gaps.
+    agentCliTools = with pkgs; [
+      # structured data
+      jq
+      yq-go
+      gron
+      jo
+      htmlq
+      # search / filesystem
+      ripgrep
+      fd
+      tree
+      file
+      eza
+      bat
+      # archives / transfer
+      unzip
+      zip
+      p7zip
+      rsync
+      wget
+      # system introspection
+      lsof
+      procps
+      psmisc # pstree, killall, fuser
+      openssl
+      socat
+      # text / scripting helpers
+      moreutils
+      gawk
+      gnused
+      sd
+      parallel
+      sqlite
+      # ops
+      gh
+      docker-compose
+    ];
+
     hermesEnv =
       lib.filterAttrs (_: v: v != null && v != "") {
         XAI_API_KEY = cfg.xaiApiKey;
@@ -162,11 +202,16 @@
         }
       ];
 
+      # Agent-oriented CLIs system-wide when Hermes is on (jq, fd, yq, …).
+      environment.systemPackages = agentCliTools;
+
       services.hermes-agent = {
         enable = true;
         stateDir = cfg.stateDir;
         workingDirectory = "${cfg.stateDir}/workspace";
         addToSystemPackages = true;
+        # Also on hermes user profile + gateway systemd PATH (see hermes-agent module).
+        extraPackages = agentCliTools;
         settings = hermesSettings;
         extraDependencyGroups = ["all" "messaging" "homeassistant" "youtube" "voice"];
         environment = hermesEnv;

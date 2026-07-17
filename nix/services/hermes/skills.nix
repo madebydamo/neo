@@ -208,6 +208,12 @@
       - Container images: `/neo-docker-updater`
       - Backup: `/neo-backup`
       - Full architecture: `/neo-homeserver`
+
+      ## Host CLI tools (with Hermes)
+      Prefer these when shelling out — they are on PATH:
+      `jq`, `yq`, `rg`, `fd`, `tree`, `bat`, `eza`, `htmlq`, `gron`, `jo`,
+      `sqlite3`, `gh`, `docker-compose`, `rsync`, `lsof`, `openssl`, `socat`,
+      plus archives (`unzip`/`zip`/`7z`) and text helpers (`sd`, `gawk`, `parallel`).
     '';
 
     soulMd = ''
