@@ -30,10 +30,11 @@
         }
 
         location / {
+          # proxy.conf already sets Upgrade + Connection via $connection_upgrade.
+          # Do NOT re-set Upgrade here: nginx appends duplicate values
+          # ("websocket, websocket") and uvicorn rejects with 426.
           include /config/nginx/proxy.conf;
           proxy_pass http://host.docker.internal:${toString cfg.dashboardPort}/;
-          proxy_set_header Upgrade $http_upgrade;
-          proxy_set_header Connection "upgrade";
           ${lib.neo.authBlock config cfg}
         }
       ${lib.neo.authLocations config cfg}

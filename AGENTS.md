@@ -81,6 +81,7 @@ in {
 
 - Options: `enabled = mkEnableOption "…";`, snake_case attrs (`neo.services.*`), camelCase locals.
 - Reverse proxy: `// neo.mkReverseProxyOptions { … }` (or `lib.neo…` where used that way).
+- **WebSockets (SWAG):** `include /config/nginx/proxy.conf` already sets `Upgrade $http_upgrade` and `Connection $connection_upgrade`. **Do not** re-set those headers in `swag.nix` — nginx appends duplicates (`Upgrade: websocket, websocket`), uvicorn/Starlette returns **426**, and browsers show code **1006** / connection refused. Symptom: REST works, `POST /api/auth/ws-ticket` works, only `/api/ws` `/api/pty` `/api/events` fail. Debug: SWAG `access.log` status **426** + body “invalid Upgrade header”. Only set Upgrade/Connection yourself when the location does **not** include `proxy.conf`.
 - Containers: `// lib.neo.mkContainerDefinitions { name = "image:tag"; };` then `image = cfg.containers.name;`.
   Extra non-docker units: `extraUnits = [ "my-setup" ];` inside `mkContainerDefinitions` (do not call `mkSystemdUnits` after it — that overwrites docker units).
 - Units only (no containers): `// lib.neo.mkSystemdUnits [ "unit" ];`.
