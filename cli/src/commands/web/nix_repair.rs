@@ -307,9 +307,10 @@ pub fn build_repair_monitor_fragment(id: &str) -> String {
             ));
         }
     }
+    // `every 1s` only — never `load` with outerHTML (remount re-fires load → request storm).
     let hx = if status == "in_progress" {
         format!(
-            r#" hx-get="/nix/repair/status/{}" hx-trigger="load, every 1s" hx-swap="outerHTML""#,
+            r#" hx-get="/nix/repair/status/{}" hx-trigger="every 1s" hx-swap="outerHTML""#,
             escape_html(id)
         )
     } else {
@@ -330,10 +331,19 @@ pub fn build_repair_monitor_fragment(id: &str) -> String {
             escape_html(&format!("{status}: {phase}"))
         ),
     ));
-    html.push_str(&format!(
-        r#"<div id="repair-log" class="text-[10px] bg-base-300 p-1 mt-1 max-h-80 overflow-auto font-mono" hx-get="/nix/repair/log/{}" hx-trigger="load, every 1s" hx-swap="innerHTML"></div>"#,
-        escape_html(id)
-    ));
+    // Poll log only while running; terminal gets a static snapshot.
+    if status == "in_progress" {
+        html.push_str(&format!(
+            r#"<div id="repair-log" class="text-[10px] bg-base-300 p-1 mt-1 max-h-80 overflow-auto font-mono" hx-get="/nix/repair/log/{}" hx-trigger="load, every 1s" hx-swap="innerHTML"></div>"#,
+            escape_html(id)
+        ));
+    } else {
+        let tail = load_repair_log_tail(id, 300);
+        html.push_str(&format!(
+            r#"<div id="repair-log" class="text-[10px] bg-base-300 p-1 mt-1 max-h-80 overflow-auto font-mono"><pre class="whitespace-pre-wrap">{}</pre></div>"#,
+            escape_html(&tail)
+        ));
+    }
     html.push_str("</div>");
     html
 }
@@ -354,9 +364,10 @@ pub fn build_repair_status_fragment(id: &str) -> String {
         .as_ref()
         .and_then(|v| v.get("phase").and_then(|s| s.as_str()))
         .unwrap_or("");
+    // No `load` with outerHTML — that storms the server on every remount.
     let hx = if status == "in_progress" {
         format!(
-            r#" hx-get="/nix/repair/status/{}" hx-trigger="load, every 1s" hx-swap="outerHTML""#,
+            r#" hx-get="/nix/repair/status/{}" hx-trigger="every 1s" hx-swap="outerHTML""#,
             escape_html(id)
         )
     } else {
@@ -368,12 +379,21 @@ pub fn build_repair_status_fragment(id: &str) -> String {
         "in_progress" => "text-warning",
         _ => "opacity-60",
     };
-    format!(
+    let mut html = format!(
         r#"<div id="repair-status"{hx} class="text-xs mt-1"><span class="{cls}">{label}</span></div>"#,
         hx = hx,
         cls = cls,
         label = escape_html(&format!("{status}: {phase}")),
-    )
+    );
+    // Stop log interval when the op ends (log uses independent innerHTML polling).
+    if status != "in_progress" {
+        let tail = load_repair_log_tail(id, 300);
+        html.push_str(&format!(
+            r#"<div id="repair-log" class="text-[10px] bg-base-300 p-1 mt-1 max-h-80 overflow-auto font-mono" hx-swap-oob="true"><pre class="whitespace-pre-wrap">{}</pre></div>"#,
+            escape_html(&tail)
+        ));
+    }
+    html
 }
 
 pub fn build_repair_log_fragment(id: &str) -> String {

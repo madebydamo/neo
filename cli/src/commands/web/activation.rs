@@ -326,6 +326,8 @@ fn build_timeline_html(kind: OpKind, labels: &[&str], idx: usize, status: &str) 
         // the node and would reset CSS animations. Negative animation-delay
         // phase-locks to wall clock so the ring continues mid-cycle across
         // remounts (daisyUI default aura period is 6s).
+        // Poll with `every 1s` only — never `load` with outerHTML (each swap
+        // remounts and would re-fire load → request storm).
         let end = if running {
             let phase_ms = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -404,9 +406,16 @@ fn dialog_title_html(kind: OpKind, id: &str) -> String {
 
 /// Build the live status strip (daisyUI timeline only — phase text is redundant).
 ///
-/// Must re-emit the same `id` and `hx-*` attributes on every response: the monitor uses
-/// `hx-swap="outerHTML"`, so dropping them after the first poll permanently kills updates.
-fn build_status_fragment_for(kind: OpKind, id: &str) -> String {
+/// Must re-emit the same `id` and `hx-*` attributes on every in-progress response: the
+/// monitor uses `hx-swap="outerHTML"`, so dropping them after the first poll permanently
+/// kills updates. Use `every 1s` only (no `load`) — `load` + outerHTML remounts re-fire
+/// load immediately and storm the server. Terminal status *poll* responses drop polling
+/// and OOB-replace the log panel so its interval dies too. Action-bar WS already surfaces
+/// completion; the dialog only needs live progress while it is open.
+///
+/// `stop_log_oob`: when true (status HTTP poll path), terminal responses include an OOB
+/// log replace. When false (embedded in full monitor HTML), the caller owns the log panel.
+fn build_status_fragment_for(kind: OpKind, id: &str, stop_log_oob: bool) -> String {
     if !activation_id_ok(id) {
         return invalid_id_fragment(id);
     }
@@ -423,22 +432,36 @@ fn build_status_fragment_for(kind: OpKind, id: &str) -> String {
     let timeline = build_timeline_html(kind, steps.labels, idx, &status);
 
     // While in progress, re-emit id + hx-* so outerHTML polling keeps working.
-    // Terminal states drop hx-trigger so we stop hitting the server every second.
+    // Never include `load` here — outerHTML remount would re-trigger load in a tight loop.
+    // Terminal states drop hx-trigger so we stop hitting the server.
     let hx_attrs = if status == "in_progress" {
         format!(
-            r#" hx-get="{}" hx-trigger="load, every 1s" hx-swap="outerHTML""#,
+            r#" hx-get="{}" hx-trigger="every 1s" hx-swap="outerHTML""#,
             kind.status_path(id)
         )
     } else {
         String::new()
     };
 
-    format!(
+    let mut html = format!(
         r#"<div id="{id}"{hx_attrs} class="text-xs mt-1">{timeline}</div>"#,
         id = kind.status_div_id(),
         hx_attrs = hx_attrs,
         timeline = timeline,
-    )
+    );
+
+    // Log uses innerHTML polling and is not remounted with status — without this OOB
+    // it would keep requesting forever after the op finishes.
+    if stop_log_oob && status != "in_progress" {
+        let tail = load_log_tail(id, 300);
+        html.push_str(&format!(
+            r#"<div id="{log_id}" class="text-[10px] bg-base-300 p-1 mt-1 max-h-80 overflow-auto font-mono" hx-swap-oob="true"><pre class="whitespace-pre-wrap">{tail}</pre></div>"#,
+            log_id = kind.log_div_id(),
+            tail = escape_html(&tail),
+        ));
+    }
+
+    html
 }
 
 fn build_monitor_fragment_for(kind: OpKind, id: &str) -> String {
@@ -477,12 +500,25 @@ fn build_monitor_fragment_for(kind: OpKind, id: &str) -> String {
         _ => {}
     }
     // Progress first so step updates are visible above the log stream.
-    html.push_str(&build_status_fragment_for(kind, id));
-    html.push_str(&format!(
-        r#"<div id="{}" class="text-[10px] bg-base-300 p-1 mt-1 max-h-80 overflow-auto font-mono" hx-get="{}" hx-trigger="load, every 1s" hx-swap="innerHTML"></div>"#,
-        kind.log_div_id(),
-        kind.log_path(id)
-    ));
+    // Status polling is nested inside build_status_fragment_for (every 1s while in_progress).
+    html.push_str(&build_status_fragment_for(kind, id, false));
+    // Log: poll only while the op is running (innerHTML keeps the element stable, so
+    // `load` is safe here). Terminal opens get a static snapshot — no interval.
+    // When a live status poll hits terminal, it OOB-replaces this panel (stop_log_oob).
+    if status == "in_progress" {
+        html.push_str(&format!(
+            r#"<div id="{}" class="text-[10px] bg-base-300 p-1 mt-1 max-h-80 overflow-auto font-mono" hx-get="{}" hx-trigger="load, every 1s" hx-swap="innerHTML"></div>"#,
+            kind.log_div_id(),
+            kind.log_path(id)
+        ));
+    } else {
+        let tail = load_log_tail(id, 300);
+        html.push_str(&format!(
+            r#"<div id="{}" class="text-[10px] bg-base-300 p-1 mt-1 max-h-80 overflow-auto font-mono"><pre class="whitespace-pre-wrap">{}</pre></div>"#,
+            kind.log_div_id(),
+            escape_html(&tail)
+        ));
+    }
     if matches!(kind, OpKind::Activation) && status == "success" {
         html.push_str(
             r#"<div class="mt-4 flex flex-nowrap items-center justify-end gap-2" data-dialog-actions>
@@ -503,11 +539,11 @@ pub fn build_update_monitor_fragment(id: &str) -> String {
 }
 
 pub fn build_status_fragment(id: &str) -> String {
-    build_status_fragment_for(OpKind::Activation, id)
+    build_status_fragment_for(OpKind::Activation, id, true)
 }
 
 pub fn build_update_status_fragment(id: &str) -> String {
-    build_status_fragment_for(OpKind::Update, id)
+    build_status_fragment_for(OpKind::Update, id, true)
 }
 
 pub fn build_log_fragment(id: &str) -> String {

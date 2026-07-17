@@ -351,19 +351,41 @@ window.configShell = function configShell() {
       }
     } catch (e) {}
   }
+  // Only on full page load — never on htmx:afterSettle (status/log polls settle too and
+  // would re-fetch the monitor in a loop while neo.pendingActivation is set).
   document.addEventListener('DOMContentLoaded', resume);
-  document.addEventListener('htmx:afterSettle', resume);
+
+  /** Log panel ids used by activation / update / repair monitors. */
+  var MONITOR_LOG_IDS = { 'act-log': 1, 'update-log': 1, 'repair-log': 1 };
+
+  /**
+   * Tear down monitor HTMX polls. Closing the dialog used to leave #changes-body
+   * with every-1s status/log elements still in the DOM (and still requesting).
+   * Completion is already pushed via the action-bar WebSocket.
+   */
+  function clearChangesMonitor() {
+    var body = document.getElementById('changes-body');
+    if (!body) return;
+    // Removing nodes cancels HTMX intervals bound to them.
+    body.innerHTML = '';
+  }
+
+  var changesModal = document.getElementById('changes-modal');
+  if (changesModal) {
+    changesModal.addEventListener('close', clearChangesMonitor);
+  }
+
   document.body.addEventListener('htmx:beforeSwap', function (e) {
-    var l = document.getElementById('act-log');
-    if (l && e.detail.target === l) {
-      l.dataset.atBottom =
-        l.scrollTop + l.clientHeight >= l.scrollHeight - 8 ? '1' : '';
+    var t = e.detail && e.detail.target;
+    if (t && MONITOR_LOG_IDS[t.id]) {
+      t.dataset.atBottom =
+        t.scrollTop + t.clientHeight >= t.scrollHeight - 8 ? '1' : '';
     }
   });
   document.body.addEventListener('htmx:afterSwap', function (e) {
-    var l = document.getElementById('act-log');
-    if (l && e.detail.target === l && l.dataset.atBottom) {
-      l.scrollTop = l.scrollHeight;
+    var t = e.detail && e.detail.target;
+    if (t && MONITOR_LOG_IDS[t.id] && t.dataset.atBottom) {
+      t.scrollTop = t.scrollHeight;
     }
   });
 
@@ -377,12 +399,19 @@ window.configShell = function configShell() {
     for (var i = 0; i < actions.length; i++) {
       actions[i].remove();
     }
+    // Never carry live hx polls into the success dialog.
+    var hxEls = clone.querySelectorAll('[hx-get], [hx-trigger]');
+    for (var j = 0; j < hxEls.length; j++) {
+      hxEls[j].removeAttribute('hx-get');
+      hxEls[j].removeAttribute('hx-trigger');
+      hxEls[j].removeAttribute('hx-swap');
+    }
     b.innerHTML = clone.innerHTML;
     try {
       localStorage.removeItem('neo.pendingActivation');
     } catch (e) {}
     var cm = document.getElementById('changes-modal');
-    if (cm) cm.close();
+    if (cm) cm.close(); // also clearChangesMonitor via close listener
     d.showModal();
   };
   window.confirmActivationReload = function () {
