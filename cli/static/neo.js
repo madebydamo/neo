@@ -1,26 +1,35 @@
 // Multi-iframe navigator: each service gets its own iframe that we show/hide.
-// This avoids full reloads when switching between apps.
+// Warm iframe → show/hide without reload. No warm iframe → open at the canonical URL.
+// No last-URL persistence (localStorage); unload always means a fresh root open next time.
 let currentBlockedUrl = '';
-let lastUrls = {};           // key -> last URL (for initial load + "open in new tab")
 let currentKey = null;       // currently visible service key
 const serviceIframes = {};   // key -> iframe element
 
-// Persist last positions across dashboard reloads
-try {
-  const saved = localStorage.getItem('neo-last-urls');
-  if (saved) lastUrls = JSON.parse(saved);
-} catch (e) {}
-function persistLastUrls() {
-  try { localStorage.setItem('neo-last-urls', JSON.stringify(lastUrls)); } catch (e) {}
-}
+// Drop legacy deep-link cache from older navigator builds (one-shot cleanup).
+try { localStorage.removeItem('neo-last-urls'); } catch (e) {}
 
 function getViewerHost() {
   return document.getElementById('viewer-host');
 }
 
+/** Best-effort URL for the top bar / open-in-new-tab (same-origin location, else iframe.src). */
+function iframeDisplayUrl(iframe) {
+  if (!iframe) return '';
+  try {
+    const loc = iframe.contentWindow?.location?.href;
+    if (loc && !loc.startsWith('about:')) return loc;
+  } catch (_) { /* cross-origin — normal for most external services */ }
+  const src = iframe.src || '';
+  return src.startsWith('about:') ? '' : src;
+}
+
+function setTopBarUrl(url) {
+  const urlEl = document.getElementById('current-url');
+  if (urlEl) urlEl.textContent = url || '';
+}
+
 function updateWarmIndicators() {
   // Show green dot on all warm (pre-loaded) services, including the currently selected one.
-  // Mark service buttons
   document.querySelectorAll('.svc-btn').forEach(btn => {
     const key = btn.dataset.sub;
     if (!key) return;
@@ -69,8 +78,7 @@ function hardEvictService(key) {
     if (host) host.style.visibility = 'hidden';
     showWelcome();
 
-    const urlEl = document.getElementById('current-url');
-    if (urlEl) urlEl.textContent = '';
+    setTopBarUrl('');
     const status = document.getElementById('status');
     if (status) status.textContent = 'Ready';
   }
@@ -79,12 +87,10 @@ function hardEvictService(key) {
 function hardResetCurrent() {
   if (!currentKey) return;
   const key = currentKey;
-  const url = lastUrls[key];
-  if (!url) return;
 
   hardEvictService(key);
 
-  // Immediately recreate a fresh one
+  // Recreate at the canonical root (not a remembered deep path)
   setTimeout(() => {
     if (key === '__config') {
       const btn = document.querySelector('.svc-btn[data-sub="neo"]');
@@ -92,17 +98,9 @@ function hardResetCurrent() {
       const domain = (btn && btn.dataset && btn.dataset.domain) || '';
       loadConfig(btn, sub, domain);
     } else {
-      // Parse subdomain + domain from the stored full URL
-      try {
-        const u = new URL(url);
-        const parts = u.hostname.split('.');
-        const subdomain = parts[0];
-        const domain = parts.slice(1).join('.');
-        const btn = document.querySelector(`.svc-btn[data-sub="${subdomain}"]`);
-        loadService(subdomain, domain, btn || null);
-      } catch (e) {
-        console.warn('[neo] Could not hard reset service from URL', url, e);
-      }
+      const btn = document.querySelector(`.svc-btn[data-sub="${key}"]`);
+      const domain = (btn && btn.dataset && btn.dataset.domain) || '';
+      loadService(key, domain, btn || null);
     }
   }, 10);
 }
@@ -122,25 +120,21 @@ function getOrCreateIframe(key, targetUrl) {
   iframe.sandbox = 'allow-same-origin allow-scripts allow-forms allow-popups allow-modals';
   iframe.style.display = 'none';
 
-  // Set src only on first creation — this is the expensive step we now avoid on later switches
+  // Set src only on first creation — this is the expensive step we avoid on later switches
   iframe.src = targetUrl;
 
   host.appendChild(iframe);
   serviceIframes[key] = iframe;
   updateWarmIndicators();
 
-  // Best-effort capture of deep URLs after loads (same-origin or permissive services)
+  // Update top bar after full loads (same-origin can show the real path)
   iframe.onload = () => {
     if (currentKey === key) {
-      try {
-        const loc = iframe.contentWindow?.location?.href;
-        if (loc && !loc.startsWith('about:')) {
-          lastUrls[key] = loc;
-          const urlEl = document.getElementById('current-url');
-          if (urlEl) urlEl.textContent = loc;
-          persistLastUrls();
-        }
-      } catch (_) { /* cross-origin — normal for most external services */ }
+      const loc = iframeDisplayUrl(iframe);
+      if (loc) setTopBarUrl(loc);
+      const status = document.getElementById('status');
+      if (status && key === '__config') status.textContent = 'config';
+      else if (status && key) status.textContent = key;
     }
   };
 
@@ -153,7 +147,6 @@ function showOnly(key) {
   const welcome = document.getElementById('welcome');
   const blocked = document.getElementById('embedding-blocked');
 
-  // Hide all service iframes
   Object.values(serviceIframes).forEach(f => {
     if (f) f.style.display = 'none';
   });
@@ -166,16 +159,12 @@ function showOnly(key) {
     serviceIframes[key].style.display = '';
     currentKey = key;
 
-    // Show the best-known URL for this view in the top bar (last captured or initial)
-    const urlEl = document.getElementById('current-url');
-    if (urlEl && lastUrls[key]) {
-      urlEl.textContent = lastUrls[key];
-    }
+    const loc = iframeDisplayUrl(serviceIframes[key]);
+    if (loc) setTopBarUrl(loc);
   } else {
     currentKey = null;
   }
 
-  // Refresh dots: only non-current warm items should show the green dot
   updateWarmIndicators();
 }
 
@@ -190,30 +179,27 @@ function configTargetUrl(subdomain, domain) {
   return '/configuration';
 }
 
-// Prefer a cached deep link only when it is already on the expected neo origin.
-function resolveConfigUrl(subdomain, domain) {
-  const key = '__config';
-  const expected = (subdomain && domain) ? `https://${subdomain}.${domain}` : null;
-  const cached = lastUrls[key];
-  if (cached && expected && cached.startsWith(expected)) {
-    return cached;
+function serviceRootUrl(subdomain, domain) {
+  if (!subdomain || !domain) return null;
+  return `https://${subdomain}.${domain}/`;
+}
+
+/** URL for open-in-new-tab: warm iframe location if any, else canonical. */
+function openTabUrlFor(subOrKey, domain) {
+  const key = subOrKey === 'neo' ? '__config' : subOrKey;
+  const warm = serviceIframes[key];
+  if (warm) {
+    const loc = iframeDisplayUrl(warm);
+    if (loc) return loc;
   }
-  if (cached && cached.startsWith('https://') && !expected) {
-    return cached;
-  }
-  return configTargetUrl(subdomain, domain);
+  if (subOrKey === 'neo') return configTargetUrl(subOrKey, domain);
+  return serviceRootUrl(subOrKey, domain);
 }
 
 // Public handler for sidebar clicks (supports shift/ctrl/cmd+click to open in new tab)
 function handleSidebarClick(e, subOrKey, domain, btn) {
   if (e.shiftKey || e.ctrlKey || e.metaKey) {
-    // Modifier+click: open in new tab (like the top-right button)
-    let url;
-    if (subOrKey === 'neo') {
-      url = resolveConfigUrl(subOrKey, domain);
-    } else {
-      url = lastUrls[subOrKey] || (domain ? `https://${subOrKey}.${domain}/` : null);
-    }
+    const url = openTabUrlFor(subOrKey, domain);
     if (url) window.open(url, '_blank');
     return;
   }
@@ -235,11 +221,6 @@ function loadService(subdomain, domain, btn) {
     return;
   }
 
-  const cached = lastUrls[key];
-  const targetUrl = (cached && cached.startsWith('https://'))
-    ? cached
-    : `https://${subdomain}.${domain}/`;
-
   hideAllOverlays();
   currentBlockedUrl = '';
 
@@ -247,6 +228,8 @@ function loadService(subdomain, domain, btn) {
     loadConfig(btn, subdomain, domain);
     return;
   }
+
+  const targetUrl = serviceRootUrl(subdomain, domain);
 
   const iframeCompatibleAttr = (btn && btn.dataset && btn.dataset.iframeCompatible);
   const isIframeCompatible = iframeCompatibleAttr == null || iframeCompatibleAttr !== 'false';
@@ -259,20 +242,14 @@ function loadService(subdomain, domain, btn) {
   const iframe = getOrCreateIframe(key, targetUrl);
   if (!iframe) return;
 
-  // Remember what we loaded (for future switches and new-tab)
-  lastUrls[key] = targetUrl;
-  persistLastUrls();
-
-  // Instant switch: just show the already-loaded (or newly created) iframe
   showOnly(key);
 
-  urlEl.textContent = targetUrl;
+  const display = iframeDisplayUrl(iframe) || targetUrl;
+  if (urlEl) urlEl.textContent = display;
   status.textContent = `Loading ${subdomain}...`;
 
   setActive(btn);
 
-  // If it was newly created, the onload above will update status + capture URL
-  // If it already existed, we may want an immediate status update
   if (iframe.style.display !== 'none') {
     status.textContent = subdomain;
   }
@@ -289,7 +266,7 @@ function loadConfig(btn, subdomain, domain) {
   domain = domain || (btn && btn.dataset && btn.dataset.domain) || '';
 
   const key = '__config';
-  const targetUrl = resolveConfigUrl(subdomain, domain);
+  const targetUrl = configTargetUrl(subdomain, domain);
 
   // Drop a warm iframe that still points at the wrong origin (e.g. relative
   // /configuration resolved against a custom top-level domain).
@@ -305,17 +282,13 @@ function loadConfig(btn, subdomain, domain) {
   const iframe = getOrCreateIframe(key, targetUrl);
   if (!iframe) return;
 
-  lastUrls[key] = targetUrl;
-  persistLastUrls();
-
   showOnly(key);
 
-  urlEl.textContent = targetUrl;
+  const display = iframeDisplayUrl(iframe) || targetUrl;
+  if (urlEl) urlEl.textContent = display;
   status.textContent = 'Loading config editor...';
 
   setActive(btn);
-
-  // onload handler on the iframe will fire for updates
 }
 
 function showEmbeddingBlocked(url, label, btn, key) {
@@ -324,7 +297,6 @@ function showEmbeddingBlocked(url, label, btn, key) {
   const status = document.getElementById('status');
   const host = getViewerHost();
 
-  // Hide any service iframes and welcome
   if (host) host.style.visibility = 'hidden';
   const welcome = document.getElementById('welcome');
   if (welcome) welcome.style.display = 'none';
@@ -334,17 +306,13 @@ function showEmbeddingBlocked(url, label, btn, key) {
   currentBlockedUrl = url;
 
   if (key) {
-    lastUrls[key] = url;
     currentKey = key;
-    persistLastUrls();
   }
 
-  urlEl.textContent = url;
+  if (urlEl) urlEl.textContent = url;
   status.textContent = `${label} (embedding protected)`;
 
   setActive(btn);
-
-  // The blocked case "owns" the current view; update indicators (no dot on it)
   updateWarmIndicators();
 }
 
@@ -358,15 +326,14 @@ function copyBlockedUrl() {
 }
 
 function reloadFrame() {
-  // Hard reload only the currently visible service (does not affect others)
+  // Soft reload only the currently visible service (does not affect others)
   if (!currentKey) return;
 
   const iframe = serviceIframes[currentKey];
   if (iframe && iframe.src && !iframe.src.startsWith('about:')) {
     const currentSrc = iframe.src;
-    iframe.src = currentSrc;   // triggers a real reload of just this iframe
-    lastUrls[currentKey] = currentSrc;
-    persistLastUrls();
+    iframe.src = currentSrc;
+    setTopBarUrl(currentSrc);
 
     const status = document.getElementById('status');
     if (status) status.textContent = `Reloading ${currentKey}...`;
@@ -375,12 +342,9 @@ function reloadFrame() {
 
 function openInNewTab() {
   if (currentKey && serviceIframes[currentKey]) {
-    const iframe = serviceIframes[currentKey];
-    const url = lastUrls[currentKey] || iframe.src;
-    if (url && !url.startsWith('about:')) {
+    const url = iframeDisplayUrl(serviceIframes[currentKey]);
+    if (url) {
       window.open(url, '_blank');
-      lastUrls[currentKey] = url;
-      persistLastUrls();
       return;
     }
   }
@@ -398,10 +362,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Optional: start with welcome visible (no service loaded yet)
-// (the initial HTML already shows it)
-
-// Right-click on sidebar items: hard-evict (heavy reset) a warm service
+// Right-click on sidebar items: hard-evict (unload) a warm service
 const sidebar = document.querySelector('.w-16.bg-base-200');
 if (sidebar) {
   sidebar.addEventListener('contextmenu', (e) => {
@@ -417,7 +378,6 @@ if (sidebar) {
   });
 }
 
-// Initial indicator sync (in case of any pre-existing state)
 updateWarmIndicators();
 
 // Sidebar service buttons are loaded via htmx after the page shell; re-sync warm dots then.
