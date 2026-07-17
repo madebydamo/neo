@@ -4,68 +4,71 @@
   libExtensions.skills = {
     neo = rec {
       # Options merged into neo.services.<name> (like mkReverseProxyOptions).
+      # Parent rank 200 places skill.* after customDomains (130) and before containers (300).
       mkSkillOptions = {
         # Default skill publication flag when the service is enabled.
         enabled ? true,
       }:
         with lib; {
-          skill = mkOption {
-            type = types.submodule {
-              options = {
-                enabled =
-                  mkOption {
-                    type = types.bool;
-                    default = enabled;
-                    description = "Publish a Hermes skill for this service when it is enabled";
-                  }
-                  // {rank = 200;};
-                # Filled by nix/services/<name>/skills.nix (internal, like proxyConf).
-                conf = mkOption {
-                  type = types.nullOr (types.submodule {
-                    options = {
-                      name = mkOption {
-                        type = types.str;
-                        description = "Skill directory / slash-command name (e.g. neo-paperless)";
+          skill =
+            mkOption {
+              type = types.submodule {
+                options = {
+                  enabled =
+                    mkOption {
+                      type = types.bool;
+                      default = enabled;
+                      description = "Publish a Hermes skill for this service when it is enabled";
+                    }
+                    // {rank = 0;};
+                  # Filled by nix/services/<name>/skills.nix (internal, like proxyConf).
+                  conf = mkOption {
+                    type = types.nullOr (types.submodule {
+                      options = {
+                        name = mkOption {
+                          type = types.str;
+                          description = "Skill directory / slash-command name (e.g. neo-paperless)";
+                        };
+                        description = mkOption {
+                          type = types.str;
+                          description = "Short skill description (≤60 chars preferred for Hermes index)";
+                        };
+                        category = mkOption {
+                          type = types.str;
+                          default = "neo";
+                          description = "Hermes metadata category label";
+                        };
+                        tags = mkOption {
+                          type = types.listOf types.str;
+                          default = [];
+                          description = "Hermes skill tags";
+                        };
+                        content = mkOption {
+                          type = types.str;
+                          description = "Full SKILL.md file contents (frontmatter + body)";
+                        };
+                        references = mkOption {
+                          type = types.attrsOf types.str;
+                          default = {};
+                          description = "Optional references/<name>.md supporting files";
+                        };
+                        scripts = mkOption {
+                          type = types.attrsOf types.str;
+                          default = {};
+                          description = "Optional scripts/<name> helper scripts";
+                        };
                       };
-                      description = mkOption {
-                        type = types.str;
-                        description = "Short skill description (≤60 chars preferred for Hermes index)";
-                      };
-                      category = mkOption {
-                        type = types.str;
-                        default = "neo";
-                        description = "Hermes metadata category label";
-                      };
-                      tags = mkOption {
-                        type = types.listOf types.str;
-                        default = [];
-                        description = "Hermes skill tags";
-                      };
-                      content = mkOption {
-                        type = types.str;
-                        description = "Full SKILL.md file contents (frontmatter + body)";
-                      };
-                      references = mkOption {
-                        type = types.attrsOf types.str;
-                        default = {};
-                        description = "Optional references/<name>.md supporting files";
-                      };
-                      scripts = mkOption {
-                        type = types.attrsOf types.str;
-                        default = {};
-                        description = "Optional scripts/<name> helper scripts";
-                      };
-                    };
-                  });
-                  default = null;
-                  internal = true;
-                  description = "Hermes skill definition; set by skills.nix when the service is enabled";
+                    });
+                    default = null;
+                    internal = true;
+                    description = "Hermes skill definition; set by skills.nix when the service is enabled";
+                  };
                 };
               };
-            };
-            default = {};
-            description = "Hermes agent skill published for this Neo service";
-          };
+              default = {};
+              description = "Hermes agent skill published for this Neo service";
+            }
+            // {rank = 200;};
         };
 
       getSkillServices = config:

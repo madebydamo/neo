@@ -1,4 +1,5 @@
-# Shared option types for services.
+# Shared reverse-proxy option types for services (subdomain, auth, custom domains).
+# Ranks are level-dependent — see nix/lib/option.nix for the service band table.
 {lib, ...}: {
   libExtensions.reverseProxy = {
     neo = {
@@ -22,17 +23,22 @@
               description = "Subdomain for the service (used by swag reverse proxy)";
             }
             // {rank = 100;};
+
           proxyConf = mkOption {
             type = types.nullOr types.str;
             internal = true;
             default = null;
             description = "Nginx proxy conf for swag";
           };
-          customDomains = mkOption {
-            type = types.listOf types.str;
-            default = customDomains;
-            description = "Custom domains (one domain per string, e.g. example.com or www.example.com) that should resolve to this service; automatically added to SWAG for certificates and to Pi-hole for local DNS";
-          };
+
+          customDomains =
+            mkOption {
+              type = types.listOf types.str;
+              default = customDomains;
+              description = "Custom domains (one domain per string, e.g. example.com or www.example.com) that should resolve to this service; automatically added to SWAG for certificates and to Pi-hole for local DNS";
+            }
+            // {rank = 130;};
+
           auth =
             mkOption {
               type = types.submodule {
@@ -43,21 +49,21 @@
                       default = auth.enabled;
                       description = "tinyauth forward auth";
                     }
-                    // {rank = 101;};
+                    // {rank = 0;};
                   publicPaths =
                     mkOption {
                       type = types.listOf types.str;
                       default = auth.publicPaths;
                       description = "Regex paths that bypass tinyauth authentication";
                     }
-                    // {rank = 102;};
+                    // {rank = 10;};
                 };
               };
               default = auth;
               internal = !authAvailable;
               description = "Tinyauth forward authentication settings";
             }
-            // {rank = 110;};
+            // {rank = 120;};
         };
       getProxiedServices = config:
         lib.filterAttrs (

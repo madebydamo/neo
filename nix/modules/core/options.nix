@@ -73,54 +73,53 @@
         rank = 70;
       };
 
+      # Local ranks inside remoteBuild.* only (parent rank places the group under core.nix).
       options.neo.core.nix.remoteBuild = mkOption {
         type = types.submodule {
           options =
             {
               enabled = mkEnableOption "Offload Nix builds to a remote machine over SSH (uses the homeserver key by default)" {
-                rank = 71;
+                rank = 0;
               };
 
               maxJobs = mkOption {
                 type = types.int;
                 default = 8;
                 description = "Maximum parallel build jobs on the remote machine (roughly its usable cores)";
-                rank = 72;
+                rank = 50;
               };
 
               speedFactor = mkOption {
                 type = types.int;
                 default = 1;
                 description = "Relative speed of the remote builder (higher = preferred when multiple builders exist)";
-                rank = 73;
+                rank = 60;
               };
 
               system = mkOption {
                 type = types.str;
                 default = "x86_64-linux";
                 description = "Nix system type of the remote builder (e.g. x86_64-linux, aarch64-linux)";
-                rank = 74;
+                rank = 70;
               };
 
               supportedFeatures = mkOption {
                 type = types.listOf types.str;
                 default = ["nixos-test" "benchmark" "big-parallel" "kvm"];
                 description = "Nix features the remote builder supports";
-                rank = 75;
+                rank = 80;
               };
 
               publicHostKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Optional base64-encoded SSH host public key for the builder (avoids interactive host-key prompts). From ssh-keyscan output, base64-encode the key type and key fields only";
-                rank = 76;
+                rank = 90;
               };
             }
             // lib.neo.mkSshConnectionOptions {
-              hostRank = 77;
-              userRank = 78;
-              sshKeyRank = 79;
-              extraOptionsRank = 80;
+              # After enabled (0): host/user/sshKey/extra = 10–40, then maxJobs…
+              rankBase = 10;
               hostDescription = "Remote build machine hostname or IP (or SSH Host alias)";
               userDescription = "SSH user on the remote build machine (must be in nix.trusted-users there)";
               sshKeyDescription = "SSH private key for remote builds. Defaults to the auto-generated homeserver key; override only if needed. The nix-daemon (root) uses this key.";

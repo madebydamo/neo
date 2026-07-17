@@ -1,25 +1,38 @@
 # Container, systemd unit, and appdata helpers for image configurability, auto-updates, and neo web UI.
+# containers.* uses rank 300 so the group sits after skill (200) in the service form.
 {lib, ...}: {
   libExtensions.containers = {
     neo = {
       # Declares a fixed set of container image options (containers.<name> : str).
       # Only the image string is overridable; keys cannot be added or removed from settings.
+      # Optional `rank` (default 300) places the whole containers.* block among top-level siblings.
+      # Pass extraUnits for non-docker systemd units; do not call mkSystemdUnits after this.
       mkContainerDefinitions = argset:
         with lib; let
           extraUnits = argset.extraUnits or [];
-          containers = removeAttrs argset ["extraUnits"];
+          rank = argset.rank or 300;
+          containers = removeAttrs argset ["extraUnits" "rank"];
           dockerUnits = map (n: "docker-${n}") (attrNames containers);
         in {
           containers =
-            mapAttrs (
-              name: image:
-                mkOption {
-                  type = types.str;
-                  default = image;
-                  description = "Docker image for container \"${name}\" (\"repo:tag\"). Enables image switching via settings, auto-updates, and UI.";
-                }
-            )
-            containers;
+            mkOption {
+              type = types.submodule {
+                options =
+                  mapAttrs (
+                    name: image:
+                      mkOption {
+                        type = types.str;
+                        default = image;
+                        description = "Docker image for container \"${name}\" (\"repo:tag\"). Enables image switching via settings, auto-updates, and UI.";
+                      }
+                  )
+                  containers;
+              };
+              default = {};
+              description = "Docker image overrides for this service's declared containers";
+            }
+            // {inherit rank;};
+
           systemdUnits = mkOption {
             type = types.listOf types.str;
             default = dockerUnits ++ extraUnits;

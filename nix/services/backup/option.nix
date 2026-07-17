@@ -13,32 +13,33 @@
             {
               enabled = mkEnableOption "Enable the rsync backup service" {rank = 0;};
 
+              # After SSH band (rankBase 10 → host/user/sshKey/extra = 10–40)
               sourceDir = mkOption {
                 type = types.path;
                 default = config.neo.core.volumes.root;
                 description = "Source directory to backup";
-                rank = 40;
+                rank = 50;
               };
 
               remotePath = mkOption {
                 type = types.str;
                 default = config.neo.core.hostname;
                 description = "Remote path on the backup server";
-                rank = 50;
+                rank = 60;
               };
 
               schedule = mkOption {
                 type = types.str;
                 default = "00:00:00";
                 description = "Time to run the backup (OnCalendar format)";
-                rank = 60;
+                rank = 70;
               };
 
               excludedDirs = mkOption {
                 type = types.listOf types.str;
                 default = [];
                 description = "List of directories to exclude from backup";
-                rank = 90;
+                rank = 80;
               };
 
               logFile = mkOption {
@@ -46,14 +47,10 @@
                 internal = true;
                 default = "/var/log/backup.log";
                 description = "Path to log file for backup operations";
-                rank = 91;
               };
             }
             // lib.neo.mkSshConnectionOptions {
-              hostRank = 20;
-              userRank = 30;
-              sshKeyRank = 10;
-              extraOptionsRank = 92;
+              rankBase = 10;
               hostDescription = "Remote backup server hostname or IP";
               userDescription = "Username for SSH connection to backup server";
               sshKeyDescription = "Path to SSH private key for rsync-over-SSH. Defaults to the auto-generated homeserver key (created at activation if missing). Root runs the backup so source files stay readable; only the key is shared with homeserver. Override only if you need a different key.";

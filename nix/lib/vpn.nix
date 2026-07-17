@@ -1,4 +1,5 @@
 # VPN helper types and getters for automatic VPN overlay.
+# Rank 110 places the vpn.* group after subdomain (100) and before auth (120).
 {lib, ...}: {
   libExtensions.vpn = {
     neo = {
@@ -10,49 +11,53 @@
         enabled ? false,
       }:
         with lib; {
-          vpn = mkOption {
-            type = types.submodule {
-              options = {
-                enabled = mkOption {
-                  type = types.bool;
-                  default = enabled;
-                  description = "Put selected outbound containers behind the VPN (gluetun)";
-                };
-                containers = mkOption {
-                  type = types.listOf types.str;
-                  internal = true;
-                  default = containers;
-                  description = "Container names (within this service) that should use the VPN network";
-                };
-                internalContainers = mkOption {
-                  type = types.listOf types.str;
-                  internal = true;
-                  default = internalContainers;
-                  description = "Container names that should not use the VPN network";
-                };
-                ports = mkOption {
-                  type = types.listOf types.port;
-                  internal = true;
-                  default = ports;
-                  description = ''
-                    Listen ports of VPN-routed containers in this service.
-                    Used for conflict detection: all containers with vpn.enabled share gluetun's network
-                    namespace, so these ports must be unique across every VPN-routed service.
-                  '';
-                };
-                networks = mkOption {
-                  type = types.listOf types.str;
-                  internal = true;
-                  default = networks;
-                  description = "Networks the outbound containers are in";
+          vpn =
+            mkOption {
+              type = types.submodule {
+                options = {
+                  enabled =
+                    mkOption {
+                      type = types.bool;
+                      default = enabled;
+                      description = "Put selected outbound containers behind the VPN (gluetun)";
+                    }
+                    // {rank = 0;};
+                  containers = mkOption {
+                    type = types.listOf types.str;
+                    internal = true;
+                    default = containers;
+                    description = "Container names (within this service) that should use the VPN network";
+                  };
+                  internalContainers = mkOption {
+                    type = types.listOf types.str;
+                    internal = true;
+                    default = internalContainers;
+                    description = "Container names that should not use the VPN network";
+                  };
+                  ports = mkOption {
+                    type = types.listOf types.port;
+                    internal = true;
+                    default = ports;
+                    description = ''
+                      Listen ports of VPN-routed containers in this service.
+                      Used for conflict detection: all containers with vpn.enabled share gluetun's network
+                      namespace, so these ports must be unique across every VPN-routed service.
+                    '';
+                  };
+                  networks = mkOption {
+                    type = types.listOf types.str;
+                    internal = true;
+                    default = networks;
+                    description = "Networks the outbound containers are in";
+                  };
                 };
               };
-            };
-            default = {
-              inherit enabled containers internalContainers ports networks;
-            };
-            description = "VPN routing options for this service";
-          };
+              default = {
+                inherit enabled containers internalContainers ports networks;
+              };
+              description = "VPN routing options for this service";
+            }
+            // {rank = 110;};
         };
 
       # Returns attrset of services (name -> cfg) that have vpn.enabled = true

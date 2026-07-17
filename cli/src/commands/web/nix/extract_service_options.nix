@@ -37,13 +37,16 @@
     else if section != null
     then getNeoOpt section
     else {};
-  configServices = f.nixosConfigurations.${cfg}.config.neo.services or {};
-  configRoot =
+  # Config is best-effort: option schema must still extract if some paths/defaults
+  # are unreadable in the evaluator environment (e.g. local DATA/* perms).
+  configServices = tryOr {} (f.nixosConfigurations.${cfg}.config.neo.services or {});
+  configRoot = tryOr {} (
     if service != null
     then configServices.${service} or {}
     else if section != null
     then getNeoConf section
-    else {};
+    else {}
+  );
 
   tryOr = def: x: let
     r = builtins.tryEval x;
@@ -51,6 +54,92 @@
     if r.success
     then r.value
     else def;
+
+  # --- Level-dependent ranking (sibling sort) ---
+  # Ranks compete only among siblings at the same nesting level. Groups
+  # (submodules like vpn/auth/skill/containers, plain attrsets) stay contiguous.
+  # Intermediate attrsets without their own rank inherit min(descendant ranks)
+  # so e.g. core.nix.* and core.volumes.* keep a stable placement.
+  # Service band table: nix/lib/option.nix.
+  isOption = o: builtins.isAttrs o && (o._type or null) == "option";
+
+  pubNames = o:
+    builtins.filter (
+      k: k != "_freeformOptions" && builtins.substring 0 1 k != "_"
+    ) (builtins.attrNames o);
+
+  # Zero-pad ranks so string lexicographic order matches numeric order.
+  padRank = n: let
+    s = toString n;
+    len = builtins.stringLength s;
+  in
+    if len >= 8
+    then s
+    else (builtins.substring 0 (8 - len) "00000000") + s;
+
+  optionRank = o:
+    if isOption o
+    then tryOr null (o.rank or null)
+    else null;
+
+  optionReadOnly = o:
+    if isOption o
+    then tryOr false (o.readOnly or false)
+    else false;
+
+  minDescendantRank = o: let
+    collect = x:
+      if !(builtins.isAttrs x)
+      then []
+      else if isOption x
+      then let
+        internal = tryOr false (x.internal or false);
+        r = tryOr null (x.rank or null);
+      in
+        if internal
+        then []
+        else if r != null
+        then [r]
+        else []
+      else builtins.concatLists (map (k: collect x.${k}) (pubNames x));
+    ranks = collect o;
+  in
+    if ranks == []
+    then null
+    else
+      builtins.foldl' (
+        a: b:
+          if a < b
+          then a
+          else b
+      ) (builtins.head ranks) (builtins.tail ranks);
+
+  # Options use their own rank (submodule parents place the whole group).
+  # Plain attrset groups inherit min ranked descendant.
+  siblingRank = o:
+    if isOption o
+    then optionRank o
+    else if builtins.isAttrs o
+    then minDescendantRank o
+    else null;
+
+  # Band 0 = ranked; band 1 = unranked (enabled, normal, readOnly).
+  siblingSortKey = name: child: let
+    rank = siblingRank child;
+    ro = optionReadOnly child;
+  in
+    if rank != null
+    then "0\u0000" + padRank rank + "\u0000" + name
+    else if name == "enabled"
+    then "1\u0000" + "0\u0000" + name
+    else if ro
+    then "1\u0000" + "2\u0000" + name
+    else "1\u0000" + "1\u0000" + name;
+
+  sortSiblingNames = attrs:
+    builtins.sort (
+      a: b: (siblingSortKey a attrs.${a}) < (siblingSortKey b attrs.${b})
+    ) (pubNames attrs);
 
   getNested = pathList: attrs:
     if pathList == []
@@ -162,9 +251,10 @@
 
   # Field records for a submodule type (used as attrsOf/listOf element schema).
   # Plain nested submodules are expanded to dotted field names; collections stay as one field.
+  # Sibling order matches the main form walk (level-dependent ranks).
   mkFieldRecords = t: let
     walkF = pathList: o:
-      if builtins.isAttrs o && builtins.hasAttr "_type" o && o._type == "option"
+      if isOption o
       then let
         internal = tryOr false (o.internal or false);
       in
@@ -208,10 +298,9 @@
           else [record]
       else if builtins.isAttrs o
       then let
-        ns = builtins.attrNames o;
-        pub = builtins.filter (k: k != "_freeformOptions" && builtins.substring 0 1 k != "_") ns;
+        keys = sortSiblingNames o;
       in
-        builtins.concatLists (map (k: walkF (pathList ++ [k]) o.${k}) pub)
+        builtins.concatLists (map (k: walkF (pathList ++ [k]) o.${k}) keys)
       else [];
   in
     walkF [] (callGetSubOptions t []);
@@ -411,8 +500,10 @@
     inherit helper;
   };
 
-  # Walk options into a flat form list.
-  # - Plain submodules expand to dotted children (auth.enabled).
+  # Walk options into a flat form list, ordered by level-dependent ranks.
+  # - Sibling keys are sorted at each nesting level (rank bands, then name).
+  # - Plain submodules expand to dotted children (auth.enabled); parent rank
+  #   places the whole child block among the parent's siblings.
   # - listOf / attrsOf stay as a single field; element schema lives on type.elem
   #   (including submodule fields). No placeholder paths like entries.<name>.* .
   walk = pathList: o: let
@@ -421,14 +512,13 @@
       then ""
       else builtins.concatStringsSep "." pathList;
   in
-    if builtins.isAttrs o && builtins.hasAttr "_type" o && o._type == "option"
+    if isOption o
     then let
       internal = tryOr false (o.internal or false);
     in
       if internal
       then []
       else let
-        record = mkOptionRecord path o;
         t = tryOr null (o.type or null);
         tn = typeNameOf (tryOr {} t);
         subSet = callGetSubOptions (tryOr {} t) pathList;
@@ -437,23 +527,22 @@
           != "listOf"
           && tn != "attrsOf"
           && subSet != {};
-        subs =
-          if expandChildren
-          then walk pathList subSet
-          else [];
       in
-        [record] ++ subs
+        # Expanded submodule: emit only children (parent rank used by sibling sort above).
+        if expandChildren
+        then walk pathList subSet
+        else [(mkOptionRecord path o)]
     else if builtins.isAttrs o
     then let
-      ns = builtins.attrNames o;
-      pub = builtins.filter (k: k != "_freeformOptions" && builtins.substring 0 1 k != "_") ns;
+      keys = sortSiblingNames o;
     in
-      builtins.concatLists (map (k: walk (pathList ++ [k]) o.${k}) pub)
+      builtins.concatLists (map (k: walk (pathList ++ [k]) o.${k}) keys)
     else [];
 
   raw = walk [] root;
 
-  visible =
+  # Walk already emits in hierarchical order; filter only (no global re-sort).
+  sorted =
     builtins.filter (
       r:
         !(r.internal or false)
@@ -462,24 +551,6 @@
         && !(builtins.match "^meta(\\..*)?$" (r.name or "") != null)
     )
     raw;
-
-  ranked = builtins.filter (r: (r.rank or null) != null) visible;
-  unranked = builtins.filter (r: (r.rank or null) == null) visible;
-
-  sortedRanked = builtins.sort (a: b: (a.rank or 0) < (b.rank or 0)) ranked;
-
-  sortKey = r: let
-    n = r.name or "";
-  in
-    if n == "enabled"
-    then "0\u0000" + n
-    else if (r.readOnly or false)
-    then "2\u0000" + n
-    else "1\u0000" + n;
-
-  sortedUnranked = builtins.sort (a: b: (sortKey a) < (sortKey b)) unranked;
-
-  sorted = sortedRanked ++ sortedUnranked;
 
   meta = tryOr {} (configRoot.meta or {});
   units = tryOr [] (configRoot.systemdUnits or []);
