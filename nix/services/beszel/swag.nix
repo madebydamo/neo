@@ -23,10 +23,7 @@
           proxy_pass $upstream_proto://$upstream_app:$upstream_port;
 
           ${lib.neo.authBlock config cfg}
-
-          # WebSocket headers only
-          proxy_set_header Upgrade $http_upgrade;
-          proxy_set_header Connection "upgrade";
+          # WebSocket: proxy.conf already sets Upgrade + Connection via $connection_upgrade
         }
 
         ${lib.neo.authLocations config cfg}

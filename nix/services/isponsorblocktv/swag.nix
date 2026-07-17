@@ -20,10 +20,7 @@
           proxy_pass http://host.docker.internal:7681;
 
           ${lib.neo.authBlock config cfg}
-
-          # WebSocket headers for ttyd
-          proxy_set_header Upgrade $http_upgrade;
-          proxy_set_header Connection "upgrade";
+          # WebSocket (ttyd): proxy.conf already sets Upgrade + Connection via $connection_upgrade
         }
 
         ${lib.neo.authLocations config cfg}
