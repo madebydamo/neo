@@ -41,14 +41,12 @@
                 internal = true;
                 default = 80;
                 description = "Local HTTP port for SWAG container (overridden to 9980 with streamproxy)";
-                rank = 50;
               };
               localHttpsPort = mkOption {
                 type = types.port;
                 internal = true;
                 default = 443;
                 description = "Local HTTPS port for SWAG container (overridden to 9981 with streamproxy)";
-                rank = 60;
               };
             }
             // lib.neo.mkContainerDefinitions {

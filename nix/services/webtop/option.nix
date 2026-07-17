@@ -25,12 +25,13 @@
                 description = "Browser tab / Selkies UI title";
                 rank = 10;
               };
-              additionalMountPoints = mkOption {
-                type = types.attrsOf types.str;
-                default = {};
-                description = "Extra host volume mounts into the desktop (host volume name → container path)";
-                rank = 20;
-              };
+            }
+            // lib.neo.mkAdditionalMountPoints {
+              rank = 20;
+              description = ''
+                Extra host directories to mount into the desktop session.
+                Each entry pairs a localPath (absolute host path) with a containerPath (path inside the desktop).
+              '';
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "webtop";

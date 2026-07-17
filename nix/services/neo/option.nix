@@ -21,7 +21,7 @@
               theme = mkOption {
                 type = types.enum ["lofi" "halloween" "dark" "light"];
                 default = "lofi";
-                rank = 5;
+                rank = 10;
                 description = "Color theme for the neo web UI (navigator dashboard and configuration editor).";
               };
 
@@ -35,7 +35,7 @@
               iframeCookieSupport = mkOption {
                 type = types.bool;
                 default = true;
-                rank = 10;
+                rank = 20;
                 description = ''
                   When enabled (default), configures support for loading other services inside
                   the neo web UI iframes (neo.* embeds sub.domain pages):
@@ -61,7 +61,6 @@
                 Use the sidebar on the left (in the main navigator) to quickly jump between your self-hosted apps.
               '';
               githubUrl = "https://github.com/madebydamo/neo";
-              rank = 20;
             }
             // lib.neo.mkSkillOptions {};
         };

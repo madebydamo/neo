@@ -52,8 +52,7 @@
         ## Procedures
         1. Open `https://firefox.<domain>/` (or configured subdomain)
         2. Health-check: `systemctl status docker-firefox`
-        3. Mount host data via `additionalMountPoints` if needed
-        4. Optional VPN: set `services.firefox.vpn.enabled = true` (and ensure `services.vpn` is healthy)
+        3. Optional VPN: set `services.firefox.vpn.enabled = true` (and ensure `services.vpn` is healthy)
 
         ## Pitfalls
         - Do not expose without auth; treat as root-capable session

@@ -28,12 +28,6 @@
                 type = types.str;
                 default = "";
                 description = "Optional Firefox CLI args / start URL (FIREFOX_CLI); empty leaves image default";
-                rank = 15;
-              };
-              additionalMountPoints = mkOption {
-                type = types.attrsOf types.str;
-                default = {};
-                description = "Extra host volume mounts into the container (host volume name → container path)";
                 rank = 20;
               };
             }

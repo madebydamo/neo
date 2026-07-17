@@ -12,12 +12,6 @@
           options =
             {
               enabled = mkEnableOption "syncthing service" {rank = 0;};
-              additionalMountPoints = mkOption {
-                type = types.attrsOf types.str;
-                default = {};
-                rank = 10;
-                description = "Additional volume mounts";
-              };
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "syncthing";

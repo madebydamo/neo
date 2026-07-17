@@ -64,6 +64,48 @@
           };
         };
 
+      # Extra host→container bind mounts as a list of { localPath, containerPath }.
+      # Better UI/TOML than attrsOf string: each entry has two clear fields.
+      # Merge into a service submodule:
+      #   // lib.neo.mkAdditionalMountPoints { rank = 20; }
+      # Apply in default.nix:
+      #   volumes = [ ... ] ++ lib.neo.toOciBindMounts cfg.additionalMountPoints;
+      mkAdditionalMountPoints = {
+        rank ? 20,
+        description ? ''
+          Extra host directories to bind-mount into the container.
+          Each entry is a localPath (absolute host path) and containerPath (path inside the container).
+        '',
+      }:
+        with lib; {
+          additionalMountPoints =
+            mkOption {
+              type = types.listOf (types.submodule {
+                options = {
+                  localPath =
+                    mkOption {
+                      type = types.str;
+                      description = "Absolute path on the host to mount";
+                    }
+                    // {rank = 0;};
+                  containerPath =
+                    mkOption {
+                      type = types.str;
+                      description = "Absolute path inside the container";
+                    }
+                    // {rank = 10;};
+                };
+              });
+              default = [];
+              description = description;
+            }
+            // {inherit rank;};
+        };
+
+      # Turn additionalMountPoints entries into docker/OCI volume specs ("host:container").
+      toOciBindMounts = mounts:
+        map (m: "${m.localPath}:${m.containerPath}") mounts;
+
       getAllContainers = config:
         lib.concatLists (
           lib.mapAttrsToList (

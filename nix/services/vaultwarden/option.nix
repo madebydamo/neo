@@ -17,13 +17,12 @@
                 default = 8888;
                 internal = true;
                 description = "Internal port vaultwarden listens on (ROCKET_PORT)";
-                rank = 10;
               };
               adminToken = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Random auth token to authenticate in admin page";
-                rank = 20;
+                rank = 10;
                 helper = lib.neo.helpers.randomToken;
               };
             }

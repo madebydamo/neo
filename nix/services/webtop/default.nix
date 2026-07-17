@@ -31,10 +31,7 @@
             [
               "${appdata}:/config"
             ]
-            ++ (lib.mapAttrsToList (
-                hostVol: containerPath: "${config.neo.core.volumes.${hostVol}}:${containerPath}"
-              )
-              cfg.additionalMountPoints);
+            ++ lib.neo.toOciBindMounts cfg.additionalMountPoints;
           # Recommended by LinuxServer for desktop images (Chromium / Electron).
           extraOptions = [
             "--shm-size=1gb"

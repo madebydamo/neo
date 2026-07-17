@@ -15,7 +15,7 @@
   }: let
     cfg = config.neo.services.hermes;
 
-    baseSettings = {
+    hermesSettings = {
       model = {
         default = cfg.defaultModel;
         provider =
@@ -42,8 +42,6 @@
       };
     };
 
-    hermesSettings = lib.recursiveUpdate baseSettings cfg.extraConfig;
-
     # Fixed internal username — SWAG auto-login posts this; operators never type it.
     dashboardAuthUsername = "neo";
 
@@ -66,8 +64,7 @@
         HERMES_DASHBOARD_BASIC_AUTH_USERNAME = dashboardAuthUsername;
         HERMES_DASHBOARD_BASIC_AUTH_PASSWORD = cfg.dashboardPassword;
         HERMES_DASHBOARD_BASIC_AUTH_SECRET = cfg.dashboardPassword;
-      }
-      // cfg.extraEnvironment;
+      };
 
     # Credentials JSON for the SWAG auto-login page (safe JS embedding via toJSON).
     autologinCredsJson = builtins.toJSON {
@@ -117,118 +114,108 @@
       </html>
     '';
   in {
-    config = lib.mkIf cfg.enabled (lib.mkMerge [
-      {
-        assertions = [
-          {
-            assertion = dashboardPasswordSet;
-            message = ''
-              neo.services.hermes.dashboardPassword must be set (use the Generate helper in the UI).
-              Hermes 0.17+ requires an auth provider for non-loopback dashboard binds; neo uses this
-              password for internal basic auth and SWAG auto-login so only tinyauth is user-facing.
-            '';
-          }
-        ];
+    config = lib.mkIf cfg.enabled {
+      assertions = [
+        {
+          assertion = dashboardPasswordSet;
+          message = ''
+            neo.services.hermes.dashboardPassword must be set (use the Generate helper in the UI).
+            Hermes 0.17+ requires an auth provider for non-loopback dashboard binds; neo uses this
+            password for internal basic auth and SWAG auto-login so only tinyauth is user-facing.
+          '';
+        }
+      ];
 
-        users.users.hermes = {
-          extraGroups = ["wheel" "docker"];
-          linger = true;
-        };
+      users.users.hermes = {
+        extraGroups = ["wheel" "docker"];
+        linger = true;
+      };
 
-        security.sudo.extraRules = [
-          {
-            users = ["hermes"];
-            commands = [
-              {
-                command = "ALL";
-                options = ["NOPASSWD" "SETENV"];
-              }
-            ];
-          }
-        ];
+      security.sudo.extraRules = [
+        {
+          users = ["hermes"];
+          commands = [
+            {
+              command = "ALL";
+              options = ["NOPASSWD" "SETENV"];
+            }
+          ];
+        }
+      ];
 
-        services.hermes-agent = {
-          enable = true;
-          stateDir = cfg.stateDir;
-          workingDirectory = "${cfg.stateDir}/workspace";
-          addToSystemPackages = true;
-          settings = hermesSettings;
-          extraDependencyGroups = ["all" "messaging" "homeassistant" "youtube" "voice"];
-          environment = hermesEnv;
-          environmentFiles = cfg.environmentFiles;
-          # Workspace AGENTS.md + skill tree: hermes/skills.nix.
-          # (cfg.documents is reserved/legacy; do not map blindly — missing files break activation.)
-          restart = "always";
-          restartSec = 5;
-        };
+      services.hermes-agent = {
+        enable = true;
+        stateDir = cfg.stateDir;
+        workingDirectory = "${cfg.stateDir}/workspace";
+        addToSystemPackages = true;
+        settings = hermesSettings;
+        extraDependencyGroups = ["all" "messaging" "homeassistant" "youtube" "voice"];
+        environment = hermesEnv;
+        # Workspace AGENTS.md + skill tree: hermes/skills.nix.
+        restart = "always";
+        restartSec = 5;
+      };
 
-        # Disable ALL sandboxing/hardening (full system access)
-        systemd.services.hermes-agent.serviceConfig = {
+      # Disable ALL sandboxing/hardening (full system access)
+      systemd.services.hermes-agent.serviceConfig = {
+        ReadWritePaths = ["/"];
+        NoNewPrivileges = lib.mkForce false;
+        ProtectHome = lib.mkForce false;
+        ProtectSystem = lib.mkForce false;
+        PrivateTmp = lib.mkForce false;
+        RestrictNamespaces = lib.mkForce false;
+        LockPersonality = lib.mkForce false;
+        MemoryDenyWriteExecute = lib.mkForce false;
+        UMask = "0007";
+
+        CapabilityBoundingSet = ["CAP_SETUID" "CAP_SETGID" "CAP_AUDIT_WRITE" "CAP_DAC_OVERRIDE" "CAP_SYS_ADMIN"];
+        AmbientCapabilities = ["CAP_SETUID" "CAP_SETGID" "CAP_SYS_ADMIN"];
+      };
+
+      system.activationScripts.hermes-workspace = lib.neo.mkActivationScriptForDir config {
+        dirPath = "${cfg.stateDir}/workspace";
+        user = "hermes";
+        group = "hermes";
+        mode = "2770";
+      };
+
+      # SWAG serves this at /login so Hermes form-auth is invisible behind tinyauth.
+      system.activationScripts.hermes-dashboard-autologin = lib.neo.mkActivationScriptForFile config {
+        filePath = "${config.neo.core.volumes.appdata}/swag/www/hermes-autologin.html";
+        content = autologinHtml;
+        mode = "0644";
+      };
+
+      environment.variables.HERMES_HOME = "${cfg.stateDir}/.hermes";
+
+      # Web dashboard — non-loopback bind requires Hermes basic_auth (tinyauth is edge auth via SWAG)
+      systemd.services.hermes-dashboard = {
+        description = "Hermes Agent Web Dashboard";
+        wantedBy = ["multi-user.target"];
+        after = ["hermes-agent.service" "network-online.target"];
+        wants = ["network-online.target"];
+        requires = ["hermes-agent.service"];
+
+        serviceConfig = {
+          User = "hermes";
+          Group = "hermes";
+          WorkingDirectory = cfg.stateDir;
+          ExecStart = let
+            pkg = config.services.hermes-agent.package;
+          in "${pkg}/bin/hermes dashboard --host 0.0.0.0 --port ${toString cfg.dashboardPort} --no-open";
+          Restart = "always";
+          RestartSec = 5;
+
+          # Relaxed security matching the gateway (dashboard manages configs, API keys, sessions)
           ReadWritePaths = ["/"];
           NoNewPrivileges = lib.mkForce false;
           ProtectHome = lib.mkForce false;
           ProtectSystem = lib.mkForce false;
           PrivateTmp = lib.mkForce false;
-          RestrictNamespaces = lib.mkForce false;
-          LockPersonality = lib.mkForce false;
-          MemoryDenyWriteExecute = lib.mkForce false;
-          UMask = "0007";
-
-          CapabilityBoundingSet = ["CAP_SETUID" "CAP_SETGID" "CAP_AUDIT_WRITE" "CAP_DAC_OVERRIDE" "CAP_SYS_ADMIN"];
-          AmbientCapabilities = ["CAP_SETUID" "CAP_SETGID" "CAP_SYS_ADMIN"];
         };
 
-        system.activationScripts.hermes-workspace = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${cfg.stateDir}/workspace";
-          user = "hermes";
-          group = "hermes";
-          mode = "2770";
-        };
-
-        # SWAG serves this at /login so Hermes form-auth is invisible behind tinyauth.
-        system.activationScripts.hermes-dashboard-autologin = lib.neo.mkActivationScriptForFile config {
-          filePath = "${config.neo.core.volumes.appdata}/swag/www/hermes-autologin.html";
-          content = autologinHtml;
-          mode = "0644";
-        };
-
-        environment.variables.HERMES_HOME = "${cfg.stateDir}/.hermes";
-
-        # Web dashboard — non-loopback bind requires Hermes basic_auth (tinyauth is edge auth via SWAG)
-        systemd.services.hermes-dashboard = {
-          description = "Hermes Agent Web Dashboard";
-          wantedBy = ["multi-user.target"];
-          after = ["hermes-agent.service" "network-online.target"];
-          wants = ["network-online.target"];
-          requires = ["hermes-agent.service"];
-
-          serviceConfig = {
-            User = "hermes";
-            Group = "hermes";
-            WorkingDirectory = cfg.stateDir;
-            ExecStart = let
-              pkg = config.services.hermes-agent.package;
-            in "${pkg}/bin/hermes dashboard --host 0.0.0.0 --port ${toString cfg.dashboardPort} --no-open";
-            Restart = "always";
-            RestartSec = 5;
-
-            # Relaxed security matching the gateway (dashboard manages configs, API keys, sessions)
-            ReadWritePaths = ["/"];
-            NoNewPrivileges = lib.mkForce false;
-            ProtectHome = lib.mkForce false;
-            ProtectSystem = lib.mkForce false;
-            PrivateTmp = lib.mkForce false;
-          };
-
-          environment = hermesEnv;
-        };
-      }
-
-      (lib.mkIf (cfg.xaiApiKey == null && cfg.anthropicApiKey == null && cfg.openaiApiKey == null) {
-        warnings = [
-          "neo.services.hermes: At least one of xaiApiKey, anthropicApiKey or openaiApiKey should be set."
-        ];
-      })
-    ]);
+        environment = hermesEnv;
+      };
+    };
   };
 }

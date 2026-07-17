@@ -33,7 +33,8 @@
         ```
 
         ## Credentials
-        - Settings keys: `services.hermes.gatewayToken`, `dashboardPassword`, `telegramBotToken`, LLM API keys (`xaiApiKey`, `anthropicApiKey`, `openaiApiKey`)
+        - Required: `services.hermes.dashboardPassword` (Generate helper); optional `gatewayToken`, Telegram bot token
+        - LLM API keys (`xaiApiKey`, `anthropicApiKey`, `openaiApiKey`) are optional in settings — prefer setting them in the Hermes dashboard
         - Read from `/etc/neo/settings.toml` or Neo UI — do not invent keys
         - Dashboard internal basic auth is auto-posted by SWAG; operators use tinyauth only
 

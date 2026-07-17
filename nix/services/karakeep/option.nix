@@ -16,7 +16,7 @@
               nextauthSecret = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                rank = 1;
+                rank = 10;
                 description = ''
                   Random secret used by Karakeep's built-in NextAuth to sign session JWTs (NEXTAUTH_SECRET).
                   Not a login password and not a substitute for tinyauth — generate once and keep stable.
@@ -26,7 +26,7 @@
               meiliMasterKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                rank = 2;
+                rank = 20;
                 description = ''
                   Meilisearch master key shared by Karakeep and the search container (MEILI_MASTER_KEY).
                   Generate once; rotating it without reindexing breaks search.
@@ -42,13 +42,13 @@
               disableSignups = mkOption {
                 type = types.bool;
                 default = false;
-                rank = 20;
+                rank = 30;
                 description = "Disable public signups, should only be activated if a user is already created.";
               };
               openaiApiKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                rank = 30;
+                rank = 40;
                 description = ''
                   API key for the OpenAI-compatible inference provider (OPENAI_API_KEY).
                   Defaults target xAI; leave empty to skip automatic AI tagging.
@@ -57,7 +57,7 @@
               openaiBaseUrl = mkOption {
                 type = types.str;
                 default = "https://api.x.ai/v1";
-                rank = 31;
+                rank = 50;
                 description = ''
                   OpenAI-compatible API base URL (OPENAI_BASE_URL).
                   Examples: https://api.x.ai/v1, https://api.openai.com/v1, http://ollama:11434/v1
@@ -66,13 +66,13 @@
               inferenceTextModel = mkOption {
                 type = types.str;
                 default = "grok-latest";
-                rank = 32;
+                rank = 60;
                 description = "Model for text inference / auto-tagging (INFERENCE_TEXT_MODEL)";
               };
               inferenceImageModel = mkOption {
                 type = types.str;
                 default = "grok-latest";
-                rank = 33;
+                rank = 70;
                 description = "Model for image inference (INFERENCE_IMAGE_MODEL)";
               };
             }

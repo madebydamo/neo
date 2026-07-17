@@ -23,15 +23,10 @@
           };
           image = cfg.containers.syncthing;
           autoStart = true;
-          volumes =
-            [
-              "${config.neo.core.volumes.appdata}/syncthing:/config"
-              "${config.neo.core.volumes.data}:/DATA"
-            ]
-            ++ (lib.mapAttrsToList (
-                hostVol: containerPath: "${config.neo.core.volumes.${hostVol}}:${containerPath}"
-              )
-              cfg.additionalMountPoints);
+          volumes = [
+            "${config.neo.core.volumes.appdata}/syncthing:/config"
+            "${config.neo.core.volumes.data}:/DATA"
+          ];
           ports = [
             "8384:8384"
             "22000:22000"

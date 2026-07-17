@@ -32,31 +32,37 @@
                         url = mkOption {
                           type = types.str;
                           description = "The domain name for this ingress entry";
+                          rank = 0;
                         };
                         token = mkOption {
                           type = types.str;
                           description = "The authentication token for rathole";
                           helper = lib.neo.helpers.randomToken;
+                          rank = 10;
                         };
                         wildcard = mkOption {
                           type = types.bool;
                           default = false;
                           description = "Whether to route subdomains (*.url) to this ingress";
+                          rank = 20;
                         };
                         includeTopLevel = mkOption {
                           type = types.bool;
                           default = true;
                           description = "Whether to route the top-level domain (url) to this ingress";
+                          rank = 30;
                         };
                         customDomains = mkOption {
                           type = types.listOf types.str;
                           default = [];
                           description = "Additional custom domains that should be routed to this entry (certificates + forwarding)";
+                          rank = 40;
                         };
                       };
                     }
                   );
                   default = {};
+                  rank = 10;
                   description = "Streamproxy entries mapping names to URLs, tokens, and routing rules";
                 };
                 ports = mkOption {

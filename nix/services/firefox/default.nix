@@ -31,14 +31,9 @@
             // optionalAttrs (cfg.firefoxCli != "") {
               FIREFOX_CLI = cfg.firefoxCli;
             };
-          volumes =
-            [
-              "${appdata}:/config"
-            ]
-            ++ (lib.mapAttrsToList (
-                hostVol: containerPath: "${config.neo.core.volumes.${hostVol}}:${containerPath}"
-              )
-              cfg.additionalMountPoints);
+          volumes = [
+            "${appdata}:/config"
+          ];
           # Recommended by LinuxServer for modern sites (YouTube, etc.).
           extraOptions = [
             "--shm-size=1gb"

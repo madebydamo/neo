@@ -1,4 +1,5 @@
 # Hermes service options.
+# Order: enabled → required secrets → Telegram → optional LLM keys → model/soul → proxy/skill.
 {...}: {
   flake.modules.nixos.hermes-option = {
     config,
@@ -27,14 +28,6 @@
                 description = "Port for the Hermes web dashboard UI (uses tinyauth via SWAG)";
               };
 
-              gatewayToken = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Gateway authentication token";
-                rank = 10;
-                helper = lib.neo.helpers.randomToken;
-              };
-
               dashboardPassword = mkOption {
                 type = types.nullOr types.str;
                 default = null;
@@ -42,8 +35,16 @@
                   Internal Hermes dashboard password (required for non-loopback bind).
                   SWAG auto-logs in with this so only tinyauth is user-facing.
                 '';
-                rank = 15;
+                rank = 10;
                 helper = lib.neo.helpers.randomToken // {label = "Generate dashboard password";};
+              };
+
+              gatewayToken = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = "Gateway authentication token";
+                rank = 20;
+                helper = lib.neo.helpers.randomToken;
               };
 
               telegramBotToken = mkOption {
@@ -53,7 +54,7 @@
                   Telegram bot token string.
                   Create a bot via @BotFather on Telegram.
                 '';
-                rank = 11;
+                rank = 30;
               };
 
               telegramAllowedUserId = mkOption {
@@ -63,7 +64,7 @@
                   List of Telegram user/chat IDs allowed to interact with the bot.
                   Get your ID from @userinfobot on Telegram.
                 '';
-                rank = 12;
+                rank = 40;
               };
 
               telegramGroups = mkOption {
@@ -73,69 +74,61 @@
                       requireMention = mkOption {
                         type = types.bool;
                         default = true;
+                        rank = 0;
                         description = "Whether the bot requires an @mention in this group";
                       };
                     };
                   }
                 );
-                rank = 13;
+                rank = 50;
                 default = {};
                 description = ''
                   Per-group Telegram settings. Keys are chat IDs (as strings) or "*" for default.
                 '';
               };
 
+              # Optional: can also be configured in the Hermes dashboard after first boot.
+              xaiApiKey = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                rank = 60;
+                description = ''
+                  Optional xAI (Grok) API key. Leave empty to set the key in the Hermes dashboard instead.
+                '';
+              };
+
               anthropicApiKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                rank = 20;
+                rank = 70;
                 description = ''
-                  Anthropic (Claude) API key.
+                  Optional Anthropic (Claude) API key. Leave empty to set the key in the Hermes dashboard instead.
                 '';
               };
 
               openaiApiKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                rank = 21;
+                rank = 80;
                 description = ''
-                  OpenAI API key.
+                  Optional OpenAI API key. Leave empty to set the key in the Hermes dashboard instead.
                 '';
-              };
-
-              xaiApiKey = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                rank = 22;
-                description = "xAI (Grok) API key";
               };
 
               defaultModel = mkOption {
                 type = types.nullOr types.str;
                 default = "grok-build-latest";
-                rank = 30;
+                rank = 85;
                 description = ''
                   Default LLM model for the agent (e.g. "grok-4.20-0309-reasoning",
-                  "claude-sonnet-4", "gpt-4o").
-                '';
-              };
-
-              documents = mkOption {
-                type = types.nullOr types.path;
-                default = null;
-                rank = 40;
-                description = ''
-                  Optional extra documents directory (legacy). Neo always generates
-                  workspace AGENTS.md and seeds HERMES_HOME SOUL.md from the skills collector.
-                  Prefer editing SOUL.md under appdata/hermes/.hermes after first boot,
-                  or set forceSoul to re-seed Neo's default identity.
+                  "claude-sonnet-4", "gpt-4o"). Can also be changed in the dashboard.
                 '';
               };
 
               forceSoul = mkOption {
                 type = types.bool;
                 default = false;
-                rank = 41;
+                rank = 88;
                 description = ''
                   When true, overwrite $HERMES_HOME/SOUL.md with Neo's default co-pilot identity
                   on every activation. When false (default), seed SOUL.md only if missing so
@@ -143,34 +136,11 @@
                 '';
               };
 
-              extraEnvironment = mkOption {
-                type = types.attrsOf types.str;
-                default = {};
-                description = "Additional environment variables for the hermes service";
-              };
-
-              environmentFiles = mkOption {
-                type = types.listOf types.str;
-                default = [];
-                description = ''
-                  List of environment files to load into the service.
-                  Use this for secrets that should not be in the Nix store.
-                '';
-              };
-
               stateDir = mkOption {
                 type = types.str;
+                internal = true;
                 default = "${config.neo.core.volumes.appdata}/hermes";
                 description = "State directory for Hermes data (HERMES_HOME inside)";
-              };
-
-              extraConfig = mkOption {
-                type = types.attrs;
-                default = {};
-                description = ''
-                  Extra Hermes config attributes, deep-merged into settings.
-                  See Hermes docs for available options.
-                '';
               };
             }
             // lib.neo.mkReverseProxyOptions {subdomain = "hermes";}

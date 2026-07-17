@@ -66,7 +66,7 @@
         ## Procedures
         1. Open `https://webtop.<domain>/` (or configured subdomain)
         2. Health-check: `systemctl status docker-webtop`
-        3. Mount host data via `additionalMountPoints` if needed
+        3. Optional host mounts: `additionalMountPoints` = `[{ localPath = "/host/path"; containerPath = "/desktop/path"; }]`
         4. Switch DE: change container image tag → activate → pull/recreate
 
         ## Pitfalls

@@ -12,12 +12,6 @@
           options =
             {
               enabled = mkEnableOption "Example service" {rank = 0;};
-              additionalMountPoints = mkOption {
-                type = types.attrsOf types.str;
-                default = {};
-                description = "Additional volume mounts";
-                rank = 10;
-              };
             }
             // neo.mkReverseProxyOptions {
               subdomain = "example";

@@ -12,12 +12,13 @@
           options =
             {
               enabled = mkEnableOption "filebrowser service" {rank = 0;};
-              additionalMountPoints = mkOption {
-                type = types.attrsOf types.str;
-                default = {};
-                description = "Additional volume mounts";
-                rank = 10;
-              };
+            }
+            // lib.neo.mkAdditionalMountPoints {
+              rank = 10;
+              description = ''
+                Extra host directories to expose in Filebrowser (beyond the default media, documents, and appdata mounts under /srv).
+                Each entry pairs a localPath (absolute host path) with a containerPath (e.g. /srv/MyShare).
+              '';
             }
             // neo.mkReverseProxyOptions {
               subdomain = "filebrowser";
@@ -37,7 +38,7 @@
               description = ''
                 Filebrowser provides a file management interface.
                 It lets you upload, delete, preview, rename and edit your files in the browser.
-                Mount additional host paths via additionalMountPoints.
+                Neo mounts media, documents, and appdata under /srv by default; add more paths via additionalMountPoints.
               '';
               projectUrl = "https://filebrowser.org/";
               githubUrl = "https://github.com/filebrowser/filebrowser";

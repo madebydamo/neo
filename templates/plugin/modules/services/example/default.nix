@@ -40,17 +40,12 @@
           };
           image = cfg.containers.example;
           autoStart = true;
-          volumes =
-            [
-              "${config.neo.core.volumes.appdata}/example/config:/config"
-              "${config.neo.core.volumes.appdata}/example/database:/database"
-              "${config.neo.core.volumes.media}:/srv/Media"
-              "${config.neo.core.volumes.documents}:/srv/Documents"
-            ]
-            ++ (lib.mapAttrsToList (
-                hostVol: containerPath: "${config.neo.core.volumes.${hostVol}}:${containerPath}"
-              )
-              cfg.additionalMountPoints);
+          volumes = [
+            "${config.neo.core.volumes.appdata}/example/config:/config"
+            "${config.neo.core.volumes.appdata}/example/database:/database"
+            "${config.neo.core.volumes.media}:/srv/Media"
+            "${config.neo.core.volumes.documents}:/srv/Documents"
+          ];
           networks = ["internal"];
         };
       };

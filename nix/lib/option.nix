@@ -19,6 +19,7 @@
 #
 # Within a group, use local ranks again (0, 10, 20, …). SSH fields use
 # mkSshConnectionOptions { rankBase = N; } → host/user/sshKey/extra at N..N+30.
+# Bind mounts: mkAdditionalMountPoints { rank = N; } → list of { localPath, containerPath }.
 #
 # Usage in option.nix files:
 #   with lib;

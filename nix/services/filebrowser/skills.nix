@@ -18,7 +18,8 @@
         Browse/upload files on configured host mounts (Documents etc.).
 
         ## Architecture notes
-        - Mounts neo volumes (e.g. documents) into container
+        - Default mounts: media → /srv/Media, documents → /srv/Documents, appdata → /srv/AppData
+        - Extra mounts: `additionalMountPoints` list of `{ localPath, containerPath }`
 
         ## Credentials
         - App users may be app-managed; edge tinyauth typically required
@@ -26,7 +27,7 @@
 
         ## Procedures
         1. Health-check
-        2. Confirm mounts in settings (additionalMountPoints if any)
+        2. Confirm default mounts under /srv; add extras via additionalMountPoints if needed
         3. Fix permissions on host volumes if uploads fail
 
         ## Pitfalls

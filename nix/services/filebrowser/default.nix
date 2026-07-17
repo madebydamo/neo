@@ -48,10 +48,7 @@
               "${config.neo.core.volumes.documents}:/srv/Documents"
               "${config.neo.core.volumes.appdata}:/srv/AppData"
             ]
-            ++ (lib.mapAttrsToList (
-                hostVol: containerPath: "${config.neo.core.volumes.${hostVol}}:${containerPath}"
-              )
-              cfg.additionalMountPoints);
+            ++ lib.neo.toOciBindMounts cfg.additionalMountPoints;
           networks = ["internal"];
         };
       };
