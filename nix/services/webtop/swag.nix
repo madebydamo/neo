@@ -1,4 +1,4 @@
-# Webtop reverse proxy for SWAG (HTTP upstream on Selkies port 3000).
+# Webtop reverse proxy for SWAG (HTTP upstream on CUSTOM_PORT / cfg.port, default 3050).
 # proxy.conf already sets Upgrade/Connection for websockets — do not re-set them.
 {...}: {
   flake.modules.nixos.webtop-swag = {

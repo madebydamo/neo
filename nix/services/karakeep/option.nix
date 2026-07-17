@@ -88,7 +88,8 @@
               containers = ["karakeep" "karakeep-chrome"];
               internalContainers = ["karakeep-meilisearch"];
               networks = ["internal"];
-              ports = [3000];
+              # Web UI + Chrome remote debugging (shared gluetun netns; must not collide with other VPN services).
+              ports = [3000 9222];
             }
             // lib.neo.mkContainerDefinitions {
               karakeep = "ghcr.io/karakeep-app/karakeep:release";

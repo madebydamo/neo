@@ -15,9 +15,9 @@
               enabled = mkEnableOption "webtop browser desktop (LinuxServer)" {rank = 0;};
               port = mkOption {
                 type = types.port;
-                default = 3000;
+                default = 3050;
                 internal = true;
-                description = "Internal HTTP port for the Selkies web desktop (proxied by SWAG)";
+                description = "Internal HTTP port for the Selkies web desktop (proxied by SWAG; CUSTOM_PORT)";
               };
               title = mkOption {
                 type = types.str;
@@ -37,10 +37,9 @@
               auth.enabled = true;
             }
             // lib.neo.mkVpnOptions {
-              # Outbound desktop traffic via gluetun when vpn.enabled = true (default off).
               containers = ["webtop"];
               networks = ["internal"];
-              ports = [3000];
+              ports = [3050 3051 8082];
             }
             // lib.neo.mkContainerDefinitions {
               # Lightweight Ubuntu + XFCE. Other distros/DEs: change the tag only

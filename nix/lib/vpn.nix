@@ -34,7 +34,11 @@
                   type = types.listOf types.port;
                   internal = true;
                   default = ports;
-                  description = "Host ports exposed by the VPN-routed containers (for firewall rules/validation)";
+                  description = ''
+                    Listen ports of VPN-routed containers in this service.
+                    Used for conflict detection: all containers with vpn.enabled share gluetun's network
+                    namespace, so these ports must be unique across every VPN-routed service.
+                  '';
                 };
                 networks = mkOption {
                   type = types.listOf types.str;

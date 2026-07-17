@@ -20,12 +20,14 @@
         ## Architecture notes
         - gluetun container provides network for opted-in services
         - Options: wireguard private/preshared keys, addresses, provider/countries
+        - VPN-routed containers share gluetun's network namespace: listen ports in each service's `vpn.ports` must be unique (asserted at eval time)
 
         ## Credentials
         - WireGuard keys in `services.vpn` — highly sensitive
 
         ## Pitfalls
         - Misconfig breaks all VPN-attached services' networking
+        - Two services with `vpn.enabled` claiming the same port fail Nix evaluation with a clear conflict list
 
         ## Verification
         - Gluetun healthy; egress IP matches provider
