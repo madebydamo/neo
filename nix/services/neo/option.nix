@@ -61,6 +61,7 @@
                 Use the sidebar on the left (in the main navigator) to quickly jump between your self-hosted apps.
               '';
               githubUrl = "https://github.com/madebydamo/neo";
+              rank = 0;
             }
             // lib.neo.mkSkillOptions {};
         };

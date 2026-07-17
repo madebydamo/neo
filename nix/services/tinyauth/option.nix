@@ -56,6 +56,7 @@
               projectUrl = "https://tinyauth.app/";
               githubUrl = "https://github.com/tinyauthapp/tinyauth";
               releaseUrl = "https://github.com/tinyauthapp/tinyauth/releases";
+              rank = 10;
             }
             // lib.neo.mkSkillOptions {};
         };
