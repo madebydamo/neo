@@ -34,7 +34,11 @@
 
         ## Credentials
         - Required: `services.hermes.dashboardPassword` (Generate helper); optional `gatewayToken`, Telegram bot token
-        - LLM API keys (`xaiApiKey`, `anthropicApiKey`, `openaiApiKey`) are optional in settings — prefer setting them in the Hermes dashboard
+        - LLM: optional API keys (`xaiApiKey`, `anthropicApiKey`, `openaiApiKey`) **or** OAuth (no key)
+        - xAI OAuth (no API key): set `modelProvider = "xai-oauth"`, optional `defaultModel`, then:
+          `sudo -u hermes env HERMES_HOME=<stateDir>/.hermes hermes auth add xai-oauth`
+        - Optional pins: `defaultModel`, `modelProvider` — leave empty so Nix does not overwrite model.*
+        - Hermes NixOS managed mode blocks dashboard model/config saves; pin via Neo settings or OAuth CLI
         - Read from `/etc/neo/settings.toml` or Neo UI — do not invent keys
         - Dashboard internal basic auth is auto-posted by SWAG; operators use tinyauth only
 
@@ -43,11 +47,14 @@
         2. Confirm AGENTS.md present in workspace
         3. Confirm Neo skills appear (`/neo-homeserver`, `/neo-*`)
         4. Config changes: edit hermes options in settings → activate
+        5. OAuth-only: clear API keys, set modelProvider if needed, run `hermes auth add …` as user hermes
 
         ## Pitfalls
         - Clearing hermes appdata wipes memory, sessions, local skills, and custom SOUL
         - Agent-created skills under HERMES_HOME/skills override external Neo skills with the same name
         - Managed Neo skills are replaced on rebuild — do not edit the store path
+        - Setting `xaiApiKey` forces provider `xai` (API key path), not `xai-oauth`
+        - Dashboard cannot switch models under Nix managed mode — use Neo options or OAuth CLI
 
         ## Verification
         - Both units active; dashboard reachable behind tinyauth; chat responds

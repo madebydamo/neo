@@ -15,32 +15,51 @@
   }: let
     cfg = config.neo.services.hermes;
 
-    hermesSettings = {
-      model = {
+    # Only pin model.* when the operator set them or an API key implies a provider.
+    # Omitting keys leaves config.yaml free for OAuth / prior values (Nix merge preserves
+    # user keys it does not declare). Hermes managed mode still blocks dashboard saves.
+    nonEmpty = v: v != null && v != "";
+
+    derivedProvider =
+      if nonEmpty cfg.modelProvider
+      then cfg.modelProvider
+      else if nonEmpty cfg.xaiApiKey
+      then "xai"
+      else if nonEmpty cfg.anthropicApiKey
+      then "anthropic"
+      else if nonEmpty cfg.openaiApiKey
+      then "openai"
+      else null;
+
+    modelSection =
+      (lib.optionalAttrs (nonEmpty cfg.defaultModel) {
         default = cfg.defaultModel;
-        provider =
-          if (cfg.xaiApiKey != null)
-          then "xai"
-          else if (cfg.anthropicApiKey != null)
-          then "anthropic"
-          else "openrouter";
+      })
+      // (lib.optionalAttrs (derivedProvider != null) {
+        provider = derivedProvider;
+      });
+
+    hermesSettings =
+      {
+        telegram = {
+          channel_prompts = cfg.telegramGroups or {};
+        };
+        toolsets = ["all"];
+        terminal = {
+          backend = "local";
+          cwd = "${cfg.stateDir}/workspace";
+        };
+        api = {
+          enabled = true;
+          port = cfg.gatewayPort;
+        };
+        dashboard = {
+          theme = "default";
+        };
+      }
+      // lib.optionalAttrs (modelSection != {}) {
+        model = modelSection;
       };
-      telegram = {
-        channel_prompts = cfg.telegramGroups or {};
-      };
-      toolsets = ["all"];
-      terminal = {
-        backend = "local";
-        cwd = "${cfg.stateDir}/workspace";
-      };
-      api = {
-        enabled = true;
-        port = cfg.gatewayPort;
-      };
-      dashboard = {
-        theme = "default";
-      };
-    };
 
     # Fixed internal username — SWAG auto-login posts this; operators never type it.
     dashboardAuthUsername = "neo";

@@ -1,5 +1,5 @@
 # Hermes service options.
-# Order: enabled → required secrets → Telegram → optional LLM keys → model/soul → proxy/skill.
+# Order: enabled → required secrets → Telegram → optional LLM keys → model/provider/soul → proxy/skill.
 {...}: {
   flake.modules.nixos.hermes-option = {
     config,
@@ -87,13 +87,14 @@
                 '';
               };
 
-              # Optional: can also be configured in the Hermes dashboard after first boot.
+              # Optional LLM credentials. Prefer OAuth (e.g. xAI) without keys; API keys pin provider=xai|…
               xaiApiKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 60;
                 description = ''
-                  Optional xAI (Grok) API key. Leave empty to set the key in the Hermes dashboard instead.
+                  Optional xAI (Grok) API key. When set, Neo pins model.provider = "xai".
+                  Leave empty for xAI OAuth (set modelProvider = "xai-oauth") or other providers.
                 '';
               };
 
@@ -102,7 +103,8 @@
                 default = null;
                 rank = 70;
                 description = ''
-                  Optional Anthropic (Claude) API key. Leave empty to set the key in the Hermes dashboard instead.
+                  Optional Anthropic (Claude) API key. When set, Neo pins model.provider = "anthropic"
+                  unless modelProvider is set explicitly.
                 '';
               };
 
@@ -111,7 +113,8 @@
                 default = null;
                 rank = 80;
                 description = ''
-                  Optional OpenAI API key. Leave empty to set the key in the Hermes dashboard instead.
+                  Optional OpenAI API key. When set, Neo pins model.provider = "openai"
+                  unless modelProvider is set explicitly.
                 '';
               };
 
@@ -120,8 +123,26 @@
                 default = "grok-build-latest";
                 rank = 85;
                 description = ''
-                  Default LLM model for the agent (e.g. "grok-4.20-0309-reasoning",
-                  "claude-sonnet-4", "gpt-4o"). Can also be changed in the dashboard.
+                  Optional default LLM model id written to config.yaml as model.default
+                  (e.g. "grok-4", "grok-build-latest", "claude-sonnet-4").
+                  Leave empty so Nix does not pin the model — Hermes/OAuth or prior
+                  config.yaml values are preserved across rebuilds.
+                  Note: under the Hermes NixOS module, the dashboard cannot save model
+                  changes (managed mode); pin here or use CLI OAuth flows that write auth.json.
+                '';
+              };
+
+              modelProvider = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                rank = 86;
+                description = ''
+                  Optional model.provider for config.yaml (e.g. "xai-oauth", "xai", "anthropic",
+                  "openai", "openrouter"). Explicit value always wins.
+                  If unset, Neo derives from API keys (xaiApiKey → xai, anthropicApiKey → anthropic,
+                  openaiApiKey → openai); if no keys either, provider is not written so OAuth or
+                  an existing config.yaml provider is left alone.
+                  For xAI SuperGrok OAuth without an API key: modelProvider = "xai-oauth".
                 '';
               };
 
