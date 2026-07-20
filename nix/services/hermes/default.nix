@@ -190,17 +190,11 @@
         linger = true;
       };
 
-      security.sudo.extraRules = [
-        {
-          users = ["hermes"];
-          commands = [
-            {
-              command = "ALL";
-              options = ["NOPASSWD" "SETENV"];
-            }
-          ];
-        }
-      ];
+      # Agent needs unrestricted host control (docker, systemctl, package tools, …).
+      security.sudo.extraRules = lib.neo.mkSudoExtraRules {
+        users = ["hermes"];
+        all = true;
+      };
 
       # Agent-oriented CLIs system-wide when Hermes is on (jq, fd, yq, …).
       environment.systemPackages = agentCliTools;

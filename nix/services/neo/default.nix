@@ -12,29 +12,6 @@
     cfg = config.neo.services.neo;
     neoPkg = self.packages.${pkgs.stdenv.hostPlatform.system}.neo;
     swagDomain = config.neo.services.swag.domain;
-    secRuleBuilder = pkg: name: [
-      {
-        command = "${pkg}/bin/${name}";
-        options = [
-          "NOPASSWD"
-          "SETENV"
-        ];
-      }
-      {
-        command = "/run/current-system/sw/bin/${name}";
-        options = [
-          "NOPASSWD"
-          "SETENV"
-        ];
-      }
-      {
-        command = "/nix/store/*-nixos-rebuild-*/bin/${name}";
-        options = [
-          "NOPASSWD"
-          "SETENV"
-        ];
-      }
-    ];
   in {
     config = lib.mkIf cfg.enabled {
       systemd.services.neo-web = {
@@ -90,31 +67,43 @@
         ];
       };
 
-      # neo-web runs as homeserver and uses `sudo -n` for privileged ops
-      # (units, activate via systemd-run, store repair). Keep NOPASSWD in sync
-      # with every binary the web UI may invoke under sudo.
-      security.sudo.extraRules = [
-        {
-          users = ["homeserver"];
-          commands =
-            (secRuleBuilder pkgs.nixos-rebuild "nixos-rebuild")
-            ++ (secRuleBuilder pkgs.systemd "systemctl")
-            ++ (secRuleBuilder pkgs.systemd "journalctl")
-            ++ (secRuleBuilder pkgs.systemd "systemd-run")
-            ++ (secRuleBuilder pkgs.coreutils "rm")
-            # Store repair from the web UI (`sudo -n nix-store --verify --repair`).
-            ++ (secRuleBuilder pkgs.nix "nix-store")
-            ++ [
-              {
-                command = "/nix/store/*-nix-*/bin/nix-store";
-                options = [
-                  "NOPASSWD"
-                  "SETENV"
-                ];
-              }
-            ];
-        }
-      ];
+      # neo-web runs as homeserver and uses `sudo -n` for privileged ops.
+      # Keep in sync with every binary the web UI / activate path may invoke under sudo.
+      security.sudo.extraRules = lib.neo.mkSudoExtraRules {
+        users = ["homeserver"];
+        commands = [
+          # activate (web trigger → systemd-run → neo activate)
+          {
+            package = pkgs.nixos-rebuild;
+            name = "nixos-rebuild";
+          }
+          # unit status / start / stop / restart (web UI + activate cleanup)
+          {
+            package = pkgs.systemd;
+            name = "systemctl";
+          }
+          # live logs dialog (journalctl -f)
+          {
+            package = pkgs.systemd;
+            name = "journalctl";
+          }
+          # web apply/update: spawn neo-activate@ / neo-update@ oneshots
+          {
+            package = pkgs.systemd;
+            name = "systemd-run";
+          }
+          # clear appdata (stop → rm -rf → start)
+          {
+            package = pkgs.coreutils;
+            name = "rm";
+          }
+          # store repair (`sudo -n nix-store --verify --repair`)
+          {
+            package = pkgs.nix;
+            name = "nix-store";
+          }
+        ];
+      };
     };
   };
 }

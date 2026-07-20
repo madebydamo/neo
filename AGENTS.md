@@ -12,7 +12,7 @@ NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) plus a R
 |--------|----------------|
 | **Dendritic modules** | Every non-entrypoint `.nix` under `nix/` is auto-imported. One concern per file; no manual import list in root `flake.nix`. |
 | **Service split** | `nix/services/<name>/{option,default,swag}.nix` — options, impl (`mkIf`), reverse-proxy. |
-| **`lib.neo` helpers** | Activation scripts, reverse-proxy/auth, container image options, systemd unit lists, web UI helpers. |
+| **`lib.neo` helpers** | Activation scripts, reverse-proxy/auth, container image options, systemd unit lists, sudo extraRules, web UI helpers. |
 | **settings.toml → neo** | Deploy flake maps TOML into `config.neo` (see `templates/homeserver/modules/settings.nix`). |
 | **Plugins as flakes** | Extra inputs `plugin0…` export `nixosModules.default`; same option namespace. |
 | **CLI + web UI** | `cli/`: clap commands; `neo web` edits TOML against live option schema. |
@@ -86,6 +86,7 @@ in {
   Extra non-docker units: `extraUnits = [ "my-setup" ];` inside `mkContainerDefinitions` (do not call `mkSystemdUnits` after it — that overwrites docker units).
 - Units only (no containers): `// lib.neo.mkSystemdUnits [ "unit" ];`.
 - Appdata (for web UI “Clear appdata”): `// lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/<name>";`.
+- Passwordless sudo for a service user: `security.sudo.extraRules = lib.neo.mkSudoExtraRules { users = ["homeserver"]; commands = [ { package = pkgs.systemd; name = "systemctl"; } ]; };` (or `all = true` for unrestricted). Do not hand-roll path triples.
 - Hermes skill options: `// lib.neo.mkSkillOptions {};` on every service submodule (like reverse-proxy hooks).
 - Volumes: `config.neo.core.volumes.appdata` (etc.), not hard-coded paths.
 - Internal services: Docker `networks = ["internal"];`, `restart` always where applicable.

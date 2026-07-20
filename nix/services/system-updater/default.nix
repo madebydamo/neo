@@ -86,113 +86,28 @@
         };
       };
 
-      # Allow homeserver to run rebuild/GC/systemctl (web UI activate, manual neo).
-      security.sudo.extraRules = [
-        {
-          users = ["homeserver"];
-          commands = [
-            {
-              command = "${pkgs.nixos-rebuild}/bin/nixos-rebuild";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/run/current-system/sw/bin/nixos-rebuild";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/nix/store/*-nixos-rebuild-*/bin/nixos-rebuild";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "${pkgs.nix}/bin/nix-collect-garbage";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/run/current-system/sw/bin/nix-collect-garbage";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/nix/store/*-nix-*/bin/nix-collect-garbage";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            # Also used by neo-web store repair.
-            {
-              command = "${pkgs.nix}/bin/nix-store";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/run/current-system/sw/bin/nix-store";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/nix/store/*-nix-*/bin/nix-store";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/run/current-system/sw/bin/systemctl";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "${pkgs.systemd}/bin/systemctl";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/nix/store/*-systemd-*/bin/systemctl";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/run/current-system/sw/bin/systemd-run";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-            {
-              command = "/nix/store/*-systemd-*/bin/systemd-run";
-              options = [
-                "NOPASSWD"
-                "SETENV"
-              ];
-            }
-          ];
-        }
-      ];
+      # homeserver runs neo bootstrap/update/activate and optional GC as this user.
+      # (web UI store repair / journalctl / systemd-run / rm live on neo.services.neo)
+      security.sudo.extraRules = lib.neo.mkSudoExtraRules {
+        users = ["homeserver"];
+        commands = [
+          # neo activate → sudo nixos-rebuild switch
+          {
+            package = pkgs.nixos-rebuild;
+            name = "nixos-rebuild";
+          }
+          # neo activate → systemctl reset-failed/stop of rebuild unit
+          {
+            package = pkgs.systemd;
+            name = "systemctl";
+          }
+          # scheduled GC before update (`sudo nix-collect-garbage --delete-older-than …`)
+          {
+            package = pkgs.nix;
+            name = "nix-collect-garbage";
+          }
+        ];
+      };
     };
   };
 }
