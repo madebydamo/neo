@@ -8,6 +8,50 @@ const serviceIframes = {};   // key -> iframe element
 // Drop legacy deep-link cache from older navigator builds (one-shot cleanup).
 try { localStorage.removeItem('neo-last-urls'); } catch (e) {}
 
+// --- Mobile collapsible sidebar (drawer) ---
+// md+ keeps the sidebar always visible (static); below md it is an off-canvas drawer.
+const MOBILE_NAV_MQ = '(max-width: 767px)';
+
+function isMobileNav() {
+  return window.matchMedia(MOBILE_NAV_MQ).matches;
+}
+
+function openSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  const toggle = document.getElementById('sidebar-toggle');
+  if (!sidebar) return;
+  sidebar.dataset.open = 'true';
+  sidebar.classList.remove('-translate-x-full');
+  sidebar.classList.add('translate-x-0');
+  if (backdrop) backdrop.classList.remove('hidden');
+  if (toggle) toggle.setAttribute('aria-expanded', 'true');
+}
+
+function closeSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  const toggle = document.getElementById('sidebar-toggle');
+  if (!sidebar) return;
+  sidebar.dataset.open = 'false';
+  // On desktop the md:translate-x-0 utility keeps it visible; only hide off-canvas on mobile.
+  sidebar.classList.add('-translate-x-full');
+  sidebar.classList.remove('translate-x-0');
+  if (backdrop) backdrop.classList.add('hidden');
+  if (toggle) toggle.setAttribute('aria-expanded', 'false');
+}
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar && sidebar.dataset.open === 'true') closeSidebar();
+  else openSidebar();
+}
+
+// Keep drawer state sane when rotating / resizing past the md breakpoint.
+window.matchMedia(MOBILE_NAV_MQ).addEventListener('change', (e) => {
+  if (!e.matches) closeSidebar();
+});
+
 function getViewerHost() {
   return document.getElementById('viewer-host');
 }
@@ -205,6 +249,8 @@ function handleSidebarClick(e, subOrKey, domain, btn) {
   }
 
   loadService(subOrKey, domain, btn);
+  // Free up the viewport after picking a service on mobile.
+  if (isMobileNav()) closeSidebar();
 }
 
 function loadService(subdomain, domain, btn) {
@@ -353,17 +399,22 @@ function openInNewTab() {
   }
 }
 
-// Keyboard hint: press / to focus first service
+// Keyboard: / focuses first service; Escape closes mobile drawer
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && isMobileNav()) {
+    closeSidebar();
+    return;
+  }
   if (e.key === '/' && document.activeElement.tagName === 'BODY') {
     e.preventDefault();
+    if (isMobileNav()) openSidebar();
     const first = document.querySelector('.svc-btn');
     if (first) first.click();
   }
 });
 
 // Right-click on sidebar items: hard-evict (unload) a warm service
-const sidebar = document.querySelector('.w-16.bg-base-200');
+const sidebar = document.getElementById('sidebar');
 if (sidebar) {
   sidebar.addEventListener('contextmenu', (e) => {
     const btn = e.target.closest('.svc-btn');
