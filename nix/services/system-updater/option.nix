@@ -23,8 +23,8 @@
               };
               garbageCollectOlderThen = mkOption {
                 type = types.nullOr types.str;
-                default = "60d";
-                description = "Value passed to nix-collect-garbage --delete-older-than at the end of each auto-update (e.g. 60d, 30d); set to null to skip GC";
+                default = "30d";
+                description = "Value passed to nix-collect-garbage --delete-older-than at the end of each auto-update (e.g. 30d, 60d); set to null to skip GC. When set, also enables nix keep-outputs so build-time deps (e.g. Rust crate builds) survive GC while their generation is still live";
                 rank = 20;
               };
             }
