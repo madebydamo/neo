@@ -1,198 +1,73 @@
 # AGENTS.md — Neo development guide
 
-Concise map for humans and coding agents. Product overview: [README.md](README.md). Install: [docs/INSTALL.md](docs/INSTALL.md). Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Map for humans and coding agents. Deeper docs: [README.md](README.md), [docs/INSTALL.md](docs/INSTALL.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/CLI.md](docs/CLI.md), [docs/PLUGINS.md](docs/PLUGINS.md).
 
 ## What this is
 
-NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) plus a Rust **`neo` CLI** (crane). Operators configure via `settings.toml`; modules turn that into OCI services, SWAG, volumes, and optional Disko/ZFS. No traditional unit-test suite—validate with `nix flake check`, `just` VM loop, and smoke checks over SSH.
+NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) + Rust **`neo` CLI**. Operators set `settings.toml` → `config.neo` → OCI services, SWAG, volumes. **Default validation: live QEMU smoke test** (`just launch` → guest checks → `https://<subdomain>.<domain>`).
 
-## Architecture (what is special)
+| Area | Layout |
+|------|--------|
+| Services | `nix/services/<name>/{option,default,swag,skills}.nix` — auto-imported; **never** `imports = [ ./sibling.nix ]` |
+| Lib | `nix/lib/` → `lib.neo` (proxy, containers, activation, skills, sudo, …) |
+| Deploy template | `templates/homeserver` (`#homeserver`); plugins: `templates/plugin` |
+| Operator config | `settings.toml` → `build/` via `neo init` (secrets: do not commit real ones) |
+| CLI | `cli/` (clap); web UI under `commands/web/` |
 
-| Choice | Why it matters |
-|--------|----------------|
-| **Dendritic modules** | Every non-entrypoint `.nix` under `nix/` is auto-imported. One concern per file; no manual import list in root `flake.nix`. |
-| **Service split** | `nix/services/<name>/{option,default,swag}.nix` — options, impl (`mkIf`), reverse-proxy. |
-| **`lib.neo` helpers** | Activation scripts, reverse-proxy/auth, container image options, systemd unit lists, sudo extraRules, web UI helpers. |
-| **settings.toml → neo** | Deploy flake maps TOML into `config.neo` (see `templates/homeserver/modules/settings.nix`). |
-| **Plugins as flakes** | Extra inputs `plugin0…` export `nixosModules.default`; same option namespace. |
-| **CLI + web UI** | `cli/`: clap commands; `neo web` edits TOML against live option schema. |
-| **VM-first dev** | `just build` / `launch` / `ssh` against QEMU; `tools/id_ed25519` for SSH. |
+## just (primary tools)
 
-## Repository map
+| Recipe | Role |
+|--------|------|
+| **`just launch`** | Default loop: shutdown → build → QEMU (SSH **:2222**, key `tools/id_ed25519`) |
+| `just build` | `neo nuke` → `init` → `build` |
+| `just status` / `shutdown` | VM health / stop |
+| `just exec 'CMD'` / `just logs SVC` / `just ssh` | Guest shell / `journalctl -b -u SVC` |
+| `just format` / `just check` | alejandra + cargo fmt / flake check |
 
-| Path | Role |
-|------|------|
-| `flake.nix` | Inputs + `flake-parts` + `import-tree ./nix` |
-| `nix/lib/` | `lib.neo` (activation, reverseProxy, containers, helpers, …) |
-| `nix/modules/` | core, cli, disko, flakeparts |
-| `nix/services/<name>/` | Built-in services |
-| `nix/output/` | nixos configs, templates registration, devshell, systems |
-| `cli/` | Rust `neo` + static/templates for web UI |
-| `templates/homeserver` | `nix flake init` target for deploys (`#homeserver`) |
-| `templates/plugin` | Skeleton for a plugin flake (`#plugin`) |
-| `justfile` | format, check, VM build/launch/ssh |
-| `build/` | Local init output (dev; gitignored-ish workflow) |
-| `docs/` | INSTALL, ARCHITECTURE, CLI, PLUGINS |
-| `settings.toml` | Local/dev operator settings (may contain secrets—do not commit real secrets) |
+**Flakes only see git-tracked files** — `git add` new `nix/` paths before `just launch`.
 
-## Commands
+## Add a service
 
-```bash
-# VM / integration
-just build      # neo nuke → init → build (qcow / VM)
-just launch     # shutdown + build + QEMU (SSH :2222)
-just ssh        # root@localhost -p 2222
-just exec CMD   # run CMD in VM
-just logs SVC   # journalctl -b -u SVC
-just status     # QEMU / monitor / SSH / disk
-just shutdown
+1. `option.nix` — `enabled`, `// lib.neo.mkReverseProxyOptions`, `mkContainerDefinitions`, `mkAppdata`, `mkServiceMeta`, `mkSkillOptions`
+2. `default.nix` — `mkIf`, activation dirs, `oci-containers` on `networks = ["internal"]`
+3. `swag.nix` if public; `skills.nix` for Hermes (`mkServiceSkill`)
+4. Enable in **`settings.toml`**: `[services.<name>] enabled = true`
+5. `git add` → **`just launch`** → smoke test below → `just format && just check`
 
-# Lint
-just format     # alejandra .
-just check      # nix flake check (root + build/)
+Naming: options snake_case under `neo.services.*`; plain-string descriptions; volumes via `config.neo.core.volumes.*`.
 
-# Nix / CLI
-nix flake check -L
-nix build .#neo
-nix run .#neo -- --help
-nix develop     # Rust/Cargo env with tools
-```
+**SWAG traps:** `include /config/nginx/proxy.conf` already sets Upgrade/Connection and proxy timeouts — **do not re-set** them (426 WebSockets / `proxy_*_timeout` duplicate kills all vhosts).
 
-**Rust:** `cargo fmt`, `cargo clippy -- -D warnings` (prefer via `nix develop`).
+**tinyauth:** default edge auth. Health probes need `auth.publicPaths` (e.g. `^/api/v1/info/status$`). UI stays 302 → tinyauth.
 
-## Conventions
+**Hermes:** per-service `skills.nix` → `neo-<name>`; use `mkServiceSkill`; credentials = real settings keys only. Collector: `nix/services/hermes/skills.nix`.
 
-### Nix
+**Rust:** clap, `anyhow::Result`, `?` + `.context`, `toml_edit::DocumentMut`; no `unwrap` in lib paths.
 
-- Files end in `.nix`; start with a short `#` comment; prefer under 200 lines.
-- **import-tree owns discovery** — every `.nix` under `nix/` is auto-imported via `flake.nix` (`import-tree ./nix`). **Never** `imports = [ ./option.nix ./swag.nix ]` (or any sibling path) in service modules; that fights the dendritic layout and double-loads modules.
-- Service split: one concern per file, each exporting a `flake.modules.nixos.*` attr (flake-parts modules). Siblings are independent modules, not manually imported:
+## Live VM smoke test (default acceptance)
 
-```nix
-# option.nix — options only
-{...}: {
-  flake.modules.nixos.example-option = { config, lib, ... }:
-    with lib;
-    with {inherit (lib.neo) mkOption mkEnableOption;}; {
-      options.neo.services.example = mkOption {
-        type = types.submodule {
-          options =
-            {
-              enabled = mkEnableOption "example service" {rank = 0;};
-              # …
-            }
-            // lib.neo.mkReverseProxyOptions { subdomain = "example"; }
-            // lib.neo.mkContainerDefinitions { example = "image:tag"; }
-            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/example"
-            // lib.neo.mkServiceMeta { /* … */ }
-            // lib.neo.mkSkillOptions {};
-        };
-        default = {};
-        description = "Example service configuration";
-      };
-    };
-}
-```
-
-```nix
-# default.nix — implementation only (no imports of siblings)
-{...}: {
-  flake.modules.nixos.example = { config, lib, ... }:
-    with lib; let
-      cfg = config.neo.services.example;
-    in {
-      config = mkIf cfg.enabled {
-        # oci-containers, activation, units, …
-      };
-    };
-}
-```
-
-```nix
-# swag.nix — reverse-proxy conf (if publicly proxied)
-{...}: {
-  flake.modules.nixos.example-swag = { config, lib, ... }: let
-    cfg = config.neo.services.example;
-  in {
-    config.neo.services.example.proxyConf = lib.mkDefault ''
-      # nginx server block …
-    '';
-  };
-}
-```
-
-- Options: `enabled = mkEnableOption "…";`, snake_case attrs (`neo.services.*`), camelCase locals.
-- Reverse proxy: `// neo.mkReverseProxyOptions { … }` (or `lib.neo…` where used that way).
-- **WebSockets (SWAG):** `include /config/nginx/proxy.conf` already sets `Upgrade $http_upgrade` and `Connection $connection_upgrade`. **Do not** re-set those headers in `swag.nix` — nginx appends duplicates (`Upgrade: websocket, websocket`), uvicorn/Starlette returns **426**, and browsers show code **1006** / connection refused. Symptom: REST works, `POST /api/auth/ws-ticket` works, only `/api/ws` `/api/pty` `/api/events` fail. Debug: SWAG `access.log` status **426** + body “invalid Upgrade header”. Only set Upgrade/Connection yourself when the location does **not** include `proxy.conf`.
-- Containers: `// lib.neo.mkContainerDefinitions { name = "image:tag"; };` then `image = cfg.containers.name;`.
-  Extra non-docker units: `extraUnits = [ "my-setup" ];` inside `mkContainerDefinitions` (do not call `mkSystemdUnits` after it — that overwrites docker units).
-- Units only (no containers): `// lib.neo.mkSystemdUnits [ "unit" ];`.
-- Appdata (for web UI “Clear appdata”): `// lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/<name>";`.
-- Passwordless sudo for a service user: `security.sudo.extraRules = lib.neo.mkSudoExtraRules { users = ["homeserver"]; commands = [ { package = pkgs.systemd; name = "systemctl"; } ]; };` (or `all = true` for unrestricted). Do not hand-roll path triples.
-- Hermes skill options: `// lib.neo.mkSkillOptions {};` on every service submodule (like reverse-proxy hooks).
-- Volumes: `config.neo.core.volumes.appdata` (etc.), not hard-coded paths.
-- Internal services: Docker `networks = ["internal"];`, `restart` always where applicable.
-- Option UI helpers (tokens, bcrypt, mkpasswd): `helper = lib.neo.helpers.…` — see `nix/lib/helpers/`.
-
-### Hermes skills (homeserver curriculum)
-
-Teach Hermes via three layers (not one mega prompt):
-
-| Layer | Where | Purpose |
-|-------|--------|---------|
-| SOUL.md | `$HERMES_HOME/SOUL.md` | Identity / safety (seeded once by Neo) |
-| AGENTS.md | Hermes workspace | Always-on map: volumes, domain, enabled services, skill index |
-| `/neo-*` skills | `skills.external_dirs` store tree | Per-service runbooks (CLI, architecture, credentials pointers) |
-
-- Per service: `nix/services/<name>/skills.nix` sets `neo.services.<name>.skill.conf` when enabled (parallel to `swag.nix` → `proxyConf`).
-- Collector: `nix/services/hermes/skills.nix` builds the skill tree, sets `services.hermes-agent.settings.skills.external_dirs`, force-writes workspace `AGENTS.md`, seeds SOUL.
-- Helpers: `lib.neo.mkSkillOptions`, `mkSkillMd`, `mkServiceSkill`, `getSkillServices` in `nix/lib/skills.nix`.
-- Prefer `mkServiceSkill { service = "…"; inherit cfg domain; description = "…"; body = ''…''; }` — auto-derives units, containers, subdomain, public URL, appdata, tinyauth, and **`meta.description`** (long product blurb for install guidance).
-- Skill names: `neo-<service>` plus meta `/neo-homeserver`.
-- Credentials: prefer settings keys + “where to create API tokens”; do not invent secrets Neo does not store.
-- Plugins: ship `skills.nix` the same way; auto-imported with the plugin module.
-
-### Rust (`cli/src/`)
-
-- clap derive, `anyhow::Result`, `?` + `.context(…)`, no `unwrap()` in library paths.
-- `toml_edit::DocumentMut` for surgical TOML edits.
-- Commands in `cli/src/commands/`; web under `commands/web/`.
-
-## Workflow: add a service
-
-1. `nix/services/<name>/option.nix` — submodule + proxy/containers/units/meta + `mkSkillOptions` as needed.
-2. `nix/services/<name>/default.nix` — `mkIf`, activation helpers, oci-container.
-3. `nix/services/<name>/swag.nix` if publicly proxied.
-4. `nix/services/<name>/skills.nix` — Hermes skill (`neo-<name>`) with CLI, architecture, credentials guidance.
-5. New volume only if required → `nix/modules/core/`.
-6. `just format && just check`
-7. Optional: `just build && just launch` → `just exec 'systemctl status …'`
-
-Plugins: same patterns inside a separate flake — [docs/PLUGINS.md](docs/PLUGINS.md).
-
-## Verification checklist
-
-- [ ] `just format` / `just check`
-- [ ] Plain-string option descriptions; `lib.neo` helpers for dirs/files/proxy
-- [ ] Dendritic split respected; volumes via `neo.core.volumes.*`
-- [ ] No secrets committed; internal network for private containers
-- [ ] VM smoke test when behavior changes
-
-## Security / agent don'ts
-
-- Do not commit secrets or real API keys.
-- Prefer ports above 1024 for non-root listeners; least privilege.
-- Do not force-push or commit unless the user asks.
-- Prefer fixing root causes over bypassing checks.
-
-## Debug
+Domain = `services.swag.domain` in settings. OCI unit = `docker-<container>`.
 
 ```bash
-just status
-just logs <svc>
-just exec 'journalctl -u <svc> --no-pager -f'
-just exec 'ls -la /var/neo/DATA/AppData/<svc>'
-nix flake check --print-build-logs
+just launch && just status
+just exec 'echo up'                                          # wait until SSH works
+just exec 'systemctl is-active docker-<name> docker-swag docker-tinyauth'
+just logs docker-<name>
+just exec 'docker exec swag curl -sS -m 10 http://<container>:<port>/…'   # internal
+curl -sk -m 20 -w "\n%{http_code}\n" "https://<sub>.<domain>/health…"     # public (publicPaths)
+curl -sk -m 20 -D - -o /dev/null "https://<sub>.<domain>/"                # expect 302 → tinyauth
 ```
 
-CLI details: [docs/CLI.md](docs/CLI.md).
+**Pass:** unit active, internal OK, public health **200** (if bypassed), UI **302** to tinyauth, no SWAG `emerg`. Iterate: fix → `git add` → `just launch`.
+
+```bash
+# Debug extras
+just exec 'docker logs <name> 2>&1 | tail -80'
+just exec 'docker logs swag 2>&1 | tail -40'
+just exec 'docker exec swag cat /config/nginx/proxy-confs/<sub>.subdomain.conf'
+```
+
+## Don'ts
+
+- No secrets in git; no force-push/commit unless asked; fix root causes.
+- No sibling `imports` in dendritic modules; no hand-rolled sudo path triples (`mkSudoExtraRules`).
