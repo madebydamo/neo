@@ -48,6 +48,18 @@ in {
           inputs = [];
         };
 
+        # 16 random bytes as 32 hex characters (openssl rand -hex 16).
+        # Use for keys that must be exactly 32 hex chars (e.g. Activepieces AP_ENCRYPTION_KEY).
+        randomToken32Hex = mkHelper {
+          id = "random-token-32-hex";
+          kind = "button";
+          label = "Generate";
+          description = "Fill with 32 random hex characters (16 bytes).";
+          apply = "set";
+          script = scripts + "/random-token-32-hex.sh";
+          inputs = [];
+        };
+
         bcryptUser = mkHelper {
           id = "bcrypt-user";
           kind = "form";
