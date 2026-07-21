@@ -27,7 +27,7 @@
               category = "Core";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/watchtower.svg";
               description = ''
-                Periodically pulls newer images for every enabled service's declared Docker containers (from the central containers registry) and restarts the corresponding docker-* units when a newer image is downloaded. Provides a declarative, UI-integrated alternative to watchtower without extra runtime containers. Image tags are configurable per-container under each service's "containers" setting (applied on activate).
+                Periodically pulls newer images for every enabled service's declared Docker containers (from the central containers registry) and restarts the corresponding docker-* units when a newer image is downloaded. Shared images (e.g. the same redis:tag used by several services) are pulled once; every consumer container is restarted when that image ID changes. Provides a declarative, UI-integrated alternative to watchtower without extra runtime containers. Image tags are configurable per-container under each service's "containers" setting (applied on activate).
               '';
             }
             // lib.neo.mkSkillOptions {};

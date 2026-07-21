@@ -1,4 +1,7 @@
 # Docker auto-updater implementation: scheduled pulls + restarts using the containers registry from lib/containers.nix.
+#
+# Images are often shared across services (e.g. redis:7 for paperless + activepieces).
+# Pull once per unique image; if the image ID changes, restart every container that uses it.
 {...}: {
   flake.modules.nixos.docker-updater = {
     config,
@@ -10,19 +13,33 @@
       cfg = config.neo.services."docker-updater";
       containers = neo.getAllContainers config;
 
+      # Group by image so a single pull can restart all consumers of that image.
+      containersByImage = groupBy (c: c.image) containers;
+
       updateScript = pkgs.writeShellScript "neo-docker-update" ''
         set -euo pipefail
-        ${concatMapStringsSep "\n" (c: ''
-            echo "[$(date -Iseconds)] Checking ${c.container} (${c.image}) for ${c.service}..."
-            output=$(${pkgs.docker}/bin/docker pull ${escapeShellArg c.image} 2>&1 || true)
-            if echo "$output" | grep -qE "(Downloaded newer image|Status: Downloaded newer image)"; then
-              echo "  Newer image downloaded; restarting docker-${c.container}"
-              ${pkgs.systemd}/bin/systemctl restart "docker-${c.container}" || true
-            else
-              echo "  Up to date or no change."
-            fi
-          '')
-          containers}
+        ${concatMapStringsSep "\n" (
+            image: let
+              cs = containersByImage.${image};
+              consumers = concatMapStringsSep ", " (c: "${c.container} (${c.service})") cs;
+            in ''
+              echo "[$(date -Iseconds)] Checking ${escapeShellArg image} (used by: ${consumers})..."
+              old_id=$(${pkgs.docker}/bin/docker image inspect --format '{{.Id}}' ${escapeShellArg image} 2>/dev/null || echo "none")
+              ${pkgs.docker}/bin/docker pull ${escapeShellArg image} || true
+              new_id=$(${pkgs.docker}/bin/docker image inspect --format '{{.Id}}' ${escapeShellArg image} 2>/dev/null || echo "none")
+              if [ "$old_id" != "$new_id" ] && [ "$new_id" != "none" ]; then
+                echo "  Image updated ($old_id -> $new_id); restarting all consumers"
+                ${concatMapStringsSep "\n" (c: ''
+                    echo "    systemctl restart docker-${c.container} (${c.service})"
+                    ${pkgs.systemd}/bin/systemctl restart "docker-${c.container}" || true
+                  '')
+                  cs}
+              else
+                echo "  Up to date or no change."
+              fi
+            ''
+          )
+          (attrNames containersByImage)}
         echo "Docker update check complete."
       '';
     in {
