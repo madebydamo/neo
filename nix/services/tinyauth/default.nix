@@ -12,14 +12,16 @@
       # Collect all services that have auth enabled.
       authServices = filterAttrs (n: v: v.enabled && (v.auth.enabled or false)) config.neo.services;
 
-      # Generate TINYAUTH_APPS_<NAME>_PATH_ALLOW env vars for services with publicPaths.
+      # Generate TINYAUTH_APPS_<NAME>_* env vars for services with publicPaths / domains.
+      # Tinyauth treats `_` as nested config keys (e.g. APPS_FOO_BAR → apps.foo.bar), so
+      # hyphenated service names must not become FOO_BAR — strip hyphens instead (stirling-pdf → STIRLINGPDF).
       appAclEnvVars =
         foldlAttrs (
           acc: name: svc:
             acc
             // (
               let
-                appName = lib.toUpper (replaceStrings ["-"] ["_"] name);
+                appName = lib.toUpper (replaceStrings ["-"] [""] name);
               in
                 optionalAttrs (svc.auth.publicPaths or [] != []) {
                   "TINYAUTH_APPS_${appName}_PATH_ALLOW" = "(${concatStringsSep "|" svc.auth.publicPaths})";
