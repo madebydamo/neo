@@ -170,12 +170,43 @@ window.configShell = function configShell() {
 };
 
 (function () {
-  /** Instant navbar spinner (no CSS fade — ms requests must not feel like 200ms). */
-  function setNavBusy(on) {
+  /** Client-side page load in flight (HTMX → #config-content). */
+  var navLoadBusy = false;
+
+  /** Server-driven nix eval busy, mirrored from #action-bar-dynamic[data-eval-busy]. */
+  function isEvalBusy() {
+    var bar = document.getElementById('action-bar-dynamic');
+    return !!(bar && bar.getAttribute('data-eval-busy') === 'true');
+  }
+
+  /** Single navbar ring for page load and/or nix eval (plain "Loading" label). */
+  function syncBarBusy() {
     var el = document.getElementById('nav-busy');
     if (!el) return;
-    el.classList.toggle('is-busy', !!on);
+    var on = navLoadBusy || isEvalBusy();
+    el.classList.toggle('is-busy', on);
     el.setAttribute('aria-hidden', on ? 'false' : 'true');
+  }
+
+  /** Instant navbar spinner for config navigations (no CSS fade). */
+  function setNavBusy(on) {
+    navLoadBusy = !!on;
+    syncBarBusy();
+  }
+
+  /** After action-bar swaps (HTTP or WS OOB), re-fold data-eval-busy into #nav-busy. */
+  function syncBarBusyIfActionBar(evt) {
+    try {
+      var t = (evt.detail || {}).target;
+      if (!t) return;
+      if (t.id === 'action-bar-dynamic') {
+        syncBarBusy();
+        return;
+      }
+      if (t.querySelector && t.querySelector('#action-bar-dynamic')) {
+        syncBarBusy();
+      }
+    } catch (e) {}
   }
 
   /** Resolve #config-content whether detail.target is an element or a selector string. */
@@ -249,7 +280,29 @@ window.configShell = function configShell() {
     }
   }
   document.body.addEventListener('htmx:afterRequest', clearNavBusyIfConfig);
-  document.body.addEventListener('htmx:afterSwap', clearNavBusyIfConfig);
+  document.body.addEventListener('htmx:afterSwap', function (evt) {
+    clearNavBusyIfConfig(evt);
+    syncBarBusyIfActionBar(evt);
+  });
+  document.body.addEventListener('htmx:oobAfterSwap', syncBarBusyIfActionBar);
+
+  // WS/OOB replaces #action-bar-dynamic; watch its parent so data-eval-busy
+  // still folds into #nav-busy when htmx target events are sparse.
+  (function observeEvalBusy() {
+    if (typeof MutationObserver === 'undefined') return;
+    var bar = document.getElementById('action-bar-dynamic');
+    var parent = bar && bar.parentNode;
+    if (!parent) return;
+    var mo = new MutationObserver(function () {
+      syncBarBusy();
+    });
+    mo.observe(parent, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-eval-busy'],
+    });
+  })();
   document.body.addEventListener('htmx:responseError', function (evt) {
     clearNavBusyIfConfig(evt);
     try {

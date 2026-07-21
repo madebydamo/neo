@@ -20,15 +20,6 @@ fn action_bar_signature(config: &AppConfig) -> String {
     format!("{busy}|{act}|{upd}|{rep}|{dirty}")
 }
 
-/// Compact spinner in the sticky navbar (same visual language as client-side `#nav-busy`).
-pub fn render_nix_busy_html(config: &AppConfig) -> String {
-    if config.eval_busy.load(Ordering::Relaxed) {
-        r#"<span class="inline-flex items-center gap-1 text-[10px] text-info opacity-90" title="Nix evaluator working"><span class="loading loading-spinner loading-xs"></span><span class="hidden sm:inline">eval</span></span>"#.to_string()
-    } else {
-        String::new()
-    }
-}
-
 fn progress_button(
     kind_label: &str,
     title: &str,
@@ -63,9 +54,11 @@ fn progress_button(
     )
 }
 
-/// Inner HTML of `#action-bar-dynamic` (appearing middle section: busy, pending, reset).
+/// Inner HTML of `#action-bar-dynamic` (pending / reset only).
+/// Eval busy is exposed as `data-eval-busy` on the wrapper so the client can fold it
+/// into the single navbar spinner (`#nav-busy`) with page-load busy.
 /// Uses a single dirty_state pass for pending + reset.
-pub fn render_action_bar_dynamic_inner(config: &AppConfig) -> String {
+fn render_action_bar_dynamic_inner(config: &AppConfig) -> String {
     let d = dirty_state(config);
     let pending = if let Some(id) = activation::find_recent_in_progress_activation() {
         progress_button(
@@ -95,15 +88,23 @@ pub fn render_action_bar_dynamic_inner(config: &AppConfig) -> String {
     } else {
         String::new()
     };
-    format!(r#"{}{}{}"#, render_nix_busy_html(config), pending, reset,)
+    format!(r#"{}{}"#, pending, reset)
+}
+
+/// Full `#action-bar-dynamic` element (optional OOB attr for WS pushes).
+pub fn action_bar_dynamic_element(config: &AppConfig, oob: bool) -> String {
+    let busy = config.eval_busy.load(Ordering::Relaxed);
+    let oob_attr = if oob { r#" hx-swap-oob="true""# } else { "" };
+    format!(
+        r#"<div id="action-bar-dynamic" class="flex items-center gap-2" data-eval-busy="{}"{oob_attr}>{}</div>"#,
+        if busy { "true" } else { "false" },
+        render_action_bar_dynamic_inner(config),
+    )
 }
 
 /// Full OOB fragment for the action bar middle section (htmx ws extension applies it).
 pub fn action_bar_oob_fragment(config: &AppConfig) -> String {
-    format!(
-        r#"<div id="action-bar-dynamic" class="flex items-center gap-2" hx-swap-oob="true">{}</div>"#,
-        render_action_bar_dynamic_inner(config)
-    )
+    action_bar_dynamic_element(config, true)
 }
 
 pub fn broadcast_action_bar(config: &AppConfig) {
