@@ -72,7 +72,10 @@ pub fn shell_quote(s: &str) -> String {
 }
 
 /// Join program + args into a shell-copyable command line (no cwd).
-pub fn shell_join(program: impl AsRef<OsStr>, args: impl IntoIterator<Item = impl AsRef<OsStr>>) -> String {
+pub fn shell_join(
+    program: impl AsRef<OsStr>,
+    args: impl IntoIterator<Item = impl AsRef<OsStr>>,
+) -> String {
     let mut parts = Vec::new();
     parts.push(shell_quote(&program.as_ref().to_string_lossy()));
     for a in args {

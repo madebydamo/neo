@@ -27,9 +27,12 @@ pub fn docker_update(container: &str) -> Result<()> {
     execute_command(&mut Command::new("docker").args(["pull", &img]))?;
 
     let unit = format!("docker-{}", cname);
-    execute_command(
-        &mut Command::new("sudo").args(["systemctl", "restart", &unit, "--no-ask-password"]),
-    )?;
+    execute_command(&mut Command::new("sudo").args([
+        "systemctl",
+        "restart",
+        &unit,
+        "--no-ask-password",
+    ]))?;
 
     println!("✓ docker-update complete for {}", cname);
     Ok(())
