@@ -1,0 +1,10 @@
+{
+  "name": "neo-web-css",
+  "private": true,
+  "version": "0.1.0",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.11",
+    "daisyui": "^5.0.46",
+    "tailwindcss": "^4.1.11"
+  }
+}

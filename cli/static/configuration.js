@@ -551,7 +551,7 @@ window.configShell = function configShell() {
     fields.innerHTML = '';
     (helper.inputs || []).forEach(function (inp) {
       var wrap = document.createElement('div');
-      wrap.className = 'form-control w-full';
+      wrap.className = 'flex flex-col w-full';
       var lab = document.createElement('label');
       lab.className = 'label py-1';
       lab.innerHTML = '<span class="label-text text-sm">' +
@@ -567,7 +567,7 @@ window.configShell = function configShell() {
         el.checked = !!inp.default;
       } else if (inp.type === 'enum' && inp.values && inp.values.length) {
         el = document.createElement('select');
-        el.className = 'select select-bordered select-sm w-full font-mono';
+        el.className = 'select select-sm w-full font-mono';
         inp.values.forEach(function (v) {
           var o = document.createElement('option');
           o.value = v;
@@ -577,7 +577,7 @@ window.configShell = function configShell() {
       } else {
         el = document.createElement('input');
         el.type = inp.type === 'password' ? 'password' : (inp.type === 'int' ? 'number' : 'text');
-        el.className = 'input input-bordered input-sm w-full font-mono';
+        el.className = 'input input-sm w-full font-mono';
         if (inp.placeholder) el.placeholder = inp.placeholder;
         if (inp.type === 'password') el.autocomplete = 'new-password';
         if (inp.default != null) el.value = String(inp.default);

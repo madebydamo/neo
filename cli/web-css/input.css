@@ -1,0 +1,29 @@
+/* Neo web UI — Tailwind v4 + daisyUI v5. Built by packages.neo-web-css. */
+
+@import "tailwindcss";
+
+@source "../templates/**/*.hbs";
+@source "../static/**/*.{js,css,html}";
+@source "../src/**/*.rs";
+@source not "../static/neo-ui.css";
+@source not "./**";
+
+@plugin "daisyui" {
+  themes: all;
+}
+
+:root {
+  --neo-sticky-bar-top: 1.5rem;
+}
+
+[x-cloak] {
+  display: none !important;
+}
+
+/* Explicit display so #nav-busy always hides (no Tailwind utility clash). */
+#nav-busy {
+  display: none;
+}
+#nav-busy.is-busy {
+  display: inline-flex;
+}

@@ -5,7 +5,7 @@
   inputs,
   ...
 }: let
-  packageWrapper = pkgs: cfg: let
+  packageWrapper = pkgs: cfg: neoWebCss: let
     craneLib = inputs.crane.mkLib pkgs;
     src = lib.cleanSourceWith {
       src = self + "/cli";
@@ -39,7 +39,13 @@
       }
     '';
     template_dir = "${self}/cli/templates";
-    static_dir = "${self}/cli/static";
+    static_dir = pkgs.runCommand "neo-static" {} ''
+      mkdir -p $out
+      cp -a ${self}/cli/static/. $out/
+      chmod -R u+w $out
+      rm -f $out/neo-ui.css
+      cp ${neoWebCss}/neo-ui.css $out/neo-ui.css
+    '';
     common = {
       pname = "neo";
       version = "0.1.0";
@@ -70,8 +76,12 @@
     );
   cfgPackage = self.nixosConfigurations.homeserver.config.neo;
 in {
-  perSystem = {pkgs, ...}: {
-    packages.neo = packageWrapper pkgs cfgPackage;
+  perSystem = {
+    pkgs,
+    config,
+    ...
+  }: {
+    packages.neo = packageWrapper pkgs cfgPackage config.packages.neo-web-css;
   };
   flake.modules.nixos.cli = {
     lib,
@@ -81,7 +91,9 @@ in {
   }: {
     config = let
       cfg = config.neo;
-      neoCli = packageWrapper pkgs cfg;
+      system = pkgs.stdenv.hostPlatform.system;
+      neoWebCss = self.packages.${system}.neo-web-css;
+      neoCli = packageWrapper pkgs cfg neoWebCss;
     in {
       environment.systemPackages = [
         neoCli

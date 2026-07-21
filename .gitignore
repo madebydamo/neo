@@ -6,3 +6,4 @@ build/
 nixos-efi-vars.fd
 cli/target
 target
+cli/web-css/node_modules/
