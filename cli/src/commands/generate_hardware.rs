@@ -22,28 +22,21 @@ pub fn generate_hardware(
         return Ok(());
     }
     fs::create_dir_all(config_path).context("create config dir")?;
-    let desc = format!(
-        "nixos-generate-config --no-filesystems --show-hardware-config (in {})",
-        config_path
-    );
-    println!("→ {}", desc);
-    let mut binding = Command::new("nixos-generate-config");
-    let cmd = binding
-        .current_dir(config_path)
-        .arg("--show-hardware-config");
-    let cmd = if disko_enabled {
-        cmd.arg("--no-filesystems")
-    } else {
-        cmd
-    };
+    let mut cmd = Command::new("nixos-generate-config");
+    cmd.current_dir(config_path).arg("--show-hardware-config");
+    if disko_enabled {
+        cmd.arg("--no-filesystems");
+    }
+    let display = crate::commands::format_command(&cmd);
+    println!("→ {display}");
     let output = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .output()
-        .with_context(|| format!("failed to spawn: {}", desc))?;
+        .with_context(|| format!("failed to spawn: {display}"))?;
     if !output.status.success() {
         let stderr = std::string::String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Command failed: {}\nStderr: {}", desc, stderr);
+        anyhow::bail!("Command failed: {display}\nStderr: {stderr}");
     }
     fs::write(
         Path::new(config_path).join("hardware-configuration.nix"),

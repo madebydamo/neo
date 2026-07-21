@@ -160,12 +160,15 @@ fn run(cli: Cli) -> Result<()> {
     // On a full install, run as homeserver so configPath ownership and git identity match.
     if etc_settings.exists() && env::var("USER").unwrap_or_default() != "homeserver" {
         let sudo_bin = cli.sudo_path.as_deref().unwrap_or("sudo");
-        execute_command(Command::new(sudo_bin).arg("-u")
-            .arg("homeserver")
-            .arg(
-                "--preserve-env=NEO_NEO_INPUT,NEO_TEMPLATE,NEO_REMOTE_URL,NIX_BINARY_PATH,SUDO_BINARY_PATH,NEO_ACTIVATION_SUFFIX,NEO_UPDATE_SUFFIX,NEO_SECTION,NEO_PROFILE",
-            )
-            .args(env::args()), "sudo -u homeserver")?;
+        execute_command(
+            Command::new(sudo_bin)
+                .arg("-u")
+                .arg("homeserver")
+                .arg(
+                    "--preserve-env=NEO_NEO_INPUT,NEO_TEMPLATE,NEO_REMOTE_URL,NIX_BINARY_PATH,SUDO_BINARY_PATH,NEO_ACTIVATION_SUFFIX,NEO_UPDATE_SUFFIX,NEO_SECTION,NEO_PROFILE",
+                )
+                .args(env::args()),
+        )?;
         return Ok(());
     }
 

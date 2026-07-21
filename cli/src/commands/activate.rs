@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::process::{Command, Stdio};
 
 use crate::commands::log::{resolve_suffix, OperationLog};
-use crate::commands::{get_current_branch, git_cmd, has_staged_changes, run_nix};
+use crate::commands::{format_command, get_current_branch, git_cmd, has_staged_changes, run_nix};
 
 pub fn activate(
     config_path: &str,
@@ -104,18 +104,17 @@ pub fn activate(
             "nixos-rebuild-switch-to-configuration.service",
         ])
         .status();
-    let desc = format!(
-        "{} nixos-rebuild switch --flake .#neo (in {})",
-        sudo_cmd, config_path
-    );
-    println!("→ {}", desc);
-    let status = Command::new(sudo_cmd)
+    let mut rebuild = Command::new(sudo_cmd);
+    rebuild
         .current_dir(config_path)
-        .args(["nixos-rebuild", "switch", "--flake", ".#neo"])
+        .args(["nixos-rebuild", "switch", "--flake", ".#neo"]);
+    let display = format_command(&rebuild);
+    println!("→ {display}");
+    let status = rebuild
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .status()
-        .with_context(|| format!("failed to spawn: {}", desc))?;
+        .with_context(|| format!("failed to spawn: {display}"))?;
     let code = status.code().unwrap_or(-1);
 
     if code == 4 {
@@ -152,7 +151,7 @@ pub fn activate(
             Some(&format!("exit code {}", code)),
             None,
         );
-        anyhow::bail!("Command failed: {} (exit {})", desc, code);
+        anyhow::bail!("Command failed: {display} (exit {code})");
     }
 
     if has_changes {

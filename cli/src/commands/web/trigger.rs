@@ -40,7 +40,6 @@ pub fn trigger_systemd_run(
     let nix_bin = util::nix_bin();
     let neo_bin = util::neo_bin();
     let unit = format!("neo-{}@{}.service", subcommand, suffix);
-    let desc = format!("{} systemd-run --unit={} (as homeserver)", sudo_cmd, unit);
     let mut run_cmd = Command::new(&sudo_cmd);
     run_cmd.args([
         "systemd-run",
@@ -69,7 +68,7 @@ pub fn trigger_systemd_run(
         &neo_bin,
         subcommand,
     ]);
-    let _ = crate::commands::execute_command(&mut run_cmd, &desc);
+    let _ = crate::commands::execute_command(&mut run_cmd);
 }
 
 /// Create OperationLog, mark triggered, and launch the matching oneshot unit.

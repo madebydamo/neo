@@ -16,42 +16,108 @@ pub mod update_inputs;
 pub mod web;
 
 use anyhow::{Context, Result};
+use std::ffi::OsStr;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-pub fn execute_command(cmd: &mut Command, description: &str) -> Result<()> {
-    println!("→ {}", description);
+/// Quote a string for safe copy-paste into a POSIX shell (bash/sh).
+///
+/// Bare tokens stay unquoted when they only use safe characters; otherwise
+/// single quotes are used (with proper escaping of embedded `'`).
+pub fn shell_quote(s: &str) -> String {
+    if s.is_empty() {
+        return "''".to_string();
+    }
+    // Safe unquoted: alphanumerics + common path/flag/flake chars.
+    // `#` is fine mid-token (e.g. `.#write-flake`); it only comments at word start.
+    let safe = s.bytes().all(|b| {
+        matches!(
+            b,
+            b'a'..=b'z'
+                | b'A'..=b'Z'
+                | b'0'..=b'9'
+                | b'-'
+                | b'_'
+                | b'.'
+                | b'/'
+                | b':'
+                | b'='
+                | b'+'
+                | b'@'
+                | b'%'
+                | b','
+                | b'#'
+        )
+    });
+    if safe {
+        s.to_string()
+    } else if !s.contains('\'') {
+        format!("'{s}'")
+    } else {
+        // bash: 'foo'\''bar' → foo'bar
+        let mut out = String::with_capacity(s.len() + 8);
+        out.push('\'');
+        for ch in s.chars() {
+            if ch == '\'' {
+                out.push_str("'\\''");
+            } else {
+                out.push(ch);
+            }
+        }
+        out.push('\'');
+        out
+    }
+}
+
+/// Join program + args into a shell-copyable command line (no cwd).
+pub fn shell_join(program: impl AsRef<OsStr>, args: impl IntoIterator<Item = impl AsRef<OsStr>>) -> String {
+    let mut parts = Vec::new();
+    parts.push(shell_quote(&program.as_ref().to_string_lossy()));
+    for a in args {
+        parts.push(shell_quote(&a.as_ref().to_string_lossy()));
+    }
+    parts.join(" ")
+}
+
+/// Format a `Command` for display: prompt-style cwd, then shell-copyable argv.
+///
+/// Example: `/var/neo/config $ nix run .#write-flake`
+/// Copy everything after `$ ` to re-run (in that directory).
+pub fn format_command(cmd: &Command) -> String {
+    let cmdline = shell_join(cmd.get_program(), cmd.get_args());
+    match cmd.get_current_dir() {
+        Some(dir) => format!("{} $ {}", dir.display(), cmdline),
+        None => format!("$ {cmdline}"),
+    }
+}
+
+pub fn execute_command(cmd: &mut Command) -> Result<()> {
+    let display = format_command(cmd);
+    println!("→ {display}");
     let status = cmd
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .status()
-        .with_context(|| format!("failed to spawn: {}", description))?;
+        .with_context(|| format!("failed to spawn: {display}"))?;
     if !status.success() {
-        anyhow::bail!("Command failed: {}", description);
+        anyhow::bail!("Command failed: {display}");
     }
     Ok(())
 }
 
 pub fn run_nix(config_path: &str, nix_cmd: &str, args: &[&str]) -> Result<()> {
-    let desc = format!("{} {:?} (in {})", nix_cmd, args, config_path);
     execute_command(
         Command::new(nix_cmd)
             .current_dir(config_path)
             .args(["--extra-experimental-features", "nix-command flakes"])
             .args(args),
-        &desc,
-    )?;
-    Ok(())
+    )
 }
 
 pub fn git_cmd(config_path: &str, args: &[&str]) -> Result<()> {
-    let desc = format!("git {:?} (in {})", args, config_path);
-    execute_command(
-        Command::new("git").current_dir(config_path).args(args),
-        &desc,
-    )
+    execute_command(Command::new("git").current_dir(config_path).args(args))
 }
 
 pub fn get_timestamp() -> String {
@@ -105,16 +171,16 @@ pub fn run_nix_logged(
     args: &[&str],
     log_path: &Path,
 ) -> Result<()> {
-    let output = Command::new(nix_cmd)
-        .current_dir(config_path)
+    let mut cmd = Command::new(nix_cmd);
+    cmd.current_dir(config_path)
         .args(["--extra-experimental-features", "nix-command flakes"])
-        .args(args)
+        .args(args);
+    let display = format_command(&cmd);
+    let output = cmd
         .output()
-        .with_context(|| format!("failed to run nix logged in {}", config_path))?;
+        .with_context(|| format!("failed to run nix logged in {config_path}"))?;
     let combined = format!(
-        "$ {} {:?}\nstdout:\n{}\nstderr:\n{}\nexit: {:?}\n\n",
-        nix_cmd,
-        args,
+        "{display}\nstdout:\n{}\nstderr:\n{}\nexit: {:?}\n\n",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
         output.status.code()

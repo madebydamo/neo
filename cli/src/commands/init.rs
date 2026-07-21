@@ -66,33 +66,24 @@ pub fn init(
             neo_cli_get(config, profile, "bootstrapMethod").unwrap_or("template");
 
         if repo_url.is_some() && bootstrap_method == "clone" {
-            let desc = format!("git clone {} (in {})", repo_url.unwrap(), config_path);
-            execute_command(
-                Command::new("git").current_dir(config_path).args([
-                    "clone",
-                    repo_url.unwrap(),
-                    ".",
-                ]),
-                &desc,
-            )?;
+            execute_command(Command::new("git").current_dir(config_path).args([
+                "clone",
+                repo_url.unwrap(),
+                ".",
+            ]))?;
         } else {
             let template = neo_cli_get(config, profile, "template")
                 .unwrap_or("github:madebydamo/neo#homeserver");
 
             run_nix(config_path, nix_cmd, &["flake", "init", "-t", template])?;
 
-            execute_command(
-                Command::new("git").current_dir(config_path).arg("init"),
-                "git init",
-            )?;
+            execute_command(Command::new("git").current_dir(config_path).arg("init"))?;
 
             if let Some(url) = repo_url {
-                let desc = format!("git remote add origin {} (in {})", url, config_path);
                 execute_command(
                     Command::new("git")
                         .current_dir(config_path)
                         .args(["remote", "add", "origin", url]),
-                    &desc,
                 )?;
             }
         }

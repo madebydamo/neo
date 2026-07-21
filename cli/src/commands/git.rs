@@ -8,8 +8,5 @@ pub fn git(config_path: &str, dry_run: bool) -> Result<()> {
         println!("DRY-RUN: lazygit (in {})", config_path);
         return Ok(());
     }
-    execute_command(
-        Command::new("lazygit").current_dir(config_path),
-        &format!("lazygit (in {})", config_path),
-    )
+    execute_command(Command::new("lazygit").current_dir(config_path))
 }
