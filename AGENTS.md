@@ -65,17 +65,59 @@ nix develop     # Rust/Cargo env with tools
 ### Nix
 
 - Files end in `.nix`; start with a short `#` comment; prefer under 200 lines.
-- Service module pattern:
+- **import-tree owns discovery** — every `.nix` under `nix/` is auto-imported via `flake.nix` (`import-tree ./nix`). **Never** `imports = [ ./option.nix ./swag.nix ]` (or any sibling path) in service modules; that fights the dendritic layout and double-loads modules.
+- Service split: one concern per file, each exporting a `flake.modules.nixos.*` attr (flake-parts modules). Siblings are independent modules, not manually imported:
 
 ```nix
-# Service description.
-{ config, lib, ... }:
-let
-  cfg = config.neo.services.example;
-in {
-  imports = [ ./option.nix ./swag.nix ];
-} // lib.mkIf cfg.enabled {
-  # implementation
+# option.nix — options only
+{...}: {
+  flake.modules.nixos.example-option = { config, lib, ... }:
+    with lib;
+    with {inherit (lib.neo) mkOption mkEnableOption;}; {
+      options.neo.services.example = mkOption {
+        type = types.submodule {
+          options =
+            {
+              enabled = mkEnableOption "example service" {rank = 0;};
+              # …
+            }
+            // lib.neo.mkReverseProxyOptions { subdomain = "example"; }
+            // lib.neo.mkContainerDefinitions { example = "image:tag"; }
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/example"
+            // lib.neo.mkServiceMeta { /* … */ }
+            // lib.neo.mkSkillOptions {};
+        };
+        default = {};
+        description = "Example service configuration";
+      };
+    };
+}
+```
+
+```nix
+# default.nix — implementation only (no imports of siblings)
+{...}: {
+  flake.modules.nixos.example = { config, lib, ... }:
+    with lib; let
+      cfg = config.neo.services.example;
+    in {
+      config = mkIf cfg.enabled {
+        # oci-containers, activation, units, …
+      };
+    };
+}
+```
+
+```nix
+# swag.nix — reverse-proxy conf (if publicly proxied)
+{...}: {
+  flake.modules.nixos.example-swag = { config, lib, ... }: let
+    cfg = config.neo.services.example;
+  in {
+    config.neo.services.example.proxyConf = lib.mkDefault ''
+      # nginx server block …
+    '';
+  };
 }
 ```
 
