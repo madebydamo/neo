@@ -15,6 +15,8 @@ pub fn operations_dir() -> PathBuf {
 pub enum OperationKind {
     Activation,
     Update,
+    /// System generation switch/boot (web triggers via systemd-run).
+    Generation,
 }
 
 pub struct OperationLog {
@@ -29,6 +31,7 @@ impl OperationLog {
         let prefix = match kind {
             OperationKind::Activation => "activation",
             OperationKind::Update => "update",
+            OperationKind::Generation => "genswitch",
         };
         let id = format!("{}_{}", prefix, suffix);
         let dir = operations_dir();
@@ -51,6 +54,10 @@ impl OperationLog {
         Self::new(OperationKind::Update, suffix)
     }
 
+    pub fn new_generation(suffix: &str) -> Self {
+        Self::new(OperationKind::Generation, suffix)
+    }
+
     pub fn id(&self) -> &str {
         &self.id
     }
@@ -68,6 +75,18 @@ impl OperationLog {
     }
 
     pub fn write_state(&self, status: &str, phase: &str, err: Option<&str>, branch: Option<&str>) {
+        self.write_state_extra(status, phase, err, branch, None);
+    }
+
+    /// Like [`write_state`] with optional extra JSON fields (e.g. generation number).
+    pub fn write_state_extra(
+        &self,
+        status: &str,
+        phase: &str,
+        err: Option<&str>,
+        branch: Option<&str>,
+        extra: Option<serde_json::Value>,
+    ) {
         let mut s = serde_json::json!({
             "id": &self.id,
             "status": status,
@@ -80,6 +99,13 @@ impl OperationLog {
         }
         if let Some(b) = branch {
             s["branch"] = serde_json::json!(b);
+        }
+        if let Some(serde_json::Value::Object(map)) = extra {
+            if let Some(obj) = s.as_object_mut() {
+                for (k, v) in map {
+                    obj.insert(k, v);
+                }
+            }
         }
         let _ = fs::write(
             &self.state_path,

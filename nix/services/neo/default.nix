@@ -102,6 +102,18 @@
             package = pkgs.nix;
             name = "nix-store";
           }
+          # generation list/switch: `sudo -n nix-env -p … --switch-generation N`
+          {
+            package = pkgs.nix;
+            name = "nix-env";
+          }
+          # after profile switch: `/nix/var/nix/profiles/system/bin/switch-to-configuration`
+          {
+            command = "/nix/var/nix/profiles/system/bin/switch-to-configuration";
+          }
+          {
+            command = "/nix/var/nix/profiles/system-*-link/bin/switch-to-configuration";
+          }
         ];
       };
     };

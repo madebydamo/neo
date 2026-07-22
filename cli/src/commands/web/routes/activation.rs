@@ -58,3 +58,19 @@ pub fn update_status(id: &str) -> RawHtml<String> {
     }
     RawHtml(activation::build_update_status_fragment(id))
 }
+
+#[get("/genswitch/status/<id>")]
+pub fn genswitch_status(id: &str) -> RawHtml<String> {
+    if !activation_id_ok(id) {
+        return invalid_id_html(id);
+    }
+    RawHtml(activation::build_genswitch_status_fragment(id))
+}
+
+#[get("/genswitch/log/<id>")]
+pub fn genswitch_log(id: &str) -> RawHtml<String> {
+    if !activation_id_ok(id) {
+        return invalid_id_html(id);
+    }
+    RawHtml(activation::build_genswitch_log_fragment(id))
+}

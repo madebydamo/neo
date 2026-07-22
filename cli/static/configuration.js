@@ -345,7 +345,12 @@ window.configShell = function configShell() {
         data.clearDetail();
         // Infer active tab from grid/branches partials (Back/Forward history restore).
         if (content && content.querySelector('#core-grid')) data.tab = 'settings';
-        else if (content && content.querySelector('#branches-section')) data.tab = 'versioning';
+        else if (
+          content &&
+          (content.querySelector('#versioning-root') ||
+            content.querySelector('#branches-section'))
+        )
+          data.tab = 'versioning';
         else if (content && content.querySelector('#services-grid')) data.tab = 'services';
       }
     } catch (e) {}
@@ -441,6 +446,14 @@ window.configShell = function configShell() {
         (t.closest && t.closest('#config-content') && t.id === 'options-pane')
       ) {
         syncConfigShellFromContent();
+        // Versioning partial includes an inline init; call again in case script tags
+        // were skipped by HTMX, or to refresh data after re-entry.
+        if (
+          typeof window.neoInitVersioning === 'function' &&
+          document.getElementById('versioning-root')
+        ) {
+          window.neoInitVersioning();
+        }
         requestAnimationFrame(function () {
           unlockConfigContentHeight();
           // Opening/closing the option pane (or switching tabs) replaces the main

@@ -67,13 +67,16 @@ pub fn unit_name_valid(unit: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || "-@._".contains(c))
 }
 
-/// Activation / update operation ids used as filenames under the ops dir.
-/// Must match `activation_*` or `update_*` and contain only safe path characters.
+/// Activation / update / generation-switch operation ids under the ops dir.
+/// Must match `activation_*`, `update_*`, or `genswitch_*` with safe path characters.
 pub fn activation_id_ok(id: &str) -> bool {
     if id.is_empty() || id.len() > 200 {
         return false;
     }
-    if !(id.starts_with("activation_") || id.starts_with("update_")) {
+    if !(id.starts_with("activation_")
+        || id.starts_with("update_")
+        || id.starts_with("genswitch_"))
+    {
         return false;
     }
     id.chars()
@@ -103,6 +106,23 @@ pub fn branch_ok(br: &str) -> bool {
     // No path separators or git-special characters that could confuse switch.
     br.chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// Git revision allowed for versioning APIs: `activation_*` branch name or hex SHA (7–40).
+pub fn rev_ok(rev: &str) -> bool {
+    if rev.is_empty() || rev.len() > 200 {
+        return false;
+    }
+    if branch_ok(rev) {
+        return true;
+    }
+    let len = rev.len();
+    (7..=40).contains(&len) && rev.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// NixOS generation numbers accepted by the web UI (positive, reasonable bound).
+pub fn generation_ok(n: u64) -> bool {
+    n > 0 && n < 1_000_000
 }
 
 /// Neo service names (settings.toml `[services.<name>]` keys).
@@ -209,6 +229,8 @@ mod tests {
         assert!(!activation_id_ok("activation_/../x"));
         assert!(activation_id_ok("activation_20240101_120000"));
         assert!(activation_id_ok("update_20240101_120000"));
+        assert!(activation_id_ok("genswitch_20240101-120000"));
+        assert!(!activation_id_ok("genswitch_/../x"));
     }
 
     #[test]
@@ -216,6 +238,25 @@ mod tests {
         assert!(branch_ok("activation_abc"));
         assert!(!branch_ok("main"));
         assert!(!branch_ok("activation_a/b"));
+    }
+
+    #[test]
+    fn rev_ok_sha_or_activation_branch() {
+        assert!(rev_ok("activation_20240101-120000"));
+        assert!(rev_ok("abcdef0"));
+        assert!(rev_ok("0123456789abcdef0123456789abcdef01234567"));
+        assert!(!rev_ok("short"));
+        assert!(!rev_ok("main"));
+        assert!(!rev_ok("../etc/passwd"));
+        assert!(!rev_ok("abc;rm"));
+    }
+
+    #[test]
+    fn generation_ok_positive_bound() {
+        assert!(generation_ok(1));
+        assert!(generation_ok(42));
+        assert!(!generation_ok(0));
+        assert!(!generation_ok(1_000_000));
     }
 
     #[test]

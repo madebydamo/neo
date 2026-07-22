@@ -1,31 +1,81 @@
-<div id="branches-section" class="mt-3 border border-base-300 rounded overflow-hidden">
-  <div class="bg-base-200 px-2 py-1 text-xs font-semibold flex items-center gap-2">
-    <span>Versioning (activation branches)</span>
-    {{#if graph}}
-      <span class="opacity-40">· tree</span>
-    {{/if}}
-  </div>
-  {{#if graph}}
-    <pre class="text-[8px] font-mono leading-[1.05] overflow-auto max-h-20 bg-base-300 p-1 border-b border-base-300">{{graph}}</pre>
-  {{/if}}
-  <div class="divide-y divide-base-300 text-sm">
-    {{#each branches}}
-      <div
-        class="flex items-center justify-between px-2 py-1 hover:bg-base-100 cursor-pointer {{ #if is_current }}bg-success/10{{/if}}"
-        hx-post="/git/switch/{{name}}"
-        hx-target="#branch-status"
-        hx-swap="innerHTML"
-        hx-confirm="Switch working tree to {{name}} (affects visible settings and future actions until next switch)?"
-        hx-on::after-request="htmx.ajax('GET','/configuration/versioning',{target:'#config-content',swap:'innerHTML',push:'/configuration/versioning'})">
-        <div class="font-mono flex items-center gap-2 truncate">
-          <span>{{name}}</span>
-          {{#if is_current}}
-            <span class="badge badge-success badge-xs flex-shrink-0">current</span>
-          {{/if}}
+{{!-- Versioning tab: D3 commit graph + detail panel + generations + multi-select diff --}}
+<div id="versioning-root"
+     class="mt-3 space-y-4"
+     data-versioning="1">
+  <div class="border border-base-300 rounded overflow-hidden bg-base-100">
+    <div class="bg-base-200 px-3 py-1.5 text-xs font-semibold flex items-center justify-between gap-2">
+      <span>Versioning</span>
+      <span class="opacity-50 font-normal">activation history · click select · Ctrl/Cmd multi-select (max 2)</span>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-0 min-h-[280px]">
+      {{!-- Graph: grows with content; scroll only when taller than viewport budget --}}
+      <div class="lg:col-span-3 border-b lg:border-b-0 lg:border-r border-base-300 relative min-w-0">
+        <div id="versioning-graph-host"
+             class="w-full min-h-[280px] max-h-[min(70vh,720px)] overflow-auto bg-base-300/40"
+             role="img"
+             aria-label="Activation commit graph"></div>
+        <div id="versioning-graph-empty"
+             class="hidden absolute inset-0 flex items-center justify-center text-sm opacity-50 p-4 text-center">
+          No activation branches yet. Activate a configuration to start history.
         </div>
-        <span class="text-[10px] opacity-50 flex-shrink-0">switch →</span>
       </div>
-    {{/each}}
+      {{!-- Detail --}}
+      <div class="lg:col-span-2 flex flex-col min-h-[200px]">
+        <div class="bg-base-200 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide opacity-70">
+          Selection
+        </div>
+        <div id="versioning-detail" class="flex-1 p-3 text-sm space-y-3 overflow-auto">
+          <p class="opacity-50 text-xs">Select a commit on the graph.</p>
+        </div>
+        <div id="versioning-actions" class="px-3 py-2 border-t border-base-300 flex flex-wrap gap-2 bg-base-200/50">
+          <button type="button"
+                  id="ver-btn-checkout"
+                  class="btn btn-xs btn-outline"
+                  disabled
+                  title="Checkout this activation branch in the config repo">
+            Checkout config
+          </button>
+          <button type="button"
+                  id="ver-btn-activate"
+                  class="btn btn-xs btn-error"
+                  disabled
+                  title="Checkout and run full activate (new NixOS generation from this config)">
+            Activate this config
+          </button>
+          <button type="button"
+                  id="ver-btn-clear"
+                  class="btn btn-xs btn-ghost"
+                  title="Clear selection">
+            Clear
+          </button>
+        </div>
+        <div id="versioning-status" class="px-3 py-2 text-xs text-base-content/80 bg-base-200 min-h-[1.5rem] max-h-64 overflow-auto"></div>
+      </div>
+    </div>
   </div>
-  <div id="branch-status" class="px-2 py-0.5 text-[10px] text-base-content/60 bg-base-200"></div>
+
+  {{!-- Diff panel (two commits) --}}
+  <div id="versioning-diff-wrap" class="border border-base-300 rounded overflow-hidden hidden">
+    <div class="bg-base-200 px-3 py-1.5 text-xs font-semibold flex items-center justify-between">
+      <span>settings.toml diff</span>
+      <span id="versioning-diff-label" class="font-mono font-normal opacity-60 text-[10px]"></span>
+    </div>
+    <div id="versioning-diff" class="p-2"></div>
+  </div>
+
+  {{!-- System generations --}}
+  <div class="border border-base-300 rounded overflow-hidden">
+    <div class="bg-base-200 px-3 py-1.5 text-xs font-semibold flex items-center justify-between gap-2">
+      <span>System generations (NixOS)</span>
+      <button type="button" id="ver-btn-refresh-gens" class="btn btn-ghost btn-xs">Refresh</button>
+    </div>
+    <div id="versioning-generations" class="p-2 text-sm">
+      <p class="opacity-50 text-xs px-1">Loading generations…</p>
+    </div>
+  </div>
 </div>
+<script>
+  if (typeof window.neoInitVersioning === 'function') {
+    window.neoInitVersioning();
+  }
+</script>

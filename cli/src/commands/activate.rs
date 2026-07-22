@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use std::process::{Command, Stdio};
 
+use crate::commands::generation::record_generation_in_commit;
 use crate::commands::log::{resolve_suffix, OperationLog};
 use crate::commands::{format_command, get_current_branch, git_cmd, has_staged_changes, run_nix};
 
@@ -130,6 +131,7 @@ pub fn activate(
             None,
             Some(&activation_branch),
         );
+        record_gen_after_activate(config_path, &activation_branch, has_changes);
         println!(
             "Activated using branch {} (exit code 4 / warnings)",
             activation_branch
@@ -158,6 +160,30 @@ pub fn activate(
         let _ = git_cmd(config_path, &["branch", "-D", &build_branch]);
     }
     op.write_state("success", "completed", None, Some(&activation_branch));
+    record_gen_after_activate(config_path, &activation_branch, has_changes);
     println!("Activated using branch {}", activation_branch);
     Ok(())
+}
+
+/// Embed generation number in the activation commit message (no sidecar files).
+/// `has_activation_commit` is true when this run created/amended a real Activation commit
+/// (dirty tree); otherwise we add an empty commit so re-activates still get history + gen.
+fn record_gen_after_activate(config_path: &str, activation_branch: &str, has_activation_commit: bool) {
+    match record_generation_in_commit(config_path, activation_branch, has_activation_commit) {
+        Ok(gen) => {
+            println!(
+                "Recorded generation {} on {} commit for {}",
+                gen,
+                if has_activation_commit {
+                    "amended"
+                } else {
+                    "empty"
+                },
+                activation_branch
+            );
+        }
+        Err(e) => {
+            eprintln!("warning: could not record generation in commit: {e}");
+        }
+    }
 }

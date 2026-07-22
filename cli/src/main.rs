@@ -9,8 +9,10 @@ pub mod commands;
 use crate::commands::profile::{resolve_config_path, resolve_profile};
 use crate::commands::{
     activate::activate, build::build, edit::edit, execute_command,
-    generate_hardware::generate_hardware, git::git, init::init, migrate::migrate, nuke::nuke,
-    paste_settings::paste_settings, update::update, update_inputs::update_inputs, web::web,
+    generate_hardware::generate_hardware,
+    generation::{generation_boot, generation_help, generation_list, generation_switch},
+    git::git, init::init, migrate::migrate, nuke::nuke, paste_settings::paste_settings,
+    update::update, update_inputs::update_inputs, web::web,
 };
 #[derive(Parser)]
 #[command(name = "neo", version, about = "Neo Homeserver CLI", long_about = None)]
@@ -83,6 +85,25 @@ enum Commands {
     Lg,
     DockerUpdate {
         container: String,
+    },
+    /// List / switch / boot NixOS system generations.
+    Generation {
+        #[command(subcommand)]
+        action: Option<GenerationAction>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum GenerationAction {
+    /// List system profile generations.
+    List,
+    /// Switch the running system to generation N.
+    Switch {
+        n: u64,
+    },
+    /// Set boot default to generation N (next reboot).
+    Boot {
+        n: u64,
     },
 }
 
@@ -239,5 +260,11 @@ fn run(cli: Cli) -> Result<()> {
             use crate::commands::docker_update::docker_update;
             docker_update(&container)
         }
+        Commands::Generation { action } => match action {
+            Some(GenerationAction::List) => generation_list(dry_run),
+            Some(GenerationAction::Switch { n }) => generation_switch(n, dry_run, sudo_cmd),
+            Some(GenerationAction::Boot { n }) => generation_boot(n, dry_run, sudo_cmd),
+            None => generation_help(),
+        },
     }
 }

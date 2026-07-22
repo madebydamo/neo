@@ -2,6 +2,7 @@ use std::process::Command;
 
 use rocket::response::content::RawHtml;
 
+use crate::commands::generation::GenerationMode;
 use crate::commands::log::OperationLog;
 
 use super::activation;
@@ -30,16 +31,19 @@ impl OneshotKind {
     }
 }
 
-pub fn trigger_systemd_run(
-    subcommand: &str,
-    env_var: &str,
-    suffix: &str,
+/// Launch `neo <args…>` as a detached oneshot under homeserver via systemd-run.
+/// Survives `neo-web` restarts (e.g. generation switch stops neo-web.service).
+pub fn trigger_systemd_run_args(
+    unit_leaf: &str,
+    neo_args: &[&str],
+    env_pairs: &[(&str, &str)],
     log_path: &std::path::Path,
+    description: &str,
 ) {
     let sudo_cmd = util::sudo_cmd();
     let nix_bin = util::nix_bin();
     let neo_bin = util::neo_bin();
-    let unit = format!("neo-{}@{}.service", subcommand, suffix);
+    let unit = format!("neo-{}.service", unit_leaf);
     let mut run_cmd = Command::new(&sudo_cmd);
     run_cmd.args([
         "systemd-run",
@@ -56,19 +60,38 @@ pub fn trigger_systemd_run(
         "-E",
         &format!("SUDO_BINARY_PATH={}", sudo_cmd),
         "-E",
-        &format!("{}={}", env_var, suffix),
-        "-E",
         "PATH=/run/current-system/sw/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    ]);
+    for (k, v) in env_pairs {
+        run_cmd.arg("-E");
+        run_cmd.arg(format!("{k}={v}"));
+    }
+    run_cmd.args([
         "--property",
         &format!("StandardOutput=append:{}", log_path.to_string_lossy()),
         "--property",
         &format!("StandardError=append:{}", log_path.to_string_lossy()),
         "--property",
-        &format!("Description=Neo one-shot {} {}", subcommand, suffix),
+        &format!("Description={description}"),
         &neo_bin,
-        subcommand,
     ]);
+    run_cmd.args(neo_args);
     let _ = crate::commands::execute_command(&mut run_cmd);
+}
+
+pub fn trigger_systemd_run(
+    subcommand: &str,
+    env_var: &str,
+    suffix: &str,
+    log_path: &std::path::Path,
+) {
+    trigger_systemd_run_args(
+        &format!("{subcommand}@{suffix}"),
+        &[subcommand],
+        &[(env_var, suffix)],
+        log_path,
+        &format!("Neo one-shot {subcommand} {suffix}"),
+    );
 }
 
 /// Create OperationLog, mark triggered, and launch the matching oneshot unit.
@@ -99,6 +122,12 @@ pub fn trigger_activation(_config: &AppConfig) -> RawHtml<String> {
             ),
         ));
     }
+    if let Some(other) = activation::find_recent_in_progress_genswitch() {
+        return RawHtml(alert_html(
+            AlertKind::Error,
+            &format!("Generation switch {} in progress. Wait.", other),
+        ));
+    }
     let op = trigger_oneshot(OneshotKind::Activate);
     RawHtml(activation::build_monitor_fragment(op.id()))
 }
@@ -118,6 +147,61 @@ pub fn trigger_update() -> RawHtml<String> {
             &format!("Update {} already in progress", id),
         ));
     }
+    if let Some(id) = activation::find_recent_in_progress_genswitch() {
+        return RawHtml(alert_html(
+            AlertKind::Info,
+            &format!("Generation switch {} in progress — cannot update", id),
+        ));
+    }
     let op = trigger_oneshot(OneshotKind::Update);
     RawHtml(activation::build_update_monitor_fragment(op.id()))
+}
+
+/// Detached generation switch/boot. Must not run in the neo-web process:
+/// `switch-to-configuration` stops `neo-web.service`.
+pub fn trigger_generation_switch(n: u64, mode: GenerationMode) -> RawHtml<String> {
+    activation::gc_old_activations();
+    if let Some(id) = activation::find_recent_in_progress_activation() {
+        return RawHtml(alert_html(
+            AlertKind::Error,
+            &format!("Activation {} in progress — cannot switch generation", id),
+        ));
+    }
+    if let Some(id) = activation::find_recent_in_progress_genswitch() {
+        return RawHtml(alert_html(
+            AlertKind::Error,
+            &format!("Generation switch {} already in progress", id),
+        ));
+    }
+
+    let ts = crate::commands::get_timestamp();
+    // Suffix embeds mode + gen for uniqueness and log readability.
+    let mode_s = match mode {
+        GenerationMode::Switch => "switch",
+        GenerationMode::Boot => "boot",
+    };
+    let suffix = format!("{mode_s}-{n}-{ts}");
+    let op = OperationLog::new_generation(&suffix);
+    op.init_for_web_trigger(&ts);
+    op.write_state_extra(
+        "in_progress",
+        "triggered",
+        None,
+        None,
+        Some(serde_json::json!({
+            "generation": n,
+            "mode": mode_s,
+        })),
+    );
+
+    let n_s = n.to_string();
+    trigger_systemd_run_args(
+        &format!("genswitch@{suffix}"),
+        &["generation", mode_s, &n_s],
+        &[("NEO_GENSWITCH_SUFFIX", op.suffix())],
+        op.log_path(),
+        &format!("Neo generation {mode_s} {n}"),
+    );
+
+    RawHtml(activation::build_genswitch_monitor_fragment(op.id(), n, mode_s))
 }
