@@ -1,7 +1,7 @@
 qemu_monitor_host := "127.0.0.1"
 qemu_monitor_port := "4444"
 qemu_monitor := qemu_monitor_host + ":" + qemu_monitor_port
-ssh_opts := "-i tools/id_ed25519 -p 2222 -o StrictHostKeyChecking=no root@localhost"
+ssh_opts := "-i tools/development_ed25519 -p 2222 -o StrictHostKeyChecking=no root@localhost"
 disk_image := "nixos.qcow2"
 
 build:

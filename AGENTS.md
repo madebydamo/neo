@@ -18,7 +18,7 @@ NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) + Rust *
 
 | Recipe | Role |
 |--------|------|
-| **`just launch`** | Default loop: shutdown → build → QEMU (SSH **:2222**, key `tools/id_ed25519`) |
+| **`just launch`** | Default loop: shutdown → build → QEMU (SSH **:2222**, key `tools/development_ed25519`) |
 | `just build` | `neo nuke` → `init` → `build` |
 | `just status` / `shutdown` | VM health / stop |
 | `just exec 'CMD'` / `just logs SVC` / `just ssh` | Guest shell / `journalctl -b -u SVC` |

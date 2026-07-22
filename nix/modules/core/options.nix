@@ -9,10 +9,8 @@
     with {inherit (lib.neo) mkOption mkEnableOption;}; {
       options.neo.core.ssh.authorizedKeys = mkOption {
         type = types.listOf types.str;
-        default = [
-          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC9fFR8aERyyLjqI0aG08BXmSaMemGXK4WK8bLy7Nzmc development"
-        ];
-        description = "SSH authorized keys for root in VM";
+        default = [];
+        description = "SSH authorized keys for root, admin, and homeserver (set in settings.toml; the QEMU VM module adds the development key separately)";
         rank = 0;
       };
 
