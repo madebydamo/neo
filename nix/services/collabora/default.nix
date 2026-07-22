@@ -24,11 +24,19 @@
         virtualisation.oci-containers.containers.collabora = {
           image = cfg.containers.collabora;
           autoStart = true;
+          # CODE 26.04+ entrypoint is coolwsd --use-env-vars, which ignores
+          # extra_params. Pass SSL overrides as cmd so they append to the
+          # entrypoint (reverse proxy terminates TLS; container speaks plain HTTP).
+          cmd = [
+            "--o:ssl.enable=false"
+            "--o:ssl.termination=true"
+          ];
           environment = {
             domain = nextcloudUrl;
             aliasgroup1 = "https://${nextcloudUrl}:443,https://${builtins.replaceStrings ["."] ["\\\\."] nextcloudUrl}:443";
             server_name = collaboraUrl;
-            extra_params = "--o:ssl.enable=false --o:ssl.termination=true";
+            # Skip self-signed cert generation when SSL is disabled at the app layer.
+            DONT_GEN_SSL_CERT = "1";
           };
           capabilities = {
             MKNOD = true;
