@@ -366,6 +366,68 @@ window.configShell = function configShell() {
     } catch (e) {}
   }
 
+  /** Hide the shared fused glass plate and clear fuse state. */
+  function clearStickyBarsFuse() {
+    try {
+      document.documentElement.classList.remove('neo-bars-fused');
+      var glass = document.getElementById('config-fused-glass');
+      if (glass) {
+        glass.hidden = true;
+        glass.removeAttribute('style');
+      }
+    } catch (e) {}
+  }
+
+  /**
+   * Fuse the sticky action bar + option-pane save strip into one glass chrome
+   * when the save strip is stuck under the navbar. A single fixed plate carries
+   * backdrop-filter (two layered blurs cannot merge at the seam). Cleared when
+   * the pane is gone or the strip is still in normal document flow.
+   */
+  function updateStickyBarsFuse() {
+    try {
+      var save = document.getElementById('options-sticky-save');
+      var action = document.getElementById('config-action-bar');
+      var glass = document.getElementById('config-fused-glass');
+      var root = document.documentElement;
+      if (!save || !action) {
+        clearStickyBarsFuse();
+        return;
+      }
+      var stickyTop = parseFloat(getComputedStyle(save).top) || 0;
+      var ar = action.getBoundingClientRect();
+      var sr = save.getBoundingClientRect();
+      var stuck = sr.top <= stickyTop + 0.5;
+      if (!stuck) {
+        clearStickyBarsFuse();
+        return;
+      }
+      root.classList.add('neo-bars-fused');
+      if (!glass) return;
+      // One plate from the top of the action bar to the bottom of the save strip,
+      // matching the action bar's width so the fused chrome is continuous.
+      glass.hidden = false;
+      glass.style.top = ar.top + 'px';
+      glass.style.left = ar.left + 'px';
+      glass.style.width = ar.width + 'px';
+      glass.style.height = Math.max(0, sr.bottom - ar.top) + 'px';
+    } catch (e) {
+      clearStickyBarsFuse();
+    }
+  }
+
+  var stickyFuseRaf = 0;
+  function scheduleStickyBarsFuse() {
+    if (stickyFuseRaf) return;
+    stickyFuseRaf = requestAnimationFrame(function () {
+      stickyFuseRaf = 0;
+      updateStickyBarsFuse();
+    });
+  }
+
+  window.addEventListener('scroll', scheduleStickyBarsFuse, { passive: true });
+  window.addEventListener('resize', scheduleStickyBarsFuse);
+
   // Sync chrome as soon as content lands (afterSwap), not afterSettle — so the
   // breadcrumb is updated in the same paint cycle as the pane/grid swap.
   // Then release the height lock and scroll on the next frame so Alpine can
@@ -384,6 +446,7 @@ window.configShell = function configShell() {
           // Opening/closing the option pane (or switching tabs) replaces the main
           // content while preserving document scroll — always start at the top.
           resetConfigViewport();
+          updateStickyBarsFuse();
         });
       }
     } catch (e) {}
@@ -406,7 +469,10 @@ window.configShell = function configShell() {
   }
   // Only on full page load — never on htmx:afterSettle (status/log polls settle too and
   // would re-fetch the monitor in a loop while neo.pendingActivation is set).
-  document.addEventListener('DOMContentLoaded', resume);
+  document.addEventListener('DOMContentLoaded', function () {
+    resume();
+    updateStickyBarsFuse();
+  });
 
   /** Log panel ids used by activation / update / repair monitors. */
   var MONITOR_LOG_IDS = { 'act-log': 1, 'update-log': 1, 'repair-log': 1 };

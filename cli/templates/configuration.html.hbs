@@ -50,8 +50,15 @@
            x-data="configShell()"
            data-initial-tab="{{#if initial_tab}}{{initial_tab}}{{else}}services{{/if}}"
            data-initial-detail="{{#if initial_detail}}{{initial_detail}}{{/if}}">
-        {{!-- Sticky config bar: title reflects current service when editing. --}}
-        <div class="navbar h-16 min-h-16 bg-base-100/95 backdrop-blur rounded-box mb-6 shadow sticky z-30"
+        {{!--
+          Single continuous glass plate used while action + save bars are fused.
+          Separate backdrop-filter layers cannot blend at the seam; this one plate
+          covers both bars so blur is unbroken. Positioned by configuration.js.
+        --}}
+        <div id="config-fused-glass" class="neo-fused-glass" hidden aria-hidden="true"></div>
+        {{!-- Sticky config bar: glass chrome; fuses with the option-pane save strip on scroll. --}}
+        <div id="config-action-bar"
+             class="navbar h-16 min-h-16 bg-base-100/60 backdrop-blur-xs rounded-box mb-6 shadow sticky z-30 transition-[background-color,box-shadow,border-radius] duration-200"
              style="top: var(--neo-sticky-bar-top)">
           <div class="flex-1 min-w-0 flex items-center gap-2 px-4">
             <button type="button"
@@ -62,8 +69,8 @@
             <span class="text-sm opacity-50 truncate"
                   x-show="!detail"
                   x-cloak>homeserver config</span>
-            {{!-- Active service/section while editing (light, not bold). --}}
-            <span class="text-sm font-mono font-normal opacity-70 truncate min-w-0"
+            {{!-- Active service/section while editing (bold mono). --}}
+            <span class="text-sm font-mono font-bold opacity-90 truncate min-w-0"
                   x-show="detail"
                   x-text="detail"
                   x-cloak

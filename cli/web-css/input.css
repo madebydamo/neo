@@ -27,3 +27,45 @@
 #nav-busy.is-busy {
   display: inline-flex;
 }
+
+/*
+ * Fused sticky chrome: one continuous glass plate (#config-fused-glass) carries
+ * backdrop-filter so blur is not split between two layers. Bars go transparent
+ * and sit above the plate (pointer events stay on the controls).
+ */
+.neo-fused-glass {
+  position: fixed;
+  z-index: 25;
+  pointer-events: none;
+  /* Match Tailwind bg-base-100/60 + backdrop-blur-xs */
+  background-color: color-mix(
+    in oklab,
+    var(--color-base-100, var(--fallback-b1, oklch(100% 0 0))) 60%,
+    transparent
+  );
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  border-radius: var(--radius-box, 1rem);
+  box-shadow: 0 8px 20px -8px oklch(0% 0 0 / 0.18);
+}
+
+html.neo-bars-fused #config-action-bar,
+html.neo-bars-fused #options-sticky-save {
+  background-color: transparent !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+/*
+ * Align "options" with "neo": daisyUI .navbar adds padding 0.5rem, and the
+ * title row adds px-4 — unfused save strip only has px-4 (correct inside the
+ * card). When fused, pad left to navbar + title so the labels share an edge.
+ */
+html.neo-bars-fused #options-sticky-save {
+  z-index: 30;
+  padding-left: calc(0.5rem + 1rem); /* .navbar p + title px-4 */
+  /* Right: .navbar p + actions pr-2 — keep save buttons under Activate cluster */
+  padding-right: calc(0.5rem + 0.5rem);
+}
