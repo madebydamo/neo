@@ -6,9 +6,17 @@
     pkgs,
     ...
   }: {
-    services.openssh = {
+    # Keys-only when neo.core.ssh.authorizedKeys is non-empty (settings.toml).
+    # Empty keys → password auth kept so first-boot / recovery is not locked out.
+    services.openssh = let
+      hasKeys = config.neo.core.ssh.authorizedKeys != [];
+    in {
       enable = true;
-      settings.PermitRootLogin = "yes";
+      settings = {
+        PermitRootLogin = "no";
+        PasswordAuthentication = !hasKeys;
+        KbdInteractiveAuthentication = !hasKeys;
+      };
     };
 
     virtualisation.docker.enable = true;

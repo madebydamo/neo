@@ -25,8 +25,9 @@
             "${config.neo.core.volumes.appdata}/syncthing:/config"
             "${config.neo.core.volumes.data}:/DATA"
           ];
+          # GUI (8384) is NOT published on the host — only reachable on the
+          # Docker `internal` network via SWAG + tinyauth. Sync/discovery ports stay public.
           ports = [
-            "8384:8384"
             "22000:22000"
             "22000:22000/udp"
             "21027:21027/udp"
@@ -34,6 +35,8 @@
           networks = ["internal"];
         };
 
+        # insecureAdminAccess lets SWAG (which strips Authorization) proxy the GUI
+        # while tinyauth is the only user-facing gate on the public subdomain.
         systemd.services."syncthing-config" = {
           after = ["docker-syncthing.service"];
           requires = ["docker-syncthing.service"];

@@ -10,7 +10,11 @@
       options.neo.core.ssh.authorizedKeys = mkOption {
         type = types.listOf types.str;
         default = [];
-        description = "SSH authorized keys for root, admin, and homeserver (set in settings.toml; the QEMU VM module adds the development key separately)";
+        description = ''
+          SSH authorized keys for admin and homeserver (set in settings.toml; the QEMU VM module adds the development key separately).
+          When non-empty, SSH disables password/keyboard-interactive auth and root login (keys only).
+          When empty, password auth stays enabled so you are not locked out before adding a key.
+        '';
         rank = 0;
       };
 

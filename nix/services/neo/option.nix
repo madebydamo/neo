@@ -29,7 +29,7 @@
                 type = types.port;
                 internal = true;
                 default = 8091;
-                description = "Internal port for the Neo web UI (binds to 0.0.0.0 on host; proxied via SWAG)";
+                description = "Internal port for the Neo web UI (binds 127.0.0.1 on host; SWAG via host.docker.internal + DNAT)";
               };
 
               iframeCookieSupport = mkOption {

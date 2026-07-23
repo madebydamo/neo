@@ -1,4 +1,5 @@
-# iSponsorBlockTV reverse proxy for SWAG (ttyd setup UI).
+# iSponsorBlockTV reverse proxy for SWAG (ttyd setup UI on host loopback).
+# ttyd binds 127.0.0.1:7681; host.docker.internal reaches it via mkDockerToLocalhostForward.
 # proxy.conf already sets Upgrade/Connection — do not re-set them.
 {...}: {
   flake.modules.nixos.isponsorblocktv-swag = {

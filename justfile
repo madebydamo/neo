@@ -1,7 +1,8 @@
 qemu_monitor_host := "127.0.0.1"
 qemu_monitor_port := "4444"
 qemu_monitor := qemu_monitor_host + ":" + qemu_monitor_port
-ssh_opts := "-i tools/development_ed25519 -p 2222 -o StrictHostKeyChecking=no root@localhost"
+# admin (not root): neo disables PermitRootLogin when authorizedKeys are set
+ssh_opts := "-i tools/development_ed25519 -p 2222 -o StrictHostKeyChecking=no admin@localhost"
 disk_image := "nixos.qcow2"
 
 build:
