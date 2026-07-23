@@ -90,8 +90,9 @@ html.neo-bars-fused #options-sticky-save {
 
 /*
  * Align "options" with "neo": daisyUI .navbar adds padding 0.5rem, and the
- * title row adds px-4 — unfused save strip only has px-4 (correct inside the
- * card). When fused, pad left to navbar + title so the labels share an edge.
+ * title row adds px-2 / sm:px-4. Unfused save strip uses px-3 sm:px-6 to match
+ * #options-pane > .card-body --card-p (option field cards). When fused, pad
+ * left to navbar + title so the labels share an edge.
  */
 html.neo-bars-fused #options-sticky-save {
   z-index: 30;
