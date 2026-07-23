@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use git2::Repository;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -89,24 +88,22 @@ pub fn init(
         }
     }
 
-    let repo = if has_git {
-        Repository::open(repo_path)?
-    } else {
-        Repository::init(repo_path).context("git init failed")?
-    };
+    // Ensure a repo exists (template/clone paths may already have run `git init`).
+    if !repo_path.join(".git").exists() {
+        git_cmd(config_path, &["init"]).context("git init failed")?;
+    }
 
-    let mut cfg = repo.config().context("git config")?;
-    cfg.set_str(
-        "user.name",
-        neo_cli_get(config, profile, "gitUserName").unwrap_or("Neo Bootstrap"),
-    )?;
-    cfg.set_str(
-        "user.email",
-        neo_cli_get(config, profile, "gitUserEmail").unwrap_or("neo@local"),
-    )?;
-    cfg.set_str(
-        "init.defaultBranch",
-        neo_cli_get(config, profile, "defaultBranch").unwrap_or("master"),
+    let git_user_name =
+        neo_cli_get(config, profile, "gitUserName").unwrap_or("Neo Bootstrap");
+    let git_user_email =
+        neo_cli_get(config, profile, "gitUserEmail").unwrap_or("neo@local");
+    let default_branch =
+        neo_cli_get(config, profile, "defaultBranch").unwrap_or("master");
+    git_cmd(config_path, &["config", "user.name", git_user_name])?;
+    git_cmd(config_path, &["config", "user.email", git_user_email])?;
+    git_cmd(
+        config_path,
+        &["config", "init.defaultBranch", default_branch],
     )?;
 
     crate::commands::generate_hardware::generate_hardware(config_path, &config, false, nix_cmd)?;
