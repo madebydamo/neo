@@ -29,6 +29,17 @@
   will-change: transform;
 }
 
+/* Home-screen / standalone: respect notch and home indicator without browser chrome */
+@supports (padding: env(safe-area-inset-top)) {
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
+  }
+}
+
 /* === Viewport-locked iframe shell (desktop + mobile) ===
    The goal: the entire navigator frame (sidebar + bars + viewer) is pinned to the
    visual viewport size. The *only* place that should scroll is inside the <iframe>s

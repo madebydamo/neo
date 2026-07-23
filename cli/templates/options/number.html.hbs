@@ -1,5 +1,5 @@
 {{#if (or (eq type.kind "int") (eq type.kind "port"))}}
-  <div class="mt-2">
+  <div class="mt-1.5 sm:mt-2">
     <input type="number"
            class="input input-primary input-sm w-full font-mono"
            x-model.number="values['{{name}}']"
@@ -8,7 +8,7 @@
   </div>
 {{/if}}
 {{#if (eq type.kind "float")}}
-  <div class="mt-2">
+  <div class="mt-1.5 sm:mt-2">
     <input type="number"
            class="input input-primary input-sm w-full font-mono"
            x-model.number="values['{{name}}']"

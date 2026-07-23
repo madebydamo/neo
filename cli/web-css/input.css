@@ -13,7 +13,37 @@
 }
 
 :root {
-  --neo-sticky-bar-top: 1.5rem;
+  /* Matches body padding: p-3 on mobile, sm:p-6 on larger screens */
+  --neo-sticky-bar-top: 0.75rem;
+  /* Matches #config-action-bar height: h-14 mobile, sm:h-16 desktop */
+  --neo-action-bar-height: 3.5rem;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --neo-sticky-bar-top: 1.5rem;
+    --neo-action-bar-height: 4rem;
+  }
+}
+
+/* Config shell only — not the full-viewport navigator (index).
+   Tighter on mobile (was p-6 everywhere); larger screens keep 1.5rem.
+   env(safe-area-*) covers home-screen / notched devices. */
+body.neo-config {
+  padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  body.neo-config {
+    padding-top: max(1.5rem, env(safe-area-inset-top, 0px));
+    padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+  }
 }
 
 [x-cloak] {
@@ -65,7 +95,29 @@ html.neo-bars-fused #options-sticky-save {
  */
 html.neo-bars-fused #options-sticky-save {
   z-index: 30;
-  padding-left: calc(0.5rem + 1rem); /* .navbar p + title px-4 */
+  /* .navbar p + title row: px-2 mobile, sm:px-4 */
+  padding-left: calc(0.5rem + 0.5rem);
   /* Right: .navbar p + actions pr-2 — keep save buttons under Activate cluster */
   padding-right: calc(0.5rem + 0.5rem);
+}
+
+@media (min-width: 640px) {
+  html.neo-bars-fused #options-sticky-save {
+    padding-left: calc(0.5rem + 1rem);
+  }
+}
+
+/*
+ * Option pane denser on mobile: daisyUI card-body defaults to 1.5rem, which
+ * leaves a wide gutter around each option field. Desktop keeps the default.
+ */
+#options-pane > .card-body {
+  --card-p: 0.75rem;
+  padding: var(--card-p);
+}
+
+@media (min-width: 640px) {
+  #options-pane > .card-body {
+    --card-p: 1.5rem;
+  }
 }

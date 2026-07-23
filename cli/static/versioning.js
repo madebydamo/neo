@@ -435,21 +435,14 @@
     );
   }
 
-  function postGenAction(n, mode) {
-    var url =
-      mode === 'boot'
-        ? '/versioning/generations/' + n + '/boot'
-        : '/versioning/generations/' + n + '/switch';
+  function postGenAction(n) {
+    var url = '/versioning/generations/' + n + '/switch';
     var msg =
-      mode === 'boot'
-        ? 'Set boot default to generation ' +
-          n +
-          ' via background job? Takes effect on next reboot (or after switch-to-configuration boot).'
-        : 'Switch the LIVE system to generation ' +
-          n +
-          ' via background job?\n\n' +
-          'This runs outside the web UI (systemd-run) because the switch may restart neo-web. ' +
-          'The page may disconnect — wait and reload if needed.';
+      'Switch the LIVE system to generation ' +
+      n +
+      ' via background job?\n\n' +
+      'This runs outside the web UI (systemd-run) because the switch may restart neo-web. ' +
+      'The page may disconnect — wait and reload if needed.';
     if (!window.confirm(msg)) return Promise.resolve();
     setStatus('<span class="opacity-50">Starting background generation job…</span>');
     return fetch(url, { method: 'POST', headers: { Accept: 'text/html' } })
@@ -462,12 +455,7 @@
         if (el && typeof htmx !== 'undefined' && htmx.process) {
           htmx.process(el);
         }
-        toast(
-          mode === 'boot'
-            ? 'Boot default job started'
-            : 'Generation switch started in background',
-          'info'
-        );
+        toast('Generation switch started in background', 'info');
         // Refresh list later; switch may restart the UI first.
         setTimeout(function () {
           try {
@@ -485,13 +473,11 @@
 
   function renderDetail() {
     var el = $('versioning-detail');
-    var btnCheckout = $('ver-btn-checkout');
     var btnActivate = $('ver-btn-activate');
     if (!el) return;
 
     if (state.selected.length === 0) {
       el.innerHTML = '<p class="opacity-50 text-xs">Select a commit on the graph.</p>';
-      if (btnCheckout) btnCheckout.disabled = true;
       if (btnActivate) btnActivate.disabled = true;
       return;
     }
@@ -507,7 +493,6 @@
         selectionCardHtml('B · compare', 'success', state.selected[1], cb) +
         '<p class="opacity-50 text-[10px]">Ctrl/Cmd-click another node to replace B (A stays fixed).</p>' +
         '</div>';
-      if (btnCheckout) btnCheckout.disabled = true;
       if (btnActivate) btnActivate.disabled = true;
       return;
     }
@@ -552,9 +537,6 @@
         '<button type="button" class="btn btn-xs btn-warning ver-sel-gen-switch" data-n="' +
         c.generation +
         '">Switch now</button>' +
-        '<button type="button" class="btn btn-xs btn-outline ver-sel-gen-boot" data-n="' +
-        c.generation +
-        '">Set boot default</button>' +
         '</div></div>';
     }
     html += '</div>';
@@ -563,17 +545,11 @@
       '<div id="ver-services" class="flex flex-wrap gap-1 min-h-[1.5rem]"><span class="opacity-40 text-xs">Loading…</span></div></div>';
     el.innerHTML = html;
 
-    if (btnCheckout) btnCheckout.disabled = !tip;
     if (btnActivate) btnActivate.disabled = !tip;
 
     el.querySelectorAll('.ver-sel-gen-switch').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        postGenAction(btn.getAttribute('data-n'), 'switch');
-      });
-    });
-    el.querySelectorAll('.ver-sel-gen-boot').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        postGenAction(btn.getAttribute('data-n'), 'boot');
+        postGenAction(btn.getAttribute('data-n'));
       });
     });
 
@@ -909,9 +885,6 @@
               '<button type="button" class="btn btn-ghost btn-xs ver-gen-switch" data-n="' +
               g.number +
               '">Switch</button>' +
-              '<button type="button" class="btn btn-ghost btn-xs ver-gen-boot" data-n="' +
-              g.number +
-              '">Boot default</button>' +
               '</td></tr>'
             );
           })
@@ -924,12 +897,7 @@
 
         host.querySelectorAll('.ver-gen-switch').forEach(function (btn) {
           btn.addEventListener('click', function () {
-            postGenAction(btn.getAttribute('data-n'), 'switch');
-          });
-        });
-        host.querySelectorAll('.ver-gen-boot').forEach(function (btn) {
-          btn.addEventListener('click', function () {
-            postGenAction(btn.getAttribute('data-n'), 'boot');
+            postGenAction(btn.getAttribute('data-n'));
           });
         });
       })
@@ -940,7 +908,6 @@
   }
 
   function wireActions() {
-    var btnCheckout = $('ver-btn-checkout');
     var btnActivate = $('ver-btn-activate');
     var btnClear = $('ver-btn-clear');
     var btnRefresh = $('ver-btn-refresh-gens');
@@ -948,28 +915,13 @@
     if (btnClear) {
       btnClear.onclick = clearSelection;
     }
-    if (btnCheckout) {
-      btnCheckout.onclick = function () {
-        if (state.selected.length !== 1) return;
-        var id = state.selected[0];
-        var c = commitById(id);
-        var name =
-          c && c.branches && c.branches[0]
-            ? formatActivationName(c.branches[0])
-            : short(id);
-        postAction(
-          '/versioning/checkout/' + encodeURIComponent(id),
-          'Checkout config to ' + name + '? Working tree must be clean.'
-        );
-      };
-    }
     if (btnActivate) {
       btnActivate.onclick = function () {
         if (state.selected.length !== 1) return;
         var id = state.selected[0];
         postAction(
           '/versioning/activate/' + encodeURIComponent(id),
-          'Checkout this activation branch and run FULL activate (nixos-rebuild)? This can take several minutes and creates a new system generation.'
+          'Activate this config (checkout branch + full nixos-rebuild)? This can take several minutes and creates a new system generation.'
         );
       };
     }

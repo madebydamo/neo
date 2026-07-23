@@ -1,5 +1,5 @@
 {{#if (eq type.elem.kind "str")}}
-  <div class="mt-2 flex gap-2 items-center">
+  <div class="mt-1.5 sm:mt-2 flex gap-2 items-center">
     <input type="text" class="input input-primary input-sm flex-1 font-mono"
            x-model="values['{{name}}']"
            placeholder="null (use default)">
@@ -14,7 +14,7 @@
   </div>
 {{/if}}
 {{#if (eq type.elem.kind "path")}}
-  <div class="mt-2 flex gap-2 items-center">
+  <div class="mt-1.5 sm:mt-2 flex gap-2 items-center">
     <input type="text" class="input input-primary input-sm flex-1 font-mono"
            x-model="values['{{name}}']"
            placeholder="null (use default)">
@@ -29,7 +29,7 @@
   </div>
 {{/if}}
 {{#if (or (eq type.elem.kind "int") (eq type.elem.kind "port"))}}
-  <div class="mt-2 flex gap-2 items-center">
+  <div class="mt-1.5 sm:mt-2 flex gap-2 items-center">
     <input type="number"
            class="input input-primary input-sm flex-1 font-mono"
            x-model.number="values['{{name}}']"
@@ -41,7 +41,7 @@
   </div>
 {{/if}}
 {{#if (eq type.elem.kind "float")}}
-  <div class="mt-2 flex gap-2 items-center">
+  <div class="mt-1.5 sm:mt-2 flex gap-2 items-center">
     <input type="number"
            class="input input-primary input-sm flex-1 font-mono"
            x-model.number="values['{{name}}']"

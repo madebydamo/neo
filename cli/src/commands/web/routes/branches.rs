@@ -143,63 +143,6 @@ pub fn git_switch(config: &State<Arc<AppConfig>>, br: &str) -> RawHtml<String> {
     }
 }
 
-/// Checkout config to an activation branch tip for `rev` (must resolve to a branch tip).
-#[post("/versioning/checkout/<rev>")]
-pub fn versioning_checkout(config: &State<Arc<AppConfig>>, rev: &str) -> RawHtml<String> {
-    if !rev_ok(rev) {
-        return RawHtml(
-            r#"<span class="text-error text-xs">invalid rev</span>"#.to_string(),
-        );
-    }
-    if activation::is_activation_in_progress() {
-        return RawHtml(
-            "<span class=\"text-error text-xs\">activation in progress — cannot switch</span>"
-                .to_string(),
-        );
-    }
-    let dir = config_dir(&config);
-    let dir_str = dir.to_str().unwrap_or(".");
-    if is_worktree_dirty(dir_str) {
-        return RawHtml(
-            "<span class=\"text-error text-xs\">working tree dirty — commit, revert, or discard changes first</span>"
-                .to_string(),
-        );
-    }
-    let branch = match activation_branch_for_rev(dir_str, rev) {
-        Ok(Some(b)) if branch_ok(&b) => b,
-        Ok(Some(_)) => {
-            return RawHtml(
-                r#"<span class="text-error text-xs">branch name not allowed</span>"#.to_string(),
-            );
-        }
-        Ok(None) => {
-            return RawHtml(
-                r#"<span class="text-error text-xs">checkout only allowed on activation branch tips</span>"#
-                    .to_string(),
-            );
-        }
-        Err(e) => {
-            return RawHtml(format!(
-                r#"<span class="text-error text-xs">{}</span>"#,
-                escape_html(&e)
-            ));
-        }
-    };
-    match git_cmd(dir_str, &["switch", &branch]) {
-        Ok(()) => {
-            refresh_after_settings_change(&config);
-            RawHtml(format!(
-                r#"<span class="text-success text-xs">checked out {}</span>"#,
-                escape_html(&branch)
-            ))
-        }
-        Err(e) => RawHtml(format!(
-            r#"<span class="text-error text-xs">checkout failed: {}</span>"#,
-            escape_html(&e.to_string())
-        )),
-    }
-}
-
 /// Checkout activation branch tip for rev, then trigger full activate.
 #[post("/versioning/activate/<rev>")]
 pub fn versioning_activate(config: &State<Arc<AppConfig>>, rev: &str) -> RawHtml<String> {
@@ -254,21 +197,12 @@ pub fn versioning_activate(config: &State<Arc<AppConfig>>, rev: &str) -> RawHtml
 
 #[post("/versioning/generations/<n>/switch")]
 pub fn versioning_gen_switch(n: u64) -> RawHtml<String> {
-    generation_action(n, GenerationMode::Switch)
-}
-
-#[post("/versioning/generations/<n>/boot")]
-pub fn versioning_gen_boot(n: u64) -> RawHtml<String> {
-    generation_action(n, GenerationMode::Boot)
-}
-
-fn generation_action(n: u64, mode: GenerationMode) -> RawHtml<String> {
     if !generation_ok(n) {
         return RawHtml(
             r#"<span class="text-error text-xs">invalid generation</span>"#.to_string(),
         );
     }
     // Detached oneshot: switch-to-configuration stops neo-web; must not run in-process.
-    trigger_generation_switch(n, mode)
+    trigger_generation_switch(n, GenerationMode::Switch)
 }
 

@@ -1,7 +1,7 @@
 {{#if units}}
   {{!-- Runtime unit rows: live ActiveState + controls are pushed over /ws/status
        after the configuration page registers these units (watch_replace). --}}
-  <div class="mb-3 p-2 bg-base-200/60 rounded border border-base-300" id="runtime-units" data-units="{{#each units}}{{name}}{{#unless @last}} {{/unless}}{{/each}}">
+  <div class="mb-2 sm:mb-3 p-1.5 sm:p-2 bg-base-200/60 rounded border border-base-300" id="runtime-units" data-units="{{#each units}}{{name}}{{#unless @last}} {{/unless}}{{/each}}">
     <div class="text-xs font-semibold mb-1.5 flex items-center gap-2 flex-wrap">
       <span>Runtime units</span>
       <span class="text-[10px] font-normal opacity-50">live via websocket</span>
@@ -35,7 +35,7 @@
 {{else}}
   {{#if appdata}}
     {{!-- Appdata-only services (no declared runtime units) still get clear controls. --}}
-    <div class="mb-3 p-2 bg-base-200/60 rounded border border-base-300" id="runtime-units">
+    <div class="mb-2 sm:mb-3 p-1.5 sm:p-2 bg-base-200/60 rounded border border-base-300" id="runtime-units">
       <div class="text-xs font-semibold mb-0 flex items-center gap-2 flex-wrap">
         <span>Appdata</span>
         <span class="text-[10px] font-normal opacity-50 font-mono truncate max-w-[14rem]" title="{{appdata}}">{{appdata}}</span>

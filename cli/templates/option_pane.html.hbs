@@ -3,7 +3,8 @@
   <!-- Seed script moved to top so it is available immediately when x-init runs -->
   <script id="options-seed" type="application/json">{{{options_json}}}</script>
 
-  {{!-- Header block: sticky save sits outside card-body so it matches the action-bar width. --}}
+  {{!-- Header block: sticky save sits outside card-body so it matches the action-bar width.
+       Mobile padding is tightened via #options-pane --card-p in input.css. --}}
   <div class="card-body{{#if options}} pb-2{{/if}}">
     {{> pane/error}}
     {{#if meta}}
@@ -13,7 +14,7 @@
     {{/if}}
     {{> pane/runtime_units}}
 
-    <div class="text-[10px] text-base-content/50 -mt-1{{#if options}} mb-0{{else}} mb-3{{/if}}">
+    <div class="text-[10px] text-base-content/50 -mt-1{{#if options}} mb-0{{else}} mb-2 sm:mb-3{{/if}}">
       Values loaded from flake evaluation (current where set in your nixosConfiguration).
     </div>
   </div>
@@ -22,7 +23,7 @@
     {{> pane/sticky_save}}
   {{/if}}
 
-  <div class="card-body{{#if options}} pt-3{{/if}}">
+  <div class="card-body{{#if options}} pt-2 sm:pt-3{{/if}}">
     {{> pane/options_list}}
   </div>
 </div>
