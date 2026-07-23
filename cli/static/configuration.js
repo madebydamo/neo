@@ -3,6 +3,20 @@
 // WebSocket unit-watch registration, and the Alpine config shell (tabs + breadcrumb).
 // Loaded only by configuration.html.hbs.
 
+// Home-screen launch (iOS sets navigator.standalone; others use display-mode).
+(function markStandalone() {
+  try {
+    var standalone =
+      window.navigator.standalone === true ||
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      window.matchMedia('(display-mode: minimal-ui)').matches;
+    if (!standalone) return;
+    document.documentElement.classList.add('neo-standalone');
+    if (document.body) document.body.classList.add('neo-standalone');
+  } catch (e) {}
+})();
+
 /**
  * Show a transient DaisyUI alert toast outside #config-content.
  * @param {string} message

@@ -1,19 +1,26 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
   <head>
+    <meta charset="utf-8">
     <title>neo config</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
     {{!-- Standalone / home-screen: hide browser chrome (address/search bar) --}}
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="neo">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="neo">
+    <meta name="format-detection" content="telephone=no">
     <meta name="theme-color" content="#1d232a" media="(prefers-color-scheme: dark)">
     <meta name="theme-color" content="#f2f2f2" media="(prefers-color-scheme: light)">
-    <meta name="application-name" content="neo">
-    <link rel="manifest" href="/static/manifest.webmanifest">
+    <meta name="color-scheme" content="dark light">
+    {{!-- Same PWA install surface as index (Seerr-style; see pages::site_webmanifest). --}}
+    <link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials">
     <link rel="icon" href="/static/favicon/favicon.ico" sizes="any">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/favicon/icon-192.png">
+    <link rel="apple-touch-icon" href="/static/favicon/apple-touch-icon.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png">
 
     <link rel="stylesheet" href="/static/neo-ui.css" />

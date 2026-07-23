@@ -1,6 +1,8 @@
 // Full-page and HTMX partial routes for the navigator and configuration UI.
+use std::path::PathBuf;
 use std::sync::Arc;
 
+use rocket::http::ContentType;
 use rocket::response::{Redirect, Responder};
 use rocket::{get, State};
 use rocket_dyn_templates::Template;
@@ -16,6 +18,17 @@ use crate::commands::web::util::Htmx;
 pub enum ShellOrPartial {
     Template(Template),
     Redirect(Redirect),
+}
+
+/// Web app manifest at a root URL with the correct MIME type (Seerr-style).
+/// Loaded from STATIC_DIR at runtime — crane's cargo source filter omits `static/`, so
+/// `include_str!` would fail in the nix build. FileServer also lacks a `.webmanifest` MIME map.
+#[get("/site.webmanifest")]
+pub fn site_webmanifest() -> Option<(ContentType, String)> {
+    let static_dir = option_env!("STATIC_DIR").unwrap_or("static");
+    let path = PathBuf::from(static_dir).join("manifest.json");
+    let body = std::fs::read_to_string(path).ok()?;
+    Some((ContentType::new("application", "manifest+json"), body))
 }
 
 /// Instant shell for the navigator — no nix-eval. Services load via `/nav-services` (htmx).

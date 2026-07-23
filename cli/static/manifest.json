@@ -1,0 +1,40 @@
+{
+  "id": "/",
+  "name": "neo",
+  "short_name": "neo",
+  "description": "Neo homeserver navigator and configuration",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1d232a",
+  "theme_color": "#1d232a",
+  "icons": [
+    {
+      "src": "/static/favicon/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/favicon/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/favicon/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/favicon/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

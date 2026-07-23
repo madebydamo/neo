@@ -41,9 +41,11 @@
         ## Pitfalls
         - Do not activate a laptop/local config path against the live server by accident — use server profile on the host
         - `neo nuke` is destructive; require confirmation
+        - Home-screen / PWA standalone needs publicPaths for `/site.webmanifest` and `/static/favicon/` (browsers fetch the manifest without cookies). After activate, re-add the icon if an old shortcut was created while the manifest was blocked.
 
         ## Verification
         - UI loads at neo subdomain; activate completes without failed units
+        - `curl -sS https://neo.<domain>/site.webmanifest` returns JSON (no tinyauth 302) with `Content-Type: application/manifest+json`
       '';
     };
   };

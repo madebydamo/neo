@@ -14,6 +14,7 @@ use rocket::routes;
 
 pub fn routes() -> Vec<rocket::Route> {
     routes![
+        pages::site_webmanifest,
         pages::index,
         pages::nav_services,
         // Canonical configuration URLs (more specific paths before legacy aliases).

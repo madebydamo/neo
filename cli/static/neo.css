@@ -29,14 +29,32 @@
   will-change: transform;
 }
 
-/* Home-screen / standalone: respect notch and home indicator without browser chrome */
+/* Home-screen / standalone: respect notch and home indicator without browser chrome.
+   iOS uses black-translucent status bar; Android standalone also reports safe-area insets.
+   Scope to installed display modes so browser tabs are unaffected. */
+html {
+  background-color: #1d232a; /* fill overscroll / status-bar letterboxing */
+}
+
 @supports (padding: env(safe-area-inset-top)) {
-  body {
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-left: env(safe-area-inset-left, 0px);
-    padding-right: env(safe-area-inset-right, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    box-sizing: border-box;
+  @media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+    body {
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-left: env(safe-area-inset-left, 0px);
+      padding-right: env(safe-area-inset-right, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      box-sizing: border-box;
+    }
+  }
+  /* iOS Safari before display-mode support: navigator.standalone is set when launched from home screen */
+  @supports (-webkit-touch-callout: none) {
+    body.neo-standalone {
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-left: env(safe-area-inset-left, 0px);
+      padding-right: env(safe-area-inset-right, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      box-sizing: border-box;
+    }
   }
 }
 

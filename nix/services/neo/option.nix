@@ -48,7 +48,18 @@
                 '';
               };
             }
-            // lib.neo.mkReverseProxyOptions {subdomain = "neo";}
+            // lib.neo.mkReverseProxyOptions {
+              subdomain = "neo";
+              # Browsers fetch the web app manifest *without* credentials by default.
+              # If tinyauth 302s that request to HTML login, install/standalone never works.
+              # Icons are fetched the same way for home-screen / splash. Keep the UI itself gated.
+              auth.publicPaths = [
+                "^/site\\.webmanifest$"
+                "^/static/manifest\\.json$"
+                "^/static/favicon/"
+                "^/static/neo-icon\\.png$"
+              ];
+            }
             // lib.neo.mkSystemdUnits [
               "neo-web"
             ]
