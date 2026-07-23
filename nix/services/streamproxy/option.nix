@@ -76,7 +76,7 @@
               // lib.neo.mkSystemdUnits [
                 "streamproxy-local80"
                 "streamproxy-local443"
-                "rathole-server"
+                "container@streamproxy"
               ]
               // lib.neo.mkServiceMeta {
                 category = "Core";
