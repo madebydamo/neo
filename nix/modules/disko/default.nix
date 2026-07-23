@@ -127,21 +127,14 @@
       monthly = 3;
     };
 
-    #TODO
+    # Disko owns the root dataset; ensure the Neo data volume mountpoints only.
     system.activationScripts.create-volumes = lib.mkIf cfg.enabled (lib.mkForce (
-      lib.concatStringsSep "\n" (
-        lib.map
-        (dir:
-          lib.neo.mkActivationScriptForDir config {
-            dirPath = "${dir}";
-          })
-        [
-          config.neo.core.volumes.data
-          config.neo.core.volumes.appdata
-          config.neo.core.volumes.media
-          config.neo.core.volumes.documents
-        ]
-      )
+      lib.neo.mkEnsureDirs config [
+        config.neo.core.volumes.data
+        config.neo.core.volumes.appdata
+        config.neo.core.volumes.media
+        config.neo.core.volumes.documents
+      ]
     ));
   };
 }

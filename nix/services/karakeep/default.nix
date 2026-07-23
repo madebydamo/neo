@@ -25,12 +25,12 @@
           }
         ];
 
-        systemd.services.docker-karakeep.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${appdata}/data";
-        };
-        systemd.services.docker-karakeep-meilisearch.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${appdata}/meilisearch";
-        };
+        systemd.services.docker-karakeep.preStart = lib.neo.mkEnsureDirs config [
+          "${appdata}/data"
+        ];
+        systemd.services.docker-karakeep-meilisearch.preStart = lib.neo.mkEnsureDirs config [
+          "${appdata}/meilisearch"
+        ];
 
         virtualisation.oci-containers.containers = {
           karakeep-meilisearch = {

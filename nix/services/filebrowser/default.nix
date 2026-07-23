@@ -18,15 +18,11 @@
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-filebrowser.preStart = lib.concatStringsSep "\n" [
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.core.volumes.appdata}/filebrowser";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.core.volumes.appdata}/filebrowser/database";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.core.volumes.appdata}/filebrowser/config";
-          })
+          (lib.neo.mkEnsureDirs config [
+            "${config.neo.core.volumes.appdata}/filebrowser"
+            "${config.neo.core.volumes.appdata}/filebrowser/database"
+            "${config.neo.core.volumes.appdata}/filebrowser/config"
+          ])
           (lib.neo.mkActivationScriptForFile config {
             filePath = "${config.neo.core.volumes.appdata}/filebrowser/config/settings.json";
             content = settingsJson;

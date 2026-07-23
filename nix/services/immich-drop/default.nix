@@ -9,10 +9,8 @@
       cfg = config.neo.services.immich-drop;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-immich-drop.preStart = lib.concatStringsSep "\n" [
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.core.volumes.appdata}/immich-drop";
-          })
+        systemd.services.docker-immich-drop.preStart = lib.neo.mkEnsureDirs config [
+          "${config.neo.core.volumes.appdata}/immich-drop"
         ];
 
         virtualisation.oci-containers.containers = {

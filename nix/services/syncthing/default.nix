@@ -9,10 +9,8 @@
       cfg = config.neo.services.syncthing;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-syncthing.preStart = lib.concatStringsSep "\n" [
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.core.volumes.appdata}/syncthing";
-          })
+        systemd.services.docker-syncthing.preStart = lib.neo.mkEnsureDirs config [
+          "${config.neo.core.volumes.appdata}/syncthing"
         ];
 
         virtualisation.oci-containers.containers.syncthing = {

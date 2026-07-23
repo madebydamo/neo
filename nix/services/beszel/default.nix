@@ -9,9 +9,9 @@
       cfg = config.neo.services.beszel;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-beszel.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${config.neo.core.volumes.appdata}/beszel";
-        };
+        systemd.services.docker-beszel.preStart = lib.neo.mkEnsureDirs config [
+          "${config.neo.core.volumes.appdata}/beszel"
+        ];
 
         virtualisation.oci-containers.containers.beszel = {
           image = cfg.containers.beszel;

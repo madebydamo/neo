@@ -12,10 +12,8 @@
       image = cfg.containers.isponsorblocktv;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-isponsorblocktv.preStart = lib.concatStringsSep "\n" [
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = dataDir;
-          })
+        systemd.services.docker-isponsorblocktv.preStart = lib.neo.mkEnsureDirs config [
+          dataDir
         ];
 
         # Main headless container (waits until devices are configured)

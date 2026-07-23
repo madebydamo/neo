@@ -32,10 +32,8 @@
       );
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-pihole.preStart = lib.concatStringsSep "\n" [
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${piholeData}";
-          })
+        systemd.services.docker-pihole.preStart = lib.neo.mkEnsureDirs config [
+          piholeData
         ];
 
         networking.firewall = mkIf cfg.enabled {

@@ -230,12 +230,14 @@
         AmbientCapabilities = ["CAP_SETUID" "CAP_SETGID" "CAP_SYS_ADMIN"];
       };
 
-      system.activationScripts.hermes-workspace = lib.neo.mkActivationScriptForDir config {
-        dirPath = "${cfg.stateDir}/workspace";
-        user = "hermes";
-        group = "hermes";
-        mode = "2770";
-      };
+      system.activationScripts.hermes-workspace = lib.neo.mkEnsureDirs config [
+        {
+          dirPath = "${cfg.stateDir}/workspace";
+          user = "hermes";
+          group = "hermes";
+          mode = "2770";
+        }
+      ];
 
       # SWAG serves this at /login so Hermes form-auth is invisible behind tinyauth.
       system.activationScripts.hermes-dashboard-autologin = lib.neo.mkActivationScriptForFile config {

@@ -28,15 +28,15 @@
           }
         ];
 
-        systemd.services.docker-activepieces-db.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${appdata}/pgdata";
-        };
-        systemd.services.docker-activepieces-redis.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${appdata}/redisdata";
-        };
-        systemd.services.docker-activepieces.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${appdata}/cache";
-        };
+        systemd.services.docker-activepieces-db.preStart = lib.neo.mkEnsureDirs config [
+          "${appdata}/pgdata"
+        ];
+        systemd.services.docker-activepieces-redis.preStart = lib.neo.mkEnsureDirs config [
+          "${appdata}/redisdata"
+        ];
+        systemd.services.docker-activepieces.preStart = lib.neo.mkEnsureDirs config [
+          "${appdata}/cache"
+        ];
 
         virtualisation.oci-containers.containers = {
           activepieces-redis = {

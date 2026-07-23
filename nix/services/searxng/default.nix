@@ -11,24 +11,14 @@
       domain = config.neo.services.swag.domain;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-searxng-redis.preStart = lib.concatStringsSep "\n" [
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${appdata}";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${appdata}/redis";
-          })
+        systemd.services.docker-searxng-redis.preStart = lib.neo.mkEnsureDirs config [
+          appdata
+          "${appdata}/redis"
         ];
-        systemd.services.docker-searxng.preStart = lib.concatStringsSep "\n" [
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${appdata}";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${appdata}/searxng";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${appdata}/cache";
-          })
+        systemd.services.docker-searxng.preStart = lib.neo.mkEnsureDirs config [
+          appdata
+          "${appdata}/searxng"
+          "${appdata}/cache"
         ];
 
         virtualisation.oci-containers.containers = {

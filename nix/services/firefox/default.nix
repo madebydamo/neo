@@ -10,9 +10,7 @@
       appdata = "${config.neo.core.volumes.appdata}/firefox";
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-firefox.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = appdata;
-        };
+        systemd.services.docker-firefox.preStart = lib.neo.mkEnsureDirs config [appdata];
 
         virtualisation.oci-containers.containers.firefox = {
           image = cfg.containers.firefox;

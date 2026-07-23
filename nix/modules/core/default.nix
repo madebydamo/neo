@@ -40,22 +40,13 @@
     # Allow other neo hosts to use this machine as a remote Nix builder over SSH as homeserver.
     nix.settings.trusted-users = ["homeserver"];
 
-    system.activationScripts.create-volumes = lib.concatStringsSep "\n" (
-      lib.map
-      (
-        dir:
-          lib.neo.mkActivationScriptForDir config {
-            dirPath = "${dir}";
-          }
-      )
-      [
-        config.neo.core.volumes.root
-        config.neo.core.volumes.data
-        config.neo.core.volumes.appdata
-        config.neo.core.volumes.media
-        config.neo.core.volumes.documents
-      ]
-    );
+    system.activationScripts.create-volumes = lib.neo.mkEnsureDirs config [
+      config.neo.core.volumes.root
+      config.neo.core.volumes.data
+      config.neo.core.volumes.appdata
+      config.neo.core.volumes.media
+      config.neo.core.volumes.documents
+    ];
 
     system.stateVersion = "24.11";
   };

@@ -10,9 +10,7 @@
       appdata = "${config.neo.core.volumes.appdata}/pastebin";
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-pastebin.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = appdata;
-        };
+        systemd.services.docker-pastebin.preStart = lib.neo.mkEnsureDirs config [appdata];
 
         virtualisation.oci-containers.containers.pastebin = {
           image = cfg.containers.pastebin;

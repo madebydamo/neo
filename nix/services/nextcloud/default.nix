@@ -13,16 +13,20 @@
       nextcloudUrl = "${cfg.subdomain}.${domain}";
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-nextcloud-db.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${appdata}/db";
-          user = "999";
-          group = "999";
-        };
-        systemd.services.docker-nextcloud.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${appdata}/html";
-          user = "33";
-          group = "33";
-        };
+        systemd.services.docker-nextcloud-db.preStart = lib.neo.mkEnsureDirs config [
+          {
+            dirPath = "${appdata}/db";
+            user = "999";
+            group = "999";
+          }
+        ];
+        systemd.services.docker-nextcloud.preStart = lib.neo.mkEnsureDirs config [
+          {
+            dirPath = "${appdata}/html";
+            user = "33";
+            group = "33";
+          }
+        ];
         virtualisation.oci-containers.containers = {
           nextcloud-db = {
             image = cfg.containers."nextcloud-db";

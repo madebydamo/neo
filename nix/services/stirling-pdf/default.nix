@@ -11,25 +11,13 @@
       appdata = "${config.neo.core.volumes.appdata}/stirling-pdf";
     in {
       config = mkIf cfg.enabled {
-        systemd.services."docker-stirling-pdf".preStart = lib.concatStringsSep "\n" [
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = appdata;
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${appdata}/tessdata";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${appdata}/configs";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${appdata}/logs";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${appdata}/customFiles";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${appdata}/pipeline";
-          })
+        systemd.services."docker-stirling-pdf".preStart = lib.neo.mkEnsureDirs config [
+          appdata
+          "${appdata}/tessdata"
+          "${appdata}/configs"
+          "${appdata}/logs"
+          "${appdata}/customFiles"
+          "${appdata}/pipeline"
         ];
 
         virtualisation.oci-containers.containers."stirling-pdf" = {

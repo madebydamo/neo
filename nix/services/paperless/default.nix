@@ -11,25 +11,17 @@
       domain = config.neo.services.swag.domain;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-paperless-db.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${appdata}/pgdata";
-        };
-        systemd.services.docker-paperless-redis.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = "${appdata}/redisdata";
-        };
-        systemd.services.docker-paperless.preStart = lib.concatStringsSep "\n" [
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${appdata}/data";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${appdata}/media";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${appdata}/export";
-          })
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${appdata}/consume";
-          })
+        systemd.services.docker-paperless-db.preStart = lib.neo.mkEnsureDirs config [
+          "${appdata}/pgdata"
+        ];
+        systemd.services.docker-paperless-redis.preStart = lib.neo.mkEnsureDirs config [
+          "${appdata}/redisdata"
+        ];
+        systemd.services.docker-paperless.preStart = lib.neo.mkEnsureDirs config [
+          "${appdata}/data"
+          "${appdata}/media"
+          "${appdata}/export"
+          "${appdata}/consume"
         ];
 
         virtualisation.oci-containers.containers = {

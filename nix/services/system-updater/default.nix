@@ -43,10 +43,12 @@
           User = "homeserver";
           Group = "homeserver";
         };
-        preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = serverCfg.configPath;
-          mode = "0755";
-        };
+        preStart = lib.neo.mkEnsureDirs config [
+          {
+            dirPath = serverCfg.configPath;
+            mode = "0755";
+          }
+        ];
         script = ''
           ${neo}/bin/neo --profile server init
         '';

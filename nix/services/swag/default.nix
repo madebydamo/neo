@@ -122,18 +122,12 @@
                 "rm -f ${config.neo.core.volumes.appdata}/swag/nginx/proxy.conf || true"
                 "rm -f ${config.neo.core.volumes.appdata}/swag/nginx/nginx.conf || true"
                 "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'"
-                (lib.neo.mkActivationScriptForDir config {
-                  dirPath = "${config.neo.core.volumes.appdata}/swag/nginx/proxy-confs";
-                })
-                (lib.neo.mkActivationScriptForDir config {
-                  dirPath = "${config.neo.core.volumes.appdata}/swag/nginx";
-                })
-                (lib.neo.mkActivationScriptForDir config {
-                  dirPath = "${config.neo.core.volumes.appdata}/swag";
-                })
-                (lib.neo.mkActivationScriptForDir config {
-                  dirPath = "${config.neo.core.volumes.appdata}/swag/nginx/conf.d";
-                })
+                (lib.neo.mkEnsureDirs config [
+                  "${config.neo.core.volumes.appdata}/swag"
+                  "${config.neo.core.volumes.appdata}/swag/nginx"
+                  "${config.neo.core.volumes.appdata}/swag/nginx/proxy-confs"
+                  "${config.neo.core.volumes.appdata}/swag/nginx/conf.d"
+                ])
               ]
               ++ proxyConfScripts
               ++ customProxyConfScripts

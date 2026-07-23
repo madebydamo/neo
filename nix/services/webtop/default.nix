@@ -10,9 +10,7 @@
       appdata = "${config.neo.core.volumes.appdata}/webtop";
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-webtop.preStart = lib.neo.mkActivationScriptForDir config {
-          dirPath = appdata;
-        };
+        systemd.services.docker-webtop.preStart = lib.neo.mkEnsureDirs config [appdata];
 
         virtualisation.oci-containers.containers.webtop = {
           image = cfg.containers.webtop;

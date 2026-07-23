@@ -41,10 +41,8 @@
           }
         ];
 
-        systemd.services.docker-tinyauth.preStart = lib.concatStringsSep "\n" [
-          (lib.neo.mkActivationScriptForDir config {
-            dirPath = "${config.neo.core.volumes.appdata}/tinyauth";
-          })
+        systemd.services.docker-tinyauth.preStart = lib.neo.mkEnsureDirs config [
+          "${config.neo.core.volumes.appdata}/tinyauth"
         ];
 
         virtualisation.oci-containers.containers.tinyauth = {
