@@ -10,7 +10,7 @@ use crate::commands::web::util::config_dir;
 /// Restore working-tree `settings.toml` from last applied `/etc/neo/settings.toml`.
 /// On success: refresh evaluator, action bar, and schema cache.
 pub fn restore_settings_from_applied(config: &AppConfig) -> Result<(), String> {
-    let dir = config_dir(config);
+    let dir = config_dir(&config.settings_path);
     let dir_str = dir.to_str().unwrap_or(".");
     let source = PathBuf::from("/etc/neo/settings.toml");
     let dummy = DocumentMut::new();

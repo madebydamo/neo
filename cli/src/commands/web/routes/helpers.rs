@@ -213,7 +213,7 @@ async fn load_options(
         ev.extract_service_options(name).await
     };
     drop(ev);
-    if let Some(err) = pane.error {
+    if let Some(err) = pane.eval_error.error {
         return Err(err);
     }
     let opts = pane.options;

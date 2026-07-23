@@ -3,9 +3,9 @@ use super::registry::{
     EXTRACT_NEO_THEME, EXTRACT_PROXIED_SERVICES, EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
 };
 use super::repl::NixEvaluator;
-use crate::commands::web::structs::{
-    ExtractedServiceGroups, IndexContext, NavigatorContext, OptionPaneContext, OptionSchema,
-    RuntimeUnit, ServiceMeta,
+use crate::commands::web::types::{
+    EvalErrorUi, ExtractedServiceGroups, IndexContext, NavigatorContext, OptionPaneContext,
+    OptionSchema, RuntimeUnit, ServiceMeta,
 };
 use crate::commands::web::util::{escape_nix_string, service_name_ok};
 
@@ -110,7 +110,7 @@ fn map_units(
         .collect()
 }
 
-fn enrich_type(t: &mut crate::commands::web::structs::OptionType) {
+fn enrich_type(t: &mut crate::commands::web::types::OptionType) {
     if let Some(fields) = t.fields.as_mut() {
         enrich_options(fields);
     }
@@ -154,10 +154,12 @@ impl NixEvaluator {
                 eprintln!("web: nix extract_services failed: {e:#}");
                 let f = format_nix_failure("Nix error while extracting service list", &e);
                 IndexContext {
-                    error: Some(f.message),
-                    error_kind: Some(f.kind_id),
-                    can_store_repair: f.can_store_repair,
-                    can_flake_update: f.can_flake_update,
+                    eval_error: EvalErrorUi::from_failure(
+                        f.message,
+                        f.kind_id,
+                        f.can_store_repair,
+                        f.can_flake_update,
+                    ),
                     ..Default::default()
                 }
             }
@@ -172,10 +174,7 @@ impl NixEvaluator {
             options_json: "[]".to_string(),
             save_endpoint: target.save_endpoint(),
             is_core: target.is_core(),
-            error: Some(reason.to_string()),
-            error_kind: None,
-            can_store_repair: false,
-            can_flake_update: false,
+            eval_error: EvalErrorUi::message(reason),
             units: vec![],
             containers: std::collections::HashMap::new(),
             appdata: None,
@@ -224,10 +223,12 @@ impl NixEvaluator {
                     options_json: "[]".to_string(),
                     save_endpoint: target.save_endpoint(),
                     is_core: target.is_core(),
-                    error: Some(f.message),
-                    error_kind: Some(f.kind_id),
-                    can_store_repair: f.can_store_repair,
-                    can_flake_update: f.can_flake_update,
+                    eval_error: EvalErrorUi::from_failure(
+                        f.message,
+                        f.kind_id,
+                        f.can_store_repair,
+                        f.can_flake_update,
+                    ),
                     units: vec![],
                     containers: std::collections::HashMap::new(),
                     appdata: None,
@@ -249,10 +250,7 @@ impl NixEvaluator {
             options_json,
             save_endpoint: target.save_endpoint(),
             is_core: target.is_core(),
-            error: raw.error,
-            error_kind: None,
-            can_store_repair: false,
-            can_flake_update: false,
+            eval_error: raw.error.map(EvalErrorUi::message).unwrap_or_default(),
             units,
             containers: raw.containers,
             appdata: raw.appdata.filter(|p| !p.is_empty()),
@@ -281,10 +279,12 @@ impl NixEvaluator {
                     domain: None,
                     services: vec![],
                     theme: String::new(),
-                    error: Some(f.message),
-                    error_kind: Some(f.kind_id),
-                    can_store_repair: f.can_store_repair,
-                    can_flake_update: f.can_flake_update,
+                    eval_error: EvalErrorUi::from_failure(
+                        f.message,
+                        f.kind_id,
+                        f.can_store_repair,
+                        f.can_flake_update,
+                    ),
                     ..Default::default()
                 }
             }

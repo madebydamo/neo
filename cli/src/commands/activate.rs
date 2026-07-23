@@ -168,7 +168,11 @@ pub fn activate(
 /// Embed generation number in the activation commit message (no sidecar files).
 /// `has_activation_commit` is true when this run created/amended a real Activation commit
 /// (dirty tree); otherwise we add an empty commit so re-activates still get history + gen.
-fn record_gen_after_activate(config_path: &str, activation_branch: &str, has_activation_commit: bool) {
+fn record_gen_after_activate(
+    config_path: &str,
+    activation_branch: &str,
+    has_activation_commit: bool,
+) {
     match record_generation_in_commit(config_path, activation_branch, has_activation_commit) {
         Ok(gen) => {
             println!(

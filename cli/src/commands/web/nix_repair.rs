@@ -1,112 +1,37 @@
 // Long-running Nix store repair jobs triggered from the web UI.
 // Does not hold the evaluator mutex while `nix-store` runs; refreshes the repl afterwards.
 use std::fs;
-use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command as TokioCommand;
 
-use crate::commands::log::{operations_dir, OPERATIONS_DIR};
-use crate::commands::web::structs::AppConfig;
+use crate::commands::log::OPERATIONS_DIR;
+use crate::commands::web::ops::store::{
+    append_log, find_recent_in_progress, load_log_tail, load_state, log_path, ops_dir, write_state,
+};
+use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::{escape_html, nix_bin, repair_id_ok, sudo_cmd};
 
-pub fn repair_dir() -> PathBuf {
-    operations_dir()
-}
-
-fn state_path(id: &str) -> PathBuf {
-    repair_dir().join(format!("{id}.json"))
-}
-
-fn log_path(id: &str) -> PathBuf {
-    repair_dir().join(format!("{id}.log"))
-}
-
-fn write_state(id: &str, status: &str, phase: &str, err: Option<&str>) {
-    let _ = fs::create_dir_all(repair_dir());
-    let mut s = serde_json::json!({
-        "id": id,
-        "status": status,
-        "phase": phase,
-        "log_path": log_path(id).to_string_lossy(),
-    });
-    if let Some(e) = err {
-        s["error"] = serde_json::json!(e);
-    }
-    let _ = fs::write(
-        state_path(id),
-        serde_json::to_string_pretty(&s).unwrap_or_else(|_| "{}".to_string()),
-    );
+pub fn repair_dir() -> std::path::PathBuf {
+    ops_dir()
 }
 
 pub fn load_repair_state(id: &str) -> Option<serde_json::Value> {
     if !repair_id_ok(id) {
         return None;
     }
-    let p = state_path(id);
-    let s = fs::read_to_string(p).ok()?;
-    serde_json::from_str(&s).ok()
+    load_state(id)
 }
 
 pub fn load_repair_log_tail(id: &str, n: usize) -> String {
-    if !repair_id_ok(id) {
-        return "(invalid id)".to_string();
-    }
-    let p = log_path(id);
-    if let Ok(content) = fs::read_to_string(&p) {
-        let lines: Vec<&str> = content.lines().collect();
-        let start = if lines.len() > n { lines.len() - n } else { 0 };
-        return lines[start..].join("\n");
-    }
-    "(no log yet)".to_string()
+    load_log_tail(id, n)
 }
 
 /// Most recent in-progress repair within the last hour, if any.
 pub fn find_recent_in_progress_repair() -> Option<String> {
-    let dir = repair_dir();
-    if !dir.exists() {
-        return None;
-    }
-    let mut best: Option<(String, u64)> = None;
-    if let Ok(rd) = fs::read_dir(&dir) {
-        for e in rd.flatten() {
-            let name = e.file_name();
-            let name = name.to_string_lossy();
-            if !(name.ends_with(".json") && name.starts_with("repair_")) {
-                continue;
-            }
-            let Ok(meta) = e.metadata() else { continue };
-            let Ok(mtime) = meta.modified() else { continue };
-            let t = mtime
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
-            if now > t + 3600 {
-                continue;
-            }
-            let Ok(s) = fs::read_to_string(e.path()) else {
-                continue;
-            };
-            let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) else {
-                continue;
-            };
-            if v.get("status").and_then(|x| x.as_str()) != Some("in_progress") {
-                continue;
-            }
-            if best.as_ref().map_or(true, |&(_, bt)| t > bt) {
-                let id = name.trim_end_matches(".json").to_string();
-                best = Some((id, t));
-            }
-        }
-    }
-    best.map(|(id, _)| id)
+    find_recent_in_progress("repair_")
 }
 
 /// Start a background store verify+repair. Returns the operation id.
@@ -207,7 +132,7 @@ async fn run_store_verify_repair(config: Arc<AppConfig>, id: String) {
                     Ok(()) => {
                         append_log(&log_file, "nix repl refreshed after store repair");
                         let nav = ev.extract_proxied_services().await;
-                        if let Some(err) = nav.error.as_ref() {
+                        if let Some(err) = nav.eval_error.error.as_ref() {
                             append_log(&log_file, &format!("warm-up still reports error: {err}"));
                         } else {
                             append_log(&log_file, "warm-up navigator extract succeeded");
@@ -243,13 +168,6 @@ async fn run_store_verify_repair(config: Arc<AppConfig>, id: String) {
             append_log(&log_file, &msg);
             write_state(&id, "failed", "nix-store-verify-repair", Some(&msg));
         }
-    }
-}
-
-fn append_log(path: &std::path::Path, line: &str) {
-    use std::io::Write;
-    if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(path) {
-        let _ = writeln!(f, "{line}");
     }
 }
 

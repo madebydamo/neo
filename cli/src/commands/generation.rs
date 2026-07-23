@@ -164,7 +164,11 @@ pub fn list_system_generations_with_sudo(sudo_cmd: &str) -> GenerationsList {
 ///
 /// **Must not run inside the neo-web process** for live `switch`: the activation
 /// stops `neo-web.service`. Web UI triggers this via `systemd-run` oneshot.
-pub fn switch_system_generation(n: u64, mode: GenerationMode, sudo_cmd: &str) -> Result<(), String> {
+pub fn switch_system_generation(
+    n: u64,
+    mode: GenerationMode,
+    sudo_cmd: &str,
+) -> Result<(), String> {
     let link = PathBuf::from(format!("/nix/var/nix/profiles/system-{}-link", n));
     if !link.exists() && !link.is_symlink() {
         return Err(format!("generation {} not found ({})", n, link.display()));
@@ -251,10 +255,7 @@ pub fn parse_generation_from_message(text: &str) -> Option<u64> {
     let lower = text.to_ascii_lowercase();
     if let Some(idx) = lower.find("(generation ") {
         let rest = &text[idx + "(generation ".len()..];
-        let num: String = rest
-            .chars()
-            .take_while(|c| c.is_ascii_digit())
-            .collect();
+        let num: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
         if let Ok(n) = num.parse::<u64>() {
             if n > 0 {
                 return Some(n);
@@ -417,7 +418,9 @@ mod tests {
     #[test]
     fn parse_generation_from_subject() {
         assert_eq!(
-            parse_generation_from_message("Activation: activation_20260721-123033 (generation 221)"),
+            parse_generation_from_message(
+                "Activation: activation_20260721-123033 (generation 221)"
+            ),
             Some(221)
         );
         assert_eq!(

@@ -1,0 +1,9 @@
+{{!-- In-progress / ok / err chips used by unit pull and clear-appdata OOB slots.
+     Rendered from Rust for WS pushes; kept here as the HTML source of truth. --}}
+{{#if pulling}}
+<span class="inline-flex items-center gap-1 text-info max-w-full"><span class="loading loading-spinner loading-xs flex-shrink-0"></span><span class="truncate">{{message}}</span></span>
+{{else if ok}}
+<span class="text-success truncate">✓ {{message}}</span>
+{{else}}
+<span class="text-error truncate">✗ {{message}}</span>
+{{/if}}

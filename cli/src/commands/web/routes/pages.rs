@@ -8,7 +8,7 @@ use rocket::{get, State};
 use rocket_dyn_templates::Template;
 
 use crate::commands::web::routes::branches::branches_template;
-use crate::commands::web::structs::{
+use crate::commands::web::types::{
     AppConfig, ConfigurationPageContext, IndexContext, NavigatorContext,
 };
 use crate::commands::web::util::Htmx;
@@ -65,10 +65,7 @@ async fn configuration_shell(
         let theme = ev.extract_neo_theme().await;
         ConfigurationPageContext {
             theme,
-            error: services.error,
-            error_kind: services.error_kind,
-            can_store_repair: services.can_store_repair,
-            can_flake_update: services.can_flake_update,
+            eval_error: services.eval_error,
             initial_content_url: initial_content_url.to_string(),
             initial_tab: initial_tab.to_string(),
             initial_detail,

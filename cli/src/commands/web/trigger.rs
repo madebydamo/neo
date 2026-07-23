@@ -203,5 +203,9 @@ pub fn trigger_generation_switch(n: u64, mode: GenerationMode) -> RawHtml<String
         &format!("Neo generation {mode_s} {n}"),
     );
 
-    RawHtml(activation::build_genswitch_monitor_fragment(op.id(), n, mode_s))
+    RawHtml(activation::build_genswitch_monitor_fragment(
+        op.id(),
+        n,
+        mode_s,
+    ))
 }

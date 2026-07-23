@@ -1,0 +1,5 @@
+{{!-- Shared Revert / Apply row for the pending-changes dialog. --}}
+<div class="mt-4 flex flex-nowrap items-center justify-end gap-2" data-dialog-actions>
+  <button type="button" hx-post="/changes/revert" hx-target="#changes-body" hx-swap="innerHTML" class="btn btn-sm btn-ghost">Revert</button>
+  <button type="button" hx-post="/changes/apply" hx-target="#changes-body" hx-swap="innerHTML" hx-confirm="Run full activation (write-flake + nixos-rebuild)? This can take several minutes." class="btn btn-sm btn-error">Apply (activate)</button>
+</div>

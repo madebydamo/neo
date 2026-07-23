@@ -97,7 +97,7 @@ pub async fn clear_appdata(service: &str, config: &State<Arc<AppConfig>>) -> Raw
         ev.extract_service_options(service).await
     };
 
-    if let Some(err) = pane.error.as_ref() {
+    if let Some(err) = pane.eval_error.error.as_ref() {
         let (inner, title) = (
             format!(
                 r#"<span class="text-error truncate">✗ {}</span>"#,

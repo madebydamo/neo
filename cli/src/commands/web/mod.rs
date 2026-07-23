@@ -11,21 +11,25 @@ use toml_edit::DocumentMut;
 
 mod action_bar;
 mod activation;
+mod git;
 mod git_ops;
 mod helper_exec;
 mod nix;
 mod nix_repair;
+mod ops;
 mod routes;
 mod schema_cache;
 mod settings;
 mod structs;
 mod trigger;
+mod types;
 mod units;
 mod util;
 
 use action_bar::start_action_bar_watcher;
 use routes::routes;
-use structs::AppConfig;
+use types::AppConfig;
+use util::InFlightSet;
 
 pub fn web(
     _doc: &DocumentMut,
@@ -62,10 +66,8 @@ pub fn web(
             evaluator: Arc::new(Mutex::new(evaluator)),
             eval_busy: busy,
             unit_updates: unit_tx,
-            pulls_in_flight: Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
-            clear_appdata_in_flight: Arc::new(std::sync::Mutex::new(
-                std::collections::HashSet::new(),
-            )),
+            pulls_in_flight: Arc::new(InFlightSet::new()),
+            clear_appdata_in_flight: Arc::new(InFlightSet::new()),
             schema_cache: Arc::new(tokio::sync::RwLock::new(
                 schema_cache::SchemaCache::default(),
             )),
@@ -88,7 +90,7 @@ pub fn web(
             {
                 let mut ev = evaluator_for_warmup.lock().await;
                 let nav = ev.extract_proxied_services().await;
-                if let Some(err) = nav.error.as_ref() {
+                if let Some(err) = nav.eval_error.error.as_ref() {
                     eprintln!("web: warm-up navigator extract failed: {err}");
                 }
                 let _ = ev.extract_neo_theme().await;

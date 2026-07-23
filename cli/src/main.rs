@@ -8,11 +8,20 @@ use toml_edit::DocumentMut;
 pub mod commands;
 use crate::commands::profile::{resolve_config_path, resolve_profile};
 use crate::commands::{
-    activate::activate, build::build, edit::edit, execute_command,
+    activate::activate,
+    build::build,
+    edit::edit,
+    execute_command,
     generate_hardware::generate_hardware,
     generation::{generation_boot, generation_help, generation_list, generation_switch},
-    git::git, init::init, migrate::migrate, nuke::nuke, paste_settings::paste_settings,
-    update::update, update_inputs::update_inputs, web::web,
+    git::git,
+    init::init,
+    migrate::migrate,
+    nuke::nuke,
+    paste_settings::paste_settings,
+    update::update,
+    update_inputs::update_inputs,
+    web::web,
 };
 #[derive(Parser)]
 #[command(name = "neo", version, about = "Neo Homeserver CLI", long_about = None)]
@@ -98,13 +107,9 @@ enum GenerationAction {
     /// List system profile generations.
     List,
     /// Switch the running system to generation N.
-    Switch {
-        n: u64,
-    },
+    Switch { n: u64 },
     /// Set boot default to generation N (next reboot).
-    Boot {
-        n: u64,
-    },
+    Boot { n: u64 },
 }
 
 pub fn load_or_default_settings(path: &PathBuf, _profile: &str) -> Result<DocumentMut> {

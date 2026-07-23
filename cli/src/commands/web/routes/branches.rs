@@ -20,7 +20,7 @@ use crate::commands::web::util::{
 
 /// Shared branches / versioning partial (used by `/branches` and `/configuration/versioning`).
 pub fn branches_template(config: &AppConfig) -> Template {
-    let dir = config_dir(config);
+    let dir = config_dir(&config.settings_path);
     let dir_str = dir.to_str().unwrap_or(".");
     let brs = list_activation_branches(dir_str);
     Template::render(
@@ -41,24 +41,22 @@ pub fn branches(config: &State<Arc<AppConfig>>) -> Template {
 /// Structured activation commit graph for the D3 UI.
 #[get("/versioning/graph")]
 pub fn versioning_graph(config: &State<Arc<AppConfig>>) -> RawJson<String> {
-    let dir = config_dir(config);
+    let dir = config_dir(&config.settings_path);
     let dir_str = dir.to_str().unwrap_or(".");
     let g = activation_graph(dir_str);
-    RawJson(serde_json::to_string(&g).unwrap_or_else(|_| {
-        r#"{"commits":[],"head":"","currentBranch":""}"#.to_string()
-    }))
+    RawJson(
+        serde_json::to_string(&g)
+            .unwrap_or_else(|_| r#"{"commits":[],"head":"","currentBranch":""}"#.to_string()),
+    )
 }
 
 /// Enabled/disabled services from `settings.toml` at a revision.
 #[get("/versioning/commit/<rev>/services")]
 pub fn versioning_services(config: &State<Arc<AppConfig>>, rev: &str) -> RawJson<String> {
     if !rev_ok(rev) {
-        return RawJson(
-            serde_json::json!({"error": "invalid rev"})
-                .to_string(),
-        );
+        return RawJson(serde_json::json!({"error": "invalid rev"}).to_string());
     }
-    let dir = config_dir(config);
+    let dir = config_dir(&config.settings_path);
     let dir_str = dir.to_str().unwrap_or(".");
     match enabled_services_at_rev(dir_str, rev) {
         Ok(s) => RawJson(serde_json::to_string(&s).unwrap_or_else(|_| "{}".to_string())),
@@ -70,11 +68,9 @@ pub fn versioning_services(config: &State<Arc<AppConfig>>, rev: &str) -> RawJson
 #[get("/versioning/diff?<a>&<b>")]
 pub fn versioning_diff(config: &State<Arc<AppConfig>>, a: &str, b: &str) -> RawHtml<String> {
     if !rev_ok(a) || !rev_ok(b) {
-        return RawHtml(
-            r#"<div class="text-error text-sm">invalid revision</div>"#.to_string(),
-        );
+        return RawHtml(r#"<div class="text-error text-sm">invalid revision</div>"#.to_string());
     }
-    let dir = config_dir(config);
+    let dir = config_dir(&config.settings_path);
     let dir_str = dir.to_str().unwrap_or(".");
     match diff_settings(dir_str, a, b) {
         Ok(diff) => {
@@ -101,9 +97,10 @@ pub fn versioning_diff(config: &State<Arc<AppConfig>>, a: &str, b: &str) -> RawH
 #[get("/versioning/generations")]
 pub fn versioning_generations() -> RawJson<String> {
     let list = list_system_generations_with_sudo(&sudo_cmd());
-    RawJson(serde_json::to_string(&list).unwrap_or_else(|_| {
-        r#"{"generations":[],"unavailable":true}"#.to_string()
-    }))
+    RawJson(
+        serde_json::to_string(&list)
+            .unwrap_or_else(|_| r#"{"generations":[],"unavailable":true}"#.to_string()),
+    )
 }
 
 #[post("/git/switch/<br>")]
@@ -120,7 +117,7 @@ pub fn git_switch(config: &State<Arc<AppConfig>>, br: &str) -> RawHtml<String> {
                 .to_string(),
         );
     }
-    let dir = config_dir(&config);
+    let dir = config_dir(&config.settings_path);
     let dir_str = dir.to_str().unwrap_or(".");
     if is_worktree_dirty(dir_str) {
         return RawHtml(
@@ -147,16 +144,14 @@ pub fn git_switch(config: &State<Arc<AppConfig>>, br: &str) -> RawHtml<String> {
 #[post("/versioning/activate/<rev>")]
 pub fn versioning_activate(config: &State<Arc<AppConfig>>, rev: &str) -> RawHtml<String> {
     if !rev_ok(rev) {
-        return RawHtml(
-            r#"<span class="text-error text-xs">invalid rev</span>"#.to_string(),
-        );
+        return RawHtml(r#"<span class="text-error text-xs">invalid rev</span>"#.to_string());
     }
     if activation::is_activation_in_progress() {
         return RawHtml(
             "<span class=\"text-error text-xs\">activation already in progress</span>".to_string(),
         );
     }
-    let dir = config_dir(&config);
+    let dir = config_dir(&config.settings_path);
     let dir_str = dir.to_str().unwrap_or(".");
     if is_worktree_dirty(dir_str) {
         return RawHtml(
@@ -205,4 +200,3 @@ pub fn versioning_gen_switch(n: u64) -> RawHtml<String> {
     // Detached oneshot: switch-to-configuration stops neo-web; must not run in-process.
     trigger_generation_switch(n, GenerationMode::Switch)
 }
-

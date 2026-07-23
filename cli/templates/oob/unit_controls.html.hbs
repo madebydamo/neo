@@ -1,0 +1,5 @@
+{{!-- Per-unit control row (dot + state + buttons). Built in Rust for live WS;
+     this documents the markup contract for id="unit-controls-{{unit}}". --}}
+<div id="unit-controls-{{unit}}" class="unit-controls flex items-center gap-1 flex-shrink-0" data-active-state="{{active}}" hx-swap-oob="true">
+  {{{content}}}
+</div>

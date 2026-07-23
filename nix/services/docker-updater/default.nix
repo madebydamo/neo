@@ -30,10 +30,10 @@
               if [ "$old_id" != "$new_id" ] && [ "$new_id" != "none" ]; then
                 echo "  Image updated ($old_id -> $new_id); restarting all consumers"
                 ${concatMapStringsSep "\n" (c: ''
-                    echo "    systemctl restart docker-${c.container} (${c.service})"
-                    ${pkgs.systemd}/bin/systemctl restart "docker-${c.container}" || true
-                  '')
-                  cs}
+                  echo "    systemctl restart docker-${c.container} (${c.service})"
+                  ${pkgs.systemd}/bin/systemctl restart "docker-${c.container}" || true
+                '')
+                cs}
               else
                 echo "  Up to date or no change."
               fi
