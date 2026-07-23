@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
 use std::process::{Command, Stdio};
 
-use crate::commands::generation::record_generation_in_commit;
-use crate::commands::log::{resolve_suffix, OperationLog};
-use crate::commands::{format_command, get_current_branch, git_cmd, has_staged_changes, run_nix};
+use crate::utils::{
+    format_command, get_current_branch, git_cmd, has_staged_changes, record_generation_in_commit,
+    resolve_suffix, run_nix, OperationLog,
+};
 
 pub fn activate(
     config_path: &str,

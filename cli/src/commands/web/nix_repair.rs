@@ -7,12 +7,12 @@ use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command as TokioCommand;
 
-use crate::commands::log::OPERATIONS_DIR;
 use crate::commands::web::ops::store::{
     append_log, find_recent_in_progress, load_log_tail, load_state, log_path, ops_dir, write_state,
 };
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::{escape_html, nix_bin, repair_id_ok, sudo_cmd};
+use crate::utils::{get_timestamp, OPERATIONS_DIR};
 
 pub fn repair_dir() -> std::path::PathBuf {
     ops_dir()
@@ -40,7 +40,7 @@ pub fn start_store_verify_repair(config: Arc<AppConfig>) -> String {
     if let Some(existing) = find_recent_in_progress_repair() {
         return existing;
     }
-    let ts = crate::commands::get_timestamp();
+    let ts = get_timestamp();
     let id = format!("repair_{ts}");
     let _ = fs::create_dir_all(OPERATIONS_DIR);
     write_state(&id, "in_progress", "starting", None);

@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::commands::run_nix;
+use crate::utils::run_nix;
 
 pub fn update_inputs(config_path: &str, dry_run: bool, nix_cmd: &str) -> Result<()> {
     if dry_run {

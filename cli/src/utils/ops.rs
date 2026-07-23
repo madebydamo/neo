@@ -1,14 +1,73 @@
-// Helpers for the state JSON and log files under /tmp/neo-activations (shared by
-// activate/update and the web UI for progress monitoring of long-running ops).
+//! On-disk operation state + log files under `/tmp/neo-activations`.
+//!
+//! Shared by CLI activate/update/generation and the web UI (progress monitors,
+//! store repair, genswitch).
+
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+
+use super::command::get_timestamp;
 
 pub const OPERATIONS_DIR: &str = "/tmp/neo-activations";
 
 pub fn operations_dir() -> PathBuf {
     PathBuf::from(OPERATIONS_DIR)
+}
+
+pub fn state_path(id: &str) -> PathBuf {
+    operations_dir().join(format!("{id}.json"))
+}
+
+pub fn log_path(id: &str) -> PathBuf {
+    operations_dir().join(format!("{id}.log"))
+}
+
+/// Single writer for op JSON state used by both [`OperationLog`] and the web store.
+pub fn write_op_state(
+    id: &str,
+    status: &str,
+    phase: &str,
+    err: Option<&str>,
+    branch: Option<&str>,
+    started_at: Option<&str>,
+    extra: Option<serde_json::Value>,
+) {
+    let _ = fs::create_dir_all(operations_dir());
+    let mut s = serde_json::json!({
+        "id": id,
+        "status": status,
+        "phase": phase,
+        "log_path": log_path(id).to_string_lossy(),
+    });
+    if let Some(ts) = started_at {
+        s["started_at"] = serde_json::json!(ts);
+    }
+    if let Some(e) = err {
+        s["error"] = serde_json::json!(e);
+    }
+    if let Some(b) = branch {
+        s["branch"] = serde_json::json!(b);
+    }
+    if let Some(serde_json::Value::Object(map)) = extra {
+        if let Some(obj) = s.as_object_mut() {
+            for (k, v) in map {
+                obj.insert(k, v);
+            }
+        }
+    }
+    let _ = fs::write(
+        state_path(id),
+        serde_json::to_string_pretty(&s).unwrap_or_else(|_| "{}".to_string()),
+    );
+}
+
+pub fn append_log(path: &Path, line: &str) {
+    if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(f, "{line}");
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -87,29 +146,14 @@ impl OperationLog {
         branch: Option<&str>,
         extra: Option<serde_json::Value>,
     ) {
-        let mut s = serde_json::json!({
-            "id": &self.id,
-            "status": status,
-            "phase": phase,
-            "started_at": &self.suffix,
-            "log_path": self.log_path.to_string_lossy(),
-        });
-        if let Some(e) = err {
-            s["error"] = serde_json::json!(e);
-        }
-        if let Some(b) = branch {
-            s["branch"] = serde_json::json!(b);
-        }
-        if let Some(serde_json::Value::Object(map)) = extra {
-            if let Some(obj) = s.as_object_mut() {
-                for (k, v) in map {
-                    obj.insert(k, v);
-                }
-            }
-        }
-        let _ = fs::write(
-            &self.state_path,
-            serde_json::to_string_pretty(&s).unwrap_or_else(|_| "{}".to_string()),
+        write_op_state(
+            &self.id,
+            status,
+            phase,
+            err,
+            branch,
+            Some(&self.suffix),
+            extra,
         );
     }
 
@@ -148,5 +192,5 @@ impl OperationLog {
 pub fn resolve_suffix(provided: Option<&str>, env_var: &str) -> String {
     provided
         .map(|s| s.to_string())
-        .unwrap_or_else(|| std::env::var(env_var).unwrap_or_else(|_| super::get_timestamp()))
+        .unwrap_or_else(|| std::env::var(env_var).unwrap_or_else(|_| get_timestamp()))
 }

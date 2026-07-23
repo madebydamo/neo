@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use toml_edit::{Array, DocumentMut, Item, Table};
 
-use crate::commands::toml_sort::sort_document_alphabetically;
+use crate::utils::sort_document_alphabetically;
 
 pub fn migrate(config_path: &str, source_settings: &PathBuf, dry_run: bool) -> Result<()> {
     let live = PathBuf::from(config_path).join("settings.toml");

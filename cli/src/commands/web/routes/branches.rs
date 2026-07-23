@@ -4,8 +4,6 @@ use rocket::response::content::{RawHtml, RawJson};
 use rocket::{get, post, State};
 use rocket_dyn_templates::Template;
 
-use crate::commands::generation::{list_system_generations_with_sudo, GenerationMode};
-use crate::commands::git_cmd;
 use crate::commands::web::activation;
 use crate::commands::web::git_ops::{
     activation_branch_for_rev, activation_graph, diff_settings, enabled_services_at_rev,
@@ -17,6 +15,7 @@ use crate::commands::web::trigger::{trigger_activation, trigger_generation_switc
 use crate::commands::web::util::{
     branch_ok, config_dir, escape_html, generation_ok, rev_ok, sudo_cmd,
 };
+use crate::utils::{git_cmd, list_system_generations_with_sudo, GenerationMode};
 
 /// Shared branches / versioning partial (used by `/branches` and `/configuration/versioning`).
 pub fn branches_template(config: &AppConfig) -> Template {

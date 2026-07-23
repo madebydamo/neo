@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use std::process::Command;
 
-use super::execute_command;
+use crate::utils::execute_command;
 
 pub fn docker_update(container: &str) -> Result<()> {
     let cname = if container.starts_with("docker-") {

@@ -1,11 +1,9 @@
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use toml_edit::DocumentMut;
 
-use crate::commands::profile::neo_cli_get;
-use crate::commands::{execute_command, git_cmd, has_staged_changes, run_nix};
+use crate::utils::{git_cmd, has_staged_changes, neo_cli_get, run_nix};
 
 pub fn init(
     config_path: &str,
@@ -64,26 +62,17 @@ pub fn init(
         let bootstrap_method =
             neo_cli_get(config, profile, "bootstrapMethod").unwrap_or("template");
 
-        if repo_url.is_some() && bootstrap_method == "clone" {
-            execute_command(Command::new("git").current_dir(config_path).args([
-                "clone",
-                repo_url.unwrap(),
-                ".",
-            ]))?;
+        if let (Some(url), "clone") = (repo_url, bootstrap_method) {
+            git_cmd(config_path, &["clone", url, "."])?;
         } else {
             let template = neo_cli_get(config, profile, "template")
                 .unwrap_or("github:madebydamo/neo#homeserver");
 
             run_nix(config_path, nix_cmd, &["flake", "init", "-t", template])?;
-
-            execute_command(Command::new("git").current_dir(config_path).arg("init"))?;
+            git_cmd(config_path, &["init"])?;
 
             if let Some(url) = repo_url {
-                execute_command(
-                    Command::new("git")
-                        .current_dir(config_path)
-                        .args(["remote", "add", "origin", url]),
-                )?;
+                git_cmd(config_path, &["remote", "add", "origin", url])?;
             }
         }
     }
@@ -93,12 +82,9 @@ pub fn init(
         git_cmd(config_path, &["init"]).context("git init failed")?;
     }
 
-    let git_user_name =
-        neo_cli_get(config, profile, "gitUserName").unwrap_or("Neo Bootstrap");
-    let git_user_email =
-        neo_cli_get(config, profile, "gitUserEmail").unwrap_or("neo@local");
-    let default_branch =
-        neo_cli_get(config, profile, "defaultBranch").unwrap_or("master");
+    let git_user_name = neo_cli_get(config, profile, "gitUserName").unwrap_or("Neo Bootstrap");
+    let git_user_email = neo_cli_get(config, profile, "gitUserEmail").unwrap_or("neo@local");
+    let default_branch = neo_cli_get(config, profile, "defaultBranch").unwrap_or("master");
     git_cmd(config_path, &["config", "user.name", git_user_name])?;
     git_cmd(config_path, &["config", "user.email", git_user_email])?;
     git_cmd(
@@ -106,8 +92,8 @@ pub fn init(
         &["config", "init.defaultBranch", default_branch],
     )?;
 
-    crate::commands::generate_hardware::generate_hardware(config_path, &config, false, nix_cmd)?;
-    crate::commands::paste_settings::paste_settings(
+    super::generate_hardware::generate_hardware(config_path, config, false, nix_cmd)?;
+    super::paste_settings::paste_settings(
         config_path,
         &PathBuf::from("settings.toml"),
         config,
@@ -117,7 +103,7 @@ pub fn init(
 
     git_cmd(config_path, &["add", "."])?;
 
-    crate::commands::update_inputs::update_inputs(config_path, false, nix_cmd)?;
+    super::update_inputs::update_inputs(config_path, false, nix_cmd)?;
 
     // Final git add + conditional commit (matches Bash exactly)
     git_cmd(config_path, &["add", "."])?;

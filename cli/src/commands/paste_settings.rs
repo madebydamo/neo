@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use toml_edit::DocumentMut;
 
-use crate::commands::toml_sort::sort_document_alphabetically;
+use crate::utils::sort_document_alphabetically;
 
 pub fn paste_settings(
     config_path: &str,

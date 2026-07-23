@@ -4,7 +4,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use toml_edit::DocumentMut;
 
-use crate::commands::generate_hardware;
+use crate::utils::format_command;
 
 pub fn generate_hardware(
     config_path: &str,
@@ -27,7 +27,7 @@ pub fn generate_hardware(
     if disko_enabled {
         cmd.arg("--no-filesystems");
     }
-    let display = crate::commands::format_command(&cmd);
+    let display = format_command(&cmd);
     println!("→ {display}");
     let output = cmd
         .stdout(Stdio::piped())

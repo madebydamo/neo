@@ -1,7 +1,7 @@
 use anyhow::Result;
 use toml_edit::DocumentMut;
 
-use crate::commands::{get_timestamp, git_cmd, has_staged_changes, run_nix};
+use crate::utils::{get_timestamp, git_cmd, has_staged_changes, run_nix};
 
 pub fn build(config_path: &str, config: &DocumentMut, dry_run: bool, nix_cmd: &str) -> Result<()> {
     let disko_enabled = config

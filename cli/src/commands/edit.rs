@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::process::Command;
 
-use crate::commands::execute_command;
+use crate::utils::execute_command;
 
 pub fn edit(config_path: &str, dry_run: bool) -> Result<()> {
     let settings_file = format!("{}/settings.toml", config_path);

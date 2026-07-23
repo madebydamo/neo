@@ -4,8 +4,7 @@ use std::path::Path;
 
 use toml_edit::DocumentMut;
 
-use crate::commands::generation::parse_generation_from_message;
-use crate::commands::get_current_branch;
+use crate::utils::{get_current_branch, parse_generation_from_message};
 
 use super::super::types::AppConfig;
 use super::super::types::{BranchInfo, GraphCommit, ServicesAtRev, VersioningGraph};

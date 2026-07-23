@@ -2,8 +2,7 @@ use std::process::Command;
 
 use rocket::response::content::RawHtml;
 
-use crate::commands::generation::GenerationMode;
-use crate::commands::log::OperationLog;
+use crate::utils::{execute_command, get_timestamp, GenerationMode, OperationLog};
 
 use super::activation;
 use super::structs::AppConfig;
@@ -76,7 +75,7 @@ pub fn trigger_systemd_run_args(
         &neo_bin,
     ]);
     run_cmd.args(neo_args);
-    let _ = crate::commands::execute_command(&mut run_cmd);
+    let _ = execute_command(&mut run_cmd);
 }
 
 pub fn trigger_systemd_run(
@@ -96,7 +95,7 @@ pub fn trigger_systemd_run(
 
 /// Create OperationLog, mark triggered, and launch the matching oneshot unit.
 fn trigger_oneshot(kind: OneshotKind) -> OperationLog {
-    let ts = crate::commands::get_timestamp();
+    let ts = get_timestamp();
     let op = match kind {
         OneshotKind::Activate => OperationLog::new_activation(&ts),
         OneshotKind::Update => OperationLog::new_update(&ts),
@@ -174,7 +173,7 @@ pub fn trigger_generation_switch(n: u64, mode: GenerationMode) -> RawHtml<String
         ));
     }
 
-    let ts = crate::commands::get_timestamp();
+    let ts = get_timestamp();
     // Suffix embeds mode + gen for uniqueness and log readability.
     let mode_s = match mode {
         GenerationMode::Switch => "switch",

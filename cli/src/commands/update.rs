@@ -3,9 +3,7 @@ use std::fs;
 use std::path::Path;
 use toml_edit::DocumentMut;
 
-use crate::commands::log::{resolve_suffix, OperationLog};
-use crate::commands::profile::neo_cli_get;
-use crate::commands::run_nix;
+use crate::utils::{neo_cli_get, resolve_suffix, run_nix, OperationLog};
 
 pub fn update(
     config_path: &str,

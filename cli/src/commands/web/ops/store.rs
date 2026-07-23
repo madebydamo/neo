@@ -2,23 +2,22 @@
 //! Used by activation, update, genswitch, and nix-store repair jobs.
 
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::commands::log;
 use crate::commands::web::util::{activation_id_ok, repair_id_ok};
+use crate::utils::ops::{self, append_log as ops_append_log, write_op_state};
 
 pub fn ops_dir() -> PathBuf {
-    log::operations_dir()
+    ops::operations_dir()
 }
 
 pub fn state_path(id: &str) -> PathBuf {
-    ops_dir().join(format!("{id}.json"))
+    ops::state_path(id)
 }
 
 pub fn log_path(id: &str) -> PathBuf {
-    ops_dir().join(format!("{id}.log"))
+    ops::log_path(id)
 }
 
 fn id_ok(id: &str) -> bool {
@@ -46,27 +45,13 @@ pub fn load_log_tail(id: &str, n: usize) -> String {
     "(no log yet)".to_string()
 }
 
+/// Write op state (thin wrapper over shared [`write_op_state`]).
 pub fn write_state(id: &str, status: &str, phase: &str, err: Option<&str>) {
-    let _ = fs::create_dir_all(ops_dir());
-    let mut s = serde_json::json!({
-        "id": id,
-        "status": status,
-        "phase": phase,
-        "log_path": log_path(id).to_string_lossy(),
-    });
-    if let Some(e) = err {
-        s["error"] = serde_json::json!(e);
-    }
-    let _ = fs::write(
-        state_path(id),
-        serde_json::to_string_pretty(&s).unwrap_or_else(|_| "{}".to_string()),
-    );
+    write_op_state(id, status, phase, err, None, None, None);
 }
 
 pub fn append_log(path: &Path, line: &str) {
-    if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(path) {
-        let _ = writeln!(f, "{line}");
-    }
+    ops_append_log(path, line);
 }
 
 /// Find the most recent in-progress op whose id starts with `prefix` (within last hour).

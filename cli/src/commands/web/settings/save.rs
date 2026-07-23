@@ -6,9 +6,9 @@ use rocket::http::Status;
 use toml_edit::{DocumentMut, Table};
 
 use super::{insert_dotted, json_to_toml_item, json_to_toml_value};
-use crate::commands::toml_sort::sort_document_alphabetically;
 use crate::commands::web::action_bar::broadcast_action_bar;
 use crate::commands::web::structs::AppConfig;
+use crate::utils::sort_document_alphabetically;
 
 pub fn load_settings_doc(path: &Path) -> Result<DocumentMut, Status> {
     if let Some(parent) = path.parent() {
