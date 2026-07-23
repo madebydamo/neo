@@ -1,4 +1,5 @@
-# Beszel reverse proxy for SWAG (tinyauth + WebSocket)
+# Beszel reverse proxy for SWAG (tinyauth + WebSocket).
+# proxy.conf already sets Upgrade/Connection — do not re-set them.
 {...}: {
   flake.modules.nixos.beszel-swag = {
     config,
@@ -7,27 +8,11 @@
   }: let
     cfg = config.neo.services.beszel;
   in {
-    config.neo.services.beszel.proxyConf = lib.mkDefault ''
-      server {
-        listen 443 ssl;
-        http2 on;
-        server_name ${cfg.subdomain}.*;
-        include /config/nginx/ssl.conf;
-
-        location / {
-          include /config/nginx/proxy.conf;
-          include /config/nginx/resolver.conf;
-          set $upstream_app beszel;
-          set $upstream_port 8090;
-          set $upstream_proto http;
-          proxy_pass $upstream_proto://$upstream_app:$upstream_port;
-
-          ${lib.neo.authBlock config cfg}
-          # WebSocket: proxy.conf already sets Upgrade + Connection via $connection_upgrade
-        }
-
-        ${lib.neo.authLocations config cfg}
-      }
-    '';
+    config.neo.services.beszel.proxyConf = lib.mkDefault (lib.neo.mkSubdomainProxyConf {
+      inherit config cfg;
+      upstream = "beszel";
+      port = 8090;
+      maxBodySize = null;
+    });
   };
 }

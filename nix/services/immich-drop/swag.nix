@@ -1,4 +1,4 @@
-# Immich-drop reverse proxy configuration for SWAG.
+# Immich-drop reverse proxy for SWAG (no edge tinyauth).
 {...}: {
   flake.modules.nixos.immich-drop-swag = {
     config,
@@ -7,26 +7,11 @@
   }: let
     cfg = config.neo.services.immich-drop;
   in {
-    config.neo.services.immich-drop.proxyConf = lib.mkDefault ''
-      server {
-        listen 443 ssl;
-        http2 on;
-
-        server_name ${cfg.subdomain}.*;
-
-        include /config/nginx/ssl.conf;
-
-        client_max_body_size 0;
-
-        location / {
-          include /config/nginx/proxy.conf;
-          include /config/nginx/resolver.conf;
-          set $upstream_app immich-drop;
-          set $upstream_port 8080;
-          set $upstream_proto http;
-          proxy_pass $upstream_proto://$upstream_app:$upstream_port;
-        }
-      }
-    '';
+    config.neo.services.immich-drop.proxyConf = lib.mkDefault (lib.neo.mkSubdomainProxyConf {
+      inherit config cfg;
+      upstream = "immich-drop";
+      port = 8080;
+      auth = false;
+    });
   };
 }
