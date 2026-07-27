@@ -98,7 +98,9 @@
           };
         };
 
-        # Setup service to configure Nextcloud via occ. Retries every 60s until DB and container are ready.
+        # Configure Nextcloud via occ. Type=simple so switch-to-configuration does not
+        # wait for setup to finish (oneshot would block until the retry loop succeeds).
+        # In-script retries (60s); Restart=on-failure if the process exits unexpectedly.
         systemd.services.nextcloud-setup = {
           description = "Nextcloud post-install configuration (maintenance window, defaults)";
           after = [
@@ -113,19 +115,16 @@
           ];
           wants = ["docker-nextcloud.service"];
           serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
+            Type = "simple";
             Restart = "on-failure";
             RestartSec = 60;
-            StartLimitBurst = 30;
-            StartLimitIntervalSec = "30min";
           };
           script = let
             docker = "${pkgs.docker}/bin/docker";
             occ = "${docker} exec --user www-data nextcloud php occ";
           in ''
             echo "Running Nextcloud setup..."
-            for _ in $(seq 1 20); do
+            while true; do
               if ${occ} config:system:set maintenance_window_start --value ${toString cfg.maintenanceWindowStart} --type integer \
                  && ${occ} config:system:set default_phone_region --value '${cfg.defaultPhoneRegion}' \
                  && ${occ} config:system:set instanceid --value '${cfg.instanceId}' \
@@ -136,11 +135,9 @@
                 echo "Nextcloud setup completed."
                 exit 0
               fi
-              echo "setup not ready, retry in 10s"
-              sleep 10
+              echo "setup not ready, retry in 60s"
+              sleep 60
             done
-            echo "setup gave up after retries (will restart via systemd)"
-            exit 1
           '';
         };
         systemd.services.docker-nextcloud.wants = ["nextcloud-setup.service"];
