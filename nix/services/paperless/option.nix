@@ -25,6 +25,20 @@
                 description = "Password for internal docker connection";
                 helper = lib.neo.helpers.randomToken;
               };
+              # Required since paperless-ngx 3.0.0 — refuses to start with unset or default 'change-me'.
+              # See https://docs.paperless-ngx.com/configuration/ (PAPERLESS_SECRET_KEY) and
+              # https://github.com/paperless-ngx/paperless-ngx/issues/13215
+              secretKey = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                rank = 20;
+                description = ''
+                  PAPERLESS_SECRET_KEY: Django secret used for sessions and signing.
+                  Required by paperless-ngx 3.0+ (startup fails if unset or the default "change-me").
+                  Generate once with the helper and keep stable; rotating invalidates sessions/tokens.
+                '';
+                helper = lib.neo.helpers.randomToken;
+              };
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "paperless";

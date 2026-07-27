@@ -9,8 +9,17 @@
       cfg = config.neo.services.paperless;
       appdata = "${config.neo.core.volumes.appdata}/paperless";
       domain = config.neo.services.swag.domain;
+      secretSet = v: v != null && v != "";
     in {
       config = mkIf cfg.enabled {
+        # paperless-ngx 3.0+ raises ImproperlyConfigured without a real secret key.
+        assertions = [
+          {
+            assertion = secretSet cfg.secretKey && cfg.secretKey != "change-me";
+            message = "neo.services.paperless: secretKey must be set to a unique value when enabled (use the Generate helper; not the default \"change-me\").";
+          }
+        ];
+
         systemd.services.docker-paperless-db.preStart = lib.neo.mkEnsureDirs config [
           "${appdata}/pgdata"
         ];
@@ -57,6 +66,7 @@
               PAPERLESS_DBNAME = "paperless";
               PAPERLESS_DBUSER = "paperless_user";
               PAPERLESS_DBPASS = cfg.dbPassword;
+              PAPERLESS_SECRET_KEY = cfg.secretKey;
               PAPERLESS_TIME_ZONE = config.neo.core.timeZone;
               PAPERLESS_OCR_LANGUAGE = "deu+eng";
               PAPERLESS_CSRF_TRUSTED_ORIGINS = "https://${cfg.subdomain}.${domain}";

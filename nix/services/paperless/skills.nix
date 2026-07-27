@@ -28,6 +28,7 @@
 
         ## Credentials
         - Neo: `services.paperless.dbPassword` (internal DB only)
+        - Neo: `services.paperless.secretKey` → `PAPERLESS_SECRET_KEY` (required since paperless-ngx 3.0; Generate helper)
         - App users + **API tokens**: create in Paperless UI (Settings → API tokens) — not stored by Neo
         - Edge: tinyauth
 
@@ -39,6 +40,8 @@
         ## Pitfalls
         - Do not clear appdata without confirmation — destroys documents DB
         - dbPassword is not the web UI password
+        - Missing/default secretKey → crash loop (`ImproperlyConfigured: PAPERLESS_SECRET_KEY…`); host CPU thrash
+        - Rotating secretKey invalidates sessions/signed tokens — set once and keep stable
 
         ## Verification
         - UI loads; can search a document; API with token returns 200
