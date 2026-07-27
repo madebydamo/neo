@@ -100,9 +100,10 @@
 
         # Configure Nextcloud via occ. Type=simple so switch-to-configuration does not
         # wait for setup to finish (oneshot would block until the retry loop succeeds).
+        # Runs occ upgrade when needsDbUpgrade is set (image bumps), then defaults/repair.
         # In-script retries (60s); Restart=on-failure if the process exits unexpectedly.
         systemd.services.nextcloud-setup = {
-          description = "Nextcloud post-install configuration (maintenance window, defaults)";
+          description = "Nextcloud post-install configuration (upgrade, maintenance window, defaults)";
           after = [
             "docker-nextcloud-db.service"
             "docker-nextcloud-redis.service"
@@ -125,6 +126,16 @@
           in ''
             echo "Running Nextcloud setup..."
             while true; do
+              if ${occ} status 2>/dev/null | grep -Eq 'needsDbUpgrade:[[:space:]]*true'; then
+                echo "Pending Nextcloud DB upgrade detected, running occ upgrade..."
+                if ! ${occ} upgrade; then
+                  echo "occ upgrade failed, retry in 60s"
+                  sleep 60
+                  continue
+                fi
+                ${occ} maintenance:mode --off || true
+              fi
+
               if ${occ} config:system:set maintenance_window_start --value ${toString cfg.maintenanceWindowStart} --type integer \
                  && ${occ} config:system:set default_phone_region --value '${cfg.defaultPhoneRegion}' \
                  && ${occ} config:system:set instanceid --value '${cfg.instanceId}' \
