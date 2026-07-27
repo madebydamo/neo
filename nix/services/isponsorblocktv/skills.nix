@@ -17,19 +17,18 @@
         ## When to Use
         TV device pairing, sponsorblock on YouTube app devices.
 
-        ## Setup UI (temporary)
+        ## Setup UI
         - Unit: `isponsorblocktv-setup` — ttyd on **127.0.0.1:7681** (not LAN); SWAG via `host.docker.internal` + DNAT
-        - Starts on boot for pairing, then auto-stops after **1 hour** (`RuntimeMaxSec`) or after one session (`ttyd --once`)
-        - Re-open pairing: `systemctl start isponsorblocktv-setup`
-        - Setup container is always named `isponsorblocktv-setup` and removed on stop (no orphans)
+        - Always available (`Restart=always`); one browser session at a time (`ttyd --once`), then restarts
+        - Setup container is named `isponsorblocktv-setup` and removed on stop (no orphans)
 
         ## Credentials
         - Pairing codes in UI; no Neo API token
 
         ## Verification
         - Device paired; segments skipped on TV
-        - `systemctl is-active isponsorblocktv-setup` inactive after pairing/timeout
-        - `docker ps -a` has no leftover `isponsorblocktv-setup` container
+        - `systemctl is-active isponsorblocktv-setup` active
+        - `docker ps -a` has no leftover `isponsorblocktv-setup` container after a session ends
       '';
     };
   };

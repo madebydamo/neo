@@ -1,7 +1,6 @@
 # iSponsorBlockTV service implementation with ttyd-based setup UI.
-# Setup unit is temporary: named container, max 1h runtime, cleaned on stop.
 # ttyd binds loopback only; SWAG reaches it via host.docker.internal + DNAT
-# (same pattern as neo-web).
+# (same pattern as neo-web). Setup container is named for reliable cleanup.
 {...}: {
   flake.modules.nixos.isponsorblocktv = {
     config,
@@ -36,22 +35,16 @@
             networks = ["internal"];
           };
 
-          # Setup UI: start with `systemctl start isponsorblocktv-setup` (or after boot).
-          # --once: ttyd exits after one client disconnects.
-          # RuntimeMaxSec: hard stop after 1h even if left open.
-          # Named container + ExecStopPost: no orphan setup containers.
+          # Setup service using host ttyd
           # -i 127.0.0.1: not on LAN; SWAG uses host.docker.internal + DNAT.
+          # Named container + ExecStopPost: no orphan setup containers.
           systemd.services.isponsorblocktv-setup = {
-            description = "iSponsorBlockTV setup UI (ttyd on 127.0.0.1, auto-stops after 1h)";
+            description = "iSponsorBlockTV setup UI (ttyd)";
             after = ["docker.service"];
             wants = ["docker.service"];
-            # Available after boot for pairing; does not restart forever.
             wantedBy = ["multi-user.target"];
 
             serviceConfig = {
-              Type = "simple";
-              RuntimeMaxSec = 3600;
-              Restart = "no";
               ExecStart = ''
                 ${pkgs.ttyd}/bin/ttyd \
                   --once \
@@ -59,6 +52,7 @@
                   -i 127.0.0.1 \
                   -p ${toString setupPort} \
                   -t titleFixed="iSponsorBlockTV Setup" \
+                  timeout 3600 \
                   ${pkgs.docker}/bin/docker run --rm -it \
                     --name ${setupContainerName} \
                     -v ${dataDir}:/app/data \
@@ -66,6 +60,7 @@
                     ${image} --setup
               '';
               ExecStopPost = "${cleanupScript}";
+              Restart = "always";
             };
           };
         }
