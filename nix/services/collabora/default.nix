@@ -45,6 +45,9 @@
           networks = ["internal"];
         };
 
+        # Type=simple so switch-to-configuration does not wait for setup to finish
+        # (oneshot would block until the retry loop succeeds). In-script retries (60s);
+        # Restart=on-failure if the process exits unexpectedly.
         systemd.services.collabora-setup = {
           description = "Nextcloud post-install configuration (collabora)";
           after = [
@@ -61,19 +64,16 @@
             "nextcloud-setup.service"
           ];
           serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
+            Type = "simple";
             Restart = "on-failure";
             RestartSec = 60;
-            StartLimitBurst = 30;
-            StartLimitIntervalSec = "30min";
           };
           script = let
             docker = "${pkgs.docker}/bin/docker";
             occ = "${docker} exec --user www-data nextcloud php occ";
           in ''
             echo "Configuring Collabora integration..."
-            for _ in $(seq 1 20); do
+            while true; do
               if ${occ} app:install richdocuments || true \
                  && ${occ} app:disable richdocuments \
                  && ${occ} app:disable richdocumentscode \
@@ -86,11 +86,9 @@
                 echo "Collabora setup completed."
                 exit 0
               fi
-              echo "collabora setup not ready, retry in 10s"
-              sleep 10
+              echo "collabora setup not ready, retry in 60s"
+              sleep 60
             done
-            echo "collabora setup gave up after retries (will restart via systemd)"
-            exit 1
           '';
         };
         systemd.services.docker-collabora.wants = ["collabora-setup.service"];
