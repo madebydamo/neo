@@ -7,6 +7,8 @@
 #   1. Adds an include for /config/nginx/conf.d/*.conf into nginx.conf
 #   2. Optionally injects or removes iframe/embed CSP/frame-ancestors support
 #      into proxy.conf (controlled by neo.iframeCookieSupport + neo.enabled)
+#   3. Drops the swag-dashboard mod's fixed dashboard.subdomain.conf when Neo
+#      serves the UI under a different subdomain (default: swag)
 
 set -uo pipefail
 
@@ -14,6 +16,7 @@ set -uo pipefail
 : "${NEO_UID:=1000}"
 : "${NEO_GID:=1000}"
 : "${NEO_SUPPORT:=false}"
+: "${DASHBOARD_SUBDOMAIN:=swag}"
 
 # ====================
 # 1. nginx.conf patcher (conf.d include)
@@ -74,4 +77,20 @@ else
     sed -i '/proxy_hide_header Content-Security-Policy/d' "$PROXY_CONF" || true
     echo "→ Removed iframe/embed headers from proxy.conf"
   fi
+fi
+
+# ====================
+# 3. swag-dashboard mod default vhost
+# ====================
+# The mod always installs proxy-confs/dashboard.subdomain.conf when missing.
+# Neo materializes the UI under ${DASHBOARD_SUBDOMAIN}.subdomain.conf instead.
+echo "=== Cleaning mod-default dashboard vhost ==="
+MOD_DASH_CONF="$APPDATA/nginx/proxy-confs/dashboard.subdomain.conf"
+if [ "$DASHBOARD_SUBDOMAIN" != "dashboard" ] && [ -f "$MOD_DASH_CONF" ]; then
+  rm -f "$MOD_DASH_CONF"
+  echo "→ Removed $MOD_DASH_CONF (UI is ${DASHBOARD_SUBDOMAIN}.subdomain.conf)"
+elif [ "$DASHBOARD_SUBDOMAIN" = "dashboard" ]; then
+  echo "→ Subdomain is dashboard; leaving mod/Neo conf as-is"
+else
+  echo "→ No mod-default dashboard.subdomain.conf present"
 fi

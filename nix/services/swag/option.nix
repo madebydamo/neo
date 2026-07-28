@@ -49,6 +49,10 @@
                 description = "Local HTTPS port for SWAG container (overridden to 9981 with streamproxy)";
               };
             }
+            # Dashboard UI at https://swag.<domain>/ (docker-mod + GoAccess).
+            // lib.neo.mkReverseProxyOptions {
+              subdomain = "swag";
+            }
             // lib.neo.mkContainerDefinitions {
               swag = "lscr.io/linuxserver/swag:latest";
               extraUnits = [
@@ -64,6 +68,7 @@
                 SWAG (Secure Web Application Gateway) is the foundational reverse proxy and SSL termination layer for the Neo homeserver.
                 Built on Nginx with integrated Certbot, it automatically provisions and renews trusted SSL certificates from Let's Encrypt or ZeroSSL for the primary domain, all configured subdomains, and domains listed in proxyPass.
                 Every other service's public web interface is routed exclusively through SWAG using its extensive library of reverse proxy configurations, enabling centralized HTTPS, optional auth, fail2ban protection, and keeping backends isolated on the internal Docker network.
+                When enabled, SWAG also loads the linuxserver swag-dashboard docker-mod (GoAccess): access-log analytics, proxy discovery, and fail2ban summary at swag.<domain>, protected by tinyauth by default.
                 As the entry point for all external traffic, SWAG must be configured with your domain and email before other proxied services can be reached securely from the internet. It uses the container image lscr.io/linuxserver/swag:latest.
               '';
               projectUrl = "https://docs.linuxserver.io/general/swag/";

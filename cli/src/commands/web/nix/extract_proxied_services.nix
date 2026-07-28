@@ -26,7 +26,8 @@
   isProxied = n: let
     v = services.${n} or {};
   in
-    n != "swag" && (v.enabled or false) && (v.subdomain or null) != null;
+    # Include swag when it has a dashboard subdomain (sidebar + navigator).
+    (v.enabled or false) && (v.subdomain or null) != null;
 
   proxiedNames = builtins.filter isProxied (builtins.attrNames services);
 

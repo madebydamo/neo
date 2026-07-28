@@ -62,6 +62,7 @@
                 }
             ) (svc.customDomains or [])
         ) (attrValues appServices));
+        # Skip null proxyConf (should not happen for proxied services).
         proxyConfScripts = map (
           svc:
             lib.neo.mkActivationScriptForFile config {
@@ -150,6 +151,8 @@
               EXTRA_DOMAINS = concatStringsSep "," (proxyPassDomains ++ customDomains);
               SWAG_AUTORELOAD = "true";
               SWAG_AUTORELOAD_WATCHLIST = "/config/etc/letsencrypt";
+              # Dashboard UI (GoAccess) — always on when SWAG is enabled.
+              DOCKER_MODS = "linuxserver/mods:swag-dashboard";
             };
             volumes = [
               "${config.neo.core.volumes.appdata}/swag:/config"
@@ -197,6 +200,7 @@
               NEO_UID="${toString config.neo.core.uid}"
               NEO_GID="${toString config.neo.core.gid}"
               NEO_SUPPORT=${lib.boolToString ((config.neo.services.neo.iframeCookieSupport) && (config.neo.services.neo.enabled))}
+              DASHBOARD_SUBDOMAIN="${cfg.subdomain}"
               ${builtins.readFile ./swag-patcher.sh}
             '';
           };

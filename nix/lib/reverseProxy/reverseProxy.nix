@@ -65,9 +65,11 @@
             }
             // {rank = 120;};
         };
+      # Services with a public SWAG vhost (subdomain + proxyConf).
+      # Includes swag itself when it exposes the dashboard UI at swag.<domain>.
       getProxiedServices = config:
         lib.filterAttrs (
-          n: v: v.enabled && v.subdomain or null != null && n != "swag"
+          _: v: v.enabled && (v.subdomain or null) != null && (v.proxyConf or null) != null
         )
         config.neo.services;
     };

@@ -10,14 +10,10 @@
       cfg = config.neo.services.pihole;
       onlySubdomains = config.neo.services.swag.onlySubdomains;
       piholeData = "${config.neo.core.volumes.appdata}/pihole";
-      appServices =
-        filterAttrs (
-          n: v: v.enabled && v.subdomain or null != null && n != "swag"
-        )
-        config.neo.services;
+      swagCfg = config.neo.services.swag;
+      appServices = lib.neo.getProxiedServices config;
       subdomains = catAttrs "subdomain" (attrValues appServices);
       customDomains = concatLists (catAttrs "customDomains" (attrValues appServices));
-      swagCfg = config.neo.services.swag;
       proxyPassDomains = attrNames (swagCfg.proxyPass or {});
       domain = config.neo.services.swag.domain;
       dnsMasqLines = concatStringsSep ";" (
