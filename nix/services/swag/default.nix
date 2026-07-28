@@ -124,6 +124,16 @@
             filePath = "${appdataSwag}/nginx/conf.d/real-ip.conf";
             content = lib.neo.realIpConf;
           })
+          # SWAG tinyauth snippets — included by authBlock / authLocations so the
+          # dashboard can detect auth via tinyauth-location.conf in proxy-confs.
+          (lib.neo.mkActivationScriptForFile config {
+            filePath = "${appdataSwag}/nginx/tinyauth-location.conf";
+            content = lib.neo.tinyauthLocationConf;
+          })
+          (lib.neo.mkActivationScriptForFile config {
+            filePath = "${appdataSwag}/nginx/tinyauth-server.conf";
+            content = lib.neo.mkTinyauthServerConf config;
+          })
         ];
       in
         mkIf cfg.enabled {

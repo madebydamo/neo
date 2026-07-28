@@ -52,7 +52,7 @@
 
           ## Edge traffic
           - **SWAG** terminates TLS on 80/443 (or streamproxy tunnel ports).
-          - **tinyauth** is the first login gate for most UIs (`auth_request`).
+          - **tinyauth** is the first login gate for most UIs (`tinyauth-location.conf`).
           - Backends sit on Docker network **`internal`** (or host units via `host.docker.internal`).
           - Domain: ${
             if domain != null

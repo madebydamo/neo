@@ -19,7 +19,7 @@
         Login gate, add users, session issues, publicPaths bypasses.
 
         ## Architecture notes
-        - Used by SWAG via `auth_request /tinyauth`
+        - Used by SWAG via `include /config/nginx/tinyauth-location.conf` (location) + `tinyauth-server.conf` (server)
         - Users option: list of `username:bcrypt_hash`
         - Per-service `auth.enabled` / `auth.publicPaths` control protection
 
