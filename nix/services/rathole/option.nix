@@ -43,7 +43,7 @@
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/rathole.png";
               description = ''
                 Rathole is a lightweight, high-performance reverse proxy for NAT traversal, written in Rust as a fast and low-resource alternative to frp and ngrok.
-                In this homeserver, it runs as a client that securely tunnels local HTTP and HTTPS traffic (on ports 80 and 443) through a remote server with a public IP, using per-service tokens for auth.
+                In this homeserver, it runs as a client that securely tunnels local HTTP (port 80) and HTTPS (SWAG PROXY-protocol port) through a remote server with a public IP, using per-service tokens for auth.
                 This allows exposing internal services to the internet without requiring inbound firewall rules or port forwards on the client network.
                 Features include TCP/UDP support, optional encryption via TLS or Noise protocol, hot configuration reload, and minimal memory footprint (binary can be ~500KiB).
               '';

@@ -11,11 +11,11 @@
   in {
     config.neo.services.vaultwarden.proxyConf = lib.mkDefault ''
       server {
-        listen 443 ssl;
+        include /config/nginx/listen-https.conf;
         http2 on;
         server_name ${cfg.subdomain}.*;
         include /config/nginx/ssl.conf;
-
+        include /config/nginx/geo-access.conf;
         client_max_body_size 128M;
 
         location / {

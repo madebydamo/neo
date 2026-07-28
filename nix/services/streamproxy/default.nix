@@ -12,7 +12,8 @@
       swagCfg = config.neo.services.swag;
       swagEnabled = swagCfg.enabled;
       swagHttp = swagCfg.localHttpPort;
-      swagHttps = swagCfg.localHttpsPort;
+      # PROXY-protocol HTTPS port on local SWAG (plain 443 stays for LAN).
+      swagHttpsPP = swagCfg.localHttpsProxyProtocolPort;
       swagDomain = swagCfg.domain;
       streamproxyIp = "192.168.100.11";
       localIp = "192.168.100.10";
@@ -78,9 +79,12 @@
               then removePrefix "*." domain
               else domain;
           in
-            mkStreamMapEntry bare isWildcard "${domain} ${localIp}:${toString swagHttps};"
+            # Local SWAG PROXY-protocol listener (real client IP for access logs / GoAccess).
+            mkStreamMapEntry bare isWildcard "${domain} ${localIp}:${toString swagHttpsPP};"
         )
         allSwagDomains));
+      # Rathole backends: TCP is transparent, so PROXY protocol bytes reach remote SWAG :8443/9982.
+      # Remote rathole clients must bind HTTPS to SWAG localHttpsProxyProtocolPort (not plain 443).
       streamConfigEntries = flatten (mapAttrsToList (
           name: entry: let
             httpsPort = cfg.ports.${name}.https;
@@ -234,6 +238,7 @@
                     proxy_timeout 24h;
                     proxy_socket_keepalive on;
 
+                    proxy_protocol on;
                     proxy_pass $backend;
                   }
                 }

@@ -8,6 +8,8 @@
   }:
     with lib; let
       cfg = config.neo.services.rathole;
+      # Deliver HTTPS to SWAG's PROXY-protocol listener so streamproxy can pass real client IPs.
+      swagHttpsPP = config.neo.services.swag.localHttpsProxyProtocolPort;
       configFile = pkgs.writeText "rathole-client.toml" ''
         [client]
         remote_addr = "${cfg.remoteAddr}:${toString cfg.port}"
@@ -18,7 +20,7 @@
 
         [client.services.${cfg.name}_https]
         token = "${cfg.token}"
-        local_addr = "127.0.0.1:443"
+        local_addr = "127.0.0.1:${toString swagHttpsPP}"
       '';
     in {
       config = mkIf cfg.enabled {

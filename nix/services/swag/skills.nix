@@ -11,45 +11,32 @@
     config.neo.services.swag.skill.conf = lib.neo.mkServiceSkill {
       service = "swag";
       inherit cfg domain;
-      description = "SWAG reverse proxy, TLS, proxy-confs, certificates, dashboard";
-      tags = ["neo" "swag" "nginx" "tls" "dashboard" "goaccess"];
+      description = "SWAG reverse proxy, TLS, proxy-confs, certificates, dashboard, geo";
+      tags = ["neo" "swag" "nginx" "tls" "dashboard" "goaccess" "geoip" "dbip"];
       title = "Neo · SWAG (edge reverse proxy)";
       body = ''
         ## When to Use
-        TLS, domains, reverse proxy routing, certificate issues, nginx conf for services,
-        access-log analytics / SWAG Dashboard.
+        TLS, reverse proxy routing, certs, SWAG Dashboard / GoAccess, geo allow-deny.
 
-        ## Architecture notes
-        - Generated proxy confs: `appdata/swag/nginx/proxy-confs/<subdomain>.subdomain.conf`
-        - Each service's `swag.nix` sets `proxyConf`; SWAG preStart materializes them
-        - Docker network: backends on `internal`; host services via `host.docker.internal`
-        - SWAG is itself a proxied service (`mkReverseProxyOptions`, default subdomain `swag`):
-          - docker-mod `linuxserver/mods:swag-dashboard` (GoAccess) when SWAG is enabled
-          - UI: `https://swag.<domain>/` (override with `services.swag.subdomain`)
-          - tinyauth via standard `services.swag.auth` (default on)
-          - conf: `nix/services/swag/swag.nix` (local PHP root `/dashboard/www`, not an upstream app)
-          - Stats from `appdata/swag/log/nginx`; clear by removing those logs and recreating the container
-          - Geo graphs need MaxMind/DB-IP docker-mod (not enabled by Neo yet)
-
-        ## Credentials
-        - Options: `services.swag.domain`, `email`, `proxyPass`, `subdomain`, `auth`
-        - Let's Encrypt uses the configured email; no API token in Neo
+        ## Architecture
+        - Proxy confs: `appdata/swag/nginx/proxy-confs/<sub>.subdomain.conf`
+        - Dual HTTPS listeners (`listen-https.conf`):
+          - **443** plain TLS — LAN / direct
+          - **8443** TLS + PROXY protocol — streamproxy / rathole (host port `localHttpsProxyProtocolPort`, 9982 when streamproxy co-located)
+        - Docker mods: swag-dashboard + swag-dbip
+        - Geo lists: `services.swag.geo` (empty = unrestricted)
+        - Real client IPs: only on the PROXY-protocol path; old access.log lines stay private-proxy IPs until new traffic
 
         ## Procedures
-        1. Confirm domain/email set and container healthy
-        2. For routing bugs: inspect generated proxy-conf, not hand-edit permanently
-        3. Fix durable routing in the service's `swag.nix` / options, then activate
-        4. Cert renew failures: check logs, DNS A/AAAA, ports 80/443 reachability
-        5. Dashboard: confirm `DOCKER_MODS` includes swag-dashboard and `swag.subdomain.conf` exists
+        1. Domain/email set; container healthy
+        2. Routing: fix service `swag.nix`, not hand-edited confs
+        3. Geo map empty: confirm streamproxy targets PP port with `proxy_protocol on`, rathole HTTPS → PP host port
+        4. Dashboard: `https://swag.<domain>/` → tinyauth → UI
 
         ## Pitfalls
-        - Hand-edited proxy-confs are wiped on container restart/preStart
-        - streamproxy changes local ports (9980/9981) — do not assume 80/443 on host in that mode
-        - The docker-mod may drop a `dashboard.subdomain.conf`; Neo removes it when subdomain ≠ dashboard
-
-        ## Verification
-        - HTTPS to a known subdomain works; cert valid; proxy-conf exists for enabled services
-        - Dashboard: `https://swag.<domain>/` → 302 to tinyauth (if auth on), then UI after login
+        - PROXY-protocol port is not for browsers; LAN must use 443
+        - PreStart regenerates proxy-confs / dbip / listen-https
+        - Do not mix swag-dbip with swag-maxmind
       '';
     };
   };

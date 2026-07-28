@@ -34,35 +34,18 @@
           }
         '';
 
-      # Standard SWAG subdomain vhost: TLS + proxy.conf + optional tinyauth.
-      # Call sites stay explicit about upstream/port (or proxyPass). Complex vhosts
-      # (extra locations, special headers) keep a hand-written proxyConf.
-      #
-      #   lib.neo.mkSubdomainProxyConf {
-      #     inherit config cfg;
-      #     upstream = "paperless";
-      #     port = cfg.port;
-      #   }
-      #
-      #   lib.neo.mkSubdomainProxyConf {
-      #     inherit config cfg;
-      #     proxyPass = "http://host.docker.internal:${toString cfg.port}/";
-      #   }
+      # Standard SWAG subdomain vhost: TLS + proxy.conf + optional tinyauth + geo.
       mkSubdomainProxyConf = {
         config,
         cfg,
-        # Docker DNS name for $upstream_app (omit when proxyPass is set).
         upstream ? null,
         port ? null,
         proto ? "http",
-        # Full proxy_pass target; skips $upstream_* (e.g. host.docker.internal).
         proxyPass ? null,
-        # null omits the directive; default "0" allows large uploads.
         maxBodySize ? "0",
-        # Wire tinyauth auth_request / login locations (still respects cfg.auth.enabled).
         auth ? true,
-        # resolver.conf is required for $upstream_* Docker DNS; off for fixed proxyPass.
         includeResolver ? (proxyPass == null),
+        geo ? true,
       }: let
         ab =
           if auth
@@ -72,7 +55,10 @@
           if auth
           then authLocations config cfg
           else "";
-        # Fixed indent (not '') so nesting is stable after nix string dedent elsewhere.
+        geoLine =
+          if geo
+          then "  include /config/nginx/geo-access.conf;\n"
+          else "";
         bodySize =
           if maxBodySize == null
           then ""
@@ -88,11 +74,12 @@
             + "    proxy_pass $upstream_proto://$upstream_app:$upstream_port;";
       in
         "server {\n"
-        + "  listen 443 ssl;\n"
+        + "  include /config/nginx/listen-https.conf;\n"
         + "  http2 on;\n"
         + "  server_name ${cfg.subdomain}.*;\n"
         + "  include /config/nginx/ssl.conf;\n"
         + bodySize
+        + geoLine
         + "\n"
         + "  location / {\n"
         + "    include /config/nginx/proxy.conf;\n"

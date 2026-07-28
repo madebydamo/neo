@@ -15,32 +15,32 @@
         proxyPass = cfg.proxyPass;
         proxyPassDomains = attrNames proxyPass;
         domain = cfg.domain;
+        appdataSwag = "${config.neo.core.volumes.appdata}/swag";
+        ppContainerPort = lib.neo.httpsProxyProtocolContainerPort;
         customProxyConfScripts = flatten (map (
           svc:
             map (
               customDomain:
                 lib.neo.mkActivationScriptForFile config {
-                  filePath = "${config.neo.core.volumes.appdata}/swag/nginx/site-confs/${customDomain}.conf";
+                  filePath = "${appdataSwag}/nginx/site-confs/${customDomain}.conf";
                   content = ''
                     server {
                       listen 80;
                       listen [::]:80;
                       server_name ${customDomain};
 
-                      # Redirect HTTP to HTTPS
                       return 301 https://$server_name$request_uri;
                     }
 
                     server {
-                      listen 443 ssl;
+                      include /config/nginx/listen-https.conf;
                       http2 on;
                       server_name ${customDomain};
 
                       include /config/nginx/ssl.conf;
                       client_max_body_size 0;
-
+                      include /config/nginx/geo-access.conf;
                       location / {
-                        # include /config/nginx/proxy.conf;
                         include /config/nginx/resolver.conf;
 
                         proxy_pass https://${svc.subdomain}.${domain}:443;
@@ -62,19 +62,18 @@
                 }
             ) (svc.customDomains or [])
         ) (attrValues appServices));
-        # Skip null proxyConf (should not happen for proxied services).
         proxyConfScripts = map (
           svc:
             lib.neo.mkActivationScriptForFile config {
-              filePath = "${config.neo.core.volumes.appdata}/swag/nginx/proxy-confs/${svc.subdomain}.subdomain.conf";
+              filePath = "${appdataSwag}/nginx/proxy-confs/${svc.subdomain}.subdomain.conf";
               content = svc.proxyConf;
             }
-        ) (attrValues appServices);
+        ) (filter (svc: svc.proxyConf != null) (attrValues appServices));
         proxyPassConfScripts =
           mapAttrsToList (
             domain: upstream:
               lib.neo.mkActivationScriptForFile config {
-                filePath = "${config.neo.core.volumes.appdata}/swag/nginx/site-confs/${domain}.conf";
+                filePath = "${appdataSwag}/nginx/site-confs/${domain}.conf";
                 content = ''
                   server {
                     listen 80;
@@ -85,13 +84,13 @@
                   }
 
                   server {
-                    listen 443 ssl;
+                    include /config/nginx/listen-https.conf;
                     http2 on;
                     server_name ${domain};
 
                     include /config/nginx/ssl.conf;
                     client_max_body_size 0;
-
+                    include /config/nginx/geo-access.conf;
                     location / {
                       include /config/nginx/proxy.conf;
                       include /config/nginx/resolver.conf;
@@ -108,6 +107,24 @@
               }
           )
           proxyPass;
+        edgeConfScripts = [
+          (lib.neo.mkActivationScriptForFile config {
+            filePath = "${appdataSwag}/nginx/dbip.conf";
+            content = lib.neo.mkDbipConf cfg.geo;
+          })
+          (lib.neo.mkActivationScriptForFile config {
+            filePath = "${appdataSwag}/nginx/geo-access.conf";
+            content = lib.neo.geoAccessConf;
+          })
+          (lib.neo.mkActivationScriptForFile config {
+            filePath = "${appdataSwag}/nginx/listen-https.conf";
+            content = lib.neo.listenHttpsConf;
+          })
+          (lib.neo.mkActivationScriptForFile config {
+            filePath = "${appdataSwag}/nginx/conf.d/real-ip.conf";
+            content = lib.neo.realIpConf;
+          })
+        ];
       in
         mkIf cfg.enabled {
           networking.firewall.extraCommands = "
@@ -116,23 +133,27 @@
           networking.firewall.extraStopCommands = "
             iptables -D nixos-fw -i br+ -j ACCEPT
           ";
+          networking.firewall.allowedTCPPorts = [cfg.localHttpsProxyProtocolPort];
+
           systemd.services.docker-swag = {
             preStart = lib.concatStringsSep "\n" ([
-                "rm -r ${config.neo.core.volumes.appdata}/swag/nginx/proxy-confs || true"
-                "rm -r ${config.neo.core.volumes.appdata}/swag/nginx/site-confs || true"
-                "rm -f ${config.neo.core.volumes.appdata}/swag/nginx/proxy.conf || true"
-                "rm -f ${config.neo.core.volumes.appdata}/swag/nginx/nginx.conf || true"
+                "rm -r ${appdataSwag}/nginx/proxy-confs || true"
+                "rm -r ${appdataSwag}/nginx/site-confs || true"
+                "rm -f ${appdataSwag}/nginx/proxy.conf || true"
+                "rm -f ${appdataSwag}/nginx/nginx.conf || true"
                 "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'"
                 (lib.neo.mkEnsureDirs config [
-                  "${config.neo.core.volumes.appdata}/swag"
-                  "${config.neo.core.volumes.appdata}/swag/nginx"
-                  "${config.neo.core.volumes.appdata}/swag/nginx/proxy-confs"
-                  "${config.neo.core.volumes.appdata}/swag/nginx/conf.d"
+                  appdataSwag
+                  "${appdataSwag}/nginx"
+                  "${appdataSwag}/nginx/proxy-confs"
+                  "${appdataSwag}/nginx/conf.d"
+                  "${appdataSwag}/geoip2db"
                 ])
               ]
               ++ proxyConfScripts
               ++ customProxyConfScripts
-              ++ proxyPassConfScripts);
+              ++ proxyPassConfScripts
+              ++ edgeConfScripts);
             wants = ["swag-patcher.service"];
           };
 
@@ -151,8 +172,7 @@
               EXTRA_DOMAINS = concatStringsSep "," (proxyPassDomains ++ customDomains);
               SWAG_AUTORELOAD = "true";
               SWAG_AUTORELOAD_WATCHLIST = "/config/etc/letsencrypt";
-              # Dashboard UI (GoAccess) — always on when SWAG is enabled.
-              DOCKER_MODS = "linuxserver/mods:swag-dashboard";
+              DOCKER_MODS = "linuxserver/mods:swag-dashboard|linuxserver/mods:swag-dbip";
             };
             volumes = [
               "${config.neo.core.volumes.appdata}/swag:/config"
@@ -160,6 +180,7 @@
             ports = [
               "${toString cfg.localHttpPort}:80"
               "${toString cfg.localHttpsPort}:443"
+              "${toString cfg.localHttpsProxyProtocolPort}:${toString ppContainerPort}"
             ];
             capabilities = {
               NET_ADMIN = true;

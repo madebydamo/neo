@@ -65,11 +65,12 @@
             }
             // {rank = 120;};
         };
-      # Services with a public SWAG vhost (subdomain + proxyConf).
-      # Includes swag itself when it exposes the dashboard UI at swag.<domain>.
+      # Enabled services that get a SWAG subdomain (certs, DNS, proxy-conf materialization).
+      # Includes swag itself for the dashboard UI at swag.<domain>.
+      # Do NOT require proxyConf here — reading it while modules define it causes infinite recursion.
       getProxiedServices = config:
         lib.filterAttrs (
-          _: v: v.enabled && (v.subdomain or null) != null && (v.proxyConf or null) != null
+          _: v: v.enabled && (v.subdomain or null) != null
         )
         config.neo.services;
     };
