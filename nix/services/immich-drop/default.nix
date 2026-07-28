@@ -7,6 +7,8 @@
   }:
     with lib; let
       cfg = config.neo.services.immich-drop;
+      immichCfg = config.neo.services.immich;
+      domain = config.neo.services.swag.domain;
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-immich-drop.preStart = lib.neo.mkEnsureDirs config [
@@ -18,11 +20,11 @@
             image = cfg.containers."immich-drop";
             autoStart = true;
             environment = {
-              IMMICH_BASE_URL = "https://immich.damo4mf20.ch/api";
+              IMMICH_BASE_URL = "https://${immichCfg.subdomain}.${domain}/api";
               IMMICH_API_KEY = "N0iWGGfNrozgwBfPuTLQYAAjYfv6rxJMcDN6Xfo8c";
               IMMICH_ALBUM_NAME = "dead-drop";
               PUBLIC_UPLOAD_PAGE_ENABLED = "false";
-              PUBLIC_BASE_URL = "https://drop.damo4mf20.ch";
+              PUBLIC_BASE_URL = "https://${cfg.subdomain}.${domain}";
               CHUNKED_UPLOADS_ENABLED = "true";
               CHUNK_SIZE_MB = "95";
               SESSION_SECRET = "SET-A-STRONG-RANDOM-VALUE";
