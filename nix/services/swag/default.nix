@@ -10,7 +10,32 @@
       config = let
         cfg = config.neo.services.swag;
         appServices = lib.neo.getProxiedServices config;
-        subdomains = catAttrs "subdomain" (attrValues appServices);
+        # (service name, subdomain) for every enabled proxied service.
+        subdomainClaims = mapAttrsToList (name: svc: {
+          service = name;
+          subdomain = svc.subdomain;
+        })
+        appServices;
+        subdomains = map (c: c.subdomain) subdomainClaims;
+        # Subdomains must be unique DNS labels of lowercase a-z only.
+        invalidSubdomains = filter (s: builtins.match "[a-z]+" s == null) subdomains;
+        invalidSubdomainMessage =
+          concatMapStringsSep "\n" (
+            s: let
+              owners = filter (c: c.subdomain == s) subdomainClaims;
+              names = concatMapStringsSep ", " (c: c.service) owners;
+            in "  - \"${s}\" (service: ${names})"
+          )
+          invalidSubdomains;
+        duplicateSubdomains = unique (filter (s: (count (c: c.subdomain == s) subdomainClaims) > 1) subdomains);
+        duplicateSubdomainMessage =
+          concatMapStringsSep "\n" (
+            s: let
+              owners = filter (c: c.subdomain == s) subdomainClaims;
+              names = concatMapStringsSep ", " (c: c.service) owners;
+            in "  - \"${s}\": claimed by ${names}"
+          )
+          duplicateSubdomains;
         customDomains = concatLists (catAttrs "customDomains" (attrValues appServices));
         proxyPass = cfg.proxyPass;
         proxyPassDomains = attrNames proxyPass;
@@ -137,6 +162,25 @@
         ];
       in
         mkIf cfg.enabled {
+          assertions = [
+            {
+              assertion = invalidSubdomains == [];
+              message = ''
+                neo.services.swag: every service subdomain must consist of lowercase a-z only (no digits, hyphens, or uppercase).
+                Invalid subdomains:
+                ${invalidSubdomainMessage}
+              '';
+            }
+            {
+              assertion = duplicateSubdomains == [];
+              message = ''
+                neo.services.swag: service subdomains must be unique across all enabled proxied services.
+                Duplicate subdomains:
+                ${duplicateSubdomainMessage}
+              '';
+            }
+          ];
+
           networking.firewall.extraCommands = "
             iptables -I nixos-fw 1 -i br+ -j ACCEPT
           ";

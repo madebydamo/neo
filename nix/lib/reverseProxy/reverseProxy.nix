@@ -20,7 +20,7 @@
             mkOption {
               type = types.nullOr types.str;
               default = subdomain;
-              description = "Subdomain for the service (used by swag reverse proxy)";
+              description = "Subdomain for the service. Must be unique among enabled services and consist of lowercase a-z only";
             }
             // {rank = 100;};
 
