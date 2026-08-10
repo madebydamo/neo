@@ -47,6 +47,10 @@
         rank = 30;
       };
 
+      options.neo.core.zramSwap.enabled = mkEnableOption "Compressed RAM swap (zram). Recommended on hosts with ≤8 GiB RAM or not much RAM left" {
+        rank = 35;
+      };
+
       options.neo.core.uid = mkOption {
         type = types.int;
         default = 1000;

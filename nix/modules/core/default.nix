@@ -25,6 +25,15 @@
     users.allowNoPasswordLogin = true;
     users.mutableUsers = false;
 
+    zramSwap = lib.mkIf config.neo.core.zramSwap.enabled {
+      enable = true;
+    };
+
+    services.earlyoom = {
+      enable = true;
+      freeMemKillThreshold = 2;
+    };
+
     boot.kernel.sysctl = {
       "net.ipv4.ip_forward" = 1;
       "net.ipv6.conf.all.forwarding" = 1;
