@@ -1,0 +1,72 @@
+{{! exclusiveListPair: attrsOf submodule with mode toggle + single multi-select grid.
+    Driven by option.ui (modes, keysFrom, entryLabel, emptyHint, choiceEmptyHint).
+    See nix/lib/ui.nix and option_form.js elp* helpers. }}
+<div class="space-y-3">
+  <template x-for="(key, idx) in attrKeys('{{name}}')" :key="key">
+    <div class="rounded-xl border border-base-300 bg-base-100/70 p-3 sm:p-4 space-y-3 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary text-sm font-semibold"
+                x-text="(key || '?').slice(0, 1).toUpperCase()"></span>
+          <div class="min-w-0">
+            <div class="text-[10px] uppercase tracking-wide text-base-content/45 font-semibold"
+                 x-text="elpEntryLabel('{{name}}')"></div>
+            <div class="font-mono text-sm font-medium truncate" x-text="key"></div>
+          </div>
+        </div>
+        <span class="badge badge-sm"
+              :class="elpBadgeClass('{{name}}', key)"
+              x-text="elpModeLabel('{{name}}', key)"></span>
+      </div>
+
+      <div>
+        <div class="text-xs text-base-content/55 mb-1.5">Access mode</div>
+        <div class="join join-vertical sm:join-horizontal w-full">
+          <template x-for="mode in elpModes('{{name}}')" :key="mode.id">
+            <button type="button"
+                    class="btn btn-sm join-item flex-1"
+                    :class="elpMode('{{name}}', key) === mode.id ? 'btn-primary' : 'btn-ghost border border-base-300'"
+                    @click="setElpMode('{{name}}', key, mode.id)"
+                    x-text="mode.label"></button>
+          </template>
+        </div>
+        <p class="text-[11px] text-base-content/45 mt-1.5 leading-snug"
+           x-text="elpModeHint('{{name}}', key)"></p>
+      </div>
+
+      <div x-show="(elpModeDef('{{name}}', elpMode('{{name}}', key))?.active || []).length > 0"
+           x-cloak class="space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <div class="text-xs font-medium text-base-content/70"
+               x-text="elpListLabel('{{name}}', key)"></div>
+          <div class="flex gap-1">
+            <button type="button" class="btn btn-ghost btn-xs"
+                    @click="setAllElpApps('{{name}}', key, true)">All</button>
+            <button type="button" class="btn btn-ghost btn-xs"
+                    @click="setAllElpApps('{{name}}', key, false)">None</button>
+          </div>
+        </div>
+        <div class="max-h-56 overflow-y-auto rounded-lg border border-base-300 bg-base-200/30 p-2">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            <template x-for="app in elpChoices('{{name}}')" :key="app">
+              <label class="flex items-center gap-2.5 rounded-lg border border-base-300/80 bg-base-100 px-2.5 py-2 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-colors">
+                <input type="checkbox"
+                       class="checkbox checkbox-primary checkbox-sm shrink-0"
+                       :checked="elpAppSelected('{{name}}', key, app)"
+                       @change="toggleElpApp('{{name}}', key, app, $event.target.checked)">
+                <span class="font-mono text-xs leading-tight break-all" x-text="app"></span>
+              </label>
+            </template>
+          </div>
+          <p class="text-xs text-base-content/50 px-1 py-2"
+             x-show="elpChoices('{{name}}').length === 0"
+             x-text="elpChoiceEmptyHint('{{name}}')"></p>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <p class="text-xs text-base-content/50"
+     x-show="attrKeys('{{name}}').length === 0"
+     x-text="elpEmptyHint('{{name}}')"></p>
+</div>

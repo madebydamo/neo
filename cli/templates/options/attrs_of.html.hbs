@@ -1,6 +1,9 @@
-{{! attrsOf: scalar values or one-deep submodule entries }}
+{{! attrsOf: scalar values or one-deep submodule entries; widgets via option.ui }}
 {{#if (eq type.elem.kind "submodule")}}
   <div class="mt-2">
+    {{#if (eq ui.widget "exclusiveListPair")}}
+      {{> options/widgets/exclusive_list_pair}}
+    {{else}}
     <template x-for="(key, idx) in attrKeys('{{name}}')" :key="key">
       <div>
         <div class="divider my-3 text-xs text-base-content/40" x-show="idx > 0">entry</div>
@@ -212,6 +215,7 @@
         + Add entry
       </button>
     </div>
+    {{/if}}
   </div>
 {{else}}
   <div class="mt-2 space-y-1">

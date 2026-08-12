@@ -24,7 +24,8 @@
                 helper = lib.neo.helpers.bcryptUser;
               };
               # Per-user app ACLs. Keys = usernames (before ":" in users).
-              # allow/block list neo service names.
+              # allow/block list service names; UI multi-select via ui.choices = "authApps".
+              # Presentation: exclusiveListPair widget (mode + single grid), keysFrom users.
               access = mkOption {
                 type = types.attrsOf (types.submodule {
                   options = {
@@ -36,6 +37,7 @@
                         If non-empty, the user may only use these apps (do not also set block).
                       '';
                       rank = 0;
+                      ui.choices = "authApps";
                     };
                     block = mkOption {
                       type = types.listOf types.str;
@@ -45,6 +47,7 @@
                         Only applied when allow is empty.
                       '';
                       rank = 10;
+                      ui.choices = "authApps";
                     };
                   };
                 });
@@ -56,8 +59,49 @@
                   when the UI only shows active users.
                 '';
                 rank = 15;
+                ui = lib.neo.ui.mkUi {
+                  widget = "exclusiveListPair";
+                  keysFrom = lib.neo.ui.mkKeysFrom {
+                    option = "users";
+                    extract = "beforeColon";
+                  };
+                  modes = [
+                    (lib.neo.ui.mkMode {
+                      id = "open";
+                      label = "All apps";
+                      active = [];
+                      badge = "success";
+                      hintEmpty = "No restrictions — this user can open every app behind tinyauth.";
+                      hintFilled = "No restrictions — this user can open every app behind tinyauth.";
+                    })
+                    (lib.neo.ui.mkMode {
+                      id = "allow";
+                      label = "Allow list";
+                      active = ["allow"];
+                      listLabel = "Allowed apps";
+                      badge = "primary";
+                      hintEmpty = "Pick at least one app. Saving with none selected keeps full access.";
+                      hintFilled = "This user can only open the apps you check below.";
+                    })
+                    (lib.neo.ui.mkMode {
+                      id = "block";
+                      label = "Block list";
+                      active = ["block"];
+                      listLabel = "Blocked apps";
+                      badge = "warning";
+                      hintEmpty = "Pick apps to block, or stay on All apps.";
+                      hintFilled = "This user can open every app except the ones you check below.";
+                    })
+                  ];
+                  save = lib.neo.ui.mkSave {
+                    pruneEmptyEntries = true;
+                    omitIfEmpty = true;
+                  };
+                  entryLabel = "User";
+                  emptyHint = "Add users above to configure per-user app access.";
+                  choiceEmptyHint = "No enabled apps with tinyauth yet. Enable a service with edge auth first.";
+                };
               };
-
               sessionExpiry = mkOption {
                 type = types.int;
                 default = 86400;

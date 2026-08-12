@@ -1,6 +1,7 @@
 // option_form.js
 // Alpine form controller for service options + HTMX/Alpine re-init after swaps.
-// Supports scalar fields, listOf/attrsOf of scalars, and one-deep submodule collections.
+// Supports scalar fields, listOf/attrsOf of scalars, one-deep submodule collections,
+// and declarative ui.widget handlers (see nix/lib/ui.nix).
 
 function optionForm() {
   return {
@@ -15,6 +16,11 @@ function optionForm() {
     saveBusy: false,
     saveFlash: '', // '' | 'ok' | 'err'
     saveError: '',
+    /**
+     * Ephemeral UI state per option (not saved).
+     * exclusiveListPair: { modes: { [entryKey]: modeId } }
+     */
+    uiState: {},
 
     cloneValue(v) {
       if (v === null || v === undefined) return v;
@@ -122,12 +128,358 @@ function optionForm() {
       return this.cloneValue(v);
     },
 
+    // ── Schema / ui helpers ──────────────────────────────────────────
+
+    optUi(name) {
+      return this.optionsByName[name]?.ui || null;
+    },
+
+    hasWidget(name, widget) {
+      return this.optUi(name)?.widget === widget;
+    },
+
+    // ── keysFrom (generic) ───────────────────────────────────────────
+
+    extractKeyFromItem(item, extract) {
+      const s = String(item ?? '');
+      if (extract === 'beforeColon') {
+        const i = s.indexOf(':');
+        return i >= 0 ? s.slice(0, i) : s;
+      }
+      return s;
+    },
+
+    deriveKeysFrom(keysFrom) {
+      if (!keysFrom || !keysFrom.option) return [];
+      const src = this.values[keysFrom.option];
+      const extract = keysFrom.extract || 'identity';
+      if (Array.isArray(src)) {
+        return src
+          .map((item) => this.extractKeyFromItem(item, extract))
+          .filter((n) => n.length > 0);
+      }
+      if (src && typeof src === 'object' && !Array.isArray(src)) {
+        return Object.keys(src);
+      }
+      return [];
+    },
+
+    /**
+     * Align attrsOf keys with keysFrom source; seed missing entries with submodule defaults.
+     */
+    syncKeysFromOption(optionName) {
+      const opt = this.optionsByName[optionName];
+      const kf = opt?.ui?.keysFrom;
+      if (!kf) return;
+      const names = this.deriveKeysFrom(kf);
+      const prev = (this.values[optionName] && typeof this.values[optionName] === 'object'
+        && !Array.isArray(this.values[optionName]))
+        ? this.values[optionName]
+        : {};
+      const elem = this.unwrapType(opt.type?.elem);
+      const next = {};
+      names.forEach((n) => {
+        if (Object.prototype.hasOwnProperty.call(prev, n)) {
+          next[n] = prev[n];
+        } else {
+          next[n] = this.defaultForType(elem || { kind: 'submodule' });
+        }
+      });
+      this.values[optionName] = next;
+
+      // exclusiveListPair: keep mode map aligned
+      if (opt.ui?.widget === 'exclusiveListPair') {
+        this.elpSyncModes(optionName);
+      }
+    },
+
+    /** Re-sync every option that keysFrom the given source option name. */
+    notifyKeysFromSource(sourceName) {
+      Object.keys(this.optionsByName || {}).forEach((name) => {
+        const kf = this.optionsByName[name]?.ui?.keysFrom;
+        if (kf && kf.option === sourceName) {
+          this.syncKeysFromOption(name);
+        }
+      });
+    },
+
+    // ── exclusiveListPair widget ─────────────────────────────────────
+
+    elpModes(optionName) {
+      return this.optUi(optionName)?.modes || [];
+    },
+
+    elpModeDef(optionName, modeId) {
+      return this.elpModes(optionName).find((m) => m.id === modeId) || null;
+    },
+
+    elpListFieldNames(optionName) {
+      const names = new Set();
+      this.elpModes(optionName).forEach((m) => {
+        (m.active || []).forEach((f) => names.add(f));
+      });
+      return [...names];
+    },
+
+    elpEnsureState(optionName) {
+      if (!this.uiState[optionName]) {
+        this.uiState[optionName] = { modes: {} };
+      }
+      if (!this.uiState[optionName].modes) {
+        this.uiState[optionName].modes = {};
+      }
+      return this.uiState[optionName];
+    },
+
+    /** Infer mode from data (first mode with non-empty active lists, else open/empty active). */
+    elpInferMode(optionName, entry) {
+      const modes = this.elpModes(optionName);
+      const e = entry || {};
+      for (let i = 0; i < modes.length; i++) {
+        const m = modes[i];
+        const active = m.active || [];
+        if (active.length === 0) continue;
+        const has = active.some((f) => Array.isArray(e[f]) && e[f].length > 0);
+        if (has) return m.id;
+      }
+      // Prefer mode with empty active (open)
+      const open = modes.find((m) => !(m.active || []).length);
+      return open ? open.id : (modes[0]?.id || 'open');
+    },
+
+    elpSyncModes(optionName) {
+      const st = this.elpEnsureState(optionName);
+      const prevModes = st.modes || {};
+      const nextModes = {};
+      const map = this.values[optionName] || {};
+      Object.keys(map).forEach((key) => {
+        const e = map[key] || {};
+        const anyList = this.elpListFieldNames(optionName).some(
+          (f) => Array.isArray(e[f]) && e[f].length > 0
+        );
+        // Data with picks wins; otherwise keep sticky UI mode (empty allow/block still needs a mode).
+        if (anyList) {
+          nextModes[key] = this.elpInferMode(optionName, e);
+        } else if (prevModes[key] && this.elpModeDef(optionName, prevModes[key])) {
+          nextModes[key] = prevModes[key];
+        } else {
+          nextModes[key] = this.elpInferMode(optionName, e);
+        }
+      });
+      this.uiState = { ...this.uiState, [optionName]: { ...st, modes: nextModes } };
+    },
+
+    elpMode(optionName, key) {
+      const st = this.uiState[optionName];
+      const ui = st?.modes?.[key];
+      if (ui && this.elpModeDef(optionName, ui)) return ui;
+      const e = (this.values[optionName] || {})[key] || {};
+      return this.elpInferMode(optionName, e);
+    },
+
+    elpModeLabel(optionName, key) {
+      const m = this.elpModeDef(optionName, this.elpMode(optionName, key));
+      return m?.label || this.elpMode(optionName, key);
+    },
+
+    elpModeHint(optionName, key) {
+      const modeId = this.elpMode(optionName, key);
+      const m = this.elpModeDef(optionName, modeId);
+      if (!m) return '';
+      const e = (this.values[optionName] || {})[key] || {};
+      const active = m.active || [];
+      let n = 0;
+      if (active.length) {
+        const list = e[active[0]];
+        n = Array.isArray(list) ? list.length : 0;
+      }
+      if (n > 0) return m.hintFilled || m.hintEmpty || '';
+      return m.hintEmpty || m.hintFilled || '';
+    },
+
+    elpBadgeClass(optionName, key) {
+      const m = this.elpModeDef(optionName, this.elpMode(optionName, key));
+      const b = m?.badge || '';
+      if (b === 'success') return 'badge-success badge-outline';
+      if (b === 'primary') return 'badge-primary badge-outline';
+      if (b === 'warning') return 'badge-warning badge-outline';
+      if (b === 'error') return 'badge-error badge-outline';
+      return 'badge-ghost';
+    },
+
+    elpListLabel(optionName, key) {
+      const m = this.elpModeDef(optionName, this.elpMode(optionName, key));
+      return m?.listLabel || m?.label || 'Items';
+    },
+
+    setElpMode(optionName, key, modeId) {
+      const st = this.elpEnsureState(optionName);
+      st.modes = { ...st.modes, [key]: modeId };
+      this.uiState = { ...this.uiState, [optionName]: { ...st } };
+
+      const mode = this.elpModeDef(optionName, modeId);
+      const active = mode?.active || [];
+      const allLists = this.elpListFieldNames(optionName);
+      const obj = this.ensureAttrs(optionName);
+      const prev = Object.assign({}, obj[key] || {});
+      // Collect previous picks from any list field (for mode switch carry-over)
+      let carried = [];
+      allLists.forEach((f) => {
+        if (Array.isArray(prev[f]) && prev[f].length) carried = [...prev[f]];
+      });
+      const next = Object.assign({}, prev);
+      allLists.forEach((f) => { next[f] = []; });
+      if (active.length === 1) {
+        const field = active[0];
+        const prevField = Array.isArray(prev[field]) ? prev[field] : [];
+        next[field] = prevField.length ? [...prevField] : [...carried];
+      }
+      obj[key] = next;
+      this.values[optionName] = { ...obj };
+    },
+
+    /** Choices from first nested field that has type.values (from ui.choices). */
+    elpChoices(optionName) {
+      const fields = this.optType(optionName)?.elem?.fields || [];
+      for (let i = 0; i < fields.length; i++) {
+        const vals = fields[i]?.type?.values;
+        if (Array.isArray(vals) && vals.length) return vals;
+      }
+      // Prefer empty array over undefined for x-for
+      for (let i = 0; i < fields.length; i++) {
+        const vals = fields[i]?.type?.values;
+        if (Array.isArray(vals)) return vals;
+      }
+      return [];
+    },
+
+    elpChoiceEmptyHint(optionName) {
+      return this.optUi(optionName)?.choiceEmptyHint || 'No choices available.';
+    },
+
+    elpEmptyHint(optionName) {
+      return this.optUi(optionName)?.emptyHint || '';
+    },
+
+    elpEntryLabel(optionName) {
+      return this.optUi(optionName)?.entryLabel || 'Entry';
+    },
+
+    elpAppSelected(optionName, key, app) {
+      const modeId = this.elpMode(optionName, key);
+      const mode = this.elpModeDef(optionName, modeId);
+      const active = mode?.active || [];
+      if (!active.length) return false;
+      const e = (this.values[optionName] || {})[key] || {};
+      const list = e[active[0]];
+      return Array.isArray(list) && list.includes(app);
+    },
+
+    toggleElpApp(optionName, key, app, checked) {
+      const modeId = this.elpMode(optionName, key);
+      const mode = this.elpModeDef(optionName, modeId);
+      const active = mode?.active || [];
+      if (!active.length) return;
+      // Sticky mode while picking
+      const st = this.elpEnsureState(optionName);
+      st.modes = { ...st.modes, [key]: modeId };
+      this.uiState = { ...this.uiState, [optionName]: { ...st } };
+      this.toggleNestedListChoice(optionName, key, active[0], app, checked);
+    },
+
+    setAllElpApps(optionName, key, selectAll) {
+      const modeId = this.elpMode(optionName, key);
+      const mode = this.elpModeDef(optionName, modeId);
+      const active = mode?.active || [];
+      if (!active.length) return;
+      const st = this.elpEnsureState(optionName);
+      st.modes = { ...st.modes, [key]: modeId };
+      this.uiState = { ...this.uiState, [optionName]: { ...st } };
+      const apps = this.elpChoices(optionName);
+      const allLists = this.elpListFieldNames(optionName);
+      const obj = this.ensureAttrs(optionName);
+      const entry = Object.assign({}, obj[key] || {});
+      allLists.forEach((f) => { entry[f] = []; });
+      entry[active[0]] = selectAll ? [...apps] : [];
+      obj[key] = entry;
+      this.values[optionName] = { ...obj };
+    },
+
+    elpPruneEmptyEntries(optionName, value) {
+      const lists = this.elpListFieldNames(optionName);
+      const out = {};
+      Object.keys(value || {}).forEach((k) => {
+        const e = value[k] || {};
+        const any = lists.some((f) => Array.isArray(e[f]) && e[f].length > 0);
+        if (any) {
+          const entry = {};
+          lists.forEach((f) => {
+            entry[f] = Array.isArray(e[f]) ? e[f] : [];
+          });
+          // Keep any non-list fields too
+          Object.keys(e).forEach((fk) => {
+            if (!lists.includes(fk)) entry[fk] = e[fk];
+          });
+          out[k] = entry;
+        }
+      });
+      return out;
+    },
+
+    elpIsAtDefault(optionName) {
+      const save = this.optUi(optionName)?.save || {};
+      let v = this.values[optionName];
+      if (save.pruneEmptyEntries) {
+        v = this.elpPruneEmptyEntries(optionName, v);
+      }
+      if (save.omitIfEmpty || save.pruneEmptyEntries) {
+        return Object.keys(v || {}).length === 0;
+      }
+      return this.deepEqual(v, this.defaults[optionName]);
+    },
+
+    elpPrepareSave(optionName) {
+      const save = this.optUi(optionName)?.save || {};
+      let v = this.cloneValue(this.values[optionName]);
+      if (save.pruneEmptyEntries) {
+        v = this.elpPruneEmptyEntries(optionName, v);
+      }
+      if (save.omitIfEmpty && Object.keys(v || {}).length === 0) {
+        return undefined; // omit from payload
+      }
+      return v;
+    },
+
+    initExclusiveListPair(optionName) {
+      this.syncKeysFromOption(optionName);
+      this.elpSyncModes(optionName);
+      this.originals[optionName] = this.cloneValue(this.values[optionName]);
+      const kf = this.optUi(optionName)?.keysFrom;
+      if (kf?.option && typeof this.$watch === 'function') {
+        this.$watch(`values.${kf.option}`, () => {
+          this.syncKeysFromOption(optionName);
+        });
+      }
+    },
+
+    // ── Widget lifecycle ─────────────────────────────────────────────
+
+    initWidgets() {
+      Object.keys(this.optionsByName || {}).forEach((name) => {
+        const w = this.optUi(name)?.widget;
+        if (w === 'exclusiveListPair') {
+          this.initExclusiveListPair(name);
+        }
+      });
+    },
+
     initForm() {
       const raw = document.getElementById('options-seed')?.textContent || '[]';
       let opts = [];
       try { opts = JSON.parse(raw); } catch (e) { opts = []; }
 
       this.optionsByName = {};
+      this.uiState = {};
       opts.forEach((o) => {
         this.optionsByName[o.name] = o;
         const hasCurrent = (o.current !== undefined && o.current !== null);
@@ -145,8 +497,9 @@ function optionForm() {
         || '';
       this.isCore = (pane?.dataset?.isCore === 'true')
         || (pane?.dataset?.saveEndpoint || '').startsWith('/save-core/');
-    },
 
+      this.initWidgets();
+    },
 
     toggleListChoice(optionName, choice, checked) {
       const list = Array.isArray(this.values[optionName]) ? [...this.values[optionName]] : [];
@@ -236,6 +589,7 @@ function optionForm() {
         }
         list[target.index] = value;
         this.values[optionName] = [...list];
+        this.notifyKeysFromSource(optionName);
         return;
       }
       if (!target || !target.field) {
@@ -246,6 +600,7 @@ function optionForm() {
         } else {
           this.values[optionName] = value;
         }
+        this.notifyKeysFromSource(optionName);
         return;
       }
       if (target.key != null && target.key !== undefined) {
@@ -291,6 +646,9 @@ function optionForm() {
       } else {
         this.values[name] = this.cloneValue(this.defaults[name]);
       }
+      if (this.hasWidget(name, 'exclusiveListPair')) {
+        this.syncKeysFromOption(name);
+      }
     },
 
     revertField(name) {
@@ -298,6 +656,9 @@ function optionForm() {
       const origs = this.originals || {};
       if (!(name in origs)) return;
       this.values[name] = this.cloneValue(origs[name]);
+      if (this.hasWidget(name, 'exclusiveListPair')) {
+        this.elpSyncModes(name);
+      }
     },
 
     resetAll() {
@@ -310,6 +671,9 @@ function optionForm() {
 
     isAtDefault(name) {
       if (!name) return true;
+      if (this.hasWidget(name, 'exclusiveListPair')) {
+        return this.elpIsAtDefault(name);
+      }
       const vals = this.values || {};
       const defs = this.defaults || {};
       return this.deepEqual(vals[name], defs[name]);
@@ -349,12 +713,14 @@ function optionForm() {
       const elem = this.unwrapType(this.optType(name)?.elem);
       list.push(this.defaultForType(elem || { kind: 'str' }));
       this.values[name] = [...list];
+      this.notifyKeysFromSource(name);
     },
 
     removeListItem(name, idx) {
       const list = this.ensureList(name);
       list.splice(idx, 1);
       this.values[name] = [...list];
+      this.notifyKeysFromSource(name);
     },
 
     addAttrItem(name, inputEl) {
@@ -399,7 +765,6 @@ function optionForm() {
       const ft = this.fieldType(parentName, fieldName);
       const elem = this.unwrapType(ft?.elem || ft);
       list.push(this.defaultForType(elem || { kind: 'str' }));
-      // reassign for Alpine reactivity
       this.values[parentName] = { ...this.values[parentName] };
     },
 
@@ -489,8 +854,23 @@ function optionForm() {
       const svc = this.serviceName || 'service';
       const pane = document.getElementById('options-pane');
       const ep = (pane && pane.dataset && pane.dataset.saveEndpoint) || `/save/${encodeURIComponent(svc)}`;
+
+      // keysFrom: align before write
+      Object.keys(this.optionsByName || {}).forEach((name) => {
+        if (this.optUi(name)?.keysFrom) {
+          this.syncKeysFromOption(name);
+        }
+      });
+
       const toSave = {};
       Object.keys(this.values || {}).forEach((k) => {
+        if (this.hasWidget(k, 'exclusiveListPair')) {
+          const prepared = this.elpPrepareSave(k);
+          if (prepared !== undefined) {
+            toSave[k] = prepared;
+          }
+          return;
+        }
         if (!this.isAtDefault(k)) {
           toSave[k] = this.values[k];
         }
