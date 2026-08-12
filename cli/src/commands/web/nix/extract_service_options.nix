@@ -252,6 +252,7 @@
   # Field records for a submodule type (used as attrsOf/listOf element schema).
   # Plain nested submodules are expanded to dotted field names; collections stay as one field.
   # Sibling order matches the main form walk (level-dependent ranks).
+  # Nested field `ui` (e.g. ui.choices) is serialized so multi-select works inside widgets.
   mkFieldRecords = t: let
     walkF = pathList: o:
       if isOption o
@@ -267,7 +268,9 @@
             else builtins.concatStringsSep "." pathList;
           ot = tryOr {} (o.type or {});
           tn = typeNameOf ot;
-          ti = getTypeInfo ot;
+          uiMeta = toUiMeta (o.ui or null);
+          choices = tryOr null (if uiMeta == null then null else uiMeta.choices or null);
+          ti = applyChoicesToType (getTypeInfo ot) choices;
           record = {
             name = path;
             type = ti;
@@ -287,6 +290,7 @@
             current = null;
             rank = tryOr null (o.rank or null);
             helper = toHelperMeta (o.helper or null);
+            ui = uiMeta;
           };
           childSet =
             if tn == "submodule"
@@ -455,9 +459,214 @@
     then "enum"
     else k;
 
+  # Named dynamic choice lists for ui.choices (multi-select on listOf str).
+  # Options declare ui.choices = "authApps" | [ "a" "b" ]; never hardcode service paths here.
+  choiceProviders = {
+    # Enabled services with reverse-proxy / tinyauth edge auth (exclude tinyauth itself).
+    authApps = let
+      names =
+        builtins.filter (
+          n:
+            n
+            != "tinyauth"
+            && (tryOr false (configServices.${n}.enabled or false))
+            && (tryOr false (configServices.${n}.auth.enabled or false))
+        ) (builtins.attrNames configServices);
+    in
+      builtins.sort (a: b: a < b) names;
+  };
+
+  resolveChoices = choices:
+    if choices == null
+    then null
+    else if builtins.isList choices
+    then choices
+    else if builtins.isString choices && builtins.hasAttr choices choiceProviders
+    then choiceProviders.${choices}
+    else null;
+
+  # Attach type.values for multi-select when ui.choices is set.
+  applyChoicesToType = ti: choices: let
+    vals = resolveChoices choices;
+  in
+    if vals == null
+    then ti
+    else
+      ti
+      // {
+        values = vals;
+      };
+
+  # Serialize option ui metadata (widgets, keysFrom, modes, save rules).
+  # choices are resolved into type.values; the name is kept for debugging/JS.
+  toUiMeta = u:
+    if !(builtins.isAttrs u)
+    then null
+    else let
+      widget = tryOr null (u.widget or null);
+      choices = u.choices or null;
+      keysFromRaw = u.keysFrom or null;
+      keysFrom =
+        if !(builtins.isAttrs keysFromRaw)
+        then null
+        else {
+          option = tryOr "" (keysFromRaw.option or "");
+          extract = tryOr "identity" (keysFromRaw.extract or "identity");
+        };
+      modesRaw = u.modes or null;
+      modes =
+        if !(builtins.isList modesRaw)
+        then null
+        else
+          map (
+            m:
+              if !(builtins.isAttrs m)
+              then null
+              else
+                {
+                  id = tryOr "" (m.id or "");
+                  label = tryOr "" (m.label or "");
+                  active = tryOr [] (m.active or []);
+                }
+                // (
+                  if (m.listLabel or null) != null
+                  then {listLabel = m.listLabel;}
+                  else {}
+                )
+                // (
+                  if (m.hintEmpty or null) != null
+                  then {hintEmpty = m.hintEmpty;}
+                  else {}
+                )
+                // (
+                  if (m.hintFilled or null) != null
+                  then {hintFilled = m.hintFilled;}
+                  else {}
+                )
+                // (
+                  if (m.badge or null) != null
+                  then {badge = m.badge;}
+                  else {}
+                )
+          ) (builtins.filter builtins.isAttrs modesRaw);
+      saveRaw = u.save or null;
+      save =
+        if !(builtins.isAttrs saveRaw)
+        then null
+        else {
+          pruneEmptyEntries = tryOr false (saveRaw.pruneEmptyEntries or false);
+          omitIfEmpty = tryOr false (saveRaw.omitIfEmpty or false);
+        };
+      emptyHint = tryOr null (u.emptyHint or null);
+      entryLabel = tryOr null (u.entryLabel or null);
+      choiceEmptyHint = tryOr null (u.choiceEmptyHint or null);
+      # Drop null / empty shells so the JSON seed stays small.
+      cleaned =
+        {}
+        // (
+          if widget != null && widget != ""
+          then {inherit widget;}
+          else {}
+        )
+        // (
+          if choices != null
+          then {inherit choices;}
+          else {}
+        )
+        // (
+          if keysFrom != null && (keysFrom.option or "") != ""
+          then {inherit keysFrom;}
+          else {}
+        )
+        // (
+          if modes != null && modes != []
+          then {inherit modes;}
+          else {}
+        )
+        // (
+          if save != null
+          then {inherit save;}
+          else {}
+        )
+        // (
+          if emptyHint != null
+          then {inherit emptyHint;}
+          else {}
+        )
+        // (
+          if entryLabel != null
+          then {inherit entryLabel;}
+          else {}
+        )
+        // (
+          if choiceEmptyHint != null
+          then {inherit choiceEmptyHint;}
+          else {}
+        );
+    in
+      if cleaned == {}
+      then null
+      else cleaned;
+
+  # Derive attrsOf keys from a source option value (list or attrs).
+  extractKeyFromItem = extract: item: let
+    s = toString item;
+  in
+    if extract == "beforeColon"
+    then let
+      m = builtins.match "([^:]+):.*" s;
+    in
+      if builtins.isList m && builtins.length m > 0
+      then builtins.head m
+      else s
+    else s; # identity
+
+  deriveKeysFromSource = keysFrom: let
+    srcName = keysFrom.option or "";
+    extract = keysFrom.extract or "identity";
+    srcVal = tryOr null (
+      if srcName == ""
+      then null
+      else getNested [srcName] configRoot
+    );
+  in
+    if srcVal == null
+    then null
+    else if builtins.isList srcVal
+    then map (extractKeyFromItem extract) srcVal
+    else if builtins.isAttrs srcVal
+    then builtins.attrNames srcVal
+    else null;
+
+  # Keep only attrsOf entries whose keys are in the keysFrom source set.
+  pruneCurrentByKeysFrom = curVal: uiMeta:
+    if uiMeta == null || !(builtins.isAttrs curVal)
+    then curVal
+    else let
+      kf = uiMeta.keysFrom or null;
+      # `or` only works on attr selection (x.y or def), not bare vars.
+      known =
+        if kf == null
+        then null
+        else deriveKeysFromSource kf;
+    in
+      if kf == null || known == null
+      then curVal
+      else
+        builtins.listToAttrs (
+          builtins.filter (x: builtins.elem x.name known) (
+            map (k: {
+              name = k;
+              value = curVal.${k};
+            }) (builtins.attrNames curVal)
+          )
+        );
+
   mkOptionRecord = path: o: let
     t = tryOr {} (o.type or {});
-    ti = getTypeInfo t;
+    uiMeta = toUiMeta (o.ui or null);
+    choices = tryOr null (if uiMeta == null then null else uiMeta.choices or null);
+    ti = applyChoicesToType (getTypeInfo t) choices;
     defVal = tryOr null (
       if builtins.hasAttr "default" o
       then o.default
@@ -467,11 +676,12 @@
       if path == ""
       then []
       else builtins.filter builtins.isString (builtins.split "\\." path);
-    curVal = tryOr null (
+    curVal0 = tryOr null (
       if curPath == []
       then null
       else getNested curPath configRoot
     );
+    curVal = pruneCurrentByKeysFrom curVal0 uiMeta;
     exVal = tryOr null (
       if builtins.hasAttr "example" o
       then o.example
@@ -498,6 +708,7 @@
     current = toSafeValue curVal;
     rank = rank;
     inherit helper;
+    ui = uiMeta;
   };
 
   # Walk options into a flat form list, ordered by level-dependent ranks.

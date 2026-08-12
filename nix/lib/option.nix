@@ -1,5 +1,9 @@
-# Helpers for mkOption / mkEnableOption that support optional `rank` (UI order)
-# and optional `helper` (UI fill-assist scripts) in the neo web config editor.
+# Helpers for mkOption / mkEnableOption that support optional UI metadata in the
+# neo web config editor:
+#   - rank   — sibling sort order (level-dependent)
+#   - helper — fill-assist scripts (Generate / form dialogs)
+#   - ui     — presentation: widgets, dynamic choices, keysFrom, save rules
+#              (see nix/lib/ui.nix and AGENTS.md "Web UI option metadata")
 #
 # ## Level-dependent ranks (web UI)
 #
@@ -31,20 +35,23 @@
 #     description = "...";
 #     rank = 10;
 #     helper = lib.neo.helpers.randomToken;
+#     # ui = lib.neo.ui.mkUi { choices = "authApps"; };  # optional
 #   };
-# Also valid: `mkOption { ... } // { helper = ...; }` (same as rank attachments).
+# Also valid: `mkOption { ... } // { helper = ...; ui = ...; }` (same as rank).
 {lib, ...}: {
   libExtensions.option = {
     neo = {
       mkOption = {
         rank ? null,
         helper ? null,
+        ui ? null,
         ...
       } @ args: let
-        o = lib.mkOption (removeAttrs args ["rank" "helper"]);
+        o = lib.mkOption (removeAttrs args ["rank" "helper" "ui"]);
         extra =
           (lib.optionalAttrs (rank != null) {inherit rank;})
-          // (lib.optionalAttrs (helper != null) {inherit helper;});
+          // (lib.optionalAttrs (helper != null) {inherit helper;})
+          // (lib.optionalAttrs (ui != null) {inherit ui;});
       in
         if extra == {}
         then o
