@@ -212,6 +212,11 @@ enabled = true
 users = [
   "admin:$2a$10$REPLACE_WITH_BCRYPT_HASH",
 ]
+# Optional per-user app ACLs (neo service names). Empty = full access.
+# [services.tinyauth.access.guest]
+# allow = ["searxng", "homarr"]
+# [services.tinyauth.access.kid]
+# block = ["webtop"]
 
 [services.neo]
 enabled = true

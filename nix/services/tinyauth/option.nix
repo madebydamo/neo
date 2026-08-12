@@ -23,6 +23,41 @@
                 rank = 10;
                 helper = lib.neo.helpers.bcryptUser;
               };
+              # Per-user app ACLs. Keys = usernames (before ":" in users).
+              # allow/block list neo service names.
+              access = mkOption {
+                type = types.attrsOf (types.submodule {
+                  options = {
+                    allow = mkOption {
+                      type = types.listOf types.str;
+                      default = [];
+                      description = ''
+                        Whitelist of neo service names this user may access.
+                        If non-empty, the user may only use these apps (do not also set block).
+                      '';
+                      rank = 0;
+                    };
+                    block = mkOption {
+                      type = types.listOf types.str;
+                      default = [];
+                      description = ''
+                        Blacklist of neo service names this user may not access.
+                        Only applied when allow is empty.
+                      '';
+                      rank = 10;
+                    };
+                  };
+                });
+                default = {};
+                description = ''
+                  Per-user application access control. Attribute names are Tinyauth usernames
+                  (the part before ":" in users). Empty allow and block means full access.
+                  Orphan keys for deleted users are ignored at evaluation and dropped on save
+                  when the UI only shows active users.
+                '';
+                rank = 15;
+              };
+
               sessionExpiry = mkOption {
                 type = types.int;
                 default = 86400;
