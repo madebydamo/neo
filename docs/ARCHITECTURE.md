@@ -105,3 +105,13 @@ Neo wraps that so you get the benefits without writing a custom NixOS module set
 The Neo repository uses flake-parts and auto-imported modules under `nix/` (Dendritic style). Services typically split into options, implementation, and reverse-proxy snippets. Plugins are separate flakes that export a NixOS module Neo imports when you add them in the UI.
 
 See [AGENTS.md](../AGENTS.md) and [CLI.md](CLI.md) for contributor tooling. Power users who prefer a terminal over the web UI can use the optional CLI; it is **not** required for normal operation.
+
+### Web option form metadata (contributors)
+
+Service options can declare **`rank`**, **`helper`**, and **`ui`** (see `nix/lib/option.nix`, `nix/lib/ui.nix`, `nix/lib/helpers/`). The web UI schema extractor (`cli/src/commands/web/nix/extract_service_options.nix`) serializes these into JSON; Alpine + Handlebars render fields generically:
+
+- **`ui.choices`** → multi-select (`type.values`)
+- **`ui.keysFrom`** → attrsOf keys locked to another option
+- **`ui.widget`** → composite editor (e.g. `exclusiveListPair` for allow/block mode cards)
+
+Special UIs should be declared on the option, not branched by service name in the form. Full checklist: [AGENTS.md](../AGENTS.md#web-ui-option-metadata-rank--helper--ui).
