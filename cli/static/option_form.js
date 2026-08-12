@@ -147,6 +147,27 @@ function optionForm() {
         || (pane?.dataset?.saveEndpoint || '').startsWith('/save-core/');
     },
 
+
+    toggleListChoice(optionName, choice, checked) {
+      const list = Array.isArray(this.values[optionName]) ? [...this.values[optionName]] : [];
+      const i = list.indexOf(choice);
+      if (checked && i < 0) list.push(choice);
+      if (!checked && i >= 0) list.splice(i, 1);
+      this.values[optionName] = list;
+    },
+
+    toggleNestedListChoice(parentName, key, field, choice, checked) {
+      const obj = this.ensureAttrs(parentName);
+      const entry = Object.assign({}, obj[key] || {});
+      const list = Array.isArray(entry[field]) ? [...entry[field]] : [];
+      const i = list.indexOf(choice);
+      if (checked && i < 0) list.push(choice);
+      if (!checked && i >= 0) list.splice(i, 1);
+      entry[field] = list;
+      obj[key] = entry;
+      this.values[parentName] = { ...obj };
+    },
+
     resolveHelper(optionName, target) {
       const opt = this.optionsByName[optionName];
       if (!opt) return null;

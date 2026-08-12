@@ -125,6 +125,23 @@
             class="btn btn-outline btn-xs mt-1">+ Add entry</button>
   </div>
 {{else}}
+  {{! Multi-select: listOf with type.values }}
+  {{#if type.values}}
+    <div class="mt-2 max-h-56 overflow-y-auto rounded-lg border border-base-300 bg-base-200/30 p-2">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+        {{#each type.values}}
+          <label class="flex items-center gap-2.5 rounded-lg border border-base-300/80 bg-base-100 px-2.5 py-2 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-colors">
+            <input type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0"
+                   :checked="(values['{{../name}}'] || []).includes('{{this}}')"
+                   @change="toggleListChoice('{{../name}}', '{{this}}', $event.target.checked)">
+            <span class="font-mono text-xs leading-tight break-all">{{this}}</span>
+          </label>
+        {{else}}
+          <p class="text-xs text-base-content/50 px-1 col-span-full">No choices available.</p>
+        {{/each}}
+      </div>
+    </div>
+  {{else}}
   <div class="mt-2">
     <template x-for="(item, idx) in (values['{{name}}'] || [])" :key="idx">
       <div class="flex gap-2 items-center mb-1.5">
@@ -144,8 +161,17 @@
                        x-model="values['{{name}}'][idx]">
               </label>
             {{else}}
-              <input type="text" class="input input-primary input-sm flex-1 font-mono"
-                     x-model="values['{{name}}'][idx]">
+              {{#if (eq type.elem.kind "enum")}}
+                <select class="select select-sm select-primary flex-1 font-mono"
+                        x-model="values['{{name}}'][idx]">
+                  {{#each type.elem.values}}
+                    <option value="{{this}}">{{this}}</option>
+                  {{/each}}
+                </select>
+              {{else}}
+                <input type="text" class="input input-primary input-sm flex-1 font-mono"
+                       x-model="values['{{name}}'][idx]">
+              {{/if}}
             {{/if}}
           {{/if}}
         {{/if}}
@@ -161,4 +187,5 @@
     </template>
     <button type="button" @click="addListItem('{{name}}')" class="btn btn-outline btn-xs mt-1">+ Add</button>
   </div>
+  {{/if}}
 {{/if}}
