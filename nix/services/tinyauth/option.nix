@@ -18,7 +18,7 @@
                 description = ''
                   List of users in username:bcrypt_hash format.
                   Use "Add user" in the web UI, or generate with:
-                  docker run -i -t --rm ghcr.io/steveiliop56/tinyauth:v5 user create --interactive
+                  docker run -i -t --rm ghcr.io/tinyauthapp/tinyauth:v5.1.3 user create --interactive
                 '';
                 rank = 10;
                 helper = lib.neo.helpers.bcryptUser;
@@ -120,7 +120,7 @@
               auth.available = false;
             }
             // lib.neo.mkContainerDefinitions {
-              tinyauth = "ghcr.io/steveiliop56/tinyauth:v5";
+              tinyauth = "ghcr.io/tinyauthapp/tinyauth:v5.1.3";
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/tinyauth"
             // lib.neo.mkServiceMeta {

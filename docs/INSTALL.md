@@ -181,7 +181,7 @@ Enough for a machine with **public IP**, **DNS** for your domain, and ports **80
 Generate a tinyauth password hash:
 
 ```bash
-docker run -i -t --rm ghcr.io/steveiliop56/tinyauth:v5 user create --interactive
+docker run -i -t --rm ghcr.io/tinyauthapp/tinyauth:v5.1.3 user create --interactive
 ```
 
 (or use helpers in Neo web after bootstrap)

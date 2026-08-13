@@ -120,8 +120,7 @@
               TINYAUTH_AUTH_USERS = concatStringsSep "," cfg.users;
               TINYAUTH_SERVER_PORT = toString cfg.port;
               TINYAUTH_AUTH_SESSIONEXPIRY = toString cfg.sessionExpiry;
-              # Default ACL policy is allow-by-default (do not set TINYAUTH_AUTH_ACLS_POLICY:
-              # some tinyauth:v5 builds reject auth.acls and fail with "field not found, node: acls").
+              # Default ACL policy is allow-by-default (auth.acls.policy defaults to "allow").
               TINYAUTH_ANALYTICS_ENABLED = "false";
               TINYAUTH_DATABASE_PATH = "/data/tinyauth.db";
             }
