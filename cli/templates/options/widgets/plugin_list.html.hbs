@@ -1,0 +1,60 @@
+{{! pluginList: listOf flake URLs with cards, add/remove, and per-remove uninstall confirm.
+    Driven by option.ui (emptyHint). Inventory comes from #plugin-inventory-seed.
+    See nix/lib/ui.nix and option_form.js pl* helpers. }}
+<div class="mt-2 space-y-3">
+  <template x-for="(url, idx) in (values['{{name}}'] || [])" :key="idx">
+    <div class="rounded-xl border border-base-300 bg-base-100/70 p-3 sm:p-4 space-y-2 shadow-sm">
+      <div class="flex items-center justify-between gap-2 min-w-0">
+        <div class="font-mono text-sm font-medium truncate" x-text="pluginLabel(url)" :title="url"></div>
+        <button type="button"
+                class="btn btn-ghost btn-xs text-error shrink-0"
+                @click="removePluginUrl('{{name}}', idx)"
+                title="Remove this plugin">
+          Remove
+        </button>
+      </div>
+      <div class="font-mono text-xs break-all text-base-content/70" x-text="url"></div>
+      <div class="flex flex-wrap gap-1"
+           x-show="plServices(url).length > 0">
+        <template x-for="svc in plServices(url)" :key="svc">
+          <span class="badge badge-ghost badge-sm font-mono" x-text="svc"></span>
+        </template>
+      </div>
+      <p class="text-[11px] text-base-content/45"
+         x-show="plServices(url).length === 0">
+        No services attributed to this plugin in the current eval. Apply the plugin first so Neo can see what it adds.
+      </p>
+    </div>
+  </template>
+
+  <p class="text-xs text-base-content/50"
+     x-show="(values['{{name}}'] || []).length === 0"
+     x-text="plEmptyHint('{{name}}')"></p>
+
+  <div class="flex flex-col sm:flex-row gap-2">
+    <input type="text"
+           class="input input-primary input-sm flex-1 font-mono"
+           x-model="plDraft['{{name}}']"
+           placeholder="github:user/plugin  ·  git+file:/path  ·  path:/path"
+           spellcheck="false"
+           @keydown.enter.prevent="addPluginUrl('{{name}}')">
+    <button type="button"
+            class="btn btn-outline btn-sm shrink-0"
+            @click="addPluginUrl('{{name}}')">+ Add plugin</button>
+  </div>
+
+  <dialog id="plugin-remove-dialog-{{name}}" class="modal">
+    <div class="modal-box max-w-lg">
+      <h3 class="font-bold text-lg mb-1">Remove plugin configuration?</h3>
+      <p class="text-sm opacity-70 mb-3">
+        These settings.toml tables will be deleted when you save, so Nix can evaluate after the plugin is gone.
+        Appdata directories are kept.
+      </p>
+      <div id="plugin-remove-body-{{name}}" class="text-sm max-h-[50vh] overflow-y-auto"></div>
+      <div class="modal-action">
+        <button type="button" id="plugin-remove-cancel-{{name}}" class="btn btn-sm btn-ghost">Cancel</button>
+        <button type="button" id="plugin-remove-confirm-{{name}}" class="btn btn-sm btn-error">Remove plugin</button>
+      </div>
+    </div>
+  </dialog>
+</div>

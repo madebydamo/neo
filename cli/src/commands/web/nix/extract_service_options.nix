@@ -269,7 +269,11 @@
           ot = tryOr {} (o.type or {});
           tn = typeNameOf ot;
           uiMeta = toUiMeta (o.ui or null);
-          choices = tryOr null (if uiMeta == null then null else uiMeta.choices or null);
+          choices = tryOr null (
+            if uiMeta == null
+            then null
+            else uiMeta.choices or null
+          );
           ti = applyChoicesToType (getTypeInfo ot) choices;
           record = {
             name = path;
@@ -464,14 +468,13 @@
   choiceProviders = {
     # Enabled services with reverse-proxy / tinyauth edge auth (exclude tinyauth itself).
     authApps = let
-      names =
-        builtins.filter (
-          n:
-            n
-            != "tinyauth"
-            && (tryOr false (configServices.${n}.enabled or false))
-            && (tryOr false (configServices.${n}.auth.enabled or false))
-        ) (builtins.attrNames configServices);
+      names = builtins.filter (
+        n:
+          n
+          != "tinyauth"
+          && (tryOr false (configServices.${n}.enabled or false))
+          && (tryOr false (configServices.${n}.auth.enabled or false))
+      ) (builtins.attrNames configServices);
     in
       builtins.sort (a: b: a < b) names;
   };
@@ -665,7 +668,11 @@
   mkOptionRecord = path: o: let
     t = tryOr {} (o.type or {});
     uiMeta = toUiMeta (o.ui or null);
-    choices = tryOr null (if uiMeta == null then null else uiMeta.choices or null);
+    choices = tryOr null (
+      if uiMeta == null
+      then null
+      else uiMeta.choices or null
+    );
     ti = applyChoicesToType (getTypeInfo t) choices;
     defVal = tryOr null (
       if builtins.hasAttr "default" o
@@ -763,6 +770,12 @@
     )
     raw;
 
+  inventory = import ./extract_plugin_inventory.nix {inherit neoFlake;};
+  servicePluginUrls =
+    if service != null
+    then inventory.owners.${service} or []
+    else [];
+
   meta = tryOr {} (configRoot.meta or {});
   units = tryOr [] (configRoot.systemdUnits or []);
   containers = tryOr {} (configRoot.containers or {});
@@ -780,4 +793,6 @@ in {
   containers = containers;
   appdata = appdata;
   appdataRoot = appdataRoot;
+  pluginUrls = servicePluginUrls;
+  pluginInventory = inventory.plugins;
 }

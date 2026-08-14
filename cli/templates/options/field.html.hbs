@@ -55,7 +55,11 @@
     {{/if}}
 
     {{#if (eq type.kind "listOf")}}
-      {{> options/list_of}}
+      {{#if (eq ui.widget "pluginList")}}
+        {{> options/widgets/plugin_list}}
+      {{else}}
+        {{> options/list_of}}
+      {{/if}}
     {{/if}}
 
     {{#if (eq type.kind "attrsOf")}}

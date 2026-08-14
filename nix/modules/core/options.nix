@@ -23,6 +23,10 @@
         default = [];
         description = "List of plugin flake URLs (e.g. github:user/plugin or path:/path/to/plugin)";
         rank = 5;
+        ui = lib.neo.ui.mkUi {
+          widget = "pluginList";
+          emptyHint = "No plugins yet. Add a flake URL (github:user/repo, git+file:/path, or path:/path).";
+        };
       };
 
       options.neo.core.hostname = mkOption {

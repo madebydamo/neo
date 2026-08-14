@@ -78,6 +78,7 @@ Extract prunes orphan keys from `current`; the form re-syncs when the source lis
 | Widget | Use |
 |--------|-----|
 | `exclusiveListPair` | attrsOf submodule with exclusive list fields + open mode (e.g. tinyauth `access` allow/block) |
+| `pluginList` | listOf flake URLs with add/remove cards and per-remove uninstall confirm (`core.plugins`) |
 
 Implementations: `cli/templates/options/widgets/<name>.html.hbs` + `elp*` (or widget-prefixed) helpers in `option_form.js`. Dispatch in `attrs_of.html.hbs` / field templates on `ui.widget`, not on option names.
 

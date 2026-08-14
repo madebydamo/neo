@@ -13,6 +13,8 @@
 #
 #   exclusiveListPair — attrsOf submodule with exclusive list fields + open mode
 #     (see tinyauth.access). Modes declare which list fields are active per mode.
+#   pluginList — listOf flake URLs with add/remove cards and per-remove uninstall
+#     confirm (core.plugins). Ownership is inferred from option declarations.
 #
 # ## keysFrom
 #
@@ -44,13 +46,14 @@
     assert lib.assertMsg (builtins.isString id && id != "")
     "neo.ui.mode: id required";
     assert lib.assertMsg (builtins.isString label && label != "")
-    "neo.ui.mode: label required"; {
-      inherit id label active;
-    }
-    // lib.optionalAttrs (listLabel != null) {inherit listLabel;}
-    // lib.optionalAttrs (hintEmpty != null) {inherit hintEmpty;}
-    // lib.optionalAttrs (hintFilled != null) {inherit hintFilled;}
-    // lib.optionalAttrs (badge != null) {inherit badge;};
+    "neo.ui.mode: label required";
+      {
+        inherit id label active;
+      }
+      // lib.optionalAttrs (listLabel != null) {inherit listLabel;}
+      // lib.optionalAttrs (hintEmpty != null) {inherit hintEmpty;}
+      // lib.optionalAttrs (hintFilled != null) {inherit hintFilled;}
+      // lib.optionalAttrs (badge != null) {inherit badge;};
 
   mkSave = {
     pruneEmptyEntries ? false,

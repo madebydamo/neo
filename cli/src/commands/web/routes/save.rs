@@ -5,6 +5,7 @@ use rocket::serde::json::Json;
 use rocket::{post, State};
 use toml_edit::{DocumentMut, Item, Table};
 
+use crate::commands::web::plugins::{plugins_from_doc, services_to_remove, strip_service_tables};
 use crate::commands::web::settings::json_to_toml_value;
 use crate::commands::web::settings::save::{
     apply_payload_to_table, finish_save_state, load_settings_doc,
@@ -72,7 +73,7 @@ const CORE_NESTED_SECTIONS: &[&str] = &[
 ];
 
 #[post("/save-core/<section>", data = "<payload>")]
-pub fn save_core_section(
+pub async fn save_core_section(
     config: &State<Arc<AppConfig>>,
     section: &str,
     payload: Json<serde_json::Value>,
@@ -88,6 +89,7 @@ pub fn save_core_section(
         Err(s) => return s,
     };
 
+    let old_plugins = plugins_from_doc(&doc);
     let is_core_nested = CORE_NESTED_SECTIONS.contains(&section);
 
     // Remove possible old top-level location (for renames/migrations).
@@ -103,10 +105,30 @@ pub fn save_core_section(
         save_toplevel_section(&mut doc, section, &payload)
     };
 
-    match status {
-        Ok(()) => finish_save_state(settings_path, &mut doc, config),
-        Err(s) => s,
+    if let Err(s) = status {
+        return s;
     }
+
+    let new_plugins = plugins_from_doc(&doc);
+    if old_plugins != new_plugins {
+        let owners = {
+            let mut ev = config.evaluator.lock().await;
+            match ev.extract_plugin_owners().await {
+                Ok(m) => m,
+                Err(e) => {
+                    eprintln!("web: refusing plugin list save; ownership extract failed: {e:#}");
+                    return Status::InternalServerError;
+                }
+            }
+        };
+        let gone = services_to_remove(&owners, &old_plugins, &new_plugins);
+        if !gone.is_empty() {
+            eprintln!("web: removing plugin config tables: {}", gone.join(", "));
+            strip_service_tables(&mut doc, &gone);
+        }
+    }
+
+    finish_save_state(settings_path, &mut doc, config)
 }
 
 /// Ensure `[core]` exists and return a mutable reference, or InternalServerError.

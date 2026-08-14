@@ -3,24 +3,35 @@
      x-data="{
        status: 'all',
        category: 'all',
-       matches(enabled, cat) {
+       plugin: 'all',
+       matches(enabled, cat, pluginUrls) {
+         const urls = pluginUrls || [];
          const st = this.status === 'all'
            || (this.status === 'installed' && enabled)
            || (this.status === 'available' && !enabled);
-         return st && (this.category === 'all' || this.category === cat);
+         const catOk = this.category === 'all' || this.category === cat;
+         const plugOk = this.plugin === 'all'
+           || (this.plugin === 'core' && urls.length === 0)
+           || urls.indexOf(this.plugin) !== -1;
+         return st && catOk && plugOk;
        },
-       sectionVisible(cat, hasEn, hasDis) {
+       sectionVisible(cat, hasEn, hasDis, packed) {
          if (this.category !== 'all' && this.category !== cat) return false;
+         const tokens = (packed || '').split('|').filter(Boolean);
+         if (this.plugin === 'core' && tokens.indexOf('core') === -1) return false;
+         if (this.plugin !== 'all' && this.plugin !== 'core' && tokens.indexOf(this.plugin) === -1) return false;
          if (this.status === 'installed') return hasEn;
          if (this.status === 'available') return hasDis;
          return true;
        },
        anyVisible() {
-         {{#if groups}}
-         return {{#each groups}}this.sectionVisible('{{name}}', {{#if hasEnabled}}true{{else}}false{{/if}}, {{#if hasDisabled}}true{{else}}false{{/if}}) || {{/each}} false;
-         {{else}}
-         return false;
-         {{/if}}
+         const els = this.$el.querySelectorAll('[data-plugin-tokens]');
+         return Array.from(els).some((el) => this.sectionVisible(
+           el.dataset.cat,
+           el.dataset.hasEn === 'true',
+           el.dataset.hasDis === 'true',
+           el.dataset.pluginTokens
+         ));
        }
      }">
   {{#if error}}
@@ -79,16 +90,32 @@
       <option value="{{this}}">{{this}}</option>
       {{/each}}
     </select>
+    {{#if plugin_filters}}
+    <select class="select select-xs min-w-[9rem]"
+            x-model="plugin"
+            aria-label="Filter by plugin">
+      <option value="all">All sources</option>
+      <option value="core">Core</option>
+      {{#each plugin_filters}}
+      <option value="{{url}}">{{display}}</option>
+      {{/each}}
+    </select>
+    {{/if}}
   </div>
 
   {{#each groups}}
   <section class="space-y-1 sm:space-y-1.5"
-           x-show="sectionVisible('{{name}}', {{#if hasEnabled}}true{{else}}false{{/if}}, {{#if hasDisabled}}true{{else}}false{{/if}})">
+           data-cat="{{name}}"
+           data-has-en="{{#if hasEnabled}}true{{else}}false{{/if}}"
+           data-has-dis="{{#if hasDisabled}}true{{else}}false{{/if}}"
+           data-plugin-tokens="{{#each services}}{{#if plugins}}{{#each plugins}}{{url}}|{{/each}}{{else}}core|{{/if}}{{/each}}"
+           x-show="sectionVisible($el.dataset.cat, $el.dataset.hasEn === 'true', $el.dataset.hasDis === 'true', $el.dataset.pluginTokens)">
     <h3 class="text-xs font-semibold uppercase tracking-wide text-base-content/50 px-0.5">{{name}}</h3>
     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1.5 sm:gap-2">
       {{#each services}}
       <div class="relative"
-           x-show="matches({{#if enabled}}true{{else}}false{{/if}}, '{{category}}')">
+           data-plugin-urls="{{#each plugins}}{{url}}{{#unless @last}}|{{/unless}}{{/each}}"
+           x-show="matches({{#if enabled}}true{{else}}false{{/if}}, '{{category}}', ($el.dataset.pluginUrls || '').split('|').filter(Boolean))">
         {{!-- Main card (navigates to options) --}}
         <div
           class="card bg-base-100 shadow-sm border border-base-300 hover:border-primary hover:shadow-md cursor-pointer transition-all active:scale-[0.985] h-full {{#unless enabled}}opacity-75{{/unless}}"
@@ -98,6 +125,13 @@
           hx-push-url="true"
           title="Configure {{name}}">
           <div class="card-body p-2 sm:p-3 gap-1.5 sm:gap-2 items-center text-center min-h-[6.25rem] sm:min-h-[7.5rem]">
+            {{#if plugins}}
+              <div class="absolute top-1 left-1 z-10 flex flex-wrap gap-0.5 max-w-[70%] pointer-events-none">
+                {{#each plugins}}
+                  <span class="badge badge-outline badge-xs font-mono" title="{{url}}">{{display}}</span>
+                {{/each}}
+              </div>
+            {{/if}}
             <div class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center flex-shrink-0">
               {{#if icon}}
                 <img src="{{icon}}" class="max-w-full max-h-full object-contain" alt=""
@@ -134,7 +168,7 @@
                   {{/if}}
                   <span class="font-mono font-semibold truncate">{{name}}</span>
                 </div>
-                <div class="text-[10px] opacity-60">{{category}} · {{#if enabled}}Installed{{else}}Available{{/if}}</div>
+                <div class="text-[10px] opacity-60">{{category}} · {{#if enabled}}Installed{{else}}Available{{/if}}{{#each plugins}} · {{display}}{{/each}}</div>
                 {{#if description}}
                   <div class="mt-0.5 leading-relaxed text-base-content/80 whitespace-pre-line max-h-48 overflow-y-auto">{{description}}</div>
                 {{else}}

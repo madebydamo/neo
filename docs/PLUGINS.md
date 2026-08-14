@@ -80,6 +80,15 @@ Developers implementing services: see [AGENTS.md](../AGENTS.md) and existing mod
 - New options show up in the web UI once the plugin is applied.
 - HTTPS and login gates stay consistent with the rest of Neo when the plugin follows Neo’s reverse-proxy helpers.
 - Updates follow the same auto-update story as the rest of the homeserver.
+- Plugin services show a badge on the services grid (filter: **All sources / Core / each plugin**). Two plugins can share the same short name; Neo keys them by the full flake URL.
+
+## Removing a plugin
+
+1. Open **Settings → core → plugins**.
+2. Click **Remove** on the plugin card (URLs are not editable in place — remove and add a new entry to change one). Neo lists the `[services.<name>]` tables it will delete from `settings.toml` when you save. Appdata is **not** deleted.
+3. **Save**, then Apply / activate so the flake input is dropped.
+
+Do not delete a plugin URL from `settings.toml` by hand without also removing its service tables — leftover keys make Nix evaluation fail. The web UI does both in one save.
 
 ## See also
 

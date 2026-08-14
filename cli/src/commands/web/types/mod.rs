@@ -14,7 +14,7 @@ pub use schema::{
     OptionUiSave,
 };
 pub use services::{
-    ConfigurationPageContext, ExtractedServiceGroups, IndexContext, NavigatorContext,
-    ProxiedService, Service, ServiceCategoryGroup,
+    ConfigurationPageContext, ExtractedServiceGroups, IndexContext, NavigatorContext, PluginFilter,
+    PluginInventoryEntry, ProxiedService, Service, ServiceCategoryGroup, ServicePlugin,
 };
 pub use versioning::{BranchInfo, BranchesContext, GraphCommit, ServicesAtRev, VersioningGraph};

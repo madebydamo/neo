@@ -20,6 +20,20 @@ pub struct Service {
     /// Long-form intro from service meta (info popover on the grid card).
     #[serde(default)]
     pub description: String,
+    /// Plugin flake URLs that declare this service (empty = core).
+    #[serde(default, rename = "pluginUrls")]
+    pub plugin_urls: Vec<String>,
+    /// Display badges (filled in Rust after extract; labels may overlap).
+    #[serde(default)]
+    pub plugins: Vec<ServicePlugin>,
+}
+
+/// One plugin that owns (or co-owns) a service. `url` is the identity; `label` may collide.
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct ServicePlugin {
+    pub url: String,
+    pub label: String,
+    pub display: String,
 }
 
 /// One category bucket in the services grid.
@@ -35,6 +49,22 @@ pub struct ServiceCategoryGroup {
     pub has_disabled: bool,
 }
 
+/// One configured plugin (from `core.plugins`) plus the services it declares.
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct PluginInventoryEntry {
+    pub url: String,
+    #[serde(default)]
+    pub services: Vec<String>,
+}
+
+/// Filter dropdown entry. `url` is the value; `display` disambiguates overlapping labels.
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct PluginFilter {
+    pub url: String,
+    pub label: String,
+    pub display: String,
+}
+
 /// Shape returned by `extract_services.nix` before theme/error are filled in.
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct ExtractedServiceGroups {
@@ -42,6 +72,8 @@ pub struct ExtractedServiceGroups {
     pub groups: Vec<ServiceCategoryGroup>,
     #[serde(default)]
     pub categories: Vec<String>,
+    #[serde(default, rename = "pluginInventory")]
+    pub plugin_inventory: Vec<PluginInventoryEntry>,
 }
 
 #[derive(Serialize, Default)]
@@ -52,6 +84,9 @@ pub struct IndexContext {
     /// Category names for filter chips (same order as groups).
     #[serde(default)]
     pub categories: Vec<String>,
+    /// Plugin filter dropdown (only when at least one plugin service exists).
+    #[serde(default)]
+    pub plugin_filters: Vec<PluginFilter>,
     #[serde(default)]
     pub theme: String,
     #[serde(flatten)]

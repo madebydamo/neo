@@ -4,6 +4,8 @@
     then builtins.getFlake neoFlake
     else neoFlake;
 
+  inventory = import ./extract_plugin_inventory.nix {inherit neoFlake;};
+
   cfgNames = builtins.attrNames (f.nixosConfigurations or {});
   cfg =
     if builtins.elem "homeserver" cfgNames
@@ -35,6 +37,7 @@
           then meta.category
           else "Other";
         description = meta.description or "";
+        pluginUrls = inventory.owners.${n} or [];
       })
       names
     else [];
@@ -98,4 +101,5 @@
 in {
   groups = groupByCategory raw;
   categories = orderedCategories raw;
+  pluginInventory = inventory.plugins;
 }

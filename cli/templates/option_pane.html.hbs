@@ -2,6 +2,7 @@
 <div id="options-pane" class="card bg-base-100 shadow" data-service="{{service}}" data-save-endpoint="{{save_endpoint}}" data-is-core="{{#if is_core}}true{{else}}false{{/if}}" data-load-url="{{#if is_core}}/configuration/core/{{service}}{{else}}/configuration/option/{{service}}{{/if}}" x-data="optionForm()" x-init="initForm()">
   <!-- Seed script moved to top so it is available immediately when x-init runs -->
   <script id="options-seed" type="application/json">{{{options_json}}}</script>
+  <script id="plugin-inventory-seed" type="application/json">{{#if plugin_inventory_json}}{{{plugin_inventory_json}}}{{else}}[]{{/if}}</script>
 
   {{!-- Header block: sticky save sits outside card-body so it matches the action-bar width.
        Mobile padding is tightened via #options-pane --card-p in input.css. --}}

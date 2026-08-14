@@ -1,8 +1,10 @@
 use super::errors::{offers_flake_update, offers_store_repair, plan_for, NixError};
 use super::registry::{
-    EXTRACT_NEO_THEME, EXTRACT_PROXIED_SERVICES, EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
+    EXTRACT_NEO_THEME, EXTRACT_PLUGIN_INVENTORY, EXTRACT_PROXIED_SERVICES, EXTRACT_SERVICES,
+    EXTRACT_SERVICE_OPTIONS,
 };
 use super::repl::NixEvaluator;
+use crate::commands::web::plugins::{attach_service_plugin_badges, plugin_badges, plugin_filters};
 use crate::commands::web::types::{
     EvalErrorUi, ExtractedServiceGroups, IndexContext, NavigatorContext, OptionPaneContext,
     OptionSchema, RuntimeUnit, ServiceMeta,
@@ -59,6 +61,10 @@ struct RawPane {
     appdata_root: Option<String>,
     #[serde(default)]
     error: Option<String>,
+    #[serde(default, rename = "pluginUrls")]
+    plugin_urls: Vec<String>,
+    #[serde(default, rename = "pluginInventory")]
+    plugin_inventory: Vec<crate::commands::web::types::PluginInventoryEntry>,
 }
 
 enum PaneTarget {
@@ -145,11 +151,18 @@ impl NixEvaluator {
     pub async fn extract_services(&mut self) -> IndexContext {
         let inner = format!("{} {{ neoFlake = f; }}", EXTRACT_SERVICES.load_name);
         match self.query_json::<ExtractedServiceGroups>(&inner).await {
-            Ok(extracted) => IndexContext {
-                groups: extracted.groups,
-                categories: extracted.categories,
-                ..Default::default()
-            },
+            Ok(mut extracted) => {
+                let inventory = extracted.plugin_inventory.clone();
+                for group in &mut extracted.groups {
+                    attach_service_plugin_badges(&mut group.services, &inventory);
+                }
+                IndexContext {
+                    groups: extracted.groups,
+                    categories: extracted.categories,
+                    plugin_filters: plugin_filters(&inventory),
+                    ..Default::default()
+                }
+            }
             Err(e) => {
                 eprintln!("web: nix extract_services failed: {e:#}");
                 let f = format_nix_failure("Nix error while extracting service list", &e);
@@ -179,6 +192,8 @@ impl NixEvaluator {
             containers: std::collections::HashMap::new(),
             appdata: None,
             appdata_root: None,
+            plugins: vec![],
+            plugin_inventory_json: "[]".to_string(),
         }
     }
 
@@ -233,6 +248,8 @@ impl NixEvaluator {
                     containers: std::collections::HashMap::new(),
                     appdata: None,
                     appdata_root: None,
+                    plugins: vec![],
+                    plugin_inventory_json: "[]".to_string(),
                 };
             }
         };
@@ -243,6 +260,10 @@ impl NixEvaluator {
         }
         let options_json = serde_json::to_string(&opts).unwrap_or_else(|_| "[]".to_string());
         let units = map_units(raw.units, &raw.containers);
+        let inv_urls: Vec<String> = raw.plugin_inventory.iter().map(|p| p.url.clone()).collect();
+        let plugins = plugin_badges(&raw.plugin_urls, &inv_urls);
+        let plugin_inventory_json =
+            serde_json::to_string(&raw.plugin_inventory).unwrap_or_else(|_| "[]".to_string());
         OptionPaneContext {
             service: label.to_string(),
             meta: raw.meta,
@@ -255,6 +276,8 @@ impl NixEvaluator {
             containers: raw.containers,
             appdata: raw.appdata.filter(|p| !p.is_empty()),
             appdata_root: raw.appdata_root.filter(|p| !p.is_empty()),
+            plugins,
+            plugin_inventory_json,
         }
     }
 
@@ -308,5 +331,19 @@ impl NixEvaluator {
                 "lofi".to_string()
             }
         }
+    }
+
+    /// Service name → plugin flake URLs that declare it (from the current flake).
+    pub async fn extract_plugin_owners(
+        &mut self,
+    ) -> anyhow::Result<std::collections::HashMap<String, Vec<String>>> {
+        #[derive(serde::Deserialize)]
+        struct RawOwners {
+            #[serde(default)]
+            owners: std::collections::HashMap<String, Vec<String>>,
+        }
+        let inner = format!("{} {{ neoFlake = f; }}", EXTRACT_PLUGIN_INVENTORY.load_name);
+        let raw: RawOwners = self.query_json(&inner).await?;
+        Ok(raw.owners)
     }
 }

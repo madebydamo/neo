@@ -64,4 +64,10 @@ pub struct OptionPaneContext {
     /// Global AppData volume root (`neo.core.volumes.appdata`); used to validate clear-appdata paths.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub appdata_root: Option<String>,
+    /// Plugin flake URLs that declare this service (empty on core panes).
+    #[serde(default)]
+    pub plugins: Vec<super::services::ServicePlugin>,
+    /// Configured plugins + owned service names (for the pluginList widget).
+    #[serde(default)]
+    pub plugin_inventory_json: String,
 }

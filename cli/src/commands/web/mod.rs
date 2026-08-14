@@ -17,6 +17,7 @@ mod helper_exec;
 mod nix;
 mod nix_repair;
 mod ops;
+mod plugins;
 mod routes;
 mod schema_cache;
 mod settings;

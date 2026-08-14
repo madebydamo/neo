@@ -12,6 +12,9 @@
       <div class="flex items-center justify-between gap-2 flex-wrap">
         <div class="flex items-center gap-2 flex-wrap min-w-0">
           <h1 class="card-title font-mono text-xl">{{service}}</h1>
+          {{#each plugins}}
+            <span class="badge badge-outline badge-sm" title="{{url}}">{{display}}</span>
+          {{/each}}
           {{#if meta.projectUrl}}
             <a href="{{meta.projectUrl}}" target="_blank" class="btn btn-xs btn-outline no-underline">Project ↗</a>
           {{/if}}

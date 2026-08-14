@@ -37,9 +37,18 @@ pub static NIX_EXTRACTORS: &[NixExtractor] = &[
         )),
         load_name: "extractNeoTheme",
     },
+    NixExtractor {
+        file_name: "extract_plugin_inventory.nix",
+        content: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/commands/web/nix/extract_plugin_inventory.nix"
+        )),
+        load_name: "extractPluginInventory",
+    },
 ];
 
 pub static EXTRACT_SERVICES: &NixExtractor = &NIX_EXTRACTORS[0];
 pub static EXTRACT_SERVICE_OPTIONS: &NixExtractor = &NIX_EXTRACTORS[1];
 pub static EXTRACT_PROXIED_SERVICES: &NixExtractor = &NIX_EXTRACTORS[2];
 pub static EXTRACT_NEO_THEME: &NixExtractor = &NIX_EXTRACTORS[3];
+pub static EXTRACT_PLUGIN_INVENTORY: &NixExtractor = &NIX_EXTRACTORS[4];
