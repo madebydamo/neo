@@ -28,7 +28,6 @@
               SECURITY_ENABLELOGIN = boolToString cfg.enableLogin;
               SYSTEM_DEFAULTLOCALE = cfg.defaultLocale;
               SYSTEM_GOOGLEVISIBILITY = boolToString cfg.googleVisibility;
-              SYSTEM_ROOTURIPATH = "/";
               SYSTEMFILEUPLOADLIMIT = cfg.fileUploadLimit;
             }
             // optionalAttrs cfg.enableLogin {
