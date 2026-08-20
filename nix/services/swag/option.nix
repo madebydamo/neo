@@ -57,39 +57,36 @@
               geo = mkOption {
                 type = types.submodule {
                   options = {
-                    countryWhitelist =
-                      mkOption {
-                        type = types.listOf types.str;
-                        default = [];
-                        description = ''
-                          ISO 3166-1 alpha-2 country codes allowed to reach proxied services (e.g. ["CH" "DE"]).
-                          Empty (default): all countries allowed. When non-empty, only listed countries (plus LAN) are allowed.
-                        '';
-                        rank = 0;
-                        example = ["CH" "DE" "AT"];
-                      };
-                    countryBlacklist =
-                      mkOption {
-                        type = types.listOf types.str;
-                        default = [];
-                        description = ''
-                          ISO 3166-1 alpha-2 country codes blocked at the edge (e.g. ["RU" "CN"]).
-                          Empty (default): no countries blocked. Combined with whitelist: a request must pass both.
-                        '';
-                        rank = 10;
-                        example = ["RU" "CN" "KP"];
-                      };
-                    continentBlacklist =
-                      mkOption {
-                        type = types.listOf types.str;
-                        default = [];
-                        description = ''
-                          Continent codes to block: AF, AS, EU, NA, OC, SA, AN.
-                          Empty (default): no continents blocked.
-                        '';
-                        rank = 20;
-                        example = ["AS" "AF"];
-                      };
+                    countryWhitelist = mkOption {
+                      type = types.listOf types.str;
+                      default = [];
+                      description = ''
+                        ISO 3166-1 alpha-2 country codes allowed to reach proxied services (e.g. ["CH" "DE"]).
+                        Empty (default): all countries allowed. When non-empty, only listed countries (plus LAN) are allowed.
+                      '';
+                      rank = 0;
+                      example = ["CH" "DE" "AT"];
+                    };
+                    countryBlacklist = mkOption {
+                      type = types.listOf types.str;
+                      default = [];
+                      description = ''
+                        ISO 3166-1 alpha-2 country codes blocked at the edge (e.g. ["RU" "CN"]).
+                        Empty (default): no countries blocked. Combined with whitelist: a request must pass both.
+                      '';
+                      rank = 10;
+                      example = ["RU" "CN" "KP"];
+                    };
+                    continentBlacklist = mkOption {
+                      type = types.listOf types.str;
+                      default = [];
+                      description = ''
+                        Continent codes to block: AF, AS, EU, NA, OC, SA, AN.
+                        Empty (default): no continents blocked.
+                      '';
+                      rank = 20;
+                      example = ["AS" "AF"];
+                    };
                   };
                 };
                 default = {};

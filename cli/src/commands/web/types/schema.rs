@@ -72,7 +72,11 @@ pub struct OptionUiMode {
     pub list_label: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "hintEmpty")]
     pub hint_empty: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "hintFilled")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "hintFilled"
+    )]
     pub hint_filled: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub badge: Option<String>,
@@ -102,9 +106,17 @@ pub struct OptionUi {
     pub save: Option<OptionUiSave>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "emptyHint")]
     pub empty_hint: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "entryLabel")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "entryLabel"
+    )]
     pub entry_label: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "choiceEmptyHint")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "choiceEmptyHint"
+    )]
     pub choice_empty_hint: Option<String>,
 }
 

@@ -52,7 +52,10 @@ pub fn services_to_remove(
     old_plugins: &[String],
     new_plugins: &[String],
 ) -> Vec<String> {
-    let new_set: HashSet<String> = new_plugins.iter().map(|u| normalize_plugin_url(u)).collect();
+    let new_set: HashSet<String> = new_plugins
+        .iter()
+        .map(|u| normalize_plugin_url(u))
+        .collect();
     let removed: HashSet<String> = old_plugins
         .iter()
         .map(|u| normalize_plugin_url(u))
@@ -232,10 +235,7 @@ mod tests {
     #[test]
     fn remove_matches_file_url_aliases() {
         let mut owners = HashMap::new();
-        owners.insert(
-            "jellyfin".into(),
-            vec!["file:///p/high_sea".into()],
-        );
+        owners.insert("jellyfin".into(), vec!["file:///p/high_sea".into()]);
         let old = vec!["git+file:/p/high_sea".into()];
         let new: Vec<String> = vec![];
         assert_eq!(services_to_remove(&owners, &old, &new), vec!["jellyfin"]);

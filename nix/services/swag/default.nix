@@ -11,11 +11,12 @@
         cfg = config.neo.services.swag;
         appServices = lib.neo.getProxiedServices config;
         # (service name, subdomain) for every enabled proxied service.
-        subdomainClaims = mapAttrsToList (name: svc: {
-          service = name;
-          subdomain = svc.subdomain;
-        })
-        appServices;
+        subdomainClaims =
+          mapAttrsToList (name: svc: {
+            service = name;
+            subdomain = svc.subdomain;
+          })
+          appServices;
         subdomains = map (c: c.subdomain) subdomainClaims;
         # Subdomains must be unique DNS labels of lowercase a-z only.
         invalidSubdomains = filter (s: builtins.match "[a-z]+" s == null) subdomains;
