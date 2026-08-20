@@ -22,6 +22,7 @@
         - Used by SWAG via `include /config/nginx/tinyauth-location.conf` (location) + `tinyauth-server.conf` (server)
         - Users option: list of `username:bcrypt_hash`
         - Per-service `auth.enabled` / `auth.publicPaths` control protection
+        - `backgroundImage` (default true): random lipsum.app login wallpaper; off = Tinyauth default
         - `access.<username>.allow` / `.block`: per-user app ACLs (neo service names)
           - empty both → full access
           - non-empty allow → only those apps

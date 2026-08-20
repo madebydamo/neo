@@ -108,6 +108,12 @@
                 description = "Session expiry time in seconds (default 24h)";
                 rank = 20;
               };
+              backgroundImage = mkOption {
+                type = types.bool;
+                default = true;
+                rank = 30;
+                description = "Random login wallpaper.";
+              };
               port = mkOption {
                 type = types.port;
                 default = 3000;

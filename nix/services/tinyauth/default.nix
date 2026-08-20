@@ -74,13 +74,12 @@
         )
       );
 
-      mixedAllowBlockUsers =
-        filter (
-          username: let
-            e = activeAccess.${username};
-          in
-            (e.allow or []) != [] && (e.block or []) != []
-        ) (attrNames activeAccess);
+      mixedAllowBlockUsers = filter (
+        username: let
+          e = activeAccess.${username};
+        in
+          (e.allow or []) != [] && (e.block or []) != []
+      ) (attrNames activeAccess);
 
       unknownServiceRefs =
         filter (n: !(elem n knownServiceNames)) referencedServiceNames;
@@ -123,6 +122,9 @@
               # Default ACL policy is allow-by-default (auth.acls.policy defaults to "allow").
               TINYAUTH_ANALYTICS_ENABLED = "false";
               TINYAUTH_DATABASE_PATH = "/data/tinyauth.db";
+            }
+            // optionalAttrs cfg.backgroundImage {
+              TINYAUTH_UI_BACKGROUNDIMAGE = "https://lipsum.app/random/1920x1080";
             }
             // appAclEnvVars;
           volumes = [
