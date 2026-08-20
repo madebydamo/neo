@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+if ! command -v just >/dev/null 2>&1; then
+  echo "pre-commit: 'just' is not on PATH; install it or skip with git commit --no-verify" >&2
+  exit 1
+fi
+
+just format
+
+while IFS= read -r -d '' file; do
+  git add -- "$file"
+done < <(git diff --cached --name-only --diff-filter=ACMR -z)

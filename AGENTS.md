@@ -22,7 +22,7 @@ NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) + Rust *
 | `just build` | `neo nuke` → `init` → `build` |
 | `just status` / `shutdown` | VM health / stop |
 | `just exec 'CMD'` / `just logs SVC` / `just ssh` | Guest shell / `journalctl -b -u SVC` |
-| `just format` / `just check` | alejandra + cargo fmt / flake check |
+| `just format` / `just check` | alejandra + cargo fmt / flake check. Tracked pre-commit in `.githooks` runs `just format`; `nix develop` sets `core.hooksPath` (skip with `git commit --no-verify`) |
 
 **Flakes only see git-tracked files** — `git add` new `nix/` paths before `just launch`.
 
