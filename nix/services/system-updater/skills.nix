@@ -32,6 +32,7 @@
         2. Manual update when needed
         3. Inspect GC setting `garbageCollectOlderThen` (default 30d; null disables GC)
         4. With GC on, `nix.settings.keep-outputs` is enabled so live build-time outputs stay until their generation ages out
+        5. If Hermes `superviseUpdates` is on: marker at `/var/lib/neo/updater/system-last.json`; Hermes notifies on failure/warnings and never auto-rollbacks the generation
 
         ## Pitfalls
         - Updates can break services; prefer dry-run when testing major changes

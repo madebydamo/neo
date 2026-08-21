@@ -22,11 +22,13 @@
 
         ## Procedures
         1. Confirm schedule option
-        2. Trigger one-shot update unit
+        2. Trigger one-shot update unit (`systemctl start neo-docker-updater`)
         3. Verify containers restarted and healthy
+        4. If Hermes `superviseUpdates` is on: change marker at `/var/lib/neo/updater/docker-last.json`; rollback with `sudo neo-docker-rollback --image '<repo:tag>'`
 
         ## Pitfalls
         - `latest` tags can surprise; pin tags in service containers options for stability
+        - Supervision skips Hermes when no image ID changed
 
         ## Verification
         - Images refreshed; services still healthy after restart

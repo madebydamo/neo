@@ -157,6 +157,23 @@
                 '';
               };
 
+              superviseUpdates = mkOption {
+                type = types.bool;
+                default = false;
+                rank = 89;
+                description = ''
+                  After a system-updater or docker-updater run that actually changed something
+                  (or failed), launch Hermes to read logs and systemd state.
+                  Broken: notify the Hermes home channel; for Docker, retag the previous image
+                  and restart the containers. Warnings or migration hints: notify only, keep
+                  the new image. Clean: no message. No-op updater runs skip Hermes entirely.
+                  System updates are never rolled back automatically.
+                  Notifications use `hermes send --to all` (every configured home channel),
+                  then `hermes send --to telegram` if needed. Run `/sethome` in Telegram/Discord/…
+                  so a home channel exists.
+                '';
+              };
+
               stateDir = mkOption {
                 type = types.str;
                 internal = true;

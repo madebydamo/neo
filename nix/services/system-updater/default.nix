@@ -7,6 +7,11 @@
     ...
   }: let
     cfg = config.neo.services.system-updater;
+    supervise =
+      (config.neo.services.hermes.enabled or false)
+      && (config.neo.services.hermes.superviseUpdates or false);
+    systemManifest = lib.neo.systemUpdaterManifest;
+    updaterStateDir = lib.neo.updaterStateDir;
     # Always the server profile — never local/laptop paths.
     serverCfg = config.neo.neo-cli.server;
     neo = self.packages.${pkgs.stdenv.hostPlatform.system}.neo;
@@ -72,8 +77,25 @@
           lib.optionalString (cfg.garbageCollectOlderThen != null) ''
             /run/wrappers/bin/sudo nix-collect-garbage --delete-older-than ${cfg.garbageCollectOlderThen} || true
           ''
+          + lib.optionalString supervise ''
+            before=$(readlink /nix/var/nix/profiles/system || echo none)
+            set +e
+          ''
           + ''
             ${neo}/bin/neo --profile server update && ${neo}/bin/neo --profile server activate
+          ''
+          + lib.optionalString supervise ''
+            rc=$?
+            set -e
+            after=$(readlink /nix/var/nix/profiles/system || echo none)
+            changed=false
+            failed=false
+            if [ "$before" != "$after" ]; then changed=true; fi
+            if [ "$rc" -ne 0 ]; then failed=true; fi
+            mkdir -p ${updaterStateDir}
+            printf '%s\n' "{\"kind\":\"system\",\"generation_before\":\"$before\",\"generation_after\":\"$after\",\"changed\":$changed,\"failed\":$failed,\"exit_code\":$rc,\"finished_at\":\"$(date -Iseconds)\"}" > ${systemManifest}
+            echo "Wrote ${systemManifest} (changed=$changed failed=$failed exit=$rc)"
+            exit "$rc"
           '';
       };
 
