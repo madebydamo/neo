@@ -210,10 +210,16 @@
       - Full architecture: `/neo-homeserver`
 
       ## Host CLI tools (with Hermes)
-      Prefer these when shelling out — they are on PATH:
-      `jq`, `yq`, `rg`, `fd`, `tree`, `bat`, `eza`, `htmlq`, `gron`, `jo`,
+      Prefer these when shelling out — they are on PATH (system + hermes user + gateway/dashboard):
+      Languages: `python3`, `pip`, `uv`, `node`/`npm`/`npx`.
+      Media/docs: `ffmpeg`, `convert`/`magick`, `pdftoppm`/`pdftotext`, `tesseract`.
+      Data/ops: `jq`, `yq`, `rg`, `fd`, `tree`, `bat`, `eza`, `htmlq`, `gron`, `jo`,
       `sqlite3`, `gh`, `docker-compose`, `rsync`, `lsof`, `openssl`, `socat`,
       plus archives (`unzip`/`zip`/`7z`) and text helpers (`sd`, `gawk`, `parallel`).
+      Ad-hoc Python deps: `uv venv` in the workspace, then `uv pip install`, or
+      `pip install --user` (writes under HOME). Do not pip-install into the Nix store.
+      `npx -y` is fine (cache under HOME).
+      Browser/computer-use: no host Chromium; use the Firefox/Webtop services or docker.
     '';
 
     soulMd = ''

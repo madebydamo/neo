@@ -32,8 +32,12 @@
         # Skills UI in dashboard, or hermes skills list with HERMES_HOME set
         ```
         When Hermes is enabled, Neo also installs agent-oriented host CLIs
-        (jq, yq, rg, fd, tree, htmlq, gron, jo, bat, eza, gh, docker-compose, …)
-        on system PATH and on the hermes user/gateway PATH.
+        on system PATH and on the hermes user/gateway/dashboard PATH:
+        python3, pip, uv, node/npm/npx, ffmpeg, convert (ImageMagick), pdftoppm,
+        tesseract, jq, yq, rg, fd, tree, htmlq, gron, jo, bat, eza, gh,
+        docker-compose, … Ad-hoc Python packages: `uv venv` / `uv pip` in
+        workspace, or `pip install --user` (HOME is writable). Do not pip-install
+        into the Nix store.
 
         ## Credentials
         - Required: `services.hermes.dashboardPassword` (Generate helper); optional `gatewayToken`, Telegram bot token

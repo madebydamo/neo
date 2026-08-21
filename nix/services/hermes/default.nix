@@ -68,8 +68,20 @@
       cfg.dashboardPassword != null && cfg.dashboardPassword != "";
 
     # CLI tools useful for Hermes (and operators) when the agent is installed.
-    # Hermes itself already wraps ripgrep/git/ffmpeg/nodejs; these fill common gaps.
+    # The hermes wrapper suffixes node/ffmpeg/rg onto the *binary* PATH only.
+    # Terminal, cron, skills, and login shells rebuild PATH from NixOS profiles
+    # (system + hermes user), so these must live in extraPackages/systemPackages.
     agentCliTools = with pkgs; [
+      # languages / toolchains (ad-hoc packages: uv venv or pip install --user)
+      python3
+      python3Packages.pip
+      uv
+      nodejs # node, npm, npx
+      # media / documents
+      ffmpeg
+      imagemagick
+      poppler-utils # pdftoppm, pdftotext, pdfinfo
+      tesseract
       # structured data
       jq
       yq-go
@@ -275,6 +287,8 @@
         };
 
         environment = hermesEnv;
+        # Match the gateway unit: dashboard PTYs/skills inherit this PATH too.
+        path = agentCliTools;
       };
     };
   };
