@@ -37,6 +37,13 @@
         - PROXY-protocol port is not for browsers; LAN must use 443
         - PreStart regenerates proxy-confs / dbip / listen-https
         - Do not mix swag-dbip with swag-maxmind
+        - Never put a Docker/DNS hostname directly in proxy_pass: nginx
+          resolves that at start; NXDOMAIN is `[emerg]` and takes every vhost
+          down. Use `set $upstream_app` / `$upstream_port` / `$upstream_proto`
+          (request-time DNS via resolver.conf). Missing backend → 502, nginx stays up.
+        - Custom domains hairpin to `https://127.0.0.1:443` (SNI/Host = service
+          subdomain). Do not proxy to the public hostname — Docker DNS cannot
+          resolve it and that used to crash SWAG.
       '';
     };
   };

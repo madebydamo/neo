@@ -67,17 +67,16 @@
                       client_max_body_size 0;
                       include /config/nginx/geo-access.conf;
                       location / {
-                        include /config/nginx/resolver.conf;
+                        proxy_pass https://127.0.0.1:443;
 
-                        proxy_pass https://${svc.subdomain}.${domain}:443;
-
-                        proxy_set_header Host $proxy_host;
+                        proxy_set_header Host ${svc.subdomain}.${domain};
                         proxy_set_header X-Real-IP $remote_addr;
                         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
                         proxy_set_header X-Forwarded-Proto $scheme;
                         proxy_set_header X-Forwarded-Host $host;
 
                         proxy_ssl_server_name on;
+                        proxy_ssl_name ${svc.subdomain}.${domain};
                         proxy_ssl_verify off;
 
                         proxy_http_version 1.1;
@@ -120,7 +119,10 @@
                     location / {
                       include /config/nginx/proxy.conf;
                       include /config/nginx/resolver.conf;
-                      proxy_pass ${upstream};
+                      # Variable so nginx does not resolve the backend at start
+                      # (missing hostname → 502 this vhost, not a crash loop).
+                      set $neo_upstream "${upstream}";
+                      proxy_pass $neo_upstream;
 
                       proxy_set_header Host $host;
                       proxy_set_header X-Real-IP $remote_addr;
@@ -267,9 +269,15 @@
           systemd.services."swag-patcher" = {
             after = ["docker-swag.service"];
             requires = ["docker-swag.service"];
+            # Re-run when SWAG restarts: preStart deletes nginx.conf, so a
+            # one-shot that already "succeeded" would never inject dbip again.
+            partOf = ["docker-swag.service"];
+            path = [pkgs.docker];
             serviceConfig = {
               Type = "oneshot";
               RemainAfterExit = true;
+              Restart = "on-failure";
+              RestartSec = "5s";
             };
             script = ''
               APPDATA="${config.neo.core.volumes.appdata}/swag"
