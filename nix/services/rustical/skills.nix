@@ -1,0 +1,54 @@
+# Hermes skill for rustical.
+{...}: {
+  flake.modules.nixos.rustical-skills = {
+    config,
+    lib,
+    ...
+  }: let
+    cfg = config.neo.services.rustical;
+    domain = config.neo.services.swag.domain or null;
+  in {
+    config.neo.services.rustical.skill.conf = lib.neo.mkServiceSkill {
+      service = "rustical";
+      inherit cfg domain;
+      description = "RustiCal CalDAV/CardDAV calendars and contacts";
+      tags = ["neo" "rustical" "caldav" "carddav" "calendar"];
+      title = "Neo · RustiCal";
+      body = ''
+        ## When to Use
+        Calendar/contact sync (DAVx5, Apple, Thunderbird, Evolution), principals, app tokens, SQLite backup.
+
+        ## Architecture notes
+        - Image: ghcr.io/lennart-k/rustical (port 4000), SQLite at `/var/lib/rustical/db.sqlite3`
+        - CalDAV `/caldav` (Apple: `/caldav-compat`), CardDAV `/carddav`
+        - Edge tinyauth on the web UI (`/frontend`); DAV, well-known, Nextcloud login flow, and `/ping` are on publicPaths
+        - Health: GET `/ping` → `Pong!`
+        - With `ssoPassword` set, Neo provisions a principal per tinyauth user and SWAG completes `/frontend/login` as `Remote-User` — no second login form
+
+        ## Credentials
+        - Edge: tinyauth for the frontend (the only interactive login when SSO is on)
+        - `services.rustical.ssoPassword`: internal secret for that auto-login, not a CalDAV password
+        - CalDAV/CardDAV clients: user id + generated app token (HTTP Basic); tokens from the frontend
+
+        ## Procedures
+        1. `systemctl status docker-rustical rustical-provision`
+        2. `curl http://rustical:4000/ping` (from the internal network / SWAG container)
+        3. Open the public URL, pass tinyauth — the RustiCal UI should load as that username
+        4. Generate an app token in the frontend
+        5. Point clients at `https://rustical.<domain>/caldav` (Apple: `/caldav-compat`)
+
+        ## Pitfalls
+        - User ids cannot contain `:` or `$`
+        - Apple Calendar needs `/caldav-compat` and often a downloaded configuration profile
+        - Nextcloud login flow (DAVx5) hits `/index.php/login/v2` then `/frontend/login` — the login page is behind tinyauth
+        - Clearing appdata destroys calendars, contacts, and principals
+        - Run behind HTTPS (RustiCal session cookies are Secure; Apple Calendar expects TLS)
+
+        ## Verification
+        - `/ping` returns `Pong!` (200) without tinyauth
+        - `/` redirects to tinyauth
+        - A client with an app token can PROPFIND `/caldav`
+      '';
+    };
+  };
+}
