@@ -112,8 +112,9 @@
           3. **broken** — unit failed/inactive, crash loop, or the app is clearly unusable from logs. `hermes send --to all`. For **docker** only, roll back the broken image. For **system**, never roll back a NixOS generation.
 
           ## Inputs
-          - Marker JSON: `/var/lib/neo/updater/system-last.json` or `/var/lib/neo/updater/docker-last.json`
-          - Journals: `journalctl -u <updater-unit> -b --no-pager` plus each consumer unit
+          - Latest marker (symlink, retargeted when a run *starts*): `${volumes.appdata}/updater/system/last.json` or `${volumes.appdata}/updater/docker/last.json`. `in_progress=true` means that run crashed — treat as failed, do not use a previous run.
+          - History: `${volumes.appdata}/updater/system/` and `${volumes.appdata}/updater/docker/` (each service's appdata) — one `<utc>-<pid>.json` plus matching `.log` per run (never overwritten)
+          - Journals: `journalctl -u <updater-unit> -b --no-pager` plus each consumer unit; prefer the run `.log` next to the JSON
           - `systemctl status` / `systemctl --failed`
           - Docker: `docker logs <container> --tail 200` for each updated unit in the marker
 

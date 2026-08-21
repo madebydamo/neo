@@ -164,6 +164,9 @@
                 description = ''
                   After a system-updater or docker-updater run that actually changed something
                   (or failed), launch Hermes to read logs and systemd state.
+                  Updater run history (JSON + logs, append-only) lives in those
+                  services' appdata (`updater/docker`, `updater/system`); last.json
+                  is retargeted at the start of each run.
                   Broken: notify the Hermes home channel; for Docker, retag the previous image
                   and restart the containers. Warnings or migration hints: notify only, keep
                   the new image. Clean: no message. No-op updater runs skip Hermes entirely.

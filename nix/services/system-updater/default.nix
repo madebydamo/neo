@@ -7,11 +7,8 @@
     ...
   }: let
     cfg = config.neo.services.system-updater;
-    supervise =
-      (config.neo.services.hermes.enabled or false)
-      && (config.neo.services.hermes.superviseUpdates or false);
-    systemManifest = lib.neo.systemUpdaterManifest;
-    updaterStateDir = lib.neo.updaterStateDir;
+    updaterPaths = lib.neo.mkUpdaterPaths config.neo.core.volumes.appdata;
+    systemHistoryDir = cfg.appdata;
     # Always the server profile — never local/laptop paths.
     serverCfg = config.neo.neo-cli.server;
     neo = self.packages.${pkgs.stdenv.hostPlatform.system}.neo;
@@ -23,6 +20,7 @@
       pkgs.nixos-install-tools
       pkgs.coreutils
       pkgs.bash
+      pkgs.jq
     ];
     environment = {
       NIX_BINARY_PATH = "${pkgs.nix}/bin/nix";
@@ -33,6 +31,21 @@
       # Keep build outputs of live derivations so build-time deps (e.g. crane/cargo
       # crate builds) are not recompiled after each scheduled GC.
       nix.settings.keep-outputs = lib.mkIf (cfg.garbageCollectOlderThen != null) true;
+
+      system.activationScripts.neo-system-updater-history = lib.neo.mkEnsureDirs config [
+        {
+          dirPath = updaterPaths.stateDir;
+          mode = "0775";
+          user = "homeserver";
+          group = "homeserver";
+        }
+        {
+          dirPath = systemHistoryDir;
+          mode = "0775";
+          user = "homeserver";
+          group = "homeserver";
+        }
+      ];
 
       systemd.services.neo-bootstrap = {
         description = "Bootstrap nixos config git repo";
@@ -74,27 +87,68 @@
         stopIfChanged = false;
         restartIfChanged = false;
         script =
-          lib.optionalString (cfg.garbageCollectOlderThen != null) ''
-            /run/wrappers/bin/sudo nix-collect-garbage --delete-older-than ${cfg.garbageCollectOlderThen} || true
           ''
-          + lib.optionalString supervise ''
+            run_id=$(date -u +%Y%m%dT%H%M%SZ)-$$
+            started_at=$(date -Iseconds)
+            mkdir -p ${systemHistoryDir}
+            hist=${systemHistoryDir}/$run_id.json
+            log_file=${systemHistoryDir}/$run_id.log
+            exec > >(tee -a "$log_file") 2>&1
             before=$(readlink /nix/var/nix/profiles/system || echo none)
-            set +e
-          ''
-          + ''
-            ${neo}/bin/neo --profile server update && ${neo}/bin/neo --profile server activate
-          ''
-          + lib.optionalString supervise ''
-            rc=$?
-            set -e
-            after=$(readlink /nix/var/nix/profiles/system || echo none)
+            after=none
+            rc=""
             changed=false
             failed=false
-            if [ "$before" != "$after" ]; then changed=true; fi
-            if [ "$rc" -ne 0 ]; then failed=true; fi
-            mkdir -p ${updaterStateDir}
-            printf '%s\n' "{\"kind\":\"system\",\"generation_before\":\"$before\",\"generation_after\":\"$after\",\"changed\":$changed,\"failed\":$failed,\"exit_code\":$rc,\"finished_at\":\"$(date -Iseconds)\"}" > ${systemManifest}
-            echo "Wrote ${systemManifest} (changed=$changed failed=$failed exit=$rc)"
+            hist_done=0
+
+            write_hist() {
+              local in_progress=$1
+              local finished=$2
+              ${pkgs.jq}/bin/jq -n \
+                --arg run_id "$run_id" \
+                --arg started "$started_at" \
+                --arg before "$before" \
+                --arg after "$after" \
+                --argjson in_progress "$in_progress" \
+                --argjson changed "$changed" \
+                --argjson failed "$failed" \
+                --arg rc "$rc" \
+                --arg finished "$finished" \
+                --arg log "$run_id.log" \
+                '{kind:"system",run_id:$run_id,started_at:$started,in_progress:$in_progress,generation_before:$before,generation_after:$after,changed:$changed,failed:$failed,exit_code:(if $rc == "" then null else ($rc|tonumber) end),finished_at:(if $finished == "" then null else $finished end),log:$log}' \
+                > "$hist"
+            }
+
+            finalize() {
+              [ "$hist_done" -eq 1 ] && return
+              hist_done=1
+              trap - EXIT INT TERM HUP
+              after=$(readlink /nix/var/nix/profiles/system || echo none)
+              if [ "$before" != "$after" ]; then changed=true; fi
+              if [ "''${1:-}" = abort ]; then
+                failed=true
+                if [ -z "$rc" ]; then rc=1; fi
+              elif [ -n "$rc" ] && [ "$rc" -ne 0 ]; then
+                failed=true
+              fi
+              write_hist false "$(date -Iseconds)"
+              echo "Wrote $hist (changed=$changed failed=$failed exit=$rc); last.json -> $run_id.json"
+            }
+
+            write_hist true ""
+            ln -sfn "$run_id.json" ${systemHistoryDir}/last.json
+            echo "Started run $run_id; last.json -> $run_id.json (in_progress)"
+            trap 'finalize abort' EXIT INT TERM HUP
+          ''
+          + lib.optionalString (cfg.garbageCollectOlderThen != null) ''
+            /run/wrappers/bin/sudo nix-collect-garbage --delete-older-than ${cfg.garbageCollectOlderThen} || true
+          ''
+          + ''
+            set +e
+            ${neo}/bin/neo --profile server update && ${neo}/bin/neo --profile server activate
+            rc=$?
+            set -e
+            finalize ok
             exit "$rc"
           '';
       };

@@ -23,6 +23,7 @@
               };
             }
             // lib.neo.mkSystemdUnits ["neo-docker-updater"]
+            // lib.neo.mkAppdata (lib.neo.mkUpdaterPaths config.neo.core.volumes.appdata).dockerHistoryDir
             // lib.neo.mkServiceMeta {
               category = "Core";
               icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/watchtower.svg";

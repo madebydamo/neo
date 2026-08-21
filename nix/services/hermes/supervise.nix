@@ -10,9 +10,10 @@
     cfg = config.neo.services.hermes;
     supervise = cfg.enabled && cfg.superviseUpdates;
     hermesPkg = config.services.hermes-agent.package;
-    updaterStateDir = lib.neo.updaterStateDir;
-    dockerManifest = lib.neo.dockerUpdaterManifest;
-    systemManifest = lib.neo.systemUpdaterManifest;
+    updaterPaths = lib.neo.mkUpdaterPaths config.neo.core.volumes.appdata;
+    updaterStateDir = updaterPaths.stateDir;
+    dockerManifest = "${config.neo.services.docker-updater.appdata}/last.json";
+    systemManifest = "${config.neo.services.system-updater.appdata}/last.json";
 
     superviseEnv = lib.filterAttrs (_: v: v != null && v != "") {
       HOME = cfg.stateDir;
@@ -28,11 +29,17 @@
     promptFor = kind: ''
       You are supervising a Neo homeserver ${kind} update. Load skill /neo-update-supervisor and follow it exactly.
 
-      Marker file (JSON): ${
+      Latest marker (symlink, retargeted at run start): ${
         if kind == "system"
         then systemManifest
         else dockerManifest
       }
+      Run history (JSON + matching .log per run): ${
+        if kind == "system"
+        then config.neo.services.system-updater.appdata
+        else config.neo.services.docker-updater.appdata
+      }
+      If the marker has in_progress=true, the updater did not finish cleanly — treat as failed.
       Updater unit: ${
         if kind == "system"
         then "neo-auto-update.service"
@@ -77,10 +84,12 @@
 
       changed=false
       failed=false
+      in_progress=false
       if [ -f "$marker" ]; then
         changed=$(${pkgs.jq}/bin/jq -r '.changed // false' "$marker")
         failed=$(${pkgs.jq}/bin/jq -r '.failed // false' "$marker")
-        echo "marker $marker changed=$changed failed=$failed"
+        in_progress=$(${pkgs.jq}/bin/jq -r '.in_progress // false' "$marker")
+        echo "marker $marker changed=$changed failed=$failed in_progress=$in_progress"
         ${pkgs.jq}/bin/jq . "$marker" || true
       else
         echo "no marker at $marker"
@@ -92,7 +101,7 @@
         echo "$unit is failed"
       fi
 
-      if [ "$changed" != true ] && [ "$failed" != true ] && [ "$unit_failed" != true ]; then
+      if [ "$changed" != true ] && [ "$failed" != true ] && [ "$in_progress" != true ] && [ "$unit_failed" != true ]; then
         echo "noop: skip Hermes"
         exit 0
       fi
@@ -108,6 +117,18 @@
       system.activationScripts.neo-updater-state = lib.neo.mkEnsureDirs config [
         {
           dirPath = updaterStateDir;
+          mode = "0775";
+          user = "homeserver";
+          group = "homeserver";
+        }
+        {
+          dirPath = updaterPaths.dockerHistoryDir;
+          mode = "0775";
+          user = "homeserver";
+          group = "homeserver";
+        }
+        {
+          dirPath = updaterPaths.systemHistoryDir;
           mode = "0775";
           user = "homeserver";
           group = "homeserver";

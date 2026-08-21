@@ -29,6 +29,7 @@
               };
             }
             // lib.neo.mkSystemdUnits ["neo-bootstrap" "neo-auto-update"]
+            // lib.neo.mkAppdata (lib.neo.mkUpdaterPaths config.neo.core.volumes.appdata).systemHistoryDir
             // lib.neo.mkServiceMeta {
               category = "Core";
               icon = "https://api.iconify.design/mdi/update.svg";

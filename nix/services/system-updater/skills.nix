@@ -7,6 +7,7 @@
   }: let
     cfg = config.neo.services.system-updater;
     domain = config.neo.services.swag.domain or null;
+    updaterDir = "${config.neo.core.volumes.appdata}/updater";
   in {
     config.neo.services.system-updater.skill.conf = lib.neo.mkServiceSkill {
       service = "system-updater";
@@ -32,7 +33,8 @@
         2. Manual update when needed
         3. Inspect GC setting `garbageCollectOlderThen` (default 30d; null disables GC)
         4. With GC on, `nix.settings.keep-outputs` is enabled so live build-time outputs stay until their generation ages out
-        5. If Hermes `superviseUpdates` is on: marker at `/var/lib/neo/updater/system-last.json`; Hermes notifies on failure/warnings and never auto-rollbacks the generation
+        5. Run history is this service's appdata `${updaterDir}/system/` (`<utc>-<pid>.json` + `.log`). `${updaterDir}/system/last.json` is retargeted at run start (in-progress stub) so a crash never leaves it on an older run. Clear appdata in Neo web wipes the history.
+        6. If Hermes `superviseUpdates` is on: Hermes notifies on failure/warnings and never auto-rollbacks the generation
 
         ## Pitfalls
         - Updates can break services; prefer dry-run when testing major changes
