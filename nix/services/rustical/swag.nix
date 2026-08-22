@@ -6,6 +6,9 @@
 # Auth must stay in the access phase: `return`/`if` in the same location as
 # tinyauth-location.conf runs in rewrite and skips auth_request. Use try_files
 # (content phase) to jump to a named location after tinyauth succeeds.
+#
+# When Calino is enabled, DAV locations get CORS for the Calino origin and
+# OPTIONS is answered here (preflight must not hit RustiCal 401).
 {...}: {
   flake.modules.nixos.rustical-swag = {
     config,
@@ -14,12 +17,22 @@
   }: let
     cfg = config.neo.services.rustical;
     tinyauthCfg = config.neo.services.tinyauth or {};
+    calinoCfg = config.neo.services.calino or {};
+    domain = config.neo.services.swag.domain or null;
     ssoEnabled =
       cfg.auth.enabled
       && (tinyauthCfg.enabled or false)
       && (cfg.ssoPassword or null)
       != null
       && cfg.ssoPassword != "";
+    corsOrigin =
+      if
+        (calinoCfg.enabled or false)
+        && (calinoCfg.subdomain or null) != null
+        && domain != null
+        && domain != ""
+      then "https://${calinoCfg.subdomain}.${domain}"
+      else null;
     auth = lib.neo.authBlock config cfg;
     authLoc = lib.neo.authLocations config cfg;
     proxyCore = ''
@@ -30,6 +43,70 @@
       set $upstream_proto http;
       proxy_set_header X-Forwarded-Port 443;
       proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+    '';
+    corsHeaders = lib.optionalString (corsOrigin != null) ''
+      add_header Access-Control-Allow-Origin "${corsOrigin}" always;
+      add_header Access-Control-Allow-Methods "GET, PUT, POST, DELETE, PROPFIND, PROPPATCH, REPORT, OPTIONS, MKCOL, MKCALENDAR, COPY, MOVE" always;
+      add_header Access-Control-Allow-Headers "Authorization, Content-Type, Depth, Prefer, If-None-Match, If-Match" always;
+      add_header Access-Control-Expose-Headers "ETag, DAV, Allow, Location" always;
+      add_header Access-Control-Max-Age 86400 always;
+    '';
+    # RustiCal keeps CalDAV and CardDAV on separate trees. Calino/tsdav looks
+    # for CARD:addressbook-home-set on the CalDAV principal (Nextcloud-style).
+    # Browser well-known discovery fails (tsdav uses redirect:manual, which is
+    # opaque cross-origin). Rewrite the 404 property into a pointer at CardDAV.
+    corsCarddavHomeRewrite = lib.optionalString (corsOrigin != null) ''
+      location ~ ^/caldav/principal/(?<calino_principal>[^/]+) {
+        if ($request_method = OPTIONS) {
+          ${corsHeaders}
+          add_header Content-Length 0 always;
+          return 204;
+        }
+        include /config/nginx/proxy.conf;
+        include /config/nginx/resolver.conf;
+        set $upstream_app rustical;
+        set $upstream_port ${toString cfg.port};
+        set $upstream_proto http;
+        proxy_set_header X-Forwarded-Port 443;
+        proxy_set_header Accept-Encoding "";
+        proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+        ${corsHeaders}
+        sub_filter_types text/xml application/xml;
+        sub_filter_once off;
+        sub_filter '<addressbook-home-set xmlns="urn:ietf:params:xml:ns:carddav"/>\n            </prop>\n            <status>HTTP/1.1 404 Not Found</status>' '<addressbook-home-set xmlns="urn:ietf:params:xml:ns:carddav"><href>/carddav/principal/$calino_principal/</href></addressbook-home-set>\n            </prop>\n            <status>HTTP/1.1 200 OK</status>';
+      }
+
+    '';
+    corsDavLocation = lib.optionalString (corsOrigin != null) ''
+        # Calino (browser) → RustiCal DAV. No tinyauth: already publicPaths.
+      ${corsCarddavHomeRewrite}
+        location ~ ^/(caldav|carddav|\.well-known/caldav|\.well-known/carddav|remote\.php/dav) {
+          if ($request_method = OPTIONS) {
+            ${corsHeaders}
+            add_header Content-Length 0 always;
+            return 204;
+          }
+      ${proxyCore}
+          ${corsHeaders}
+        }
+
+    '';
+    standardConf = ''
+      server {
+        include /config/nginx/listen-https.conf;
+        http2 on;
+        server_name ${cfg.subdomain}.*;
+        include /config/nginx/ssl.conf;
+        client_max_body_size 0;
+        include /config/nginx/geo-access.conf;
+
+      ${corsDavLocation}
+        location / {
+      ${proxyCore} ${auth}
+        }
+
+        ${authLoc}
+      }
     '';
     ssoConf = ''
       server {
@@ -44,6 +121,7 @@
         absolute_redirect off;
         port_in_redirect off;
 
+      ${corsDavLocation}
         location = / {
           ${auth}
           try_files /__rustical_sso_no_such_file @rustical_root;
@@ -91,6 +169,8 @@
       (
         if ssoEnabled
         then ssoConf
+        else if corsOrigin != null
+        then standardConf
         else
           lib.neo.mkSubdomainProxyConf {
             inherit config cfg;

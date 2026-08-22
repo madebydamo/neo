@@ -22,6 +22,8 @@
         - Image: ghcr.io/lennart-k/rustical (port 4000), SQLite at `/var/lib/rustical/db.sqlite3`
         - CalDAV `/caldav` (Apple: `/caldav-compat`), CardDAV `/carddav`
         - Edge tinyauth on the web UI (`/frontend`); DAV, well-known, Nextcloud login flow, and `/ping` are on publicPaths
+        - When Calino is enabled, SWAG adds CORS on DAV paths for `https://calino.<domain>` and answers OPTIONS itself
+        - CalDAV and CardDAV are separate URL trees. SWAG rewrites CalDAV principal PROPFIND so `addressbook-home-set` points at `/carddav/principal/<id>/` (Calino/tsdav expects a unified DAV principal)
         - Health: GET `/ping` → `Pong!`
         - With `ssoPassword` set, Neo provisions a principal per tinyauth user and SWAG completes `/frontend/login` as `Remote-User` — no second login form
 
@@ -39,6 +41,8 @@
 
         ## Pitfalls
         - User ids cannot contain `:` or `$`
+        - Browser CalDAV (Calino) needs CORS on DAV; native clients do not
+        - REPORT on `/caldav` (the root) is 405; calendar collections under `/caldav/principal/<id>/` accept REPORT
         - Apple Calendar needs `/caldav-compat` and often a downloaded configuration profile
         - Nextcloud login flow (DAVx5) hits `/index.php/login/v2` then `/frontend/login` — the login page is behind tinyauth
         - Clearing appdata destroys calendars, contacts, and principals
@@ -48,6 +52,7 @@
         - `/ping` returns `Pong!` (200) without tinyauth
         - `/` redirects to tinyauth
         - A client with an app token can PROPFIND `/caldav`
+        - With Calino enabled, OPTIONS `/caldav/` with Calino Origin returns 204 + CORS headers
       '';
     };
   };
