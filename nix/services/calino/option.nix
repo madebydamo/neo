@@ -1,8 +1,10 @@
 # Calino (browser CalDAV client) service options.
 # Web UI protected with tinyauth. CalDAV traffic is browser-to-server; when
 # RustiCal is also enabled, SWAG adds CORS on RustiCal DAV paths for this origin.
-# iframeCompatible stays default true: SWAG hides upstream X-Frame-Options via
-# neo.iframeCookieSupport so the navigator can embed the UI.
+# ICS/webcal subscribe is a browser GET; SWAG /webcal-proxy/ fetches the feed
+# so publishers that omit CORS still work. iframeCompatible stays default true:
+# SWAG hides upstream X-Frame-Options via neo.iframeCookieSupport so the
+# navigator can embed the UI.
 {...}: {
   flake.modules.nixos.calino-option = {
     config,
@@ -37,6 +39,7 @@
                 Calino is a lightweight browser CalDAV client: month/week/day views, tasks, journals, and CardDAV contacts, with no Calino-side account or database.
                 The Docker image is a static SPA; calendars stay on your CalDAV server (RustiCal on this host, or any RFC 4791 server you configure in the UI).
                 Neo protects the UI with tinyauth. When RustiCal is enabled, SWAG adds CORS on RustiCal DAV paths for the Calino origin so the browser can talk to CalDAV without a proxy.
+                Public ICS/webcal feeds are fetched in the browser and almost never send CORS headers. SWAG proxies them at https://calino.<domain>/webcal-proxy (tinyauth). In Calino, Subscribe to calendar → Proxy URL: that address, then paste the original .ics URL.
                 CalDAV credentials (RustiCal app tokens) are entered in Calino and stored in the browser. Upstream X-Frame-Options is stripped at SWAG so the neo navigator can embed the UI.
               '';
               projectUrl = "https://calino.io";
