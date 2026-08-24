@@ -6,9 +6,13 @@
 # Auth must stay in the access phase: `return`/`if` in the same location as
 # tinyauth-location.conf runs in rewrite and skips auth_request. Use try_files
 # (content phase) to jump to a named location after tinyauth succeeds.
+# Exception: PROPFIND/OPTIONS/REPORT on `/` return 418 in rewrite on purpose so
+# they never hit tinyauth or the SSO 302; GET / stays authenticated.
 #
-# When Calino is enabled, DAV locations get CORS for the Calino origin and
-# OPTIONS is answered here (preflight must not hit RustiCal 401).
+# When Calino is enabled, DAV locations get CORS for the Calino origin.
+# OPTIONS is answered here only for that Origin (preflight must not hit
+# RustiCal 401). Other clients (DAVx5, GNOME) must reach RustiCal OPTIONS so
+# the DAV header is not stripped.
 {...}: {
   flake.modules.nixos.rustical-swag = {
     config,
@@ -51,17 +55,45 @@
       add_header Access-Control-Expose-Headers "ETag, DAV, Allow, Location" always;
       add_header Access-Control-Max-Age 86400 always;
     '';
+    # Browser preflight from Calino only. DAVx5 OPTIONS has no Origin and
+    # needs RustiCal's DAV: calendar-access / addressbook header.
+    corsOptionsPreflight = lib.optionalString (corsOrigin != null) ''
+      set $rustical_preflight 0;
+      if ($request_method = OPTIONS) {
+        set $rustical_preflight "${corsOrigin}";
+      }
+      if ($http_origin != $rustical_preflight) {
+        set $rustical_preflight 0;
+      }
+      if ($rustical_preflight != 0) {
+        ${corsHeaders}
+        add_header Content-Length 0 always;
+        return 204;
+      }
+    '';
+    # DAVx5/GNOME PROPFIND the site root. GET / stays behind tinyauth (and the
+    # SSO 302). RustiCal only GET-redirects `/` to `/frontend` (PROPFIND is
+    # 405), so send DAV methods to well-known CalDAV (RFC 6764; Apple UA
+    # still lands on /caldav-compat).
+    davRootSkipAuth = ''
+      error_page 418 = @rustical_dav_root;
+      if ($request_method ~ ^(PROPFIND|OPTIONS|REPORT)$) {
+        return 418;
+      }
+    '';
+    davRootNamed = ''
+      location @rustical_dav_root {
+        internal;
+        return 308 /.well-known/caldav;
+      }
+    '';
     # RustiCal keeps CalDAV and CardDAV on separate trees. Calino/tsdav looks
     # for CARD:addressbook-home-set on the CalDAV principal (Nextcloud-style).
     # Browser well-known discovery fails (tsdav uses redirect:manual, which is
     # opaque cross-origin). Rewrite the 404 property into a pointer at CardDAV.
     corsCarddavHomeRewrite = lib.optionalString (corsOrigin != null) ''
       location ~ ^/caldav/principal/(?<calino_principal>[^/]+) {
-        if ($request_method = OPTIONS) {
-          ${corsHeaders}
-          add_header Content-Length 0 always;
-          return 204;
-        }
+        ${corsOptionsPreflight}
         include /config/nginx/proxy.conf;
         include /config/nginx/resolver.conf;
         set $upstream_app rustical;
@@ -81,11 +113,7 @@
         # Calino (browser) → RustiCal DAV. No tinyauth: already publicPaths.
       ${corsCarddavHomeRewrite}
         location ~ ^/(caldav|carddav|\.well-known/caldav|\.well-known/carddav|remote\.php/dav) {
-          if ($request_method = OPTIONS) {
-            ${corsHeaders}
-            add_header Content-Length 0 always;
-            return 204;
-          }
+          ${corsOptionsPreflight}
       ${proxyCore}
           ${corsHeaders}
         }
@@ -101,6 +129,12 @@
         include /config/nginx/geo-access.conf;
 
       ${corsDavLocation}
+        location = / {
+          ${davRootSkipAuth}
+      ${proxyCore} ${auth}
+        }
+
+      ${davRootNamed}
         location / {
       ${proxyCore} ${auth}
         }
@@ -123,9 +157,12 @@
 
       ${corsDavLocation}
         location = / {
+          ${davRootSkipAuth}
           ${auth}
           try_files /__rustical_sso_no_such_file @rustical_root;
         }
+
+      ${davRootNamed}
 
         location = /frontend {
           ${auth}
@@ -169,14 +206,7 @@
       (
         if ssoEnabled
         then ssoConf
-        else if corsOrigin != null
-        then standardConf
-        else
-          lib.neo.mkSubdomainProxyConf {
-            inherit config cfg;
-            upstream = "rustical";
-            port = cfg.port;
-          }
+        else standardConf
       );
   };
 }

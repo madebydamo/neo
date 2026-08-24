@@ -1,5 +1,6 @@
 # RustiCal (CalDAV/CardDAV) service options.
 # Web UI protected with tinyauth; DAV/discovery/health bypass via publicPaths.
+# PROPFIND/OPTIONS/REPORT on / skip tinyauth in SWAG (308 to well-known CalDAV);
 {...}: {
   flake.modules.nixos.rustical-option = {
     config,
@@ -40,6 +41,7 @@
                   "^/ping$"
                   # CalDAV / CardDAV clients use HTTP Basic + app tokens, not tinyauth cookies.
                   "^/caldav"
+                  "^/caldav-compat"
                   "^/carddav"
                   "^/\\.well-known/caldav"
                   "^/\\.well-known/carddav"
@@ -56,12 +58,13 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/rustical"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
-              icon = "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/davx5.svg";
+              icon = "https://radicale.org/assets/logo.svg";
               description = ''
                 RustiCal is a lightweight CalDAV and CardDAV server written in Rust, storing everything in a single SQLite database that is easy to back up.
                 It serves calendars and contacts to DAVx5, Apple Calendar, Thunderbird, Evolution, GNOME, Home Assistant, and similar clients, with WebDAV Push for near-instant sync, a Nextcloud-compatible login flow, and Apple configuration profiles.
                 Neo exposes the web frontend behind tinyauth and, when ssoPassword is set, signs you into RustiCal as the tinyauth user so there is no second login form.
                 CalDAV/CardDAV, well-known discovery, and the /ping health endpoint bypass edge auth so native clients can use RustiCal app tokens.
+                PROPFIND (and OPTIONS/REPORT) on the site root also skip tinyauth and redirect to well-known CalDAV so DAVx5 can use the base URL; GET / remains behind tinyauth.
               '';
               projectUrl = "https://lennart-k.github.io/rustical/";
               githubUrl = "https://github.com/lennart-k/rustical";

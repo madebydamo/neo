@@ -22,7 +22,8 @@
         - Image: ghcr.io/lennart-k/rustical (port 4000), SQLite at `/var/lib/rustical/db.sqlite3`
         - CalDAV `/caldav` (Apple: `/caldav-compat`), CardDAV `/carddav`
         - Edge tinyauth on the web UI (`/frontend`); DAV, well-known, Nextcloud login flow, and `/ping` are on publicPaths
-        - When Calino is enabled, SWAG adds CORS on DAV paths for `https://calino.<domain>` and answers OPTIONS itself
+        - PROPFIND/OPTIONS/REPORT on `/` skip tinyauth in nginx (308 → `/.well-known/caldav`). GET `/` stays behind tinyauth — `/` is not a publicPath
+        - When Calino is enabled, SWAG adds CORS on DAV paths for `https://calino.<domain>` and answers OPTIONS itself only when Origin is Calino (DAVx5 OPTIONS must reach RustiCal for the DAV header)
         - CalDAV and CardDAV are separate URL trees. SWAG rewrites CalDAV principal PROPFIND so `addressbook-home-set` points at `/carddav/principal/<id>/` (Calino/tsdav expects a unified DAV principal)
         - Health: GET `/ping` → `Pong!`
         - With `ssoPassword` set, Neo provisions a principal per tinyauth user and SWAG completes `/frontend/login` as `Remote-User` — no second login form
@@ -37,7 +38,7 @@
         2. `curl http://rustical:4000/ping` (from the internal network / SWAG container)
         3. Open the public URL, pass tinyauth — the RustiCal UI should load as that username
         4. Generate an app token in the frontend
-        5. Point clients at `https://rustical.<domain>/caldav` (Apple: `/caldav-compat`)
+        5. Point clients at `https://rustical.<domain>/` (root PROPFIND discovers CalDAV) or `https://rustical.<domain>/caldav` (Apple: `/caldav-compat`)
 
         ## Pitfalls
         - User ids cannot contain `:` or `$`
@@ -50,9 +51,11 @@
 
         ## Verification
         - `/ping` returns `Pong!` (200) without tinyauth
-        - `/` redirects to tinyauth
+        - GET `/` redirects to tinyauth
+        - PROPFIND `/` returns 308 to `/.well-known/caldav` (not tinyauth HTML)
         - A client with an app token can PROPFIND `/caldav`
         - With Calino enabled, OPTIONS `/caldav/` with Calino Origin returns 204 + CORS headers
+        - OPTIONS `/caldav/` without Origin reaches RustiCal (DAV header present)
       '';
     };
   };

@@ -1,5 +1,6 @@
 # RustiCal service implementation (single SQLite-backed container).
 # Web UI behind tinyauth via SWAG; /ping and DAV paths on publicPaths.
+# Root PROPFIND/OPTIONS/REPORT skip tinyauth in SWAG (not via publicPaths).
 # When ssoPassword is set, provision principals for tinyauth users so SWAG can
 # complete RustiCal frontend login without a second password form.
 {...}: {
