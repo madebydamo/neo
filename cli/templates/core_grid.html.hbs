@@ -5,4 +5,22 @@
   <div class="col-span-full" hx-get="/ssh/public-key-card" hx-trigger="load" hx-swap="innerHTML">
     <div class="text-xs opacity-60 p-2">Loading SSH public key…</div>
   </div>
+  <div id="settings-toml-card" class="card bg-base-100 shadow-sm border border-base-300 p-3 col-span-full">
+    <div class="flex flex-wrap items-start justify-between gap-2 mb-1">
+      <div>
+        <div class="text-sm font-semibold">settings.toml</div>
+        <div class="text-[10px] opacity-50">Download a backup or replace the working-tree file. Includes secrets. Apply afterwards to activate.</div>
+      </div>
+      <div class="flex items-center gap-1">
+        <a href="/settings/download" class="btn btn-xs btn-ghost" download="settings.toml">Download</a>
+        <label class="btn btn-xs btn-primary">
+          Upload
+          <input type="file" accept=".toml,text/plain,application/toml" class="hidden"
+            aria-label="Upload settings.toml"
+            onchange="neoUploadSettingsToml(this)" />
+        </label>
+      </div>
+    </div>
+    <div id="settings-toml-status" class="mt-2 empty:hidden"></div>
+  </div>
 </div>

@@ -6,6 +6,7 @@ mod helpers;
 mod nix_repair;
 mod pages;
 mod save;
+mod settings_file;
 mod ssh;
 mod units;
 mod ws;
@@ -68,5 +69,7 @@ pub fn routes() -> Vec<rocket::Route> {
         ws::ws_status,
         ssh::ssh_public_key_card,
         ssh::ssh_regenerate,
+        settings_file::download_settings,
+        settings_file::upload_settings,
     ]
 }

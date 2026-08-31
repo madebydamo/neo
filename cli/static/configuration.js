@@ -59,6 +59,46 @@ window.neoToast = function neoToast(message, type) {
 };
 
 /**
+ * Replace working-tree settings.toml from a file input (Settings tab).
+ * @param {HTMLInputElement} input
+ */
+window.neoUploadSettingsToml = function neoUploadSettingsToml(input) {
+  var file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+  var ok = window.confirm(
+    'Replace working-tree settings.toml with "' +
+      file.name +
+      '"? Review pending changes and apply to activate.'
+  );
+  if (!ok) return;
+  var status = document.getElementById('settings-toml-status');
+  file
+    .text()
+    .then(function (text) {
+      return fetch('/settings/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        body: text,
+      });
+    })
+    .then(function (res) {
+      return res.text();
+    })
+    .then(function (html) {
+      if (status) status.innerHTML = html;
+    })
+    .catch(function (err) {
+      if (typeof neoToast === 'function') {
+        neoToast('Upload failed: ' + err, 'error');
+      }
+      if (status) {
+        status.innerHTML = '<div class="alert alert-error text-sm">Upload failed</div>';
+      }
+    });
+};
+
+/**
  * True when #options-pane exists and any option field differs from its original value.
  * Uses Alpine.$data(pane) (optionForm: values / originals / isAtOriginal).
  */
