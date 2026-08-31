@@ -17,13 +17,21 @@
         [client.services.${cfg.name}_http]
         token = "${cfg.token}"
         local_addr = "127.0.0.1:80"
+        ${optionalString (!cfg.certificateOnly) ''
 
-        [client.services.${cfg.name}_https]
-        token = "${cfg.token}"
-        local_addr = "127.0.0.1:${toString swagHttpsPP}"
+          [client.services.${cfg.name}_https]
+          token = "${cfg.token}"
+          local_addr = "127.0.0.1:${toString swagHttpsPP}"
+        ''}
       '';
     in {
       config = mkIf cfg.enabled {
+        assertions = [
+          {
+            assertion = !cfg.certificateOnly || lib.neo.privateHostnameDnsActive config;
+            message = "neo.services.rathole.certificateOnly requires Pi-hole with localIP or Tailscale split DNS, so services remain reachable on LAN or the tailnet after public HTTPS is dropped.";
+          }
+        ];
         systemd.services.rathole = {
           description = "Rathole client tunnel";
           after = ["network-online.target"];

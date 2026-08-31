@@ -76,6 +76,52 @@
       };
     };
 
+    privateNeither = dns.privateHostnameDnsActive {
+      neo.services = {};
+    };
+    privatePiholeNoIp = dns.privateHostnameDnsActive {
+      neo.services.pihole = {
+        enabled = true;
+        localIP = null;
+      };
+    };
+    privatePiholeEmptyIp = dns.privateHostnameDnsActive {
+      neo.services.pihole = {
+        enabled = true;
+        localIP = "";
+      };
+    };
+    privatePiholeDisabledWithIp = dns.privateHostnameDnsActive {
+      neo.services.pihole = {
+        enabled = false;
+        localIP = "10.0.0.5";
+      };
+    };
+    privatePiholeWithIp = dns.privateHostnameDnsActive {
+      neo.services.pihole = {
+        enabled = true;
+        localIP = "10.0.0.5";
+      };
+    };
+    privateSplitDns = dns.privateHostnameDnsActive {
+      neo.services.tailscale = {
+        enabled = true;
+        splitDns = true;
+      };
+    };
+    privateBoth = dns.privateHostnameDnsActive {
+      neo.services = {
+        pihole = {
+          enabled = true;
+          localIP = "10.0.0.5";
+        };
+        tailscale = {
+          enabled = true;
+          splitDns = true;
+        };
+      };
+    };
+
     body = lib.concatStrings [
       (expectEq "names/subdomains-only" namesSub [
         "app.damo4mf20.ch"
@@ -106,6 +152,13 @@
       (expectEq "splitDnsActive/on" splitOn true)
       (expectEq "splitDnsActive/flag-off" splitOffFlag false)
       (expectEq "splitDnsActive/tailscale-off" splitTailscaleOff false)
+      (expectEq "privateHostnameDns/neither" privateNeither false)
+      (expectEq "privateHostnameDns/pihole-no-localIP" privatePiholeNoIp false)
+      (expectEq "privateHostnameDns/pihole-empty-localIP" privatePiholeEmptyIp false)
+      (expectEq "privateHostnameDns/pihole-disabled" privatePiholeDisabledWithIp false)
+      (expectEq "privateHostnameDns/pihole-with-localIP" privatePiholeWithIp true)
+      (expectEq "privateHostnameDns/split-dns" privateSplitDns true)
+      (expectEq "privateHostnameDns/both" privateBoth true)
     ];
   in {
     checks.local-dns-names = pkgs.runCommand "local-dns-names" {} ''

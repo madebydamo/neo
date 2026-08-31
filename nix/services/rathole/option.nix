@@ -34,6 +34,15 @@
                 description = "Name prefix for rathole services";
                 rank = 40;
               };
+              certificateOnly = mkOption {
+                type = types.bool;
+                default = false;
+                description = ''
+                  Tunnel HTTP only (Let's Encrypt HTTP-01). Public HTTPS is not exposed; services stay reachable on LAN or Tailscale.
+                  Requires Pi-hole with localIP, or Tailscale split DNS, so hostnames still resolve privately after public HTTPS is dropped.
+                '';
+                rank = 50;
+              };
             }
             // lib.neo.mkSystemdUnits [
               "rathole"
