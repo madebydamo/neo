@@ -8,31 +8,26 @@
   }:
     with lib; let
       cfg = config.neo.services.pihole;
-      onlySubdomains = config.neo.services.swag.onlySubdomains;
       piholeData = "${config.neo.core.volumes.appdata}/pihole";
-      swagCfg = config.neo.services.swag;
-      appServices = lib.neo.getProxiedServices config;
-      subdomains = catAttrs "subdomain" (attrValues appServices);
-      customDomains = concatLists (catAttrs "customDomains" (attrValues appServices));
-      proxyPassDomains = attrNames (swagCfg.proxyPass or {});
-      domain = config.neo.services.swag.domain;
+      splitDnsActive = lib.neo.splitDnsActive config;
+      names = lib.neo.localDnsNamesFromConfig config;
       dnsMasqLines = concatStringsSep ";" (
-        map (sub: "address=/${sub}.${domain}/${cfg.localIP}") subdomains
-        ++ map (cd: "address=/${cd}/${cfg.localIP}") customDomains
-        ++ map (pp: "address=/${pp}/${cfg.localIP}") proxyPassDomains
-        ++ (
-          if onlySubdomains
-          then []
-          else ["address=/${domain}/${cfg.localIP}"]
-        )
+        map (n: "address=/${n}/${cfg.localIP}") names
       );
     in {
       config = mkIf cfg.enabled {
+        assertions = [
+          {
+            assertion = !(splitDnsActive && cfg.localIP == null);
+            message = "neo.services.pihole.localIP must be set when Tailscale split DNS is enabled, so Pi-hole binds only the LAN address and leaves the Tailscale IP for dnsmasq.";
+          }
+        ];
+
         systemd.services.docker-pihole.preStart = lib.neo.mkEnsureDirs config [
           piholeData
         ];
 
-        networking.firewall = mkIf cfg.enabled {
+        networking.firewall = {
           allowedTCPPorts = [53];
           allowedUDPPorts = [53];
         };
@@ -53,10 +48,10 @@
           volumes = [
             "${piholeData}:/etc/pihole"
           ];
-          ports = [
-            "53:53/tcp"
-            "53:53/udp"
-          ];
+          ports = lib.neo.piholeDnsPublishPorts {
+            inherit splitDnsActive;
+            localIP = cfg.localIP;
+          };
           extraOptions = [
             "--health-cmd=dig +short +norecurse +retry=0 @127.0.0.1 pi.hole || exit 1"
             "--health-interval=30s"

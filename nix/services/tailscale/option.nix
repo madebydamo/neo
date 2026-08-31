@@ -24,6 +24,16 @@
                 description = "Accept DNS configuration from the admin panel";
                 rank = 20;
               };
+              splitDns = mkOption {
+                type = types.bool;
+                default = false;
+                description = ''
+                  Mini dnsmasq on the Tailscale interface that answers Neo service hostnames with this node's Tailscale IP.
+                  Does not change public DNS. Add this node's Tailscale IPv4 as a nameserver restricted to services.swag.domain in the Tailscale admin console (do not enable Override DNS servers).
+                  When Pi-hole is also enabled, Pi-hole is bound to localIP only so both can listen on port 53.
+                '';
+                rank = 25;
+              };
               acceptRoutes = mkOption {
                 type = types.bool;
                 default = false;
@@ -76,6 +86,8 @@
             // lib.neo.mkSystemdUnits [
               "tailscale-up"
               "tailscaled"
+              "tailscale-split-dns"
+              "dnsmasq"
             ]
             // lib.neo.mkServiceMeta {
               category = "Network";

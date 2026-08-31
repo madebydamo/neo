@@ -21,7 +21,7 @@
               localIP = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Local IP address to forward services.swag.domain toward to.";
+                description = "Local IP address to forward services.swag.domain toward to. Required when Tailscale split DNS is enabled, so Pi-hole binds this address only and leaves the Tailscale IP for dnsmasq.";
                 rank = 20;
               };
               webPassword = mkOption {
