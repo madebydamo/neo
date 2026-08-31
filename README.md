@@ -81,7 +81,7 @@ Out of the box (enable what you need in the UI):
 | You want…             | Neo can run…                                           |
 | --------------------- | ------------------------------------------------------ |
 | Secure access & login | Reverse proxy (SWAG), tinyauth, Tailscale, VPN helpers |
-| Files & sync          | Filebrowser, Syncthing, Nextcloud (+ Collabora)        |
+| Files & sync          | Filebrowser, Dufs (WebDAV), Syncthing, Nextcloud (+ Collabora) |
 | Photos                | Immich, Immich Drop                                    |
 | Documents             | Paperless                                              |
 | Passwords             | Vaultwarden                                            |
