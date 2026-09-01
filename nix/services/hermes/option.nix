@@ -118,6 +118,16 @@
                 '';
               };
 
+              openrouterApiKey = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                rank = 82;
+                description = ''
+                  Optional OpenRouter API key. When set, Neo pins model.provider = "openrouter"
+                  unless modelProvider is set explicitly.
+                '';
+              };
+
               defaultModel = mkOption {
                 type = types.nullOr types.str;
                 default = "grok-build-latest";
@@ -140,7 +150,7 @@
                   Optional model.provider for config.yaml (e.g. "xai-oauth", "xai", "anthropic",
                   "openai", "openrouter"). Explicit value always wins.
                   If unset, Neo derives from API keys (xaiApiKey → xai, anthropicApiKey → anthropic,
-                  openaiApiKey → openai); if no keys either, provider is not written so OAuth or
+                  openaiApiKey → openai, openrouterApiKey → openrouter); if no keys either, provider is not written so OAuth or
                   an existing config.yaml provider is left alone.
                   For xAI SuperGrok OAuth without an API key: modelProvider = "xai-oauth".
                 '';

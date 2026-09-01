@@ -41,7 +41,7 @@
 
         ## Credentials
         - Required: `services.hermes.dashboardPassword` (Generate helper); optional `gatewayToken`, Telegram bot token
-        - LLM: optional API keys (`xaiApiKey`, `anthropicApiKey`, `openaiApiKey`) **or** OAuth (no key)
+        - LLM: optional API keys (`xaiApiKey`, `anthropicApiKey`, `openaiApiKey`, `openrouterApiKey`) **or** OAuth (no key)
         - xAI OAuth (no API key): set `modelProvider = "xai-oauth"`, optional `defaultModel`, then:
           `sudo -u hermes env HERMES_HOME=<stateDir>/.hermes hermes auth add xai-oauth`
         - Optional pins: `defaultModel`, `modelProvider` — leave empty so Nix does not overwrite model.*

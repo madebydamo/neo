@@ -21,6 +21,7 @@
       XAI_API_KEY = cfg.xaiApiKey;
       ANTHROPIC_API_KEY = cfg.anthropicApiKey;
       OPENAI_API_KEY = cfg.openaiApiKey;
+      OPENROUTER_API_KEY = cfg.openrouterApiKey;
       TELEGRAM_BOT_TOKEN = cfg.telegramBotToken;
       HERMES_GATEWAY_TOKEN = cfg.gatewayToken;
       TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," (map toString cfg.telegramAllowedUserId);
