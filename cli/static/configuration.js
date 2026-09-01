@@ -59,6 +59,42 @@ window.neoToast = function neoToast(message, type) {
 };
 
 /**
+ * Download working-tree settings.toml without navigating this document.
+ * A plain <a href="/settings/download"> would replace the page when this UI
+ * is embedded in the navigator iframe (or when the attachment is blocked).
+ */
+window.neoDownloadSettingsToml = function neoDownloadSettingsToml() {
+  var status = document.getElementById('settings-toml-status');
+  fetch('/settings/download')
+    .then(function (res) {
+      if (!res.ok) {
+        throw new Error(res.status === 404 ? 'settings.toml not found' : 'Download failed');
+      }
+      return res.blob();
+    })
+    .then(function (blob) {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'settings.toml';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () {
+        URL.revokeObjectURL(url);
+      }, 1000);
+    })
+    .catch(function (err) {
+      if (typeof neoToast === 'function') {
+        neoToast('Download failed: ' + err, 'error');
+      }
+      if (status) {
+        status.innerHTML = '<div class="alert alert-error text-sm">Download failed</div>';
+      }
+    });
+};
+
+/**
  * Replace working-tree settings.toml from a file input (Settings tab).
  * @param {HTMLInputElement} input
  */

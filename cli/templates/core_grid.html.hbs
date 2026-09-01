@@ -12,7 +12,7 @@
         <div class="text-[10px] opacity-50">Download a backup or replace the working-tree file. Includes secrets. Apply afterwards to activate.</div>
       </div>
       <div class="flex items-center gap-1">
-        <a href="/settings/download" class="btn btn-xs btn-ghost" download="settings.toml">Download</a>
+        <button type="button" class="btn btn-xs btn-ghost" onclick="neoDownloadSettingsToml()">Download</button>
         <label class="btn btn-xs btn-primary">
           Upload
           <input type="file" accept=".toml,text/plain,application/toml" class="hidden"

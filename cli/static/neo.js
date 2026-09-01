@@ -175,7 +175,10 @@ function getOrCreateIframe(key, targetUrl) {
   const iframe = document.createElement('iframe');
   iframe.id = `iframe-${key.replace(/[^a-z0-9_-]/gi, '')}`;
   iframe.className = 'absolute inset-0 w-full h-full border-0 bg-white';
-  iframe.sandbox = 'allow-same-origin allow-scripts allow-forms allow-popups allow-modals';
+  // allow-downloads: settings.toml (and other in-app downloads) are blocked in
+  // sandboxed iframes otherwise — the click either no-ops or navigates the frame.
+  iframe.sandbox =
+    'allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads';
   iframe.style.display = 'none';
 
   // Set src only on first creation — this is the expensive step we avoid on later switches
