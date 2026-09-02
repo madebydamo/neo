@@ -26,6 +26,7 @@ pub fn update(
     let suffix = resolve_suffix(update_suffix, "NEO_UPDATE_SUFFIX");
     let op = OperationLog::new_update(&suffix);
     op.write_state("in_progress", "starting", None, None);
+    let _tee = op.capture_stdio();
 
     // Delete modules/ folder and re-run the exact same nix flake init as init.rs does.
     // This refreshes the template-provided modules (imports, inputs, nixos, settings) from the

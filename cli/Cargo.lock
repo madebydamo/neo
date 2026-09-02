@@ -965,6 +965,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "libc",
  "rocket",
  "rocket_dyn_templates",
  "rocket_ws",

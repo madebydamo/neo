@@ -23,6 +23,7 @@ pub fn activate(
     let suffix = resolve_suffix(activation_suffix, "NEO_ACTIVATION_SUFFIX");
     let op = OperationLog::new_activation(&suffix);
     op.write_state("in_progress", "starting", None, None);
+    let _tee = op.capture_stdio();
 
     op.step("write-flake", || {
         run_nix(config_path, nix_cmd, &["run", ".#write-flake"])

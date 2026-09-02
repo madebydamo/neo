@@ -185,6 +185,12 @@ impl OperationLog {
             format!("{} triggered via web at {}\n", self.id, ts),
         );
     }
+
+    /// Mirror process stdout/stderr to this op's `.log` and the console.
+    /// Keep the returned guard alive for the duration of the operation.
+    pub fn capture_stdio(&self) -> Option<super::stdio_tee::StdioTee> {
+        super::stdio_tee::tee_stdio_to_log(&self.log_path).ok()
+    }
 }
 
 /// Resolve an explicit suffix (e.g. from CLI arg), falling back to the named env var,

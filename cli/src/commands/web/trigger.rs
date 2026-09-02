@@ -36,7 +36,6 @@ pub fn trigger_systemd_run_args(
     unit_leaf: &str,
     neo_args: &[&str],
     env_pairs: &[(&str, &str)],
-    log_path: &std::path::Path,
     description: &str,
 ) {
     let sudo_cmd = util::sudo_cmd();
@@ -67,10 +66,6 @@ pub fn trigger_systemd_run_args(
     }
     run_cmd.args([
         "--property",
-        &format!("StandardOutput=append:{}", log_path.to_string_lossy()),
-        "--property",
-        &format!("StandardError=append:{}", log_path.to_string_lossy()),
-        "--property",
         &format!("Description={description}"),
         &neo_bin,
     ]);
@@ -78,17 +73,11 @@ pub fn trigger_systemd_run_args(
     let _ = execute_command(&mut run_cmd);
 }
 
-pub fn trigger_systemd_run(
-    subcommand: &str,
-    env_var: &str,
-    suffix: &str,
-    log_path: &std::path::Path,
-) {
+pub fn trigger_systemd_run(subcommand: &str, env_var: &str, suffix: &str) {
     trigger_systemd_run_args(
         &format!("{subcommand}@{suffix}"),
         &[subcommand],
         &[(env_var, suffix)],
-        log_path,
         &format!("Neo one-shot {subcommand} {suffix}"),
     );
 }
@@ -101,12 +90,7 @@ fn trigger_oneshot(kind: OneshotKind) -> OperationLog {
         OneshotKind::Update => OperationLog::new_update(&ts),
     };
     op.init_for_web_trigger(&ts);
-    trigger_systemd_run(
-        kind.subcommand(),
-        kind.env_var(),
-        op.suffix(),
-        op.log_path(),
-    );
+    trigger_systemd_run(kind.subcommand(), kind.env_var(), op.suffix());
     op
 }
 
@@ -198,7 +182,6 @@ pub fn trigger_generation_switch(n: u64, mode: GenerationMode) -> RawHtml<String
         &format!("genswitch@{suffix}"),
         &["generation", mode_s, &n_s],
         &[("NEO_GENSWITCH_SUFFIX", op.suffix())],
-        op.log_path(),
         &format!("Neo generation {mode_s} {n}"),
     );
 

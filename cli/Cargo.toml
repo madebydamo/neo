@@ -11,6 +11,7 @@ toml_edit = "0.22"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 anyhow = "1.0"
+libc = "0.2"
 rocket = { version = "0.5", features = ["json"] }
 rocket_dyn_templates = { version = "0.1.0-rc.4", features = ["handlebars"] }
 rocket_ws = "0.1"

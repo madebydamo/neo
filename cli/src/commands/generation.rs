@@ -58,6 +58,7 @@ fn run_generation_op(n: u64, mode: GenerationMode, dry_run: bool, sudo_cmd: &str
         );
         log
     });
+    let _tee = op.as_ref().and_then(|op| op.capture_stdio());
 
     if let Some(ref op) = op {
         op.write_state_extra(
