@@ -39,6 +39,7 @@
         3. Open the public URL, pass tinyauth — the RustiCal UI should load as that username
         4. Generate an app token in the frontend
         5. Point clients at `https://rustical.<domain>/` (root PROPFIND discovers CalDAV) or `https://rustical.<domain>/caldav` (Apple: `/caldav-compat`)
+        6. For public iCal feeds, enable `ical-sync` and paste that app token there (not ssoPassword)
 
         ## Pitfalls
         - User ids cannot contain `:` or `$`

@@ -85,7 +85,7 @@ Out of the box (enable what you need in the UI):
 | Photos                | Immich, Immich Drop                                    |
 | Documents             | Paperless                                              |
 | Passwords             | Vaultwarden                                            |
-| Calendar & contacts   | RustiCal (CalDAV/CardDAV)                              |
+| Calendar & contacts   | RustiCal (CalDAV/CardDAV), iCal subscriptions          |
 | Search & utilities    | SearXNG, pastebin, change detection, Karakeep, Webtop, Firefox |
 | Privacy on the LAN    | Pi-hole                                                |
 | Backups & monitoring  | Automated backup, Beszel                               |
