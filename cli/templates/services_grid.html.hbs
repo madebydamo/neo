@@ -24,15 +24,14 @@
          if (this.status === 'available') return hasDis;
          return true;
        },
-       anyVisible() {
-         const els = this.$el.querySelectorAll('[data-plugin-tokens]');
-         return Array.from(els).some((el) => this.sectionVisible(
-           el.dataset.cat,
-           el.dataset.hasEn === 'true',
-           el.dataset.hasDis === 'true',
-           el.dataset.pluginTokens
-         ));
-       }
+        anyVisible() {
+          const els = this.$root.querySelectorAll('[data-plugin-urls]');
+          return Array.from(els).some((el) => this.matches(
+            el.dataset.enabled === 'true',
+            el.dataset.cat,
+            (el.dataset.pluginUrls || '').split('|').filter(Boolean)
+          ));
+        }
      }">
   {{#if error}}
     <div class="alert alert-error text-xs flex flex-col gap-2">
@@ -114,6 +113,8 @@
     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1.5 sm:gap-2">
       {{#each services}}
       <div class="relative"
+           data-enabled="{{#if enabled}}true{{else}}false{{/if}}"
+           data-cat="{{category}}"
            data-plugin-urls="{{#each plugins}}{{url}}{{#unless @last}}|{{/unless}}{{/each}}"
            x-show="matches({{#if enabled}}true{{else}}false{{/if}}, '{{category}}', ($el.dataset.pluginUrls || '').split('|').filter(Boolean))">
         {{!-- Main card (navigates to options) --}}
@@ -185,6 +186,7 @@
   {{/each}}
 
   <div class="text-xs opacity-60 p-4 border border-dashed rounded text-center"
+       x-cloak
        x-show="!anyVisible()">
     No services match the current filters.
   </div>
