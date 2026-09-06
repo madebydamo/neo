@@ -475,7 +475,29 @@ function optionForm() {
         if (w === 'pluginList') {
           this.initPluginList(name);
         }
+        // primaryItemList uses generic list add/remove + pil* helpers; no init.
       });
+    },
+
+    // ── primaryItemList widget ───────────────────────────────────────
+
+    pilEntryLabel(optionName) {
+      return this.optUi(optionName)?.entryLabel || 'Primary';
+    },
+
+    pilEmptyHint(optionName) {
+      return this.optUi(optionName)?.emptyHint
+        || 'Add at least one entry. The first is the primary.';
+    },
+
+    /** Move list index to front so it becomes the primary (home) item. */
+    pilSetPrimary(optionName, idx) {
+      const list = this.ensureList(optionName);
+      if (idx <= 0 || idx >= list.length) return;
+      const [item] = list.splice(idx, 1);
+      list.unshift(item);
+      this.values[optionName] = [...list];
+      this.notifyKeysFromSource(optionName);
     },
 
     // ── pluginList widget ────────────────────────────────────────────

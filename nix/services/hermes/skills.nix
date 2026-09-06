@@ -139,7 +139,8 @@
           ```bash
           hermes send --to all "…"
           ```
-          Home channels come from `/sethome`. If that fails, `hermes send --to telegram`.
+          Home channels come from `/sethome`. If that fails, `hermes send --to telegram`
+          (Neo sets `TELEGRAM_HOME_CHANNEL` to the first `telegramAllowedUserId`).
           No message on **clean**. Do not paste secrets, tokens, or full `.env` files.
 
           ## System updates

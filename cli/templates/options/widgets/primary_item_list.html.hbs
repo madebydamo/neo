@@ -1,0 +1,57 @@
+{{! primaryItemList: listOf scalars; first entry is the primary (badge from ui.entryLabel).
+    See nix/lib/ui.nix and option_form.js pil* helpers. }}
+<div class="mt-2 space-y-2">
+  <template x-for="(item, idx) in (values['{{name}}'] || [])" :key="idx">
+    <div class="rounded-xl border p-2.5 sm:p-3"
+         :class="idx === 0
+           ? 'border-primary bg-primary/10 shadow-sm ring-1 ring-primary/30'
+           : 'border-base-300 bg-base-100/60'">
+      <div class="flex flex-wrap items-center gap-2">
+        {{#if (or (eq type.elem.kind "int") (eq type.elem.kind "port"))}}
+          <input type="number" class="input input-sm flex-1 min-w-0 font-mono"
+                 :class="idx === 0 ? 'input-primary' : 'input-bordered'"
+                 x-model.number="values['{{name}}'][idx]"
+                 {{#if type.elem.min}}min="{{type.elem.min}}"{{/if}}
+                 {{#if type.elem.max}}max="{{type.elem.max}}"{{/if}}>
+        {{else}}
+          {{#if (eq type.elem.kind "float")}}
+            <input type="number" class="input input-sm flex-1 min-w-0 font-mono" step="any"
+                   :class="idx === 0 ? 'input-primary' : 'input-bordered'"
+                   x-model.number="values['{{name}}'][idx]">
+          {{else}}
+            <input type="text" class="input input-sm flex-1 min-w-0 font-mono"
+                   :class="idx === 0 ? 'input-primary' : 'input-bordered'"
+                   x-model="values['{{name}}'][idx]">
+          {{/if}}
+        {{/if}}
+        <span class="badge badge-primary badge-sm shrink-0"
+              x-show="idx === 0"
+              x-text="pilEntryLabel('{{name}}')"></span>
+        <button type="button"
+                class="btn btn-outline btn-xs shrink-0"
+                x-show="idx > 0"
+                @click="pilSetPrimary('{{name}}', idx)"
+                :title="'Move this entry first (' + pilEntryLabel('{{name}}') + ')'">
+          Set as <span x-text="pilEntryLabel('{{name}}')"></span>
+        </button>
+        <template x-if="resolveHelper('{{name}}')">
+          <button type="button" class="btn btn-outline btn-xs shrink-0"
+                  @click="runHelper('{{name}}', { index: idx })"
+                  :disabled="helperBusy"
+                  x-text="resolveHelper('{{name}}').label"></button>
+        </template>
+        <button type="button" @click="removeListItem('{{name}}', idx)"
+                class="btn btn-ghost btn-xs text-error shrink-0">Remove</button>
+      </div>
+      <p class="text-[11px] text-primary/80 mt-1.5 leading-snug font-medium"
+         x-show="idx === 0"
+         x-text="'This is the ' + (pilEntryLabel('{{name}}') || 'primary').toLowerCase() + '.'"></p>
+    </div>
+  </template>
+
+  <p class="text-xs text-base-content/50"
+     x-show="(values['{{name}}'] || []).length === 0"
+     x-text="pilEmptyHint('{{name}}')"></p>
+
+  <button type="button" @click="addListItem('{{name}}')" class="btn btn-outline btn-xs mt-1">+ Add</button>
+</div>

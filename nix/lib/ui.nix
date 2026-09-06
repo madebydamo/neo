@@ -15,6 +15,8 @@
 #     (see tinyauth.access). Modes declare which list fields are active per mode.
 #   pluginList — listOf flake URLs with add/remove cards and per-remove uninstall
 #     confirm (core.plugins). Ownership is inferred from option declarations.
+#   primaryItemList — listOf scalars; first entry is the primary (badge from
+#     entryLabel, e.g. Hermes telegramAllowedUserId "Home channel").
 #
 # ## keysFrom
 #

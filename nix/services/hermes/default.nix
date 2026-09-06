@@ -121,6 +121,12 @@
       docker-compose
     ];
 
+    # First allowed ID is the Telegram home channel (`hermes send --to telegram`).
+    telegramHomeChannel =
+      if cfg.telegramAllowedUserId == []
+      then null
+      else toString (builtins.head cfg.telegramAllowedUserId);
+
     hermesEnv =
       lib.filterAttrs (_: v: v != null && v != "") {
         XAI_API_KEY = cfg.xaiApiKey;
@@ -130,6 +136,7 @@
         TELEGRAM_BOT_TOKEN = cfg.telegramBotToken;
         HERMES_GATEWAY_TOKEN = cfg.gatewayToken;
         TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," (map toString cfg.telegramAllowedUserId);
+        TELEGRAM_HOME_CHANNEL = telegramHomeChannel;
         GATEWAY_HEALTH_URL = "http://127.0.0.1:${toString cfg.gatewayPort}";
       }
       // lib.optionalAttrs dashboardPasswordSet {

@@ -55,7 +55,7 @@
         3. Confirm Neo skills appear (`/neo-homeserver`, `/neo-*`)
         4. Config changes: edit hermes options in settings → activate
         5. OAuth-only: clear API keys, set modelProvider if needed, run `hermes auth add …` as user hermes
-        6. `superviseUpdates`: after system/docker updater runs that changed something, `neo-hermes-supervise` classifies logs (`/neo-update-supervisor`). Needs a home channel (`/sethome`) or `telegramAllowedUserId` fallback
+        6. `superviseUpdates`: after system/docker updater runs that changed something, `neo-hermes-supervise` classifies logs (`/neo-update-supervisor`). Home channel is the first `telegramAllowedUserId` (`TELEGRAM_HOME_CHANNEL`)
 
         ## Pitfalls
         - Clearing hermes appdata wipes memory, sessions, local skills, and custom SOUL

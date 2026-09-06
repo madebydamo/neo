@@ -62,9 +62,16 @@
                 default = [];
                 description = ''
                   List of Telegram user/chat IDs allowed to interact with the bot.
+                  The first ID is the home channel (TELEGRAM_HOME_CHANNEL) used for
+                  `hermes send --to telegram` and cron delivery. Group chat IDs are negative.
                   Get your ID from @userinfobot on Telegram.
                 '';
                 rank = 40;
+                ui = lib.neo.ui.mkUi {
+                  widget = "primaryItemList";
+                  entryLabel = "Home channel";
+                  emptyHint = "Add a Telegram user or chat ID. The first entry is the home channel.";
+                };
               };
 
               telegramGroups = mkOption {
@@ -182,8 +189,8 @@
                   the new image. Clean: no message. No-op updater runs skip Hermes entirely.
                   System updates are never rolled back automatically.
                   Notifications use `hermes send --to all` (every configured home channel),
-                  then `hermes send --to telegram` if needed. Run `/sethome` in Telegram/Discord/…
-                  so a home channel exists.
+                  then `hermes send --to telegram` if needed. The first `telegramAllowedUserId`
+                  is set as TELEGRAM_HOME_CHANNEL.
                 '';
               };
 

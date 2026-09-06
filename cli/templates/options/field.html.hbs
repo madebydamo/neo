@@ -58,7 +58,11 @@
       {{#if (eq ui.widget "pluginList")}}
         {{> options/widgets/plugin_list}}
       {{else}}
-        {{> options/list_of}}
+        {{#if (eq ui.widget "primaryItemList")}}
+          {{> options/widgets/primary_item_list}}
+        {{else}}
+          {{> options/list_of}}
+        {{/if}}
       {{/if}}
     {{/if}}
 

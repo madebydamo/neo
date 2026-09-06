@@ -15,6 +15,11 @@
     dockerManifest = "${config.neo.services.docker-updater.appdata}/last.json";
     systemManifest = "${config.neo.services.system-updater.appdata}/last.json";
 
+    telegramHomeChannel =
+      if cfg.telegramAllowedUserId == []
+      then null
+      else toString (builtins.head cfg.telegramAllowedUserId);
+
     superviseEnv = lib.filterAttrs (_: v: v != null && v != "") {
       HOME = cfg.stateDir;
       HERMES_HOME = "${cfg.stateDir}/.hermes";
@@ -25,6 +30,7 @@
       TELEGRAM_BOT_TOKEN = cfg.telegramBotToken;
       HERMES_GATEWAY_TOKEN = cfg.gatewayToken;
       TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," (map toString cfg.telegramAllowedUserId);
+      TELEGRAM_HOME_CHANNEL = telegramHomeChannel;
     };
 
     promptFor = kind: ''
