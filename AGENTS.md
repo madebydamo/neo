@@ -82,14 +82,14 @@ Extract prunes orphan keys from `current`; the form re-syncs when the source lis
 | `primaryItemList` | listOf scalars; first entry is the primary (badge from `entryLabel`, e.g. Hermes `telegramAllowedUserId` home channel) |
 | `providerAuth` | submodule of provider + API key and/or OAuth login + model (Hermes `llm`). Catalog rows declare `hasApiKey` / `hasOauth` / `oauthFlow` / `needsBaseUrl`; child option descriptions render as ⓘ on each input; `ui.oauth.script` runs status/login/refresh |
 
-Implementations: `cli/templates/options/widgets/<name>.html.hbs` + `elp*` (or widget-prefixed) helpers in `option_form.js`. Dispatch in `attrs_of.html.hbs` / field templates on `ui.widget`, not on option names.
+Implementations: `cli/templates/options/widgets/<name>.html.hbs` + `<name>.js` (registers on `NeoWidgets`) + `<name>.test.js`. `option_form.js` mixes in registered widgets and dispatches init/save/reset on `ui.widget` only. Dispatch in `attrs_of.html.hbs` / field templates on `ui.widget`, not on option names. Run `just test-widgets`.
 
 ### Adding a new special UI (checklist)
 
 1. Prefer composing **choices** + **keysFrom** + **save** only; add a **widget** only if the generic type editor is not enough.
 2. Declare `ui` on the option in `option.nix` via `lib.neo.ui.mkUi { ... }`.
 3. If you need a new dynamic list, add a **choice provider** in extract (one attr, reused by any service).
-4. If you need a new composite editor: one Handlebars partial under `options/widgets/`, one init/save path in `option_form.js` keyed by `ui.widget` — no `if (name === "access")`.
+4. If you need a new composite editor: one Handlebars partial + one JS module under `options/widgets/` that `NeoWidgets.register`s by `ui.widget` name, a colocated `*.test.js`, and a `<script>` in `configuration.html.hbs` after `registry.js` — no `if (name === "access")`.
 5. Document the widget/provider in this section.
 
 Reference consumers: `nix/services/tinyauth/option.nix` (`access` + `ui.choices = "authApps"`); `nix/services/hermes/option.nix` (`telegramAllowedUserId` + `primaryItemList`).

@@ -1,6 +1,6 @@
 {{! pluginList: listOf flake URLs with cards, add/remove, and per-remove uninstall confirm.
     Driven by option.ui (emptyHint). Inventory comes from #plugin-inventory-seed.
-    See nix/lib/ui.nix and option_form.js pl* helpers. }}
+    Logic: plugin_list.js (NeoWidgets.register('pluginList')). See nix/lib/ui.nix. }}
 <div class="mt-2 space-y-3">
   <template x-for="(url, idx) in (values['{{name}}'] || [])" :key="idx">
     <div class="rounded-xl border border-base-300 bg-base-100/70 p-3 sm:p-4 space-y-2 shadow-sm">

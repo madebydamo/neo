@@ -19,6 +19,7 @@
         rustc
         rustfmt
         clippy
+        nodejs
       ];
       shellHook = ''
         root="$(git rev-parse --show-toplevel 2>/dev/null || true)"

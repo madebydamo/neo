@@ -2,9 +2,16 @@
 // Alpine form controller for service options + HTMX/Alpine re-init after swaps.
 // Supports scalar fields, listOf/attrsOf of scalars, one-deep submodule collections,
 // and declarative ui.widget handlers (see nix/lib/ui.nix).
+// Widget implementations live next to their Handlebars templates under
+// templates/options/widgets/ and register on NeoWidgets.
+
+function neoWidget(name) {
+  if (typeof NeoWidgets === 'undefined' || !name) return null;
+  return NeoWidgets.get(name) || null;
+}
 
 function optionForm() {
-  return {
+  const host = {
     values: {},
     defaults: {},
     originals: {},
@@ -17,8 +24,8 @@ function optionForm() {
     saveFlash: '', // '' | 'ok' | 'err'
     saveError: '',
     /**
-     * Ephemeral UI state per option (not saved).
-     * exclusiveListPair: { modes: { [entryKey]: modeId } }
+     * Ephemeral UI state per option (not saved). Widgets store mode maps,
+     * OAuth dialogs, etc. here.
      */
     uiState: {},
     plDraft: {},
@@ -194,9 +201,9 @@ function optionForm() {
       });
       this.values[optionName] = next;
 
-      // exclusiveListPair: keep mode map aligned
-      if (opt.ui?.widget === 'exclusiveListPair') {
-        this.elpSyncModes(optionName);
+      const w = neoWidget(opt.ui?.widget);
+      if (w && typeof w.onKeysFromSync === 'function') {
+        w.onKeysFromSync.call(this, optionName);
       }
     },
 
@@ -210,853 +217,14 @@ function optionForm() {
       });
     },
 
-    // ── exclusiveListPair widget ─────────────────────────────────────
-
-    elpModes(optionName) {
-      return this.optUi(optionName)?.modes || [];
-    },
-
-    elpModeDef(optionName, modeId) {
-      return this.elpModes(optionName).find((m) => m.id === modeId) || null;
-    },
-
-    elpListFieldNames(optionName) {
-      const names = new Set();
-      this.elpModes(optionName).forEach((m) => {
-        (m.active || []).forEach((f) => names.add(f));
-      });
-      return [...names];
-    },
-
-    elpEnsureState(optionName) {
-      if (!this.uiState[optionName]) {
-        this.uiState[optionName] = { modes: {} };
-      }
-      if (!this.uiState[optionName].modes) {
-        this.uiState[optionName].modes = {};
-      }
-      return this.uiState[optionName];
-    },
-
-    /** Infer mode from data (first mode with non-empty active lists, else open/empty active). */
-    elpInferMode(optionName, entry) {
-      const modes = this.elpModes(optionName);
-      const e = entry || {};
-      for (let i = 0; i < modes.length; i++) {
-        const m = modes[i];
-        const active = m.active || [];
-        if (active.length === 0) continue;
-        const has = active.some((f) => Array.isArray(e[f]) && e[f].length > 0);
-        if (has) return m.id;
-      }
-      // Prefer mode with empty active (open)
-      const open = modes.find((m) => !(m.active || []).length);
-      return open ? open.id : (modes[0]?.id || 'open');
-    },
-
-    elpSyncModes(optionName) {
-      const st = this.elpEnsureState(optionName);
-      const prevModes = st.modes || {};
-      const nextModes = {};
-      const map = this.values[optionName] || {};
-      Object.keys(map).forEach((key) => {
-        const e = map[key] || {};
-        const anyList = this.elpListFieldNames(optionName).some(
-          (f) => Array.isArray(e[f]) && e[f].length > 0
-        );
-        // Data with picks wins; otherwise keep sticky UI mode (empty allow/block still needs a mode).
-        if (anyList) {
-          nextModes[key] = this.elpInferMode(optionName, e);
-        } else if (prevModes[key] && this.elpModeDef(optionName, prevModes[key])) {
-          nextModes[key] = prevModes[key];
-        } else {
-          nextModes[key] = this.elpInferMode(optionName, e);
-        }
-      });
-      this.uiState = { ...this.uiState, [optionName]: { ...st, modes: nextModes } };
-    },
-
-    elpMode(optionName, key) {
-      const st = this.uiState[optionName];
-      const ui = st?.modes?.[key];
-      if (ui && this.elpModeDef(optionName, ui)) return ui;
-      const e = (this.values[optionName] || {})[key] || {};
-      return this.elpInferMode(optionName, e);
-    },
-
-    elpModeLabel(optionName, key) {
-      const m = this.elpModeDef(optionName, this.elpMode(optionName, key));
-      return m?.label || this.elpMode(optionName, key);
-    },
-
-    elpModeHint(optionName, key) {
-      const modeId = this.elpMode(optionName, key);
-      const m = this.elpModeDef(optionName, modeId);
-      if (!m) return '';
-      const e = (this.values[optionName] || {})[key] || {};
-      const active = m.active || [];
-      let n = 0;
-      if (active.length) {
-        const list = e[active[0]];
-        n = Array.isArray(list) ? list.length : 0;
-      }
-      if (n > 0) return m.hintFilled || m.hintEmpty || '';
-      return m.hintEmpty || m.hintFilled || '';
-    },
-
-    elpBadgeClass(optionName, key) {
-      const m = this.elpModeDef(optionName, this.elpMode(optionName, key));
-      const b = m?.badge || '';
-      if (b === 'success') return 'badge-success badge-outline';
-      if (b === 'primary') return 'badge-primary badge-outline';
-      if (b === 'warning') return 'badge-warning badge-outline';
-      if (b === 'error') return 'badge-error badge-outline';
-      return 'badge-ghost';
-    },
-
-    elpListLabel(optionName, key) {
-      const m = this.elpModeDef(optionName, this.elpMode(optionName, key));
-      return m?.listLabel || m?.label || 'Items';
-    },
-
-    setElpMode(optionName, key, modeId) {
-      const st = this.elpEnsureState(optionName);
-      st.modes = { ...st.modes, [key]: modeId };
-      this.uiState = { ...this.uiState, [optionName]: { ...st } };
-
-      const mode = this.elpModeDef(optionName, modeId);
-      const active = mode?.active || [];
-      const allLists = this.elpListFieldNames(optionName);
-      const obj = this.ensureAttrs(optionName);
-      const prev = Object.assign({}, obj[key] || {});
-      // Collect previous picks from any list field (for mode switch carry-over)
-      let carried = [];
-      allLists.forEach((f) => {
-        if (Array.isArray(prev[f]) && prev[f].length) carried = [...prev[f]];
-      });
-      const next = Object.assign({}, prev);
-      allLists.forEach((f) => { next[f] = []; });
-      if (active.length === 1) {
-        const field = active[0];
-        const prevField = Array.isArray(prev[field]) ? prev[field] : [];
-        next[field] = prevField.length ? [...prevField] : [...carried];
-      }
-      obj[key] = next;
-      this.values[optionName] = { ...obj };
-    },
-
-    /** Choices from first nested field that has type.values (from ui.choices). */
-    elpChoices(optionName) {
-      const fields = this.optType(optionName)?.elem?.fields || [];
-      for (let i = 0; i < fields.length; i++) {
-        const vals = fields[i]?.type?.values;
-        if (Array.isArray(vals) && vals.length) return vals;
-      }
-      // Prefer empty array over undefined for x-for
-      for (let i = 0; i < fields.length; i++) {
-        const vals = fields[i]?.type?.values;
-        if (Array.isArray(vals)) return vals;
-      }
-      return [];
-    },
-
-    elpChoiceEmptyHint(optionName) {
-      return this.optUi(optionName)?.choiceEmptyHint || 'No choices available.';
-    },
-
-    elpEmptyHint(optionName) {
-      return this.optUi(optionName)?.emptyHint || '';
-    },
-
-    elpEntryLabel(optionName) {
-      return this.optUi(optionName)?.entryLabel || 'Entry';
-    },
-
-    elpAppSelected(optionName, key, app) {
-      const modeId = this.elpMode(optionName, key);
-      const mode = this.elpModeDef(optionName, modeId);
-      const active = mode?.active || [];
-      if (!active.length) return false;
-      const e = (this.values[optionName] || {})[key] || {};
-      const list = e[active[0]];
-      return Array.isArray(list) && list.includes(app);
-    },
-
-    toggleElpApp(optionName, key, app, checked) {
-      const modeId = this.elpMode(optionName, key);
-      const mode = this.elpModeDef(optionName, modeId);
-      const active = mode?.active || [];
-      if (!active.length) return;
-      // Sticky mode while picking
-      const st = this.elpEnsureState(optionName);
-      st.modes = { ...st.modes, [key]: modeId };
-      this.uiState = { ...this.uiState, [optionName]: { ...st } };
-      this.toggleNestedListChoice(optionName, key, active[0], app, checked);
-    },
-
-    setAllElpApps(optionName, key, selectAll) {
-      const modeId = this.elpMode(optionName, key);
-      const mode = this.elpModeDef(optionName, modeId);
-      const active = mode?.active || [];
-      if (!active.length) return;
-      const st = this.elpEnsureState(optionName);
-      st.modes = { ...st.modes, [key]: modeId };
-      this.uiState = { ...this.uiState, [optionName]: { ...st } };
-      const apps = this.elpChoices(optionName);
-      const allLists = this.elpListFieldNames(optionName);
-      const obj = this.ensureAttrs(optionName);
-      const entry = Object.assign({}, obj[key] || {});
-      allLists.forEach((f) => { entry[f] = []; });
-      entry[active[0]] = selectAll ? [...apps] : [];
-      obj[key] = entry;
-      this.values[optionName] = { ...obj };
-    },
-
-    elpPruneEmptyEntries(optionName, value) {
-      const lists = this.elpListFieldNames(optionName);
-      const out = {};
-      Object.keys(value || {}).forEach((k) => {
-        const e = value[k] || {};
-        const any = lists.some((f) => Array.isArray(e[f]) && e[f].length > 0);
-        if (any) {
-          const entry = {};
-          lists.forEach((f) => {
-            entry[f] = Array.isArray(e[f]) ? e[f] : [];
-          });
-          // Keep any non-list fields too
-          Object.keys(e).forEach((fk) => {
-            if (!lists.includes(fk)) entry[fk] = e[fk];
-          });
-          out[k] = entry;
-        }
-      });
-      return out;
-    },
-
-    elpIsAtDefault(optionName) {
-      const save = this.optUi(optionName)?.save || {};
-      let v = this.values[optionName];
-      if (save.pruneEmptyEntries) {
-        v = this.elpPruneEmptyEntries(optionName, v);
-      }
-      if (save.omitIfEmpty || save.pruneEmptyEntries) {
-        return Object.keys(v || {}).length === 0;
-      }
-      return this.deepEqual(v, this.defaults[optionName]);
-    },
-
-    elpPrepareSave(optionName) {
-      const save = this.optUi(optionName)?.save || {};
-      let v = this.cloneValue(this.values[optionName]);
-      if (save.pruneEmptyEntries) {
-        v = this.elpPruneEmptyEntries(optionName, v);
-      }
-      if (save.omitIfEmpty && Object.keys(v || {}).length === 0) {
-        return undefined; // omit from payload
-      }
-      return v;
-    },
-
-    initExclusiveListPair(optionName) {
-      this.syncKeysFromOption(optionName);
-      this.elpSyncModes(optionName);
-      this.originals[optionName] = this.cloneValue(this.values[optionName]);
-      const kf = this.optUi(optionName)?.keysFrom;
-      if (kf?.option && typeof this.$watch === 'function') {
-        this.$watch(`values.${kf.option}`, () => {
-          this.syncKeysFromOption(optionName);
-        });
-      }
-    },
-
     // ── Widget lifecycle ─────────────────────────────────────────────
 
     initWidgets() {
       Object.keys(this.optionsByName || {}).forEach((name) => {
-        const w = this.optUi(name)?.widget;
-        if (w === 'exclusiveListPair') {
-          this.initExclusiveListPair(name);
+        const w = neoWidget(this.optUi(name)?.widget);
+        if (w && typeof w.init === 'function') {
+          w.init.call(this, name);
         }
-        if (w === 'pluginList') {
-          this.initPluginList(name);
-        }
-        if (w === 'providerAuth') {
-          this.initProviderAuth(name);
-        }
-        // primaryItemList uses generic list add/remove + pil* helpers; no init.
-      });
-    },
-
-    // ── providerAuth widget ──────────────────────────────────────────
-
-    paCatalog(optionName) {
-      const cat = this.optUi(optionName)?.catalog;
-      return Array.isArray(cat) ? cat : [];
-    },
-
-    paRow(optionName) {
-      const id = this.values[optionName]?.provider;
-      if (!id) return null;
-      return this.paCatalog(optionName).find((r) => r.id === id) || null;
-    },
-
-    paOptionLabel(row) {
-      if (!row) return '';
-      const bits = [];
-      if (row.hasApiKey) bits.push('API key');
-      if (row.hasOauth) bits.push('OAuth');
-      const extra = bits.length ? ` (${bits.join(' / ')})` : '';
-      return `${row.label || row.id}${extra}`;
-    },
-
-    paChild(optionName, fieldName) {
-      const fields = this.optType(optionName)?.fields || [];
-      return fields.find((f) => f.name === fieldName) || null;
-    },
-
-    paChildExample(optionName, fieldName) {
-      const ex = this.paChild(optionName, fieldName)?.example;
-      if (ex == null || ex === '') return '';
-      if (typeof ex === 'string' || typeof ex === 'number' || typeof ex === 'boolean') {
-        return String(ex);
-      }
-      try {
-        return JSON.stringify(ex);
-      } catch {
-        return String(ex);
-      }
-    },
-
-    paApiKeyPlaceholder(optionName) {
-      const row = this.paRow(optionName);
-      if (row?.needsBaseUrl) {
-        return this.paChildExample(optionName, 'apiKey') || 'optional — many local endpoints need none';
-      }
-      if (row?.hasOauth) return 'leave empty to use OAuth instead';
-      return row?.envVar || 'API key';
-    },
-
-    paHint(optionName) {
-      const row = this.paRow(optionName);
-      if (!row) {
-        return 'Pick a provider. API-key vendors get a key field; ChatGPT/Codex, SuperGrok, Nous, and similar use OAuth.';
-      }
-      if (row.needsBaseUrl) {
-        return 'Set the OpenAI-compatible base URL and a model. Paste an API key if the endpoint requires one.';
-      }
-      if (row.hasApiKey && row.hasOauth) {
-        return 'Paste an API key, or log in with OAuth. You do not need both.';
-      }
-      if (row.hasOauth && !row.hasApiKey) {
-        return 'This provider uses OAuth (no API key). Log in below, then set a model.';
-      }
-      if (row.hasApiKey) {
-        return `Paste the ${row.envVar || 'API'} key and set a model.`;
-      }
-      return 'No API key or OAuth for this provider (SDK, keyless, or local). Set a model if needed.';
-    },
-
-    paShowBaseUrl(optionName) {
-      const row = this.paRow(optionName);
-      return !!(row && row.needsBaseUrl);
-    },
-
-    paEnsure(optionName) {
-      const cur = this.values[optionName];
-      if (!cur || typeof cur !== 'object' || Array.isArray(cur)) {
-        this.values[optionName] = this.mergeSubmoduleValue({}, this.optType(optionName) || { kind: 'submodule' });
-      }
-      const v = this.values[optionName];
-      if (v.provider == null) v.provider = '';
-      if (v.apiKey == null) v.apiKey = '';
-      if (v.model == null) v.model = '';
-      if (v.baseUrl == null) v.baseUrl = '';
-      return v;
-    },
-
-    paOauthState(optionName) {
-      const st = this.uiState[optionName] || {};
-      return st.oauth || {};
-    },
-
-    paOauthDlg(optionName) {
-      const st = this.uiState[optionName] || {};
-      if (!st.dlg) st.dlg = {};
-      this.uiState[optionName] = st;
-      return st.dlg;
-    },
-
-    paOauthBusy(optionName) {
-      return !!this.oauthBusy[optionName];
-    },
-
-    paOauthBadge(optionName) {
-      const st = this.paOauthState(optionName);
-      if (st.loading) return 'checking…';
-      if (st.logged_in) return st.label ? `connected (${st.label})` : 'connected';
-      if (st.error && !st.logged_in) return 'not connected';
-      return 'not connected';
-    },
-
-    paOauthBadgeClass(optionName) {
-      const st = this.paOauthState(optionName);
-      if (st.logged_in) return 'badge-success';
-      if (st.loading) return 'badge-ghost';
-      return 'badge-ghost';
-    },
-
-    paOauthDetail(optionName) {
-      const st = this.paOauthState(optionName);
-      if (st.logged_in) {
-        const bits = [];
-        if (st.source) bits.push(st.source);
-        if (st.expires_at) bits.push('expires ' + st.expires_at);
-        return bits.join(' · ') || 'OAuth is already configured for this provider.';
-      }
-      const row = this.paRow(optionName);
-      if (row?.oauthFlow === 'pkce') {
-        return 'Log in: open the authorization page, then paste the code here.';
-      }
-      if (row?.oauthFlow === 'device_code') {
-        return 'Log in: open the authorization page and enter the device code shown in the dialog.';
-      }
-      if (row?.oauthFlow === 'external') {
-        return 'Log in from a terminal on the homeserver, then check status here.';
-      }
-      return '';
-    },
-
-    initProviderAuth(optionName) {
-      this.paEnsure(optionName);
-      if (!this.uiState[optionName]) this.uiState[optionName] = {};
-      this.uiState[optionName].oauth = { loading: false };
-      this.uiState[optionName].dlg = {};
-      if (this.paRow(optionName)?.hasOauth) {
-        this.paLoadOauthStatus(optionName);
-      }
-    },
-
-    paOnProviderChange(optionName) {
-      const v = this.paEnsure(optionName);
-      if (v.provider === '') v.provider = null;
-      this.values[optionName] = { ...v, provider: v.provider || '' };
-      const row = this.paRow(optionName);
-      if (row?.models?.length && (!v.model || v.model === this.defaults[optionName]?.model)) {
-        v.model = row.models[0];
-        this.values[optionName] = { ...v };
-      }
-      if (row?.hasOauth) {
-        this.paLoadOauthStatus(optionName);
-      } else if (this.uiState[optionName]) {
-        this.uiState[optionName].oauth = {};
-      }
-    },
-
-    paUseSuggestedModel(optionName) {
-      const row = this.paRow(optionName);
-      if (!row?.models?.length) return;
-      const v = this.paEnsure(optionName);
-      v.model = row.models[0];
-      this.values[optionName] = { ...v };
-    },
-
-    paNullish(v) {
-      if (v === '' || v === undefined) return null;
-      return v;
-    },
-
-    paPrepareSave(optionName) {
-      const v = this.paEnsure(optionName);
-      const d = this.defaults[optionName] || {};
-      const out = {};
-      ['provider', 'apiKey', 'model', 'baseUrl'].forEach((k) => {
-        const cur = this.paNullish(v[k]);
-        const def = this.paNullish(d[k]);
-        if (!this.deepEqual(cur, def)) out[k] = cur;
-      });
-      if (Object.keys(out).length === 0) return undefined;
-      return out;
-    },
-
-    async paOauthPost(optionName, payload) {
-      const pane = document.getElementById('options-pane');
-      const service = this.serviceName || pane?.dataset?.service || '';
-      const res = await fetch('/widget/oauth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          service,
-          option: optionName,
-          is_core: this.isCore,
-          ...payload,
-        }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok || body.ok === false) {
-        const err = body.error || body.message || (`HTTP ${res.status}`);
-        throw new Error(err);
-      }
-      return body;
-    },
-
-    async paLoadOauthStatus(optionName) {
-      const row = this.paRow(optionName);
-      if (!row?.hasOauth) return;
-      if (!this.uiState[optionName]) this.uiState[optionName] = {};
-      this.uiState[optionName].oauth = { ...(this.uiState[optionName].oauth || {}), loading: true };
-      this.oauthBusy = { ...this.oauthBusy, [optionName]: true };
-      try {
-        const body = await this.paOauthPost(optionName, {
-          action: 'status',
-          provider: row.id,
-        });
-        this.uiState[optionName].oauth = { loading: false, ...(body.status || body) };
-      } catch (e) {
-        this.uiState[optionName].oauth = {
-          loading: false,
-          logged_in: false,
-          error: String(e.message || e),
-        };
-      } finally {
-        this.oauthBusy = { ...this.oauthBusy, [optionName]: false };
-      }
-    },
-
-    async paRefreshOauth(optionName) {
-      const row = this.paRow(optionName);
-      if (!row?.hasOauth) return;
-      this.oauthBusy = { ...this.oauthBusy, [optionName]: true };
-      try {
-        const body = await this.paOauthPost(optionName, {
-          action: 'refresh',
-          provider: row.id,
-        });
-        this.uiState[optionName].oauth = { loading: false, ...(body.status || body) };
-        if (typeof window.neoToast === 'function') {
-          window.neoToast(body.status?.logged_in ? 'OAuth refreshed' : 'OAuth not connected', 'success');
-        }
-      } catch (e) {
-        this.uiState[optionName].oauth = {
-          ...(this.uiState[optionName].oauth || {}),
-          error: String(e.message || e),
-        };
-        if (typeof window.neoToast === 'function') {
-          window.neoToast(String(e.message || e), 'error');
-        }
-      } finally {
-        this.oauthBusy = { ...this.oauthBusy, [optionName]: false };
-      }
-    },
-
-    paStopPoll(optionName) {
-      const st = this.uiState[optionName];
-      if (st?.pollTimer) {
-        clearInterval(st.pollTimer);
-        st.pollTimer = null;
-      }
-    },
-
-    async paStartOauth(optionName) {
-      const row = this.paRow(optionName);
-      if (!row?.hasOauth) return;
-      if (row.oauthFlow === 'external') {
-        if (typeof window.neoToast === 'function') {
-          window.neoToast('This provider uses an external CLI on the homeserver.', 'info');
-        }
-        return this.paLoadOauthStatus(optionName);
-      }
-      this.oauthBusy = { ...this.oauthBusy, [optionName]: true };
-      const dlg = document.getElementById(`pa-oauth-dialog-${optionName}`);
-      this.uiState[optionName].dlg = {
-        title: `Log in to ${row.label || row.id}`,
-        flow: row.oauthFlow,
-        status: 'pending',
-        message: 'Starting login…',
-        error: '',
-        url: '',
-        userCode: '',
-        code: '',
-        session: '',
-      };
-      dlg?.showModal();
-      try {
-        const body = await this.paOauthPost(optionName, {
-          action: 'login',
-          provider: row.id,
-        });
-        this.uiState[optionName].dlg = {
-          ...this.uiState[optionName].dlg,
-          flow: body.flow || row.oauthFlow,
-          session: body.session_id,
-          url: body.verification_url || body.auth_url || '',
-          userCode: body.user_code || '',
-          message: body.flow === 'pkce'
-            ? 'Open the page, authorize, then paste the code.'
-            : 'Open the page and enter the code if asked.',
-          status: 'pending',
-          error: '',
-        };
-        if ((body.flow || row.oauthFlow) === 'device_code' && body.session_id) {
-          this.paBeginPoll(optionName, body.session_id);
-        }
-      } catch (e) {
-        this.uiState[optionName].dlg.error = String(e.message || e);
-        this.uiState[optionName].dlg.message = '';
-      } finally {
-        this.oauthBusy = { ...this.oauthBusy, [optionName]: false };
-      }
-    },
-
-    paBeginPoll(optionName, sessionId) {
-      this.paStopPoll(optionName);
-      const tick = async () => {
-        try {
-          const body = await this.paOauthPost(optionName, {
-            action: 'poll',
-            session: sessionId,
-          });
-          const dlg = this.uiState[optionName].dlg || {};
-          dlg.status = body.status || 'pending';
-          dlg.error = body.error_message || '';
-          this.uiState[optionName].dlg = { ...dlg };
-          if (dlg.status === 'approved') {
-            this.paStopPoll(optionName);
-            await this.paLoadOauthStatus(optionName);
-            if (typeof window.neoToast === 'function') {
-              window.neoToast('OAuth login complete', 'success');
-            }
-          } else if (dlg.status === 'error' || dlg.status === 'expired' || dlg.status === 'denied') {
-            this.paStopPoll(optionName);
-          }
-        } catch (e) {
-          this.uiState[optionName].dlg = {
-            ...(this.uiState[optionName].dlg || {}),
-            error: String(e.message || e),
-          };
-          this.paStopPoll(optionName);
-        }
-      };
-      this.uiState[optionName].pollTimer = setInterval(tick, 2000);
-      tick();
-    },
-
-    async paSubmitOauth(optionName) {
-      const dlg = this.uiState[optionName]?.dlg || {};
-      if (!dlg.session || !dlg.code) return;
-      this.oauthBusy = { ...this.oauthBusy, [optionName]: true };
-      try {
-        const body = await this.paOauthPost(optionName, {
-          action: 'submit',
-          session: dlg.session,
-          code: dlg.code,
-        });
-        dlg.status = body.status || 'approved';
-        dlg.error = body.error || body.message || '';
-        this.uiState[optionName].dlg = { ...dlg };
-        if (dlg.status === 'approved') {
-          await this.paLoadOauthStatus(optionName);
-          if (typeof window.neoToast === 'function') {
-            window.neoToast('OAuth login complete', 'success');
-          }
-        }
-      } catch (e) {
-        this.uiState[optionName].dlg = {
-          ...dlg,
-          error: String(e.message || e),
-        };
-      } finally {
-        this.oauthBusy = { ...this.oauthBusy, [optionName]: false };
-      }
-    },
-
-    // ── primaryItemList widget ───────────────────────────────────────
-
-    pilEntryLabel(optionName) {
-      return this.optUi(optionName)?.entryLabel || 'Primary';
-    },
-
-    pilEmptyHint(optionName) {
-      return this.optUi(optionName)?.emptyHint
-        || 'Add at least one entry. The first is the primary.';
-    },
-
-    /** Move list index to front so it becomes the primary (home) item. */
-    pilSetPrimary(optionName, idx) {
-      const list = this.ensureList(optionName);
-      if (idx <= 0 || idx >= list.length) return;
-      const [item] = list.splice(idx, 1);
-      list.unshift(item);
-      this.values[optionName] = [...list];
-      this.notifyKeysFromSource(optionName);
-    },
-
-    // ── pluginList widget ────────────────────────────────────────────
-
-    pluginInventory() {
-      if (this._pluginInv) return this._pluginInv;
-      try {
-        const raw = document.getElementById('plugin-inventory-seed')?.textContent || '[]';
-        this._pluginInv = JSON.parse(raw);
-      } catch (_) {
-        this._pluginInv = [];
-      }
-      if (!Array.isArray(this._pluginInv)) this._pluginInv = [];
-      return this._pluginInv;
-    },
-
-    pluginLabel(url) {
-      let s = String(url || '').trim();
-      const cut = s.search(/[?#]/);
-      if (cut >= 0) s = s.slice(0, cut);
-      s = s.replace(/\/+$/, '');
-      const prefixes = [
-        'git+file:', 'git+https://', 'git+http://',
-        'https://', 'http://', 'path:', 'github:', 'gitlab:', 'sourcehut:',
-      ];
-      for (const p of prefixes) {
-        if (s.startsWith(p)) {
-          s = s.slice(p.length);
-          break;
-        }
-      }
-      s = s.replace(/^\/+/, '');
-      const parts = s.split('/').filter(Boolean);
-      return parts.length ? parts[parts.length - 1] : String(url || '').trim();
-    },
-
-    plNormUrl(url) {
-      let s = String(url || '').trim();
-      const hash = s.indexOf('#');
-      if (hash >= 0) s = s.slice(0, hash);
-      let query = '';
-      const q = s.indexOf('?');
-      if (q >= 0) {
-        query = s.slice(q);
-        s = s.slice(0, q);
-      }
-      const prefixes = ['git+file://', 'git+file:', 'file://', 'file:'];
-      for (const p of prefixes) {
-        if (s.startsWith(p)) {
-          return 'git+file:/' + s.slice(p.length).replace(/^\/+/, '') + query;
-        }
-      }
-      return s + query;
-    },
-
-    plServices(url) {
-      const want = this.plNormUrl(url);
-      const hit = this.pluginInventory().find((p) => this.plNormUrl(p.url) === want);
-      return (hit && hit.services) ? hit.services : [];
-    },
-
-    plEmptyHint(optionName) {
-      return this.optUi(optionName)?.emptyHint
-        || 'No plugins yet. Add a flake URL (github:user/repo, git+file:/path, or path:/path).';
-    },
-
-    initPluginList(optionName) {
-      if (!Array.isArray(this.values[optionName])) this.values[optionName] = [];
-      if (!this.plDraft) this.plDraft = {};
-      this.plDraft[optionName] = this.plDraft[optionName] || '';
-    },
-
-    addPluginUrl(optionName) {
-      const raw = (this.plDraft[optionName] || '').trim();
-      if (!raw) return;
-      const list = Array.isArray(this.values[optionName]) ? [...this.values[optionName]] : [];
-      if (list.some((u) => this.plNormUrl(u) === this.plNormUrl(raw))) {
-        this.plDraft[optionName] = '';
-        return;
-      }
-      list.push(raw);
-      this.values[optionName] = list;
-      this.plDraft[optionName] = '';
-    },
-
-    async removePluginUrl(optionName, idx) {
-      const list = Array.isArray(this.values[optionName]) ? this.values[optionName] : [];
-      const url = list[idx];
-      if (url == null || url === undefined) return;
-      const ok = await this.confirmPluginRemoval(
-        optionName,
-        this.pluginRemovalPreviewFor(optionName, [url])
-      );
-      if (!ok) return;
-      this.removeListItem(optionName, idx);
-    },
-
-    pluginRemovalPreviewFor(optionName, urlsBeingRemoved) {
-      const inv = this.pluginInventory();
-      const owners = {};
-      inv.forEach((p) => {
-        (p.services || []).forEach((svc) => {
-          if (!owners[svc]) owners[svc] = [];
-          owners[svc].push(p.url);
-        });
-      });
-      const current = Array.isArray(this.values[optionName]) ? this.values[optionName] : [];
-      const originals = Array.isArray(this.originals[optionName]) ? this.originals[optionName] : [];
-      const drop = new Set(urlsBeingRemoved.map((u) => this.plNormUrl(u)));
-      const nextNorm = new Set(
-        current.filter((u) => !drop.has(this.plNormUrl(u))).map((u) => this.plNormUrl(u))
-      );
-      const removedNorm = originals
-        .map((u) => this.plNormUrl(u))
-        .filter((u) => !nextNorm.has(u));
-      return urlsBeingRemoved.map((url) => ({
-        url,
-        label: this.pluginLabel(url),
-        services: this.plServices(url).filter((svc) => {
-          const o = owners[svc] || [];
-          return o.length > 0 && o.every((u) => removedNorm.includes(this.plNormUrl(u)));
-        }),
-      }));
-    },
-
-    confirmPluginRemoval(optionName, preview) {
-      const esc = (s) => String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-      const dlg = document.getElementById(`plugin-remove-dialog-${optionName}`);
-      const body = document.getElementById(`plugin-remove-body-${optionName}`);
-      if (!dlg || !body) {
-        const lines = preview.map((p) => {
-          const svcs = p.services.length ? p.services.join(', ') : 'no service tables';
-          return `${p.label}: ${svcs}`;
-        });
-        return Promise.resolve(window.confirm(
-          'Remove plugin from the list?\n\n' + lines.join('\n') +
-          '\n\nAppdata directories are kept. Save afterwards to drop settings.toml tables.'
-        ));
-      }
-      body.innerHTML = preview.map((p) => {
-        const svcs = p.services.length
-          ? `<ul class="list-disc pl-5 mt-1 space-y-0.5">${p.services.map((s) => `<li class="font-mono">${esc(s)}</li>`).join('')}</ul>`
-          : '<p class="text-xs opacity-60 mt-1">No settings tables attributed to this plugin.</p>';
-        return `<div class="mb-3"><div class="font-semibold font-mono">${esc(p.label)}</div>` +
-          `<div class="text-[11px] opacity-60 break-all">${esc(p.url)}</div>${svcs}</div>`;
-      }).join('');
-      return new Promise((resolve) => {
-        const ok = document.getElementById(`plugin-remove-confirm-${optionName}`);
-        const cancel = document.getElementById(`plugin-remove-cancel-${optionName}`);
-        let settled = false;
-        const done = (val) => {
-          if (settled) return;
-          settled = true;
-          ok?.removeEventListener('click', onOk);
-          cancel?.removeEventListener('click', onCancel);
-          dlg.removeEventListener('close', onClose);
-          resolve(val);
-        };
-        const onOk = () => { dlg.close(); done(true); };
-        const onCancel = () => { dlg.close(); done(false); };
-        const onClose = () => done(false);
-        ok?.addEventListener('click', onOk);
-        cancel?.addEventListener('click', onCancel);
-        dlg.addEventListener('close', onClose);
-        dlg.showModal();
       });
     },
 
@@ -1233,8 +401,9 @@ function optionForm() {
       } else {
         this.values[name] = this.cloneValue(this.defaults[name]);
       }
-      if (this.hasWidget(name, 'exclusiveListPair')) {
-        this.syncKeysFromOption(name);
+      const w = neoWidget(this.optUi(name)?.widget);
+      if (w && typeof w.onReset === 'function') {
+        w.onReset.call(this, name);
       }
     },
 
@@ -1243,11 +412,9 @@ function optionForm() {
       const origs = this.originals || {};
       if (!(name in origs)) return;
       this.values[name] = this.cloneValue(origs[name]);
-      if (this.hasWidget(name, 'exclusiveListPair')) {
-        this.elpSyncModes(name);
-      }
-      if (this.hasWidget(name, 'providerAuth')) {
-        this.initProviderAuth(name);
+      const w = neoWidget(this.optUi(name)?.widget);
+      if (w && typeof w.onRevert === 'function') {
+        w.onRevert.call(this, name);
       }
     },
 
@@ -1261,8 +428,9 @@ function optionForm() {
 
     isAtDefault(name) {
       if (!name) return true;
-      if (this.hasWidget(name, 'exclusiveListPair')) {
-        return this.elpIsAtDefault(name);
+      const w = neoWidget(this.optUi(name)?.widget);
+      if (w && typeof w.isAtDefault === 'function') {
+        return w.isAtDefault.call(this, name);
       }
       const vals = this.values || {};
       const defs = this.defaults || {};
@@ -1454,21 +622,9 @@ function optionForm() {
 
       const toSave = {};
       Object.keys(this.values || {}).forEach((k) => {
-        if (this.hasWidget(k, 'exclusiveListPair')) {
-          const prepared = this.elpPrepareSave(k);
-          if (prepared !== undefined) {
-            toSave[k] = prepared;
-          }
-          return;
-        }
-        if (this.hasWidget(k, 'pluginList')) {
-          if (!this.isAtOriginal(k)) {
-            toSave[k] = Array.isArray(this.values[k]) ? this.values[k] : [];
-          }
-          return;
-        }
-        if (this.hasWidget(k, 'providerAuth')) {
-          const prepared = this.paPrepareSave(k);
+        const w = neoWidget(this.optUi(k)?.widget);
+        if (w && typeof w.prepareSave === 'function') {
+          const prepared = w.prepareSave.call(this, k);
           if (prepared !== undefined) {
             toSave[k] = prepared;
           }
@@ -1527,7 +683,12 @@ function optionForm() {
         }
       }
     }
+  };
+
+  if (typeof NeoWidgets !== 'undefined') {
+    Object.assign(host, NeoWidgets.mixins());
   }
+  return host;
 }
 
 // Ensure Alpine picks up x-data etc. after HTMX swaps (options pane + services grid).

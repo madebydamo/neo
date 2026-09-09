@@ -53,10 +53,12 @@
       #     all = true;
       #   };
       #
-      # Run as another user (homeserver → hermes for OAuth):
+      # Run as another user (homeserver → hermes for OAuth).
+      # `runAs` is NixOS security.sudo.extraRules.*.runAs: a string
+      # ("hermes", "hermes:users", ":group"), not a list.
       #   security.sudo.extraRules = lib.neo.mkSudoExtraRules {
       #     users = ["homeserver"];
-      #     runAs = ["hermes"];
+      #     runAs = "hermes";
       #     commands = [{ package = neoHermesAuth; name = "neo-hermes-auth"; }];
       #   };
       #
@@ -66,44 +68,47 @@
       mkSudoExtraRules = {
         users ? [],
         groups ? [],
-        runAs ? [],
+        # String, matching NixOS types.str (default ALL:ALL when omitted).
+        runAs ? null,
         commands ? [],
         all ? false,
         options ? defaultSudoCommandOptions,
-      }: let
-        expand = cmd:
-          if cmd ? package && cmd ? name
-          then
-            mkSudoCommand (cmd
-              // {
+      }:
+        assert lib.assertMsg (runAs == null || builtins.isString runAs)
+        ''lib.neo.mkSudoExtraRules: runAs must be a string (NixOS security.sudo.extraRules.*.runAs), e.g. "hermes" not ["hermes"]''; let
+          expand = cmd:
+            if cmd ? package && cmd ? name
+            then
+              mkSudoCommand (cmd
+                // {
+                  options = cmd.options or options;
+                })
+            else if cmd ? command
+            then [
+              {
+                command = cmd.command;
                 options = cmd.options or options;
-              })
-          else if cmd ? command
-          then [
-            {
-              command = cmd.command;
-              options = cmd.options or options;
-            }
-          ]
-          else throw "lib.neo.mkSudoExtraRules: each command needs { package, name } or { command }";
+              }
+            ]
+            else throw "lib.neo.mkSudoExtraRules: each command needs { package, name } or { command }";
 
-        commandList =
-          if all
-          then [
-            {
-              command = "ALL";
-              inherit options;
-            }
-          ]
-          else lib.concatMap expand commands;
-      in [
-        (
-          {commands = commandList;}
-          // lib.optionalAttrs (users != []) {inherit users;}
-          // lib.optionalAttrs (groups != []) {inherit groups;}
-          // lib.optionalAttrs (runAs != []) {inherit runAs;}
-        )
-      ];
+          commandList =
+            if all
+            then [
+              {
+                command = "ALL";
+                inherit options;
+              }
+            ]
+            else lib.concatMap expand commands;
+        in [
+          (
+            {commands = commandList;}
+            // lib.optionalAttrs (users != []) {inherit users;}
+            // lib.optionalAttrs (groups != []) {inherit groups;}
+            // lib.optionalAttrs (runAs != null && runAs != "") {inherit runAs;}
+          )
+        ];
     };
   };
 }

@@ -23,6 +23,9 @@
 #     each input (from type.fields). OAuth status/login/refresh goes
 #     through ui.oauth.script.
 #
+# Browser JS for each widget is colocated with the Handlebars template
+# (`cli/templates/options/widgets/<name>.js`) and registers on NeoWidgets.
+#
 # ## keysFrom
 #
 # attrsOf keys follow another option's derived values (e.g. usernames from users).

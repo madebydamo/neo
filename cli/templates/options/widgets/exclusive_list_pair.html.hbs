@@ -1,6 +1,6 @@
 {{! exclusiveListPair: attrsOf submodule with mode toggle + single multi-select grid.
     Driven by option.ui (modes, keysFrom, entryLabel, emptyHint, choiceEmptyHint).
-    See nix/lib/ui.nix and option_form.js elp* helpers. }}
+    See nix/lib/ui.nix and exclusive_list_pair.js elp* helpers. }}
 <div class="space-y-3">
   <template x-for="(key, idx) in attrKeys('{{name}}')" :key="key">
     <div class="rounded-xl border border-base-300 bg-base-100/70 p-3 sm:p-4 space-y-3 shadow-sm">

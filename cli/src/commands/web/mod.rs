@@ -99,11 +99,11 @@ pub fn web(
             eprintln!("web: background warm-up complete.");
         });
 
-        rocket::build()
+        let widgets_dir = PathBuf::from(&template_dir).join("options/widgets");
+        mount_static_assets(rocket::build(), &static_dir, &widgets_dir)
             .manage(app_config)
             .attach(Template::fairing())
             .configure(rocket::Config::figment().merge(("template_dir", template_dir)))
-            .mount("/static", FileServer::from(static_dir))
             .mount("/", routes())
             .launch()
             .await
@@ -111,4 +111,64 @@ pub fn web(
         Ok::<(), anyhow::Error>(())
     })?;
     Ok(())
+}
+
+/// Serve `cli/static` at `/static` and colocated widget JS at `/static/widgets`.
+///
+/// Both FileServers generate a catch-all `GET /<path..>` at rank 10. `/static/<path..>`
+/// overlaps `/static/widgets/<path..>`, so the more specific mount must use a lower
+/// rank (matched first) or Rocket refuses to launch with "collisions detected".
+fn mount_static_assets(
+    rocket: rocket::Rocket<rocket::Build>,
+    static_dir: impl AsRef<std::path::Path>,
+    widgets_dir: impl AsRef<std::path::Path>,
+) -> rocket::Rocket<rocket::Build> {
+    rocket
+        .mount("/static", FileServer::from(static_dir.as_ref()))
+        .mount(
+            "/static/widgets",
+            FileServer::from(widgets_dir.as_ref()).rank(9),
+        )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rocket::http::Status;
+    use rocket::local::blocking::Client;
+    use std::fs;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    fn temp_asset_dirs() -> (PathBuf, PathBuf) {
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
+        let root =
+            std::env::temp_dir().join(format!("neo-web-static-{}-{}", std::process::id(), n));
+        let static_dir = root.join("static");
+        let widgets_dir = root.join("widgets");
+        fs::create_dir_all(&static_dir).unwrap();
+        fs::create_dir_all(&widgets_dir).unwrap();
+        fs::write(static_dir.join("option_form.js"), "/* option form */\n").unwrap();
+        fs::write(widgets_dir.join("registry.js"), "/* NeoWidgets */\n").unwrap();
+        (static_dir, widgets_dir)
+    }
+
+    #[test]
+    fn widget_js_is_served_without_route_collisions() {
+        let (static_dir, widgets_dir) = temp_asset_dirs();
+        let rocket = mount_static_assets(rocket::build(), &static_dir, &widgets_dir);
+        let client = Client::tracked(rocket).expect("static FileServers must not collide");
+
+        let widget = client.get("/static/widgets/registry.js").dispatch();
+        assert_eq!(widget.status(), Status::Ok);
+        assert!(
+            widget.into_string().unwrap().contains("NeoWidgets"),
+            "widget FileServer should serve colocated registry.js"
+        );
+
+        let form = client.get("/static/option_form.js").dispatch();
+        assert_eq!(form.status(), Status::Ok);
+        assert!(form.into_string().unwrap().contains("option form"));
+    }
 }

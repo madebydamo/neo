@@ -1,5 +1,5 @@
 {{! primaryItemList: listOf scalars; first entry is the primary (badge from ui.entryLabel).
-    See nix/lib/ui.nix and option_form.js pil* helpers. }}
+    Logic: primary_item_list.js (pil* mixins). See nix/lib/ui.nix. }}
 <div class="mt-2 space-y-2">
   <template x-for="(item, idx) in (values['{{name}}'] || [])" :key="idx">
     <div class="rounded-xl border p-2.5 sm:p-3"
