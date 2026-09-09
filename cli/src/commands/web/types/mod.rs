@@ -11,7 +11,7 @@ pub use eval_error::EvalErrorUi;
 pub use pane::{OptionPaneContext, RuntimeUnit, ServiceMeta, ServiceScreenshot};
 pub use schema::{
     HelperInput, OptionHelper, OptionSchema, OptionType, OptionUi, OptionUiKeysFrom, OptionUiMode,
-    OptionUiSave,
+    OptionUiOauth, OptionUiSave,
 };
 pub use services::{
     ConfigurationPageContext, ExtractedServiceGroups, IndexContext, NavigatorContext, PluginFilter,

@@ -14,6 +14,7 @@
     ...
   }: let
     cfg = config.neo.services.hermes;
+    neoHermesAuth = lib.neo.mkNeoHermesAuth pkgs ./oauth.py;
 
     # Only pin model.* when the operator set them. Omitting keys leaves config.yaml
     # free for OAuth / prior values (Nix merge preserves user keys it does not declare).
@@ -206,13 +207,25 @@
       };
 
       # Agent needs unrestricted host control (docker, systemctl, package tools, …).
-      security.sudo.extraRules = lib.neo.mkSudoExtraRules {
-        users = ["hermes"];
-        all = true;
-      };
+      # homeserver → hermes: Neo web OAuth widget (neo-hermes-auth).
+      security.sudo.extraRules =
+        (lib.neo.mkSudoExtraRules {
+          users = ["hermes"];
+          all = true;
+        })
+        ++ (lib.neo.mkSudoExtraRules {
+          users = ["homeserver"];
+          runAs = ["hermes"];
+          commands = [
+            {
+              package = neoHermesAuth;
+              name = "neo-hermes-auth";
+            }
+          ];
+        });
 
       # Agent-oriented CLIs system-wide when Hermes is on (jq, fd, yq, …).
-      environment.systemPackages = agentCliTools;
+      environment.systemPackages = agentCliTools ++ [neoHermesAuth];
 
       services.hermes-agent = {
         enable = true;

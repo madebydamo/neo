@@ -26,6 +26,27 @@ pub async fn run_helper_script(
     stdin_json: &str,
     env_extra: &[(&str, &str)],
 ) -> Result<HelperExecResult> {
+    run_script_with_timeout(script, stdin_json, env_extra, None, HELPER_TIMEOUT).await
+}
+
+/// Widget OAuth helper: optional `sudo -n -u <run_as>`, longer timeout, no fake HOME.
+pub async fn run_widget_script(
+    script: &Path,
+    stdin_json: &str,
+    env_extra: &[(&str, &str)],
+    run_as: Option<&str>,
+    timeout_dur: Duration,
+) -> Result<HelperExecResult> {
+    run_script_with_timeout(script, stdin_json, env_extra, run_as, timeout_dur).await
+}
+
+async fn run_script_with_timeout(
+    script: &Path,
+    stdin_json: &str,
+    env_extra: &[(&str, &str)],
+    run_as: Option<&str>,
+    timeout_dur: Duration,
+) -> Result<HelperExecResult> {
     if !script.is_absolute() {
         bail!("helper script path must be absolute");
     }
@@ -40,27 +61,46 @@ pub async fn run_helper_script(
         );
     }
 
-    let bash = std::env::var("NEO_HELPER_BASH").unwrap_or_else(|_| "bash".to_string());
-
     let tmp = tempfile_dir()?;
-    let home = tmp.join("home");
-    std::fs::create_dir_all(&home).ok();
+    let path = helper_path();
 
-    let mut cmd = Command::new(&bash);
-    cmd.arg(script)
-        .stdin(Stdio::piped())
+    let mut cmd = if let Some(user) = run_as {
+        let sudo = crate::commands::web::util::sudo_cmd();
+        let mut c = Command::new(sudo);
+        c.arg("-n").arg("-u").arg(user).arg("--");
+        let mut env_cmd = vec![
+            "env".to_string(),
+            format!("PATH={path}"),
+            "LANG=C.UTF-8".into(),
+            "LC_ALL=C.UTF-8".into(),
+        ];
+        for (k, v) in env_extra {
+            env_cmd.push(format!("{k}={v}"));
+        }
+        env_cmd.push(script_s.to_string());
+        c.args(env_cmd);
+        c
+    } else {
+        let bash = std::env::var("NEO_HELPER_BASH").unwrap_or_else(|_| "bash".to_string());
+        let home = tmp.join("home");
+        std::fs::create_dir_all(&home).ok();
+        let mut c = Command::new(&bash);
+        c.arg(script)
+            .current_dir(&tmp)
+            .env_clear()
+            .env("PATH", &path)
+            .env("HOME", &home)
+            .env("TMPDIR", &tmp)
+            .env("LANG", "C.UTF-8")
+            .env("LC_ALL", "C.UTF-8");
+        for (k, v) in env_extra {
+            c.env(k, v);
+        }
+        c
+    };
+    cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .current_dir(&tmp)
-        .env_clear()
-        .env("PATH", helper_path())
-        .env("HOME", &home)
-        .env("TMPDIR", &tmp)
-        .env("LANG", "C.UTF-8")
-        .env("LC_ALL", "C.UTF-8");
-    for (k, v) in env_extra {
-        cmd.env(k, v);
-    }
+        .stderr(Stdio::piped());
 
     let mut child = cmd.spawn().context("spawn helper bash")?;
     if let Some(mut stdin) = child.stdin.take() {
@@ -108,7 +148,7 @@ pub async fn run_helper_script(
         Ok::<_, anyhow::Error>((status, stdout, stderr))
     };
 
-    match timeout(HELPER_TIMEOUT, run).await {
+    match timeout(timeout_dur, run).await {
         Ok(Ok((status, stdout, stderr))) => {
             let _ = std::fs::remove_dir_all(&tmp);
             Ok(HelperExecResult {

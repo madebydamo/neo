@@ -14,6 +14,7 @@ pub use inflight::InFlightSet;
 pub use oob_status::{status_err, status_ok, status_pulling, status_slot_oob};
 pub use paths::{config_dir, neo_bin, nix_bin, sudo_cmd};
 pub use validate::{
-    activation_id_ok, branch_ok, core_section_ok, generation_ok, repair_id_ok, rev_ok,
+    activation_id_ok, branch_ok, core_section_ok, generation_ok, oauth_env_key_ok,
+    oauth_session_ok, option_name_ok, provider_id_ok, repair_id_ok, rev_ok, run_as_ok,
     service_name_ok, unit_name_valid,
 };

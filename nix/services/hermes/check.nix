@@ -42,6 +42,18 @@
         echo "FAIL hermes llm.provider must use lib.neo.hermesProviderIds" >&2
         exit 1
       fi
+      if ! grep -q 'widget = "providerAuth"' "$option"; then
+        echo "FAIL hermes llm must use providerAuth widget" >&2
+        exit 1
+      fi
+      if ! grep -q 'hermesProviderCatalog' "$option"; then
+        echo "FAIL hermes llm providerAuth must use hermesProviderCatalog" >&2
+        exit 1
+      fi
+      if ! grep -q 'oauth.py' "$option"; then
+        echo "FAIL hermes llm oauth helper must use oauth.py" >&2
+        exit 1
+      fi
       if grep -qE 'xaiApiKey|anthropicApiKey|openaiApiKey|openrouterApiKey|modelProvider|defaultModel' "$option" "$impl" "$supervise"; then
         echo "FAIL hermes must not keep split per-vendor LLM keys" >&2
         exit 1
@@ -52,6 +64,14 @@
       fi
       if ! grep -q 'mkHermesLlmEnv' "$supervise"; then
         echo "FAIL hermes supervise.nix must map llm.apiKey via mkHermesLlmEnv" >&2
+        exit 1
+      fi
+      if ! grep -q 'runAs' "$impl" || ! grep -q 'neo-hermes-auth' "$impl"; then
+        echo "FAIL hermes default.nix must sudo neo-hermes-auth as user hermes" >&2
+        exit 1
+      fi
+      if ! grep -q 'neo-hermes-auth' "$impl"; then
+        echo "FAIL hermes default.nix must install neo-hermes-auth" >&2
         exit 1
       fi
       if ! grep -q 'plugins/model-providers' "$catalog"; then

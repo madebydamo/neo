@@ -17,6 +17,11 @@
 #     confirm (core.plugins). Ownership is inferred from option declarations.
 #   primaryItemList — listOf scalars; first entry is the primary (badge from
 #     entryLabel, e.g. Hermes telegramAllowedUserId "Home channel").
+#   providerAuth — submodule of provider + (API key and/or OAuth) + model
+#     (+ optional base URL). Catalog rows declare hasApiKey / hasOauth /
+#     oauthFlow / needsBaseUrl. Child option descriptions render as ⓘ on
+#     each input (from type.fields). OAuth status/login/refresh goes
+#     through ui.oauth.script.
 #
 # ## keysFrom
 #
@@ -64,6 +69,21 @@
     inherit pruneEmptyEntries omitIfEmpty;
   };
 
+  # Long-running OAuth actions for providerAuth (status / login / poll / refresh).
+  # `script` is an absolute store path; extract serializes it like helpers.
+  # `runAs` is a local username (e.g. hermes); the web UI sudoes the script.
+  mkOauth = {
+    script,
+    runAs ? null,
+    env ? {},
+  }:
+    assert lib.assertMsg (script != null)
+    "neo.ui.oauth: script is required";
+      {
+        inherit script env;
+      }
+      // lib.optionalAttrs (runAs != null && runAs != "") {inherit runAs;};
+
   # Full ui attrset; attach via mkOption { ui = lib.neo.ui.mkUi { ... }; }.
   mkUi = {
     widget ? null,
@@ -74,6 +94,8 @@
     emptyHint ? null,
     entryLabel ? null,
     choiceEmptyHint ? null,
+    catalog ? null,
+    oauth ? null,
   }:
     lib.filterAttrs (_: v: v != null) {
       inherit
@@ -85,6 +107,8 @@
         emptyHint
         entryLabel
         choiceEmptyHint
+        catalog
+        oauth
         ;
     };
 in {
@@ -96,6 +120,7 @@ in {
           mkKeysFrom
           mkMode
           mkSave
+          mkOauth
           ;
       };
     };

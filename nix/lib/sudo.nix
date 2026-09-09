@@ -53,12 +53,20 @@
       #     all = true;
       #   };
       #
+      # Run as another user (homeserver → hermes for OAuth):
+      #   security.sudo.extraRules = lib.neo.mkSudoExtraRules {
+      #     users = ["homeserver"];
+      #     runAs = ["hermes"];
+      #     commands = [{ package = neoHermesAuth; name = "neo-hermes-auth"; }];
+      #   };
+      #
       # Each entry in `commands` is either:
       #   { package, name, options?, pname? }  → expanded via mkSudoCommand
       #   { command, options? }                → raw single sudo command entry
       mkSudoExtraRules = {
         users ? [],
         groups ? [],
+        runAs ? [],
         commands ? [],
         all ? false,
         options ? defaultSudoCommandOptions,
@@ -93,6 +101,7 @@
           {commands = commandList;}
           // lib.optionalAttrs (users != []) {inherit users;}
           // lib.optionalAttrs (groups != []) {inherit groups;}
+          // lib.optionalAttrs (runAs != []) {inherit runAs;}
         )
       ];
     };

@@ -4,6 +4,7 @@ mod branches;
 mod changes;
 mod helpers;
 mod nix_repair;
+mod oauth;
 mod pages;
 mod save;
 mod settings_file;
@@ -31,6 +32,7 @@ pub fn routes() -> Vec<rocket::Route> {
         pages::core_grid,
         pages::core_pane,
         helpers::run_helper,
+        oauth::run_oauth,
         save::save_service,
         save::save_core_section,
         changes::changes_action_bar,

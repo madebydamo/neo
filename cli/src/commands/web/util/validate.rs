@@ -63,6 +63,63 @@ pub fn generation_ok(n: u64) -> bool {
     n > 0 && n < 1_000_000
 }
 
+/// Local unix username for sudo -u (OAuth runAs).
+pub fn run_as_ok(name: &str) -> bool {
+    if name.is_empty() || name.len() > 32 {
+        return false;
+    }
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    (first.is_ascii_lowercase() || first == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// Provider / catalog ids (`xai`, `openai-codex`).
+pub fn provider_id_ok(id: &str) -> bool {
+    if id.is_empty() || id.len() > 64 {
+        return false;
+    }
+    let mut chars = id.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_ascii_lowercase()
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// OAuth session ids from the helper (url-safe).
+pub fn oauth_session_ok(id: &str) -> bool {
+    if id.len() < 8 || id.len() > 64 {
+        return false;
+    }
+    id.chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// Option names in the schema (may be dotted: `llm`, `vpn.enabled`).
+pub fn option_name_ok(name: &str) -> bool {
+    if name.is_empty() || name.len() > 128 {
+        return false;
+    }
+    name.chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-')
+}
+
+/// Env var names passed through ui.oauth.env.
+pub fn oauth_env_key_ok(name: &str) -> bool {
+    if name.is_empty() || name.len() > 64 {
+        return false;
+    }
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_ascii_uppercase()
+        && chars.all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+}
+
 /// Neo service names (settings.toml `[services.<name>]` keys).
 pub fn service_name_ok(name: &str) -> bool {
     if name.is_empty() || name.len() > 128 || name == "service" {
@@ -134,5 +191,22 @@ mod tests {
     fn service_name_rejects_fallback() {
         assert!(!service_name_ok("service"));
         assert!(service_name_ok("jellyfin"));
+    }
+
+    #[test]
+    fn run_as_and_provider_ids() {
+        assert!(run_as_ok("hermes"));
+        assert!(!run_as_ok("hermes;id"));
+        assert!(!run_as_ok("../root"));
+        assert!(provider_id_ok("openai-codex"));
+        assert!(provider_id_ok("xai"));
+        assert!(!provider_id_ok("xai/../x"));
+        assert!(!provider_id_ok("XAI"));
+        assert!(oauth_session_ok("abcdefgh"));
+        assert!(!oauth_session_ok("short"));
+        assert!(!oauth_session_ok("../abcd"));
+        assert!(option_name_ok("llm"));
+        assert!(oauth_env_key_ok("HERMES_HOME"));
+        assert!(!oauth_env_key_ok("PATH;rm"));
     }
 }

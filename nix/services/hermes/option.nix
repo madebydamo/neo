@@ -4,10 +4,13 @@
   flake.modules.nixos.hermes-option = {
     config,
     lib,
+    pkgs,
     ...
   }:
     with lib;
-    with {inherit (lib.neo) mkOption mkEnableOption;}; {
+    with {inherit (lib.neo) mkOption mkEnableOption;}; let
+      neoHermesAuth = lib.neo.mkNeoHermesAuth pkgs ./oauth.py;
+    in {
       options.neo.services.hermes = mkOption {
         type = types.submodule {
           options =
@@ -163,6 +166,17 @@
                 default = {};
                 rank = 60;
                 description = "LLM provider, API key or OAuth login, and default model";
+                ui = lib.neo.ui.mkUi {
+                  widget = "providerAuth";
+                  catalog = lib.neo.hermesProviderCatalog;
+                  oauth = lib.neo.ui.mkOauth {
+                    script = "${neoHermesAuth}/bin/neo-hermes-auth";
+                    runAs = "hermes";
+                    env = {
+                      HERMES_HOME = "${config.neo.services.hermes.stateDir}/.hermes";
+                    };
+                  };
+                };
               };
 
               forceSoul = mkOption {

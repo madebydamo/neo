@@ -118,6 +118,22 @@ pub struct OptionUi {
         rename = "choiceEmptyHint"
     )]
     pub choice_empty_hint: Option<String>,
+    /// Provider rows for providerAuth (id, label, hasApiKey, hasOauth, …).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catalog: Option<Vec<serde_json::Value>>,
+    /// OAuth helper script + optional runAs / env for providerAuth.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth: Option<OptionUiOauth>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct OptionUiOauth {
+    #[serde(default)]
+    pub script: String,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "runAs")]
+    pub run_as: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env: Option<std::collections::BTreeMap<String, String>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

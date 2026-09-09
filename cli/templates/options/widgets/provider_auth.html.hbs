@@ -1,0 +1,188 @@
+{{! providerAuth: submodule of provider + API key and/or OAuth + model (+ base URL).
+    Driven by option.ui.catalog and option.ui.oauth. See nix/lib/ui.nix and option_form.js pa* helpers. }}
+<div class="mt-2 space-y-3">
+  <div>
+    <div class="text-xs text-base-content/55 mb-1 flex items-center gap-1.5">
+      Provider
+      <div class="dropdown dropdown-right dropdown-hover" x-show="paChild('{{name}}', 'provider')?.description">
+        <span tabindex="0" role="button" class="cursor-help text-base-content/40 hover:text-primary text-[13px] leading-none select-none">ⓘ</span>
+        <div tabindex="0" class="dropdown-content card card-sm bg-base-100 shadow-sm z-10 w-72 text-left">
+          <div class="card-body text-sm">
+            <div class="whitespace-pre-wrap" x-text="paChild('{{name}}', 'provider')?.description"></div>
+            <div class="divider my-1"></div>
+            <div><span class="font-semibold">type:</span> <span class="font-mono text-xs" x-text="paChild('{{name}}', 'provider')?.typeLabel || ''"></span></div>
+            <div><span class="font-semibold">default:</span> <span class="font-mono text-xs" x-text="paChild('{{name}}', 'provider')?.defaultDisplay || 'null'"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <select class="select select-sm select-primary w-full font-mono"
+            x-model="values['{{name}}'].provider"
+            @change="paOnProviderChange('{{name}}')">
+      <option value="">(unset)</option>
+      <template x-for="row in paCatalog('{{name}}')" :key="row.id">
+        <option :value="row.id" x-text="paOptionLabel(row)"></option>
+      </template>
+    </select>
+    <p class="text-[11px] text-base-content/50 mt-1.5 leading-snug"
+       x-show="paHint('{{name}}')"
+       x-text="paHint('{{name}}')"></p>
+  </div>
+
+  <div x-show="paRow('{{name}}')?.hasApiKey" x-cloak class="space-y-1">
+    <div class="text-xs text-base-content/55 flex items-center gap-1.5">
+      API key
+      <span class="font-mono opacity-70"
+            x-show="paRow('{{name}}')?.envVar"
+            x-text="'→ ' + (paRow('{{name}}')?.envVar || '')"></span>
+      <div class="dropdown dropdown-right dropdown-hover" x-show="paChild('{{name}}', 'apiKey')?.description">
+        <span tabindex="0" role="button" class="cursor-help text-base-content/40 hover:text-primary text-[13px] leading-none select-none">ⓘ</span>
+        <div tabindex="0" class="dropdown-content card card-sm bg-base-100 shadow-sm z-10 w-72 text-left">
+          <div class="card-body text-sm">
+            <div class="whitespace-pre-wrap" x-text="paChild('{{name}}', 'apiKey')?.description"></div>
+            <div class="mt-1" x-show="paChildExample('{{name}}', 'apiKey')">
+              <span class="font-semibold">example:</span>
+              <span class="font-mono text-xs break-all" x-text="paChildExample('{{name}}', 'apiKey')"></span>
+            </div>
+            <div class="divider my-1"></div>
+            <div><span class="font-semibold">type:</span> <span class="font-mono text-xs" x-text="paChild('{{name}}', 'apiKey')?.typeLabel || ''"></span></div>
+            <div><span class="font-semibold">default:</span> <span class="font-mono text-xs" x-text="paChild('{{name}}', 'apiKey')?.defaultDisplay || 'null'"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <input type="password" autocomplete="off"
+           class="input input-sm input-bordered w-full font-mono"
+           x-model="values['{{name}}'].apiKey"
+           :placeholder="paApiKeyPlaceholder('{{name}}')">
+  </div>
+
+  <div x-show="paRow('{{name}}')?.hasOauth" x-cloak
+       class="rounded-lg border border-base-300 bg-base-100/70 p-2.5 sm:p-3 space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <div class="text-xs font-medium text-base-content/70">OAuth</div>
+      <span class="badge badge-sm"
+            :class="paOauthBadgeClass('{{name}}')"
+            x-text="paOauthBadge('{{name}}')"></span>
+    </div>
+    <p class="text-[11px] text-base-content/55 leading-snug"
+       x-text="paOauthDetail('{{name}}')"></p>
+    <p class="text-[11px] text-warning leading-snug"
+       x-show="paOauthState('{{name}}')?.error"
+       x-text="paOauthState('{{name}}')?.error"></p>
+    <div class="flex flex-wrap gap-1.5">
+      <button type="button" class="btn btn-primary btn-xs"
+              x-show="paRow('{{name}}')?.oauthFlow && paRow('{{name}}').oauthFlow !== 'external'"
+              :disabled="paOauthBusy('{{name}}')"
+              @click="paStartOauth('{{name}}')"
+              x-text="paOauthState('{{name}}')?.logged_in ? 'Re-login' : 'Log in with OAuth'"></button>
+      <button type="button" class="btn btn-outline btn-xs"
+              x-show="paOauthState('{{name}}')?.logged_in"
+              :disabled="paOauthBusy('{{name}}')"
+              @click="paRefreshOauth('{{name}}')">Refresh</button>
+      <button type="button" class="btn btn-ghost btn-xs"
+              :disabled="paOauthBusy('{{name}}')"
+              @click="paLoadOauthStatus('{{name}}')">Check status</button>
+    </div>
+    <p class="text-[11px] text-base-content/45 leading-snug"
+       x-show="paRow('{{name}}')?.oauthFlow === 'external'"
+       x-text="'This provider uses an external CLI. After logging in on the homeserver, click Check status.'"></p>
+  </div>
+
+  <div>
+    <div class="text-xs text-base-content/55 mb-1 flex items-center gap-1.5">
+      Model
+      <div class="dropdown dropdown-right dropdown-hover" x-show="paChild('{{name}}', 'model')?.description">
+        <span tabindex="0" role="button" class="cursor-help text-base-content/40 hover:text-primary text-[13px] leading-none select-none">ⓘ</span>
+        <div tabindex="0" class="dropdown-content card card-sm bg-base-100 shadow-sm z-10 w-72 text-left">
+          <div class="card-body text-sm">
+            <div class="whitespace-pre-wrap" x-text="paChild('{{name}}', 'model')?.description"></div>
+            <div class="mt-1" x-show="paChildExample('{{name}}', 'model')">
+              <span class="font-semibold">example:</span>
+              <span class="font-mono text-xs break-all" x-text="paChildExample('{{name}}', 'model')"></span>
+            </div>
+            <div class="divider my-1"></div>
+            <div><span class="font-semibold">type:</span> <span class="font-mono text-xs" x-text="paChild('{{name}}', 'model')?.typeLabel || ''"></span></div>
+            <div><span class="font-semibold">default:</span> <span class="font-mono text-xs" x-text="paChild('{{name}}', 'model')?.defaultDisplay || 'null'"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <input type="text" list="pa-models-{{name}}"
+           class="input input-sm input-bordered w-full font-mono"
+           x-model="values['{{name}}'].model"
+           :placeholder="paChildExample('{{name}}', 'model') || 'model id'">
+    <datalist id="pa-models-{{name}}">
+      <template x-for="m in (paRow('{{name}}')?.models || [])" :key="m">
+        <option :value="m"></option>
+      </template>
+    </datalist>
+    <button type="button" class="btn btn-ghost btn-xs mt-1"
+            x-show="(paRow('{{name}}')?.models || []).length > 0"
+            @click="paUseSuggestedModel('{{name}}')">Use suggested model</button>
+  </div>
+
+  <div x-show="paShowBaseUrl('{{name}}')" x-cloak>
+    <div class="text-xs text-base-content/55 mb-1 flex items-center gap-1.5">
+      Base URL
+      <div class="dropdown dropdown-right dropdown-hover" x-show="paChild('{{name}}', 'baseUrl')?.description">
+        <span tabindex="0" role="button" class="cursor-help text-base-content/40 hover:text-primary text-[13px] leading-none select-none">ⓘ</span>
+        <div tabindex="0" class="dropdown-content card card-sm bg-base-100 shadow-sm z-10 w-72 text-left">
+          <div class="card-body text-sm">
+            <div class="whitespace-pre-wrap" x-text="paChild('{{name}}', 'baseUrl')?.description"></div>
+            <div class="mt-1" x-show="paChildExample('{{name}}', 'baseUrl')">
+              <span class="font-semibold">example:</span>
+              <span class="font-mono text-xs break-all" x-text="paChildExample('{{name}}', 'baseUrl')"></span>
+            </div>
+            <div class="divider my-1"></div>
+            <div><span class="font-semibold">type:</span> <span class="font-mono text-xs" x-text="paChild('{{name}}', 'baseUrl')?.typeLabel || ''"></span></div>
+            <div><span class="font-semibold">default:</span> <span class="font-mono text-xs" x-text="paChild('{{name}}', 'baseUrl')?.defaultDisplay || 'null'"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <input type="text"
+           class="input input-sm input-bordered w-full font-mono"
+           x-model="values['{{name}}'].baseUrl"
+           :placeholder="paChildExample('{{name}}', 'baseUrl') || 'https://…/v1'">
+  </div>
+</div>
+
+<dialog id="pa-oauth-dialog-{{name}}" class="modal">
+  <div class="modal-box max-w-lg">
+    <h3 class="font-bold text-lg mb-1">OAuth login</h3>
+    <p class="text-sm opacity-70 mb-3"
+       x-text="(paOauthDlg('{{name}}').title) || 'Authorize this provider'"></p>
+    <div class="space-y-3">
+      <p class="text-sm" x-show="paOauthDlg('{{name}}').message" x-text="paOauthDlg('{{name}}').message"></p>
+      <div x-show="paOauthDlg('{{name}}').userCode" class="text-center space-y-2">
+        <div class="text-xs uppercase tracking-wide text-base-content/50">Enter this code</div>
+        <div class="font-mono text-2xl tracking-widest font-semibold"
+             x-text="paOauthDlg('{{name}}').userCode"></div>
+      </div>
+      <a class="btn btn-primary btn-sm w-full"
+         x-show="paOauthDlg('{{name}}').url"
+         :href="paOauthDlg('{{name}}').url"
+         target="_blank" rel="noopener">Open authorization page</a>
+      <div x-show="paOauthDlg('{{name}}').flow === 'pkce'" class="space-y-1">
+        <div class="text-xs text-base-content/55">Paste the authorization code</div>
+        <input type="text" class="input input-sm input-bordered w-full font-mono"
+               x-model="paOauthDlg('{{name}}').code"
+               placeholder="code">
+        <button type="button" class="btn btn-primary btn-sm"
+                :disabled="paOauthBusy('{{name}}')"
+                @click="paSubmitOauth('{{name}}')">Submit code</button>
+      </div>
+      <p class="text-xs text-base-content/50"
+         x-show="paOauthDlg('{{name}}').flow === 'device_code' && paOauthDlg('{{name}}').status === 'pending'">
+        Waiting for approval… keep this dialog open.
+      </p>
+      <p class="text-sm text-success" x-show="paOauthDlg('{{name}}').status === 'approved'">Logged in.</p>
+      <p class="text-sm text-error" x-show="paOauthDlg('{{name}}').error" x-text="paOauthDlg('{{name}}').error"></p>
+    </div>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn btn-sm">Close</button></form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>

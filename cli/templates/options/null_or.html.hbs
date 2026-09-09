@@ -53,3 +53,17 @@
             class="btn btn-ghost btn-xs shrink-0">Clear</button>
   </div>
 {{/if}}
+{{#if (eq type.elem.kind "enum")}}
+  <div class="mt-1.5 sm:mt-2 flex gap-2 items-center">
+    <select class="select select-sm select-primary w-full font-mono"
+            x-model="values['{{name}}']"
+            @change="if (values['{{name}}'] === '') values['{{name}}'] = null">
+      <option value="">(unset)</option>
+      {{#each type.elem.values}}
+        <option value="{{this}}">{{this}}</option>
+      {{/each}}
+    </select>
+    <button type="button" @click="values['{{name}}'] = null"
+            class="btn btn-ghost btn-xs shrink-0">Clear</button>
+  </div>
+{{/if}}

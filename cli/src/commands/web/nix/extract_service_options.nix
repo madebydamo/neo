@@ -289,6 +289,11 @@
               then o.description
               else ""
             );
+            example = toSafeValue (
+              if builtins.hasAttr "example" o
+              then o.example
+              else null
+            );
             internal = false;
             readOnly = tryOr false (o.readOnly or false);
             current = null;
@@ -563,6 +568,47 @@
       emptyHint = tryOr null (u.emptyHint or null);
       entryLabel = tryOr null (u.entryLabel or null);
       choiceEmptyHint = tryOr null (u.choiceEmptyHint or null);
+      catalogRaw = u.catalog or null;
+      catalog =
+        if builtins.isList catalogRaw
+        then map toSafeValue catalogRaw
+        else null;
+      oauthRaw = u.oauth or null;
+      oauth =
+        if !(builtins.isAttrs oauthRaw)
+        then null
+        else let
+          scriptRaw = oauthRaw.script or null;
+          script =
+            if scriptRaw == null
+            then null
+            else if builtins.typeOf scriptRaw == "path"
+            then toString scriptRaw
+            else if builtins.typeOf scriptRaw == "string"
+            then scriptRaw
+            else null;
+          runAs = tryOr null (oauthRaw.runAs or null);
+          envRaw = tryOr {} (oauthRaw.env or {});
+          env =
+            if builtins.isAttrs envRaw
+            then
+              builtins.listToAttrs (
+                map (k: {
+                  name = k;
+                  value = toString envRaw.${k};
+                }) (builtins.attrNames envRaw)
+              )
+            else {};
+        in
+          if script == null || script == ""
+          then null
+          else
+            {inherit script env;}
+            // (
+              if runAs != null && runAs != ""
+              then {inherit runAs;}
+              else {}
+            );
       # Drop null / empty shells so the JSON seed stays small.
       cleaned =
         {}
@@ -604,6 +650,16 @@
         // (
           if choiceEmptyHint != null
           then {inherit choiceEmptyHint;}
+          else {}
+        )
+        // (
+          if catalog != null && catalog != []
+          then {inherit catalog;}
+          else {}
+        )
+        // (
+          if oauth != null
+          then {inherit oauth;}
           else {}
         );
     in
@@ -740,13 +796,18 @@
         t = tryOr null (o.type or null);
         tn = typeNameOf (tryOr {} t);
         subSet = callGetSubOptions (tryOr {} t) pathList;
+        widgetName = tryOr "" ((o.ui or {}).widget or "");
+        keepAsWidget = widgetName != "";
         expandChildren =
           tn
           != "listOf"
           && tn != "attrsOf"
-          && subSet != {};
+          && subSet != {}
+          && !keepAsWidget;
       in
         # Expanded submodule: emit only children (parent rank used by sibling sort above).
+        # A submodule with ui.widget stays one field so the composite editor can
+        # cradle its children (e.g. providerAuth on llm).
         if expandChildren
         then walk pathList subSet
         else [(mkOptionRecord path o)]
@@ -764,7 +825,11 @@
     builtins.filter (
       r:
         !(r.internal or false)
-        && (r.type.kind or null) != "submodule"
+        && (
+          (r.type.kind or null)
+          != "submodule"
+          || ((r.ui.widget or "") != "")
+        )
         # Belt-and-suspenders: never expose anything under an internal meta block
         && !(builtins.match "^meta(\\..*)?$" (r.name or "") != null)
     )
