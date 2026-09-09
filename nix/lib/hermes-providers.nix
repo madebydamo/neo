@@ -1,24 +1,18 @@
 # Hermes LLM provider catalog, derived from the hermes-agent flake input.
 #
-# Source of truth:
-#   - plugins/model-providers/*/__init__.py (ProviderProfile name= + env_vars=
-#     + auth_type= + display_name= + fallback_models=)
-#   - hermes_cli/providers.py HERMES_OVERLAYS (ids with no plugin, e.g. xai-oauth)
-#   - hermes_cli/auth_commands.py _OAUTH_CAPABLE_PROVIDERS
+# Source of truth (eval-time parse, no IFD; Hermes has no flake output for this):
+#   - plugins/model-providers/*/__init__.py — ProviderProfile
+#   - hermes_cli/providers.py HERMES_OVERLAYS — ids with no plugin (xai-oauth)
+#   - hermes_cli/web_server.py _OAUTH_PROVIDER_CATALOG — dashboard flow + name
 #   - hermes_cli/models.py CANONICAL_PROVIDERS labels + _XAI_STATIC_FALLBACK
-# Hermes has no flake output for this (configKeys is config.yaml leaves only).
-# Parsed at eval time from the input source — no IFD.
 #
-# env var null = no named API-key env (OAuth / AWS SDK / Vertex ADC / keyless).
-# First env var that is not *_BASE_URL is the Neo llm.apiKey target.
-# `custom` still accepts llm.apiKey (written to model.api_key, not an env var).
+# Plugin auth_type is not the dashboard flow (openai-codex / minimax-oauth
+# declare oauth_external but the UI is device_code). Read the catalog, do not
+# keep a Neo id table.
 #
-# oauthFlow is what the Neo providerAuth widget uses:
-#   device_code | pkce | external | null
-# Plugin auth_type is not enough (openai-codex and minimax-oauth declare
-# oauth_external but the dashboard flow is device_code).
-# SuperGrok is a Hermes overlay (`xai-oauth`), not a plugin — same as Hermes's
-# own registry. Anthropic and openai-codex are plugins; we parse both sources.
+# env var null = no named API-key env. First env var that is not *_BASE_URL
+# is the Neo llm.apiKey target. Empty plugin base_url (custom) still accepts
+# llm.apiKey → model.api_key and needs a Base URL field.
 {
   inputs,
   lib,
@@ -26,9 +20,9 @@
 }: let
   hermesSrc = inputs.hermes-agent.outPath or inputs.hermes-agent.sourceInfo.outPath;
   providersDir = hermesSrc + "/plugins/model-providers";
-  authCommands = hermesSrc + "/hermes_cli/auth_commands.py";
   overlaysPy = hermesSrc + "/hermes_cli/providers.py";
   modelsPy = hermesSrc + "/hermes_cli/models.py";
+  webServerPy = hermesSrc + "/hermes_cli/web_server.py";
 
   isList = builtins.isList;
   captures = regex: str:
@@ -72,6 +66,7 @@
       authType = firstCapture ''auth_type[[:space:]]*=[[:space:]]*"([a-z_]+)"'' block;
       displayName = firstCapture ''display_name[[:space:]]*=[[:space:]]*"([^"]*)"'' block;
       modelsInner = firstCapture "fallback_models[[:space:]]*=[[:space:]]*\\(([^)]*)\\)" block;
+      baseUrl = firstCapture ''base_url[[:space:]]*=[[:space:]]*"([^"]*)"'' block;
     in
       if name == null
       then null
@@ -85,11 +80,12 @@
           if authType == null
           then "api_key"
           else authType;
-        displayName = displayName;
+        inherit displayName;
         models =
           if modelsInner == null
           then []
           else modelsFromTuple modelsInner;
+        needsBaseUrl = baseUrl == "";
       };
   in
     builtins.filter (x: x != null) (map parseBlock blocks);
@@ -106,11 +102,8 @@
 
   parsed = lib.concatMap parseFile (builtins.filter (x: x != null) files);
 
-  # Hermes overlays (hermes_cli/providers.py). SuperGrok (`xai-oauth`) is an
-  # overlay, not a plugin — Anthropic/Codex are plugins. Merge overlay-only
-  # OAuth ids so Neo does not hand-maintain that list.
-  parseOverlays = content: let
-    parts = builtins.split "\"([a-z0-9][a-z0-9-]*)\"[[:space:]]*:[[:space:]]*HermesOverlay[[:space:]]*\\(" content;
+  # Walk split() output of a capturing regex: [str, [cap], str, [cap], ...].
+  parseCapturedBlocks = parseBody: parts: let
     go = xs:
       if xs == []
       then []
@@ -125,147 +118,139 @@
           else if builtins.isString (builtins.head rest)
           then builtins.head rest
           else "";
-        authType = firstCapture ''auth_type[[:space:]]*=[[:space:]]*"([a-z_]+)"'' body;
-        envInner = firstCapture "extra_env_vars[[:space:]]*=[[:space:]]*\\(([^)]*)\\)" body;
-        keyless = builtins.match ".*keyless[[:space:]]*=[[:space:]]*True.*" body != null;
       in
-        [
-          {
-            name = id;
-            env =
-              if envInner == null
-              then null
-              else credFromVars (varsFromTuple envInner);
-            authType =
-              if authType == null
-              then "api_key"
-              else authType;
-            displayName = null;
-            models = [];
-            inherit keyless;
-          }
-        ]
-        ++ go rest;
+        [(parseBody id body)] ++ go rest;
   in
     go parts;
+
+  parseOverlays = content:
+    parseCapturedBlocks (
+      id: body: {
+        name = id;
+        env = let
+          envInner = firstCapture "extra_env_vars[[:space:]]*=[[:space:]]*\\(([^)]*)\\)" body;
+        in
+          if envInner == null
+          then null
+          else credFromVars (varsFromTuple envInner);
+        authType = let
+          authType = firstCapture ''auth_type[[:space:]]*=[[:space:]]*"([a-z_]+)"'' body;
+        in
+          if authType == null
+          then "api_key"
+          else authType;
+        displayName = null;
+        models = [];
+        needsBaseUrl = false;
+      }
+    ) (builtins.split "\"([a-z0-9][a-z0-9-]*)\"[[:space:]]*:[[:space:]]*HermesOverlay[[:space:]]*\\(" content);
 
   overlayProfiles =
     if builtins.pathExists overlaysPy
     then parseOverlays (builtins.readFile overlaysPy)
     else [];
 
+  modelsContent =
+    if builtins.pathExists modelsPy
+    then builtins.readFile modelsPy
+    else "";
+
   canonicalLabels = let
-    content =
-      if builtins.pathExists modelsPy
-      then builtins.readFile modelsPy
-      else "";
     pairs = builtins.filter isList (
-      builtins.split ''ProviderEntry[[:space:]]*\([[:space:]]*"([a-z0-9-]+)"[[:space:]]*,[[:space:]]*"([^"]+)"'' content
+      builtins.split ''ProviderEntry[[:space:]]*\([[:space:]]*"([a-z0-9-]+)"[[:space:]]*,[[:space:]]*"([^"]+)"'' modelsContent
     );
-  in
-    lib.listToAttrs (
+    fromEntries = lib.listToAttrs (
       map (p: {
         name = builtins.elemAt p 0;
         value = builtins.elemAt p 1;
       }) (builtins.filter (p: builtins.length p >= 2) pairs)
     );
+    customLabel = firstCapture ''_PROVIDER_LABELS[[]"custom"[]][[:space:]]*=[[:space:]]*"([^"]+)"'' modelsContent;
+  in
+    fromEntries
+    // lib.optionalAttrs (customLabel != null) {custom = customLabel;};
 
+  # xAI plugin has no fallback_models; Hermes keeps the floor here.
   xaiFallbackModels = let
-    content =
-      if builtins.pathExists modelsPy
-      then builtins.readFile modelsPy
-      else "";
-    inner = firstCapture "_XAI_STATIC_FALLBACK[[:space:]]*:[[:space:]]*list[[]str[]][[:space:]]*=[[:space:]]*[[]([^]]*)[]]" content;
+    inner = firstCapture "_XAI_STATIC_FALLBACK[[:space:]]*:[[:space:]]*list[[]str[]][[:space:]]*=[[:space:]]*[[]([^]]*)[]]" modelsContent;
   in
     if inner == null
     then []
     else modelsFromTuple inner;
 
-  oauthCapable = let
+  # Dashboard cards: id / name / flow. Slice between the first two mentions
+  # of the marker so we do not scan the rest of web_server.py.
+  oauthCatalogRows = let
     content =
-      if builtins.pathExists authCommands
-      then builtins.readFile authCommands
+      if builtins.pathExists webServerPy
+      then builtins.readFile webServerPy
       else "";
-    inner = firstCapture "_OAUTH_CAPABLE_PROVIDERS[[:space:]]*=[[:space:]]*[{]([^}]*)[}]" content;
+    # split() with no capture groups inserts [] for each match; keep the
+    # string between the first two mentions (the catalog tuple).
+    strings = builtins.filter builtins.isString (builtins.split "_OAUTH_PROVIDER_CATALOG" content);
+    region =
+      if builtins.length strings < 2
+      then ""
+      else builtins.elemAt strings 1;
   in
-    if inner == null
-    then ["anthropic" "nous" "openai-codex" "xai-oauth" "qwen-oauth" "minimax-oauth"]
-    else captures ''"([a-z0-9][a-z0-9-]*)"'' inner;
+    parseCapturedBlocks (
+      id: body: {
+        name = id;
+        flow = firstCapture ''"flow"[[:space:]]*:[[:space:]]*"(pkce|device_code|external)"'' body;
+        displayName = firstCapture ''"name"[[:space:]]*:[[:space:]]*"([^"]+)"'' body;
+      }
+    ) (builtins.split ''"id"[[:space:]]*:[[:space:]]*"([a-z0-9][a-z0-9-]*)"'' region);
 
+  oauthFlows = lib.listToAttrs (
+    map (e: {
+      name = e.name;
+      value = e.flow;
+    }) (builtins.filter (e: e.flow != null) oauthCatalogRows)
+  );
+  oauthNames = lib.listToAttrs (
+    map (e: {
+      name = e.name;
+      value = e.displayName;
+    }) (builtins.filter (e: e.displayName != null && e.displayName != "") oauthCatalogRows)
+  );
+
+  # Overlay-only OAuth ids (no plugin directory). Do not add catalog-only
+  # synthetic rows such as claude-code — those are not model.provider values.
   overlayOauthExtras =
     builtins.filter (
       p:
         !(builtins.any (q: q.name == p.name) parsed)
-        && (
-          builtins.elem p.name oauthCapable
-          || lib.hasPrefix "oauth_" p.authType
-        )
         && p.authType != "virtual"
+        && (
+          lib.hasPrefix "oauth_" p.authType
+          || builtins.hasAttr p.name oauthFlows
+        )
     )
     overlayProfiles;
 
-  # Last-resort if overlay parse misses SuperGrok (Hermes still lists it in
-  # _OAUTH_CAPABLE_PROVIDERS). Prefer the parsed overlay row.
-  extras =
-    if builtins.any (p: p.name == "xai-oauth") overlayOauthExtras
-    then overlayOauthExtras
-    else
-      overlayOauthExtras
-      ++ [
-        {
-          name = "xai-oauth";
-          env = null;
-          authType = "oauth_external";
-          displayName = canonicalLabels."xai-oauth" or "xAI Grok OAuth (SuperGrok / Premium+)";
-          models = xaiFallbackModels;
-        }
-      ];
-
-  # Dashboard catalog flows. Plugin auth_type is wrong for several of these
-  # (openai-codex / minimax-oauth declare oauth_external but use device_code).
-  oauthFlowOverrides = {
-    anthropic = "pkce";
-    nous = "device_code";
-    openai-codex = "device_code";
-    xai-oauth = "device_code";
-    qwen-oauth = "external";
-    minimax-oauth = "device_code";
-  };
-
-  labelOverrides = {
-    openai-codex = "ChatGPT / Codex subscription";
-    anthropic = "Anthropic (API key or Claude OAuth)";
-    nous = "Nous Portal";
-  };
-
   deriveFlow = p: let
-    id = p.name;
-    override = oauthFlowOverrides.${id} or null;
-    inCapable = builtins.elem id oauthCapable;
+    catalogFlow = oauthFlows.${p.name} or null;
   in
-    if override != null
-    then override
+    if catalogFlow != null
+    then catalogFlow
     else if p.authType == "oauth_device_code"
     then "device_code"
     else if builtins.elem p.authType ["oauth_external" "copilot" "external_process"]
     then "external"
-    else if inCapable
-    then "device_code"
     else null;
 
   toEntry = p: let
     id = p.name;
     env = p.env;
     oauthFlow = deriveFlow p;
-    needsBaseUrl = id == "custom";
-    # custom has env_vars=() but still takes llm.apiKey → model.api_key.
+    needsBaseUrl = p.needsBaseUrl or false;
     hasApiKey = (env != null && env != "") || needsBaseUrl;
     hasOauth = oauthFlow != null;
     label =
-      if builtins.hasAttr id labelOverrides
-      then labelOverrides.${id}
-      else if builtins.hasAttr id canonicalLabels
+      if builtins.hasAttr id canonicalLabels
       then canonicalLabels.${id}
+      else if builtins.hasAttr id oauthNames
+      then oauthNames.${id}
       else if p.displayName != null && p.displayName != ""
       then p.displayName
       else id;
@@ -283,9 +268,7 @@
     inherit hasApiKey hasOauth oauthFlow needsBaseUrl models;
   };
 
-  allProfiles =
-    parsed
-    ++ builtins.filter (e: !(builtins.any (p: p.name == e.name) parsed)) extras;
+  allProfiles = parsed ++ overlayOauthExtras;
 
   catalog = map toEntry allProfiles;
   catalogById = lib.listToAttrs (
@@ -308,6 +291,7 @@ in
   assert catalogById ? anthropic && catalogById.anthropic.hasApiKey && catalogById.anthropic.hasOauth;
   assert catalogById.openai-codex.oauthFlow == "device_code";
   assert catalogById.xai-oauth.oauthFlow == "device_code";
+  assert catalogById.anthropic.oauthFlow == "pkce";
   assert catalogById ? custom && catalogById.custom.hasApiKey && catalogById.custom.needsBaseUrl && catalogById.custom.envVar == null;
   assert builtins.length (lib.attrNames envVars) > 20; {
     libExtensions.hermesProviders = {

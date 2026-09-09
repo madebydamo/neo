@@ -215,7 +215,7 @@
         })
         ++ (lib.neo.mkSudoExtraRules {
           users = ["homeserver"];
-          runAs = ["hermes"];
+          runAs = "hermes";
           commands = [
             {
               package = neoHermesAuth;

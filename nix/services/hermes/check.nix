@@ -66,8 +66,8 @@
         echo "FAIL hermes supervise.nix must map llm.apiKey via mkHermesLlmEnv" >&2
         exit 1
       fi
-      if ! grep -q 'runAs' "$impl" || ! grep -q 'neo-hermes-auth' "$impl"; then
-        echo "FAIL hermes default.nix must sudo neo-hermes-auth as user hermes" >&2
+      if ! grep -q 'runAs = "hermes"' "$impl" || ! grep -q 'neo-hermes-auth' "$impl"; then
+        echo "FAIL hermes default.nix must sudo neo-hermes-auth as user hermes (runAs string, not list)" >&2
         exit 1
       fi
       if ! grep -q 'neo-hermes-auth' "$impl"; then
@@ -82,8 +82,8 @@
         echo "FAIL hermes provider catalog must read the hermes-agent flake input" >&2
         exit 1
       fi
-      if ! grep -q '_OAUTH_CAPABLE_PROVIDERS' "$catalog"; then
-        echo "FAIL hermes provider catalog must parse OAuth-capable ids from hermes-agent" >&2
+      if ! grep -q '_OAUTH_PROVIDER_CATALOG' "$catalog"; then
+        echo "FAIL hermes provider catalog must parse dashboard OAuth flows from hermes-agent" >&2
         exit 1
       fi
       if ! grep -q 'HERMES_OVERLAYS' "$catalog"; then

@@ -79,4 +79,4 @@ Tool Gateway via Nous (`web.backend`, `image_gen.provider`, `tts.provider`, `bro
 - Hermes NixOS **managed mode** blocks `hermes setup`, `hermes config set`, and dashboard config saves. Anything we want durable has to be a Neo option (or a CLI OAuth flow that writes `auth.json`).
 - Do not put secrets in `settings` / Nix `environment` if we ever grow a real secret path; today Neo already puts tokens in `settings.toml` → unit env (world-readable store). Same as other services; not a Hermes-only problem.
 - `packages.configKeys` on the hermes-agent flake is every `DEFAULT_CONFIG` leaf (config.yaml), not the provider catalog. Providers live in `plugins/model-providers/`.
-- Overlay-only ids come from `HERMES_OVERLAYS` + `_OAUTH_CAPABLE_PROVIDERS`. If Hermes adds another overlay-only OAuth provider, it should appear without a Neo extra.
+- Overlay-only ids come from `HERMES_OVERLAYS` + dashboard `_OAUTH_PROVIDER_CATALOG` (flow/name). If Hermes adds another overlay-only OAuth provider, it should appear without a Neo extra.
