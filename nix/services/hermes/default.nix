@@ -15,30 +15,24 @@
   }: let
     cfg = config.neo.services.hermes;
 
-    # Only pin model.* when the operator set them or an API key implies a provider.
-    # Omitting keys leaves config.yaml free for OAuth / prior values (Nix merge preserves
-    # user keys it does not declare). Hermes managed mode still blocks dashboard saves.
+    # Only pin model.* when the operator set them. Omitting keys leaves config.yaml
+    # free for OAuth / prior values (Nix merge preserves user keys it does not declare).
+    # Hermes managed mode still blocks dashboard saves.
     nonEmpty = v: v != null && v != "";
-
-    derivedProvider =
-      if nonEmpty cfg.modelProvider
-      then cfg.modelProvider
-      else if nonEmpty cfg.xaiApiKey
-      then "xai"
-      else if nonEmpty cfg.anthropicApiKey
-      then "anthropic"
-      else if nonEmpty cfg.openaiApiKey
-      then "openai"
-      else if nonEmpty cfg.openrouterApiKey
-      then "openrouter"
-      else null;
+    llm = cfg.llm;
 
     modelSection =
-      (lib.optionalAttrs (nonEmpty cfg.defaultModel) {
-        default = cfg.defaultModel;
+      (lib.optionalAttrs (nonEmpty llm.model) {
+        default = llm.model;
       })
-      // (lib.optionalAttrs (derivedProvider != null) {
-        provider = derivedProvider;
+      // (lib.optionalAttrs (nonEmpty llm.provider) {
+        provider = llm.provider;
+      })
+      // (lib.optionalAttrs (nonEmpty llm.baseUrl) {
+        base_url = llm.baseUrl;
+      })
+      // (lib.optionalAttrs (nonEmpty llm.provider && llm.provider == "custom" && nonEmpty llm.apiKey) {
+        api_key = llm.apiKey;
       });
 
     hermesSettings =
@@ -129,15 +123,14 @@
 
     hermesEnv =
       lib.filterAttrs (_: v: v != null && v != "") {
-        XAI_API_KEY = cfg.xaiApiKey;
-        ANTHROPIC_API_KEY = cfg.anthropicApiKey;
-        OPENAI_API_KEY = cfg.openaiApiKey;
-        OPENROUTER_API_KEY = cfg.openrouterApiKey;
         TELEGRAM_BOT_TOKEN = cfg.telegramBotToken;
         HERMES_GATEWAY_TOKEN = cfg.gatewayToken;
         TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," (map toString cfg.telegramAllowedUserId);
         TELEGRAM_HOME_CHANNEL = telegramHomeChannel;
         GATEWAY_HEALTH_URL = "http://127.0.0.1:${toString cfg.gatewayPort}";
+      }
+      // lib.neo.mkHermesLlmEnv {
+        inherit (llm) provider apiKey;
       }
       // lib.optionalAttrs dashboardPasswordSet {
         # Hermes 0.17+ refuses non-loopback binds without an auth provider.

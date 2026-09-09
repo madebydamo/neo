@@ -1,5 +1,5 @@
 # Hermes service options.
-# Order: enabled → required secrets → Telegram → optional LLM keys → model/provider/soul → proxy/skill.
+# Order: enabled → required secrets → Telegram → llm (provider/key/model) → soul/supervise → proxy/skill.
 {...}: {
   flake.modules.nixos.hermes-option = {
     config,
@@ -94,73 +94,75 @@
                 '';
               };
 
-              # Optional LLM credentials. Prefer OAuth (e.g. xAI) without keys; API keys pin provider=xai|…
-              xaiApiKey = mkOption {
-                type = types.nullOr types.str;
-                default = null;
+              # One provider + key or OAuth + model. Catalog: hermes-agent plugins/model-providers.
+              llm = mkOption {
+                type = types.submodule {
+                  options = {
+                    provider = mkOption {
+                      type = types.nullOr (types.enum lib.neo.hermesProviderIds);
+                      default = null;
+                      apply = v:
+                        if v == ""
+                        then null
+                        else v;
+                      rank = 0;
+                      description = ''
+                        Inference provider written to config.yaml as model.provider.
+                        The list is hermes-agent model-provider plugins plus Hermes overlays
+                        that have no plugin (SuperGrok is xai-oauth). API-key vendors: paste
+                        llm.apiKey. OAuth vendors (openai-codex ChatGPT/Codex, xai-oauth
+                        SuperGrok, nous, anthropic Claude, …): Log in below (writes auth.json
+                        as user hermes). Custom / Ollama / vLLM: pick custom, set baseUrl, and
+                        paste an API key if the endpoint needs one.
+                      '';
+                    };
+
+                    apiKey = mkOption {
+                      type = types.nullOr types.str;
+                      default = null;
+                      rank = 10;
+                      example = "xai-...";
+                      description = ''
+                        API key for the selected provider. For named vendors Neo maps it to
+                        that plugin's env var (XAI_API_KEY, ANTHROPIC_API_KEY, HF_TOKEN, …).
+                        For provider = custom it is written to config.yaml as model.api_key
+                        (Ollama often needs none; vLLM / OpenAI-compatible proxies often do).
+                        Leave empty when using OAuth, AWS, Vertex, or a keyless endpoint.
+                      '';
+                    };
+
+                    model = mkOption {
+                      type = types.nullOr types.str;
+                      default = "grok-build-latest";
+                      rank = 20;
+                      example = "grok-4.6";
+                      description = ''
+                        Default LLM model id written to config.yaml as model.default.
+                        Use the suggested list for the selected provider, or paste any id
+                        the endpoint serves (e.g. grok-4.6, claude-sonnet-4,
+                        anthropic/claude-sonnet-4 on OpenRouter, llama3.2 on Ollama).
+                        Leave empty so Nix does not pin the model. Under Hermes NixOS managed
+                        mode the dashboard cannot save model changes — pin here.
+                      '';
+                    };
+
+                    baseUrl = mkOption {
+                      type = types.nullOr types.str;
+                      default = null;
+                      rank = 30;
+                      example = "http://127.0.0.1:11434/v1";
+                      description = ''
+                        OpenAI-compatible API base URL for provider = custom (Ollama, vLLM,
+                        llama.cpp, or any /v1 proxy). Written to model.base_url. Leave empty
+                        for built-in provider endpoints. Example: Ollama
+                        http://127.0.0.1:11434/v1
+                      '';
+                    };
+                  };
+                };
+                default = {};
                 rank = 60;
-                description = ''
-                  Optional xAI (Grok) API key. When set, Neo pins model.provider = "xai".
-                  Leave empty for xAI OAuth (set modelProvider = "xai-oauth") or other providers.
-                '';
-              };
-
-              anthropicApiKey = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                rank = 70;
-                description = ''
-                  Optional Anthropic (Claude) API key. When set, Neo pins model.provider = "anthropic"
-                  unless modelProvider is set explicitly.
-                '';
-              };
-
-              openaiApiKey = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                rank = 80;
-                description = ''
-                  Optional OpenAI API key. When set, Neo pins model.provider = "openai"
-                  unless modelProvider is set explicitly.
-                '';
-              };
-
-              openrouterApiKey = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                rank = 82;
-                description = ''
-                  Optional OpenRouter API key. When set, Neo pins model.provider = "openrouter"
-                  unless modelProvider is set explicitly.
-                '';
-              };
-
-              defaultModel = mkOption {
-                type = types.nullOr types.str;
-                default = "grok-build-latest";
-                rank = 85;
-                description = ''
-                  Optional default LLM model id written to config.yaml as model.default
-                  (e.g. "grok-4", "grok-build-latest", "claude-sonnet-4").
-                  Leave empty so Nix does not pin the model — Hermes/OAuth or prior
-                  config.yaml values are preserved across rebuilds.
-                  Note: under the Hermes NixOS module, the dashboard cannot save model
-                  changes (managed mode); pin here or use CLI OAuth flows that write auth.json.
-                '';
-              };
-
-              modelProvider = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                rank = 86;
-                description = ''
-                  Optional model.provider for config.yaml (e.g. "xai-oauth", "xai", "anthropic",
-                  "openai", "openrouter"). Explicit value always wins.
-                  If unset, Neo derives from API keys (xaiApiKey → xai, anthropicApiKey → anthropic,
-                  openaiApiKey → openai, openrouterApiKey → openrouter); if no keys either, provider is not written so OAuth or
-                  an existing config.yaml provider is left alone.
-                  For xAI SuperGrok OAuth without an API key: modelProvider = "xai-oauth".
-                '';
+                description = "LLM provider, API key or OAuth login, and default model";
               };
 
               forceSoul = mkOption {

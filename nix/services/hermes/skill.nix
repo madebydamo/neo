@@ -41,10 +41,12 @@
 
         ## Credentials
         - Required: `services.hermes.dashboardPassword` (Generate helper); optional `gatewayToken`, Telegram bot token
-        - LLM: optional API keys (`xaiApiKey`, `anthropicApiKey`, `openaiApiKey`, `openrouterApiKey`) **or** OAuth (no key)
-        - xAI OAuth (no API key): set `modelProvider = "xai-oauth"`, optional `defaultModel`, then:
-          `sudo -u hermes env HERMES_HOME=<stateDir>/.hermes hermes auth add xai-oauth`
-        - Optional pins: `defaultModel`, `modelProvider` — leave empty so Nix does not overwrite model.*
+        - LLM: `services.hermes.llm` — `provider`, `apiKey`, `model`, optional `baseUrl`
+        - API-key plugins (`xai`, `openrouter`, …): set `llm.apiKey` (mapped to that plugin's env var)
+        - OAuth (`openai-codex` ChatGPT/Codex, `xai-oauth` SuperGrok, `nous`, `anthropic` Claude, …):
+          `sudo -u hermes env HERMES_HOME=<stateDir>/.hermes hermes auth add <provider>`
+        - Custom endpoint: `provider = "custom"`, set `baseUrl` and optional `apiKey`
+        - Leave `provider` / `model` empty so Nix does not overwrite model.*
         - Hermes NixOS managed mode blocks dashboard model/config saves; pin via Neo settings or OAuth CLI
         - Read from `/etc/neo/settings.toml` or Neo UI — do not invent keys
         - Dashboard internal basic auth is auto-posted by SWAG; operators use tinyauth only
@@ -54,15 +56,15 @@
         2. Confirm AGENTS.md present in workspace
         3. Confirm Neo skills appear (`/neo-homeserver`, `/neo-*`)
         4. Config changes: edit hermes options in settings → activate
-        5. OAuth-only: clear API keys, set modelProvider if needed, run `hermes auth add …` as user hermes
+        5. OAuth-only: set `llm.provider`, run `hermes auth add …` as user hermes
         6. `superviseUpdates`: after system/docker updater runs that changed something, `neo-hermes-supervise` classifies logs (`/neo-update-supervisor`). Home channel is the first `telegramAllowedUserId` (`TELEGRAM_HOME_CHANNEL`)
 
         ## Pitfalls
         - Clearing hermes appdata wipes memory, sessions, local skills, and custom SOUL
         - Agent-created skills under HERMES_HOME/skills override external Neo skills with the same name
         - Managed Neo skills are replaced on rebuild — do not edit the store path
-        - Setting `xaiApiKey` forces provider `xai` (API key path), not `xai-oauth`
-        - Dashboard cannot switch models under Nix managed mode — use Neo options or OAuth CLI
+        - `llm.provider = "xai"` is the API-key path; SuperGrok OAuth is `xai-oauth` with empty `apiKey`
+        - Dashboard cannot switch models under Nix managed mode — use Neo `llm.*` options or OAuth CLI
 
         ## Verification
         - Both units active; dashboard reachable behind tinyauth; chat responds

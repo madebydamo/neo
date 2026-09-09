@@ -20,18 +20,18 @@
       then null
       else toString (builtins.head cfg.telegramAllowedUserId);
 
-    superviseEnv = lib.filterAttrs (_: v: v != null && v != "") {
-      HOME = cfg.stateDir;
-      HERMES_HOME = "${cfg.stateDir}/.hermes";
-      XAI_API_KEY = cfg.xaiApiKey;
-      ANTHROPIC_API_KEY = cfg.anthropicApiKey;
-      OPENAI_API_KEY = cfg.openaiApiKey;
-      OPENROUTER_API_KEY = cfg.openrouterApiKey;
-      TELEGRAM_BOT_TOKEN = cfg.telegramBotToken;
-      HERMES_GATEWAY_TOKEN = cfg.gatewayToken;
-      TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," (map toString cfg.telegramAllowedUserId);
-      TELEGRAM_HOME_CHANNEL = telegramHomeChannel;
-    };
+    superviseEnv =
+      lib.filterAttrs (_: v: v != null && v != "") {
+        HOME = cfg.stateDir;
+        HERMES_HOME = "${cfg.stateDir}/.hermes";
+        TELEGRAM_BOT_TOKEN = cfg.telegramBotToken;
+        HERMES_GATEWAY_TOKEN = cfg.gatewayToken;
+        TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," (map toString cfg.telegramAllowedUserId);
+        TELEGRAM_HOME_CHANNEL = telegramHomeChannel;
+      }
+      // lib.neo.mkHermesLlmEnv {
+        inherit (cfg.llm) provider apiKey;
+      };
 
     promptFor = kind: ''
       You are supervising a Neo homeserver ${kind} update. Load skill /neo-update-supervisor and follow it exactly.
