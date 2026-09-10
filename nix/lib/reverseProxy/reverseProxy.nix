@@ -24,6 +24,17 @@
             }
             // {rank = 100;};
 
+          ingress =
+            mkOption {
+              type = types.listOf (types.enum ["local" "tailscale" "web"]);
+              default = ["local" "tailscale" "web"];
+              description = "Where this service is reachable. local = LAN, tailscale = Tailscale tailnet, web = public HTTPS via rathole/streamproxy. Multiple may be selected. Requests from a path that is not selected are blocked. Let's Encrypt HTTP-01 on port 80 is never blocked.";
+            }
+            // {
+              rank = 105;
+              ui = {choices = ["local" "tailscale" "web"];};
+            };
+
           proxyConf = mkOption {
             type = types.nullOr types.str;
             internal = true;

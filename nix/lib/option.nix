@@ -15,6 +15,7 @@
 #   0       enabled
 #   10–89   service-specific options (API tokens, secrets, ports you care about, …)
 #   100     subdomain          (mkReverseProxyOptions)
+#   105     ingress            (mkReverseProxyOptions)
 #   110     vpn                (mkVpnOptions group)
 #   120     auth               (mkReverseProxyOptions group)
 #   130     customDomains      (mkReverseProxyOptions)

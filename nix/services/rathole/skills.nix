@@ -20,7 +20,8 @@
         ## Architecture notes
         - Client service with token, remoteAddr, ports
         - Pairs with streamproxy on public machine
-        - `certificateOnly`: HTTP tunnel only (Let's Encrypt); no public HTTPS
+        - `certificateOnly`: HTTP tunnel only (Let's Encrypt); no public HTTPS (global)
+        - Per-service `ingress` (local / tailscale / web) gates the SWAG vhost; rathole itself stays a shared tunnel
 
         ## Credentials
         - `services.rathole.token` must match server entry

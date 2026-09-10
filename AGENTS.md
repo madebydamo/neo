@@ -38,6 +38,8 @@ Naming: options snake_case under `neo.services.*`; plain-string descriptions; vo
 
 **SWAG traps:** `include /config/nginx/proxy.conf` already sets Upgrade/Connection and proxy timeouts — **do not re-set** them (426 WebSockets / `proxy_*_timeout` duplicate kills all vhosts).
 
+**ingress:** per-service multi-select (`local` / `tailscale` / `web`) via `mkReverseProxyOptions`; default all three. Omitting `web` denies that vhost on the shared rathole/PROXY-protocol listener (404) — not a per-app rathole port.
+
 **tinyauth:** default edge auth. Health probes need `auth.publicPaths` (e.g. `^/api/v1/info/status$`). UI stays 302 → tinyauth.
 
 **Hermes:** per-service `skills.nix` → `neo-<name>`; use `mkServiceSkill`; credentials = real settings keys only. Collector: `nix/services/hermes/skills.nix`.
@@ -53,6 +55,20 @@ Declare presentation next to the option in Nix. Extract serializes it; the form 
 | `rank` | Sibling sort order (see `nix/lib/option.nix`) |
 | `helper` | Fill-assist (`lib.neo.helpers.*`, scripts under `nix/lib/helpers/`) |
 | `ui` | Widgets, dynamic multi-select choices, key linkage, save prune (`nix/lib/ui.nix`) |
+
+Recommended top-level **rank bands** for `neo.services.<name>` (siblings only; same table as `nix/lib/option.nix`):
+
+| Rank | Option |
+|------|--------|
+| 0 | `enabled` |
+| 10–89 | service-specific |
+| 100 | `subdomain` (`mkReverseProxyOptions`) |
+| 105 | `ingress` (`mkReverseProxyOptions`) |
+| 110 | `vpn` (`mkVpnOptions`) |
+| 120 | `auth` (`mkReverseProxyOptions`) |
+| 130 | `customDomains` (`mkReverseProxyOptions`) |
+| 200 | `skill` (`mkSkillOptions`) |
+| 300 | `containers` (`mkContainerDefinitions`) |
 
 ### `ui.choices` (multi-select)
 

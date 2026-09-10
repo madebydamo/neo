@@ -149,6 +149,17 @@
             content = lib.neo.listenHttpsConf;
           })
           (lib.neo.mkActivationScriptForFile config {
+            filePath = "${appdataSwag}/nginx/ingress-maps.conf";
+            content = lib.neo.mkIngressMapsConf {
+              services = appServices;
+              proxyProtocolPort = ppContainerPort;
+            };
+          })
+          (lib.neo.mkActivationScriptForFile config {
+            filePath = "${appdataSwag}/nginx/ingress-access.conf";
+            content = lib.neo.ingressAccessConf;
+          })
+          (lib.neo.mkActivationScriptForFile config {
             filePath = "${appdataSwag}/nginx/conf.d/real-ip.conf";
             content = lib.neo.realIpConf;
           })

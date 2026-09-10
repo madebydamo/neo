@@ -42,6 +42,12 @@ if ! grep -qE '^[[:space:]]*include[[:space:]]+/config/nginx/dbip\.conf;' "$NGIN
 else
   echo "→ dbip.conf include already present"
 fi
+if ! grep -qE '^[[:space:]]*include[[:space:]]+/config/nginx/ingress-maps\.conf;' "$NGINX_CONF"; then
+  sed -i '/include \/config\/nginx\/resolver\.conf;/a \    include /config/nginx/ingress-maps.conf;' "$NGINX_CONF"
+  echo "→ Added ingress-maps.conf include"
+else
+  echo "→ ingress-maps.conf include already present"
+fi
 
 PROXY_CONF="$APPDATA/nginx/proxy.conf"
 echo "=== Patching proxy.conf ==="

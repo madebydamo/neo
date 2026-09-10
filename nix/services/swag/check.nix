@@ -52,6 +52,7 @@
       touch "$APPDATA/nginx/proxy.conf"
       bash "$patcher"
       grep -qE 'include[[:space:]]+/config/nginx/dbip\.conf;' "$APPDATA/nginx/nginx.conf"
+      grep -qE 'include[[:space:]]+/config/nginx/ingress-maps\.conf;' "$APPDATA/nginx/nginx.conf"
       grep -qE 'include[[:space:]]+/config/nginx/conf\.d/\*\.conf;' "$APPDATA/nginx/nginx.conf"
 
       touch "$out"

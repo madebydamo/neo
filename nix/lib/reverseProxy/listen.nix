@@ -7,12 +7,14 @@
 
       httpsListenInclude = "  include /config/nginx/listen-https.conf;\n";
 
-      # Dual listeners: plain TLS for LAN; PROXY protocol for streamproxy/rathole.
+      # Dual listeners: plain TLS for LAN/Tailscale; PROXY protocol for streamproxy/rathole.
+      # ingress-access.conf applies per-vhost posture (local / tailscale / web).
       listenHttpsConf = ''
         listen 443 ssl;
         listen [::]:443 ssl;
         listen ${toString httpsProxyProtocolContainerPort} ssl proxy_protocol;
         listen [::]:${toString httpsProxyProtocolContainerPort} ssl proxy_protocol;
+        include /config/nginx/ingress-access.conf;
       '';
 
       # Trust private peers that may send PROXY protocol (streamproxy veth, docker, rathole/localhost).

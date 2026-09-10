@@ -88,6 +88,8 @@ flowchart LR
 
 DNS still points at the **public** side. Your **data stays on the homeserver**. You need a working tunnel (e.g. rathole) and matching streamproxy access—see [INSTALL.md](INSTALL.md#streamproxy-and-machines-without-a-public-ip).
 
+Public exposure is **per service** via **`ingress`** (`local` / `tailscale` / `web`)—not a global rathole on/off for each app. Rathole remains a shared tunnel; omitting `web` for a service returns 404 on that public vhost. To drop **all** public HTTPS at once, use **`rathole.certificateOnly`** (HTTP-01 / certs only). Details: [INSTALL.md](INSTALL.md#per-service-ingress).
+
 ## For the curious (optional technical notes)
 
 These details are for people who want to dig in or contribute. Everyday users can stop above.
