@@ -38,7 +38,7 @@ Naming: options snake_case under `neo.services.*`; plain-string descriptions; vo
 
 **SWAG traps:** `include /config/nginx/proxy.conf` already sets Upgrade/Connection and proxy timeouts — **do not re-set** them (426 WebSockets / `proxy_*_timeout` duplicate kills all vhosts).
 
-**ingress:** per-service multi-select (`local` / `tailscale` / `web`) via `mkReverseProxyOptions`; default all three. Omitting `web` denies that vhost on the shared rathole/PROXY-protocol listener (404) — not a per-app rathole port.
+**ingress:** per-service multi-select (`local` / `tailscale` / `web`) via `mkReverseProxyOptions`; default all three. Omitting `web` denies that vhost on the shared rathole/PROXY-protocol listener (packet-run 404) — not a per-app rathole port.
 
 **tinyauth:** default edge auth. Health probes need `auth.publicPaths` (e.g. `^/api/v1/info/status$`). UI stays 302 → tinyauth.
 

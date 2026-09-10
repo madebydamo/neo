@@ -47,8 +47,10 @@
         - Unknown hosts: `site-confs/default.conf` is a default_server on 80,
           443, and the PROXY-protocol port. Missing that flag on 8443 made
           public unknown names fall through to whichever vhost nginx loaded
-          first (wrong app, cert warning). The 404 is a single packet-run
-          page at `www/neo-404/p/index.html`.
+          first (wrong app, cert warning). Nginx-generated 404s (unknown
+          host, ingress deny, geo deny) share the packet-run page via
+          `error-pages.conf` (`/_neo404/` → `www/neo-404/p/index.html`).
+          Upstream application 404s are not intercepted.
       '';
     };
   };

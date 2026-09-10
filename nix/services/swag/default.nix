@@ -149,6 +149,10 @@
             content = lib.neo.listenHttpsConf;
           })
           (lib.neo.mkActivationScriptForFile config {
+            filePath = "${appdataSwag}/nginx/error-pages.conf";
+            content = lib.neo.errorPagesConf;
+          })
+          (lib.neo.mkActivationScriptForFile config {
             filePath = "${appdataSwag}/nginx/ingress-maps.conf";
             content = lib.neo.mkIngressMapsConf {
               services = appServices;

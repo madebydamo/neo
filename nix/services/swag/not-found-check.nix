@@ -11,6 +11,9 @@
         pages=${./not-found/p}
         patcher=${./swag-patcher.sh}
         swag=${./default.nix}
+        listen=${../../lib/reverseProxy/listen.nix}
+        ingress=${../../lib/reverseProxy/ingress.nix}
+        geo=${../../lib/reverseProxy/geo.nix}
 
         fail=0
         check() {
@@ -40,7 +43,16 @@
         check "server-name-catch-all" grep -qF 'server_name _;' "$conf"
         check "includes-subdomain-vhosts" grep -qF 'include /config/nginx/proxy-confs/*.subdomain.conf;' "$conf"
         check "acme-challenge" grep -qF 'location ^~ /.well-known/acme-challenge/' "$conf"
-        check "error-page-packet" grep -qF 'error_page 404 =404 /p/index.html;' "$conf"
+        check "catchall-includes-error-pages" grep -qF 'include /config/nginx/error-pages.conf;' "$conf"
+        absent "catchall-no-legacy-p-prefix" grep -qF 'location ^~ /p/' "$conf"
+        check "listen-includes-error-pages" grep -qF 'include /config/nginx/error-pages.conf;' "$listen"
+        check "error-page-packet" grep -qF 'error_page 404 =404 /_neo404/index.html;' "$listen"
+        check "error-page-asset-prefix" grep -qF 'location ^~ /_neo404/' "$listen"
+        check "error-page-alias" grep -qF 'alias /config/www/neo-404/p/;' "$listen"
+        check "swag-writes-error-pages" grep -qF 'error-pages.conf' "$swag"
+        absent "no-proxy-intercept" grep -qF 'proxy_intercept_errors' "$listen" "$conf" "$swag"
+        check "ingress-exempts-error-assets" grep -qF '/_neo404/' "$ingress"
+        check "geo-exempts-error-assets" grep -qF '/_neo404/' "$geo"
         absent "no-split-clients" grep -qF 'split_clients' "$conf"
         absent "no-proxy-pass" grep -qF 'proxy_pass' "$conf"
         absent "no-tinyauth" grep -qiF 'tinyauth' "$conf"
@@ -58,7 +70,9 @@
         absent "page-no-cdn" grep -qiE 'https?://(cdn|fonts|unpkg|jsdelivr|googleapis)' "$html"
         check "page-reduced-motion" grep -qF 'prefers-reduced-motion' "$html"
         check "page-viewport" grep -qF 'viewport' "$html"
-        check "scripts-absolute-p" grep -qF 'src="/p/shared.js"' "$html"
+        check "scripts-absolute-neo404" grep -qF 'src="/_neo404/shared.js"' "$html"
+        check "page-kicker-generic" grep -qF '>404</p>' "$html"
+        absent "page-kicker-not-unknown-host" grep -qF 'unknown host' "$html"
         for js in shared.js course.js render.js engine.js; do
           check "js-$js-exists" test -f "$pages/$js"
           absent "js-$js-no-cdn" grep -qiE 'https?://(cdn|fonts|unpkg|jsdelivr|googleapis)' "$pages/$js"

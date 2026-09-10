@@ -49,6 +49,11 @@
             set $geo-blacklist yes;
             set $continent-blacklist yes;
         }
+        if ($uri ~ ^/_neo404/) {
+            set $geo-whitelist yes;
+            set $geo-blacklist yes;
+            set $continent-blacklist yes;
+        }
         if ($geo-whitelist = no) { return 404; }
         if ($geo-blacklist = no) { return 404; }
         if ($continent-blacklist = no) { return 404; }

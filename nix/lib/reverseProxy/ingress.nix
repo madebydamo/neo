@@ -100,6 +100,9 @@ in {
         if ($ingress_class = web) {
             set $ingress_ok $ingress_allow_web;
         }
+        if ($uri ~ ^/_neo404/) {
+            set $ingress_ok 1;
+        }
         if ($ingress_ok = 0) {
             return 404;
         }

@@ -48,6 +48,7 @@
     body = lib.concatStrings [
       (expectTrue "variants" (ingress.ingressVariants == ["local" "tailscale" "web"]))
       (expectTrue "access-returns-404" (lib.hasInfix "return 404;" ingress.ingressAccessConf))
+      (expectTrue "access-exempts-error-assets" (lib.hasInfix "/_neo404/" ingress.ingressAccessConf))
       (expectTrue "access-class-web" (lib.hasInfix "$ingress_allow_web" ingress.ingressAccessConf))
       (expectTrue "pp-port-default" (lib.hasInfix "8443 1;" localConf))
       (expectTrue "pp-port-override" (lib.hasInfix "9982 1;" altPortConf))
