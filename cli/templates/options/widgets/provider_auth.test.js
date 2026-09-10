@@ -161,6 +161,21 @@ test('paEnsure fills missing submodule fields', () => {
   assert.equal(form.values.llm.provider, 'xai');
 });
 
+test('init does not mark llm dirty when Nix current has null optional fields', () => {
+  const form = makeForm({
+    options: [llmOption({
+      provider: 'xai',
+      apiKey: 'secret',
+      model: 'grok-build-latest',
+      baseUrl: null,
+    })],
+    fetch: async () => okJson({ ok: true, status: { logged_in: false } }),
+  });
+  form.initWidgets();
+  assert.equal(form.values.llm.baseUrl, '');
+  assert.equal(form.isAtOriginal('llm'), true);
+});
+
 test('paOnProviderChange fills suggested model and oauth status', async () => {
   const calls = [];
   const form = makeForm({

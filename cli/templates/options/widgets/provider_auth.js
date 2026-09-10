@@ -390,7 +390,12 @@
   const widget = {
     name: 'providerAuth',
     mixins,
-    init(optionName) { this.initProviderAuth(optionName); },
+    init(optionName) {
+      this.initProviderAuth(optionName);
+      // paEnsure maps null → '' for inputs; that is display canonicalization,
+      // not a user edit. Snapshot after so leave/dirty checks stay clean.
+      this.originals[optionName] = this.cloneValue(this.values[optionName]);
+    },
     prepareSave(optionName) { return this.paPrepareSave(optionName); },
     onRevert(optionName) { this.initProviderAuth(optionName); },
   };

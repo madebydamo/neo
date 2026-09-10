@@ -171,6 +171,45 @@ test('save() includes empty pluginList when the list was cleared', async () => {
   assert.deepEqual(posts[0].body.plugins, []);
 });
 
+test('initForm does not report dirty after providerAuth canonicalizes Nix nulls', () => {
+  const seed = [{
+    name: 'llm',
+    type: {
+      kind: 'submodule',
+      fields: [
+        { name: 'provider', type: { kind: 'nullOr', elem: { kind: 'enum', values: ['xai'] } }, default: null },
+        { name: 'apiKey', type: { kind: 'nullOr', elem: { kind: 'str' } }, default: null },
+        { name: 'model', type: { kind: 'nullOr', elem: { kind: 'str' } }, default: 'grok-build-latest' },
+        { name: 'baseUrl', type: { kind: 'nullOr', elem: { kind: 'str' } }, default: null },
+      ],
+    },
+    default: { provider: null, apiKey: null, model: 'grok-build-latest', baseUrl: null },
+    current: { provider: 'xai', apiKey: 'secret', model: 'grok-build-latest', baseUrl: null },
+    ui: {
+      widget: 'providerAuth',
+      catalog: [
+        { id: 'xai', label: 'xAI', hasApiKey: true, hasOauth: true, oauthFlow: 'pkce', models: ['grok-4'] },
+      ],
+    },
+  }];
+  const document = installGlobals({
+    fetch: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, status: { logged_in: false } }),
+    }),
+  });
+  document.set('options-seed', { textContent: JSON.stringify(seed) });
+  document.set('options-pane', {
+    dataset: { service: 'hermes', saveEndpoint: '/save/hermes' },
+  });
+  loadOptionForm();
+  const form = optionForm();
+  form.initForm();
+  assert.equal(form.values.llm.baseUrl, '');
+  assert.equal(form.isAtOriginal('llm'), true);
+});
+
 test('makeForm collectSave still matches optionForm widget dispatch', () => {
   loadWidgets();
   const options = [{

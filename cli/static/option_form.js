@@ -254,6 +254,11 @@ function optionForm() {
         || (pane?.dataset?.saveEndpoint || '').startsWith('/save-core/');
 
       this.initWidgets();
+      // Widget init may canonicalize values (null → '', keysFrom fill). That is
+      // not a user edit — recapture originals so leave/dirty stays clean.
+      Object.keys(this.values || {}).forEach((k) => {
+        this.originals[k] = this.cloneValue(this.values[k]);
+      });
     },
 
     toggleListChoice(optionName, choice, checked) {
