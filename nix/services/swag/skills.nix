@@ -44,6 +44,11 @@
         - Custom domains hairpin to `https://127.0.0.1:443` (SNI/Host = service
           subdomain). Do not proxy to the public hostname — Docker DNS cannot
           resolve it and that used to crash SWAG.
+        - Unknown hosts: `site-confs/default.conf` is a default_server on 80,
+          443, and the PROXY-protocol port. Missing that flag on 8443 made
+          public unknown names fall through to whichever vhost nginx loaded
+          first (wrong app, cert warning). The 404 is a single packet-run
+          page at `www/neo-404/p/index.html`.
       '';
     };
   };
