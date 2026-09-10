@@ -6,14 +6,18 @@
 # Path coverage (per binary) mirrors what sudo may resolve after rebuilds:
 #   1. Absolute path from the Nix package at eval time
 #   2. /run/current-system/sw/bin/<name> (secure_path / current system)
-#   3. /nix/store/*-<pname>-*/bin/<name> (other store paths / generations)
+#   3. /nix/store/*-<pname>-*/bin/<name> (versioned store paths / generations)
+#   4. /nix/store/*-<pname>/bin/<name> (unversioned, e.g. writeShellApplication)
 {lib, ...}: {
   libExtensions.sudo = {
     neo = rec {
       # Default options for non-interactive service/agent sudo.
+      # SETENV lets the caller pass VAR=value on the sudo command line
+      # (HERMES_HOME, PATH, …). Do not wrap the allowed binary in env(1):
+      # sudo then matches env, which is not in the rule and asks for a password.
       defaultSudoCommandOptions = ["NOPASSWD" "SETENV"];
 
-      # Expand one privileged binary into the three command forms above.
+      # Expand one privileged binary into the command forms above.
       # `name` is the binary basename (e.g. "systemctl"); `pname` defaults to
       # package.pname for the store-path glob.
       mkSudoCommand = {
@@ -32,6 +36,10 @@
         }
         {
           command = "/nix/store/*-${pname}-*/bin/${name}";
+          inherit options;
+        }
+        {
+          command = "/nix/store/*-${pname}/bin/${name}";
           inherit options;
         }
       ];

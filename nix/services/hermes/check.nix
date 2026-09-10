@@ -8,6 +8,8 @@
       impl=${./default.nix}
       supervise=${./supervise.nix}
       catalog=${../../lib/hermes-providers.nix}
+      sudoLib=${../../lib/sudo.nix}
+      helperExec=${../../../cli/src/commands/web/helper_exec.rs}
 
       if ! grep -q 'widget = "primaryItemList"' "$option"; then
         echo "FAIL hermes telegramAllowedUserId must use primaryItemList widget" >&2
@@ -72,6 +74,14 @@
       fi
       if ! grep -q 'neo-hermes-auth' "$impl"; then
         echo "FAIL hermes default.nix must install neo-hermes-auth" >&2
+        exit 1
+      fi
+      if ! grep -q '/nix/store/\*-''${pname}/bin/' "$sudoLib"; then
+        echo "FAIL mkSudoCommand must allow unversioned /nix/store/*-pname/bin/name (writeShellApplication)" >&2
+        exit 1
+      fi
+      if grep -qE '"env"(\.to_string\(\)|\.into\(\))' "$helperExec"; then
+        echo "FAIL helper_exec must not wrap OAuth sudo in env(1); use SETENV VAR=value so sudoers matches neo-hermes-auth" >&2
         exit 1
       fi
       if ! grep -q 'plugins/model-providers' "$catalog"; then
