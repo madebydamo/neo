@@ -6,116 +6,102 @@
 
 **Your data. Your machine. Your software.**
 
-Neo is a complete homeserver you can actually run yourself—without becoming a full-time sysadmin. It gives you the strengths of a modern Nix-based system (reproducible, revertable, recoverable) with **opinionated defaults** and a simple **web interface**. You choose what to turn on; Neo handles HTTPS, updates, firewalling, and the rest.
+Neo is a homeserver operating system. Flash it onto a machine. Easy to use without any technical knowledge, with opinionated defaults and a simple web interface for full control. Reproducible, revertible, recoverable. The easiest way to keep your data private, fully featured so you can free yourself from big tech.
 
-You should not need a technical background to understand what is going on. If you care about **owning your data and your software**, and you do not want to maintain a fragile pile of Docker Compose files by hand, Neo is for you.
+Photos, files, passwords, documents stay on hardware you control.
 
-## Why this exists
+> If you can't host it and control it, you don't really own it.
+>
+> [Louis Rossmann](https://www.youtube.com/watch?v=rk3snANxYMY), on repair, ownership, a [self-managed life](https://wiki.futo.org/wiki/Introduction_to_a_Self_Managed_Life:_a_13_hour_%26_28_minute_presentation_by_FUTO_software).
 
-Big tech wants you renting access forever: your photos on their cloud, your documents on their servers, your passwords and habits as their product. You do not really _own_ the service—you have a login until the terms change.
+That's Neo's philosophy. Sovereignty over your machine, privacy for your life on it, ownership of the software and the data.
 
-Neo flips that model:
-
-- **Everything lives on your homeserver.** Photos, files, passwords, documents, media—on hardware you control.
-- **You own the software.** The stack is open source. You can inspect it, keep it, move it, and run it without a vendor’s permission.
-- **Privacy by design.** Traffic is encrypted with TLS until it reaches _your_ machine. Services sit behind authentication. The machine only needs the usual web ports open—not a wide-open network.
-- **No “learn Nginx, Let’s Encrypt, and compose” tax.** Neo is opinionated so sensible defaults do the heavy lifting. Day to day you use the **Neo web UI**, not a command line.
-
-That spirit—**if you can’t host it and control it, you don’t really own it**—is the same fight people like [Louis Rossmann](https://www.youtube.com/watch?v=rk3snANxYMY) make for repair, ownership, and a [self-managed life](https://wiki.futo.org/wiki/Introduction_to_a_Self_Managed_Life:_a_13_hour_%26_28_minute_presentation_by_FUTO_software) instead of permanent rental from Big Tech.
-
-## What you need
-
-| You need                                                                     | You do **not** need                        |
-| ---------------------------------------------------------------------------- | ------------------------------------------ |
-| A computer (or VPS) that can run the homeserver                              | Deep Linux or Nix knowledge                |
-| A **public IP** _or_ access to a **streamproxy** token from a public machine | To open random ports all over your network |
-| A domain name pointed at that public endpoint                                | To hand-maintain Docker Compose            |
-| Willingness to click through a setup UI                                      | To become a reverse-proxy expert           |
-
-Only **ports 80 and 443** need to be reachable from the internet (or from your streamproxy path). Everything else stays on the machine. The server does not have to be a public cloud box sitting “in the internet”—it can live at home; it only needs that path for HTTPS.
-
-## How communication works
-
-Your browser always talks **HTTPS** to Neo. Encryption is terminated on _your_ server; apps talk among themselves inside a protected network; answers are encrypted again before they go back out.
-
-```mermaid
-flowchart LR
-  U[You / browser] -->|HTTPS encrypted| NGX[Nginx · De / encryption + routing]
-  NGX --> AUTH[tinyauth · login gate]
-  AUTH --> APP[Your Services]
-  APP --> NGX
-  NGX -->|HTTPS encrypted| U
-
-  subgraph machine [Your homeserver]
-    NGX
-    AUTH
-    APP
-  end
-```
-
-- **Ingress** — traffic arrives on your public IP **or** via streamproxy (same idea from your point of view).
-- **TLS** — Nginx unwraps encryption only on your machine, then routes to the right service.
-- **Double protection** — almost every service is behind **tinyauth** _and_ the app’s own login where applicable: two layers, not “hope nobody finds the port.”
-- **Inside the box** — apps run as containers on an internal network; they are not casually exposed to the world.
-- **Auto-updates** — system and containers pick up new software without you babysitting upgrades every weekend.
-
-More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Features that do the hard work for you
-
-- **Automatic HTTPS** — certificates and encryption handled for you; traffic is encrypted in transit and only decrypted on your server.
-- **Double authentication** — gateway login (tinyauth) plus per-app accounts on most services.
-- **Automatic updates** — OS and containers stay current so you get security fixes and new features without a maintenance hobby.
-- **Opinionated, safe defaults** — a firewalled host, internal service network, and sensible packaging so you are not inventing a security model from scratch.
-- **Network-wide DNS blocking** — optional Pi-hole style blocking for ads and trackers across your network.
-- **Reproducible & revertable** — built on NixOS: rebuild the same system, roll back a bad change, recover after disaster with configuration and data you control.
-- **One web UI for daily life** — enable services, set domain and users, manage the stack in the browser. Power-user CLI exists;
-- **Data stays home** — backups, files, photos, vaults: on _your_ disk, not a free tier that mines you.
-- **Plugins when you want more** — add media stacks, personal apps, or extra NixOS configurations without reinventing TLS and auth ([Plugins](docs/PLUGINS.md)).
-- **Works without a public IP at home** — pair with streamproxy on a small public machine; your data can still live on the box in your house.
-
-## What you can run
-
-Out of the box (enable what you need in the UI):
-
-| You want…             | Neo can run…                                           |
-| --------------------- | ------------------------------------------------------ |
-| Secure access & login | Reverse proxy (SWAG), tinyauth, Tailscale, VPN helpers |
-| Files & sync          | Filebrowser, Dufs (WebDAV), Syncthing, Nextcloud (+ Collabora) |
-| Photos                | Immich, Immich Drop                                    |
-| Documents             | Paperless                                              |
-| Passwords             | Vaultwarden                                            |
-| Calendar & contacts   | RustiCal (CalDAV/CardDAV), iCal subscriptions          |
-| Search & utilities    | SearXNG, pastebin, change detection, Karakeep, Webtop, Firefox |
-| Privacy on the LAN    | Pi-hole                                                |
-| Backups & monitoring  | Automated backup, Beszel                               |
-| AI / assistants       | Hermes, and more                                       |
-| Management            | **Neo web** — your control panel                       |
-
-Want a full **media / \*arr** stack (Jellyfin, Sonarr, Radarr, …)? That ships as the **[highsea.neo](https://github.com/madebydamo/highsea.neo)** plugin—same homeserver, extra apps. See [Plugins](docs/PLUGINS.md).
+**Documentation.** [Install](docs/INSTALL.md) · [How it works](docs/ARCHITECTURE.md) · [Plugins](docs/PLUGINS.md) · [CLI](docs/CLI.md)
 
 ## Getting started
 
-Full steps (including install from another computer): **[Installation guide](docs/INSTALL.md)**.
+Install Neo. Open the web UI. Set the domain. Set the login. Turn services on. Apply.
 
-In short: install Neo on your machine (or install _onto_ a remote machine with a guided path), open the **web UI**, set your domain and login, turn services on, and apply. You do not need to learn a custom command language for everyday use.
+Full steps: [Installation guide](docs/INSTALL.md).
 
-No public IP at home? You need either a public IP _or_ a **streamproxy** arrangement—described in the install guide.
+## What it looks like
 
-## Documentation
+**Services.** Everything you can turn on.
 
-| Guide                                    | Who it’s for                                            |
-| ---------------------------------------- | ------------------------------------------------------- |
-| **[Installation](docs/INSTALL.md)**      | Setting up Neo for the first time                       |
-| **[How it works](docs/ARCHITECTURE.md)** | Security, traffic, updates—plain language + diagrams    |
-| **[Plugins](docs/PLUGINS.md)**           | Adding extra apps and community plugins                 |
-| **[CLI](docs/CLI.md)**                   | Optional power-user tools (most people never need this) |
-| **[AGENTS.md](AGENTS.md)**               | Developers and automation agents working on Neo itself  |
+![Services overview in the Neo web UI](docs/images/services-overview.jpg)
+
+**One service.** Immich, with live status, options, save, activate.
+
+![Immich service page in the Neo web UI](docs/images/service-immich.jpg)
+
+**Versioning.** History of the machine, a diff between two generations, rollback.
+
+![Versioning and rollback in the Neo web UI](docs/images/versioning.jpg)
+
+## What you need
+
+- A machine you flash Neo onto
+- A domain name
+- A public IP
+
+If the machine at home has no public IP, route the traffic with [streamproxy](docs/INSTALL.md#no-public-ip-streamproxy). HTTPS still reaches it. The data stays on your hardware.
+
+## Features
+
+### Every day
+
+- **Opinionated defaults.** A firewalled host, services on an internal network, packaging chosen for you.
+- **Simple web interface.** Full control in the browser. Enable a service, edit it, apply it, revert an edit before it goes live.
+- **User management.** Add people. Provision the services each person should have.
+- **Automatic HTTPS.** Certificates stay current. Traffic stays encrypted until it reaches your server.
+- **Automatic updates.** The operating system, the containers, the apps. Everything, on a schedule, all the way through.
+
+### AI support
+
+- **Your IT support.** Hermes helps you run the homeserver. Useful on day one. Useful after you know the system well.
+- **Your provider.** The model comes from the AI provider you choose.
+- **In every service.** Each service you enable is integrated with Hermes, and Hermes can operate it.
+- **Health, reports, recommendations.** Hermes checks the machine, reports what broke, and recommends the next step.
+
+### Your hardware
+
+- **Your machine.** The homeserver is hardware you control.
+- **Home or anywhere.** Host it at home. Host it anywhere. Safe on a public Wi-Fi uplink.
+- **Fine-grained access control.** Per service, per person: who can reach it on the LAN, on Tailscale, on the public web.
+
+### Privacy
+
+- **LAN privacy.** Pi-hole across the network. WireGuard egress for the apps you choose. Tailscale for private reach. NTP for the LAN.
+- **Off-site backup.** Scheduled rsync over SSH to a machine you choose.
+
+### Extend
+
+- **Plugins.** Media stacks, personal apps, extra config, on the same HTTPS and the same login. [Plugins](docs/PLUGINS.md).
+
+### Under the hood
+
+- **Nix-based.** This is why the system is reproducible, revertible, recoverable. Rebuild the same machine. Switch back to an earlier generation. Recover from configuration you still hold.
+
+## Services
+
+Enable what you want in the web UI.
+
+- **Files.** Filebrowser, Dufs (WebDAV), Syncthing, Nextcloud, Collabora, Paperless, Docmost, Stirling PDF, Gitea
+- **Photos.** Immich, Immich Drop
+- **Media.** Jellyfin, Sonarr, Radarr, the rest of the \*arr stack, from the [highsea.neo](https://github.com/madebydamo/highsea.neo) plugin
+- **Passwords.** Vaultwarden
+- **Calendar.** RustiCal (CalDAV, CardDAV), Calino, iCal subscriptions
+- **Utilities.** SearXNG, Karakeep, pastebin, change detection, Activepieces, Webtop, Firefox, iSponsorBlockTV
+- **Network.** Pi-hole, Tailscale, WireGuard
+- **Monitoring.** Beszel
+- **AI support.** Hermes
+- **Administration.** Neo web
+- **Your own.** Neo is fully extendable with your own Nix plugins. Whatever you can imagine. [Plugins](docs/PLUGINS.md).
 
 ## For contributors
 
-If you are changing Neo’s code or packaging, start at **[AGENTS.md](AGENTS.md)**.
+Work on Neo itself starts at **[AGENTS.md](AGENTS.md)**.
 
 ---
 
-**Own your stack.** Issues and contributions welcome.
+**Own your stack.** Issues welcome. Contributions welcome.
