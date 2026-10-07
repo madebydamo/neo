@@ -7,6 +7,10 @@
   }: let
     cfg = config.neo.services.vikunja;
     domain = config.neo.services.swag.domain or null;
+    publicUrl =
+      if domain != null && domain != "" && (cfg.subdomain or null) != null
+      then "https://${cfg.subdomain}.${domain}"
+      else "https://<subdomain>.<domain>";
   in {
     config.neo.services.vikunja.skill.conf = lib.neo.mkServiceSkill {
       service = "vikunja";
@@ -21,28 +25,30 @@
         ## Architecture notes
         - Package: pkgs.vikunja via services.vikunja (not a container)
         - Unit: vikunja.service, SQLite at /var/lib/vikunja/vikunja.db
-        - Listens on 0.0.0.0:${toString cfg.port}; SWAG proxies host.docker.internal to that port
-        - Public URL: https://tasks.<domain>/ (subdomain option, default tasks)
-        - Own accounts. Edge tinyauth is off so the official apps and CalDAV basic-auth work
-        - CalDAV base is the site root; clients use the Vikunja username and password or an app token
+        - Listens on 127.0.0.1:${toString cfg.port}; SWAG reaches it via host.docker.internal + DNAT
+        - Public URL: ${publicUrl}/ (subdomain option; default tasks)
+        - Web UI is behind tinyauth (GET / is 302). Do not turn edge auth off
+        - publicPaths: /api (apps, JWT, API tokens, /api/v1/info), /dav (CalDAV), /.well-known/caldav, /feeds (HTTP Basic), /health
+        - CalDAV base is ${publicUrl}/dav/ — not the site root. Clients use the Vikunja username and password, a CalDAV token, or an API token
 
         ## Procedures
         1. systemctl status vikunja
-        2. Open https://tasks.<domain>/ and create the first user (that user is admin)
+        2. Open ${publicUrl}/ (tinyauth first) and create the first user (that user is admin)
         3. Settings → Import to pull Todoist / Microsoft To Do / Trello / CSV
-        4. Install the Vikunja app (Android, iOS, desktop) and point it at the public URL
-        5. For CalDAV, use the same URL in DAVx5 or Apple Reminders
+        4. Install the Vikunja app (Android, iOS, desktop) and point it at ${publicUrl}
+        5. For CalDAV, use ${publicUrl}/dav/principals/<username>/ in DAVx5 or Apple Reminders
 
         ## Pitfalls
-        - publicurl must be https://<subdomain>.<domain>/ with the trailing slash, or CORS and the importer fail
-        - Todoist OAuth import needs the site publicly reachable and a Todoist app whose redirect is https://<host>/migrate/todoist
-        - Do not put tinyauth in front of /api or CalDAV
-        - StateDirectory is /var/lib/vikunja (DynamicUser). Back that up; it is not under Neo appdata
+        - The NixOS module sets publicurl from frontendScheme + frontendHostname, with a trailing slash. Do not set settings.service.publicurl again
+        - Todoist OAuth import needs the site publicly reachable. The callback page is the SPA (/migrate/todoist, behind tinyauth); the migration API is under /api
+        - Do not remove /api, /dav, /.well-known/caldav, /feeds, or /health from auth.publicPaths
+        - StateDirectory is /var/lib/vikunja (DynamicUser). The NixOS module owns that path; it is not under Neo appdata. Back it up separately. Clear-appdata and volume snapshots will not see it
 
         ## Verification
         - systemctl is-active vikunja
         - curl -fsS http://127.0.0.1:${toString cfg.port}/api/v1/info
-        - https://tasks.<domain>/ returns the Vikunja UI (not a tinyauth redirect)
+        - ${publicUrl}/ returns 302 to tinyauth
+        - ${publicUrl}/api/v1/info is on publicPaths (200, no tinyauth cookie)
       '';
     };
   };

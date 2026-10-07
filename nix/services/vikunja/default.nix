@@ -1,6 +1,6 @@
 # Vikunja implementation.
 # Uses the nixpkgs package via services.vikunja (nixos-26.05, Neo's pin).
-# Listens on the host so SWAG can proxy to the docker bridge gateway.
+# Binds loopback only; SWAG reaches it via host.docker.internal + DNAT.
 {...}: {
   flake.modules.nixos.vikunja = {
     config,
@@ -12,27 +12,25 @@
       domain = config.neo.services.swag.domain or "localhost";
       publicHost = "${cfg.subdomain}.${domain}";
     in {
-      config = mkIf cfg.enabled {
-        services.vikunja = {
-          enable = true;
-          frontendScheme = "https";
-          frontendHostname = publicHost;
-          # Reachable from the SWAG container via the internal-network gateway.
-          address = "0.0.0.0";
-          port = cfg.port;
-          settings = {
-            service = {
+      config = mkIf cfg.enabled (mkMerge [
+        (lib.neo.mkDockerToLocalhostForward cfg.port)
+        {
+          services.vikunja = {
+            enable = true;
+            frontendScheme = "https";
+            frontendHostname = publicHost;
+            # Not on LAN. SWAG uses host.docker.internal + the DNAT above.
+            address = "127.0.0.1";
+            port = cfg.port;
+            # publicurl comes from frontendScheme + frontendHostname.
+            # database.* keeps the module defaults (sqlite under StateDirectory).
+            # Do not set those here: same priority conflicts if they drift.
+            settings.service = {
               enableregistration = cfg.allowRegistration;
               enableemailreminders = false;
-              # Public URL must match the SWAG vhost, with a trailing slash.
-              publicurl = "https://${publicHost}/";
-            };
-            database = {
-              type = "sqlite";
-              path = "/var/lib/vikunja/vikunja.db";
             };
           };
-        };
-      };
+        }
+      ]);
     };
 }
