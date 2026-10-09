@@ -6,6 +6,7 @@
     ...
   }: let
     cfg = config.neo.services.vikunja;
+    appdata = cfg.appdata;
     domain = config.neo.services.swag.domain or null;
     publicUrl =
       if domain != null && domain != "" && (cfg.subdomain or null) != null
@@ -24,7 +25,7 @@
 
         ## Architecture notes
         - Package: pkgs.vikunja via services.vikunja (not a container)
-        - Unit: vikunja.service, SQLite at /var/lib/vikunja/vikunja.db
+        - Unit: vikunja.service (runs as the neo user homeserver), SQLite at ${appdata}/vikunja.db
         - Listens on 127.0.0.1:${toString cfg.port}; SWAG reaches it via host.docker.internal + DNAT
         - Public URL: ${publicUrl}/ (subdomain option; default tasks)
         - Web UI is behind tinyauth (GET / is 302). Do not turn edge auth off
@@ -42,7 +43,7 @@
         - The NixOS module sets publicurl from frontendScheme + frontendHostname, with a trailing slash. Do not set settings.service.publicurl again
         - Todoist OAuth import needs the site publicly reachable. The callback page is the SPA (/migrate/todoist, behind tinyauth); the migration API is under /api
         - Do not remove /api, /dav, /.well-known/caldav, /feeds, or /health from auth.publicPaths
-        - StateDirectory is /var/lib/vikunja (DynamicUser). The NixOS module owns that path; it is not under Neo appdata. Back it up separately. Clear-appdata and volume snapshots will not see it
+        - Database and uploads live in Neo appdata (${appdata}, files under files/), so Clear-appdata and volume snapshots cover them. The module's /var/lib/vikunja is not used
 
         ## Verification
         - systemctl is-active vikunja

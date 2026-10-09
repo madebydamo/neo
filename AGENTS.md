@@ -38,6 +38,8 @@ Naming: options snake_case under `neo.services.*`; plain-string descriptions; vo
 
 **Units / status:** every unit a service runs goes in `systemdUnits` (`mkContainerDefinitions` + `extraUnits`, or `mkSystemdUnits`); the web UI status and `neo-<service>.target` read it. Post-start configuration (occ, config patches, provisioning) uses **`lib.neo.mkSetupService`** (`nix/lib/setup-service.nix`): retry loop, RemainAfterExit so success shows as "done", Type=simple unless dependents need `blocking = true`. Status health comes from systemd properties (`units/status.rs` `UnitHealth`), never unit names.
 
+**Appdata:** all mutable service state (databases, uploads) lives under `${config.neo.core.volumes.appdata}/<name>` and is declared with `mkAppdata`, so Clear-appdata and snapshots cover it. This also applies to native NixOS modules (not just OCI): point their paths there (`database.path`, …), replace `DynamicUser`/`StateDirectory` with `User`/`Group = "homeserver"` (the neo uid/gid, like OCI appdata) plus `ReadWritePaths` and a tmpfiles `d` rule (see `nix/services/vikunja/default.nix`) — never leave data in `/var/lib/<name>`.
+
 **SWAG traps:** `include /config/nginx/proxy.conf` already sets Upgrade/Connection and proxy timeouts — **do not re-set** them (426 WebSockets / `proxy_*_timeout` duplicate kills all vhosts).
 
 **ingress:** per-service multi-select (`local` / `tailscale` / `web`) via `mkReverseProxyOptions`; default all three. Omitting `web` denies that vhost on the shared rathole/PROXY-protocol listener (packet-run 404) — not a per-app rathole port.

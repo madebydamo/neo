@@ -50,12 +50,13 @@
               ];
             }
             // lib.neo.mkSystemdUnits ["vikunja"]
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/vikunja"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = "https://vikunja.io/images/vikunja-logo.svg";
               description = ''
                 Vikunja is the open-source task manager closest to Todoist: projects, labels, priorities, repeating tasks, natural-language quick add, saved filters, sharing, and list / Kanban / Gantt / table views.
-                It is installed from nixpkgs (pkgs.vikunja) and run by the NixOS module services.vikunja. The process binds 127.0.0.1; SWAG reaches it through host.docker.internal. SQLite lives in the module StateDirectory /var/lib/vikunja, not under Neo appdata.
+                It is installed from nixpkgs (pkgs.vikunja) and run by the NixOS module services.vikunja. The process binds 127.0.0.1; SWAG reaches it through host.docker.internal. SQLite and uploaded files live in Neo appdata (<appdata>/vikunja).
                 The web UI is behind tinyauth. Official apps, /api, CalDAV (/dav), well-known discovery, notification feeds, and /health bypass edge auth and use Vikunja's own accounts or tokens.
                 Import Todoist, Microsoft To Do, Trello, TickTick, or CSV from Settings. Neo already serves calendars from RustiCal; this is the task side.
               '';
