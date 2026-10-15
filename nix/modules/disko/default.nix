@@ -103,9 +103,10 @@
               data = {
                 type = "zfs_fs";
                 mountpoint = mp;
-                # Single mounter: systemd fileSystems (disko + zfsutil). canmount=noauto
-                # skips zfs-mount's `zfs mount -a`, avoiding the dual-mount race that
-                # fails local-fs.target. nofail keeps secondary disks out of emergency mode.
+                # Single mounter: systemd fileSystems (disko + zfsutil).
+                # canmount=noauto is skipped by `zfs mount -a` (zfs-mount.service),
+                # so only the fstab unit mounts the dataset — no dual-mount race.
+                # nofail keeps a missing/slow secondary disk out of emergency mode.
                 mountOptions = ["defaults" "nofail"];
                 options = {
                   "com.sun:auto-snapshot" = "false";
@@ -127,6 +128,33 @@
     };
 
     environment.systemPackages = lib.mkIf cfg.enabled [pkgs.zfs];
+
+    # Disko applies dataset options at create time. Existing additional-disk
+    # datasets may still have canmount=on until updated. Set canmount=noauto
+    # before zfs-mount (property change is safe while mounted) so one activate
+    # stops the dual-mount race without a manual zfs set.
+    systemd.services.neo-additional-disks-zfs-prep = lib.mkIf (cfg.enabled && cfg.additionalDisks != {}) {
+      description = "Neo: canmount=noauto on additional ZFS data datasets";
+      wantedBy = ["zfs-mount.service" "multi-user.target"];
+      after = ["zfs-import.target"];
+      before = ["zfs-mount.service"];
+      unitConfig.DefaultDependencies = "no";
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+      };
+      path = [pkgs.zfs pkgs.coreutils];
+      script = lib.concatMapStringsSep "\n" (mp: let
+        ds = "zpool-${sanitize mp}/data";
+      in ''
+        if zfs list -H -o name ${lib.escapeShellArg ds} >/dev/null 2>&1; then
+          cur=$(zfs get -H -o value canmount ${lib.escapeShellArg ds} || true)
+          if [ "$cur" != "noauto" ]; then
+            zfs set canmount=noauto ${lib.escapeShellArg ds} || true
+          fi
+        fi
+      '') (lib.attrValues cfg.additionalDisks);
+    };
 
     boot.initrd.systemd.services = lib.mkIf dataRestore {
       neo-zfs-restore = {

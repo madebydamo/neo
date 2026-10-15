@@ -24,7 +24,7 @@
             additionalDisks = mkOption {
               type = types.attrsOf types.str;
               default = {};
-              description = "Additional disks mapped to mountpoints (e.g. { \"/dev/sdb\" = \"/var/neo/DATA/Media\"; } or { \"/dev/mmcblk0\" = \"/var/neo\"; } to back volumes.root with its own pool for easy swap/backup). Each gets an independent ZFS pool (snapshots disabled). Datasets use canmount=noauto and fstab nofail so only systemd mounts them and a missing/slow disk does not enter emergency mode.";
+              description = "Additional disks mapped to mountpoints (e.g. { \"/dev/sdb\" = \"/var/neo/DATA/Media\"; } or { \"/dev/mmcblk0\" = \"/var/neo\"; } to back volumes.root with its own pool for easy swap/backup). Each gets an independent ZFS pool (snapshots disabled). Datasets use canmount=noauto and fstab nofail so only systemd mounts them (no zfs-mount race) and a missing/slow disk does not enter emergency mode.";
             };
 
             poolName = mkOption {
