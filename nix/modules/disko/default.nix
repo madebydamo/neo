@@ -3,6 +3,7 @@
     config,
     lib,
     pkgs,
+    utils,
     ...
   }: let
     cfg = config.neo.disko;
@@ -12,6 +13,11 @@
     # (see zfs-restore.sh). The system itself (root, /nix) is never snapshotted.
     dataRestore = cfg.enabled && config.boot.initrd.systemd.enable;
     dataDataset = "${cfg.poolName}/neo";
+    additionalMountpoints = lib.attrValues cfg.additionalDisks;
+    additionalPoolName = mp: "zpool-${sanitize mp}";
+    additionalDataset = mp: "${additionalPoolName mp}/data";
+    # systemd unit name for a path mount (e.g. /mnt/foo → mnt-foo.mount)
+    additionalMountUnit = mp: "${utils.escapeSystemdPath mp}.mount";
   in {
     imports = [inputs.disko.nixosModules.disko];
     disko.devices = lib.mkIf cfg.enabled {
@@ -89,7 +95,7 @@
           };
         }
         // lib.mapAttrs' (disk: mp: let
-          pool = "zpool-${sanitize mp}";
+          pool = additionalPoolName mp;
         in {
           name = pool;
           value = {
@@ -129,15 +135,33 @@
 
     environment.systemPackages = lib.mkIf cfg.enabled [pkgs.zfs];
 
-    # Disko applies dataset options at create time. Existing additional-disk
-    # datasets may still have canmount=on until updated. Set canmount=noauto
-    # before zfs-mount (property change is safe while mounted) so one activate
-    # stops the dual-mount race without a manual zfs set.
+    # Secondary ZFS mounts are data disks: never block boot if absent/slow.
+    # Disko already emits nofail via mountOptions; pin neededForBoot as well.
+    fileSystems = lib.mkIf (cfg.enabled && cfg.additionalDisks != {}) (
+      lib.listToAttrs (map (mp: {
+          name = mp;
+          value = {
+            neededForBoot = lib.mkDefault false;
+            options = lib.mkAfter ["nofail"];
+          };
+        })
+        additionalMountpoints)
+    );
+
+    # Disko applies dataset options at create/update time. Existing
+    # additional-disk datasets may still have canmount=on until then. Set
+    # canmount=noauto after the pool is imported and before both zfs-mount
+    # and the systemd path mounts, so neither side races on first activate.
     systemd.services.neo-additional-disks-zfs-prep = lib.mkIf (cfg.enabled && cfg.additionalDisks != {}) {
       description = "Neo: canmount=noauto on additional ZFS data datasets";
-      wantedBy = ["zfs-mount.service" "multi-user.target"];
-      after = ["zfs-import.target"];
-      before = ["zfs-mount.service"];
+      wantedBy = ["zfs-mount.service" "local-fs.target" "multi-user.target"];
+      after =
+        ["zfs-import.target"]
+        ++ map (mp: "zfs-import-${additionalPoolName mp}.service") additionalMountpoints;
+      before =
+        ["zfs-mount.service" "local-fs.target"]
+        ++ map additionalMountUnit additionalMountpoints;
+      wants = map (mp: "zfs-import-${additionalPoolName mp}.service") additionalMountpoints;
       unitConfig.DefaultDependencies = "no";
       serviceConfig = {
         Type = "oneshot";
@@ -145,7 +169,7 @@
       };
       path = [pkgs.zfs pkgs.coreutils];
       script = lib.concatMapStringsSep "\n" (mp: let
-        ds = "zpool-${sanitize mp}/data";
+        ds = additionalDataset mp;
       in ''
         if zfs list -H -o name ${lib.escapeShellArg ds} >/dev/null 2>&1; then
           cur=$(zfs get -H -o value canmount ${lib.escapeShellArg ds} || true)
@@ -153,7 +177,7 @@
             zfs set canmount=noauto ${lib.escapeShellArg ds} || true
           fi
         fi
-      '') (lib.attrValues cfg.additionalDisks);
+      '') additionalMountpoints;
     };
 
     boot.initrd.systemd.services = lib.mkIf dataRestore {
