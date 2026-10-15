@@ -103,7 +103,14 @@
               data = {
                 type = "zfs_fs";
                 mountpoint = mp;
-                options."com.sun:auto-snapshot" = "false";
+                # Single mounter: systemd fileSystems (disko + zfsutil). canmount=noauto
+                # skips zfs-mount's `zfs mount -a`, avoiding the dual-mount race that
+                # fails local-fs.target. nofail keeps secondary disks out of emergency mode.
+                mountOptions = ["defaults" "nofail"];
+                options = {
+                  "com.sun:auto-snapshot" = "false";
+                  canmount = "noauto";
+                };
               };
             };
           };
