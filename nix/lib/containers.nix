@@ -138,6 +138,8 @@ in {
       # Only containers whose docker-<name> unit is listed in systemdUnits are
       # included, so optional sidecars gated out of systemdUnits (e.g. tinyauth
       # Entra bridge when entra is off) are not pulled or restarted.
+      # Prefer the systemdUnits intersection over the raw containers attrset: image
+      # options may still exist for UI overrides while the unit is mkIf'd off.
       getAllContainers = config:
         lib.concatLists (
           lib.mapAttrsToList (

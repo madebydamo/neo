@@ -88,14 +88,21 @@
             in ''
               echo "[$(date -Iseconds)] Checking ${escapeShellArg image} (used by: ${consumers})..."
               # Normalize inspect output: trim whitespace; missing image => none.
-              # A bare "none" or empty id is a first pull — never pass it to docker tag.
+              # Only content-addressed ids (sha256:…) are taggable; anything else is a
+              # first pull (empty, "none", or garbage like a leading newline + "none").
               old_id=$(${pkgs.docker}/bin/docker image inspect --format '{{.Id}}' ${escapeShellArg image} 2>/dev/null || true)
               old_id=$(printf '%s' "$old_id" | tr -d '[:space:]')
-              if [ -z "$old_id" ]; then old_id=none; fi
+              case "$old_id" in
+                sha256:*|sha512:*) ;;
+                *) old_id=none ;;
+              esac
               ${pkgs.docker}/bin/docker pull ${escapeShellArg image} || true
               new_id=$(${pkgs.docker}/bin/docker image inspect --format '{{.Id}}' ${escapeShellArg image} 2>/dev/null || true)
               new_id=$(printf '%s' "$new_id" | tr -d '[:space:]')
-              if [ -z "$new_id" ]; then new_id=none; fi
+              case "$new_id" in
+                sha256:*|sha512:*) ;;
+                *) new_id=none ;;
+              esac
               if [ "$old_id" != "$new_id" ] && [ "$new_id" != "none" ]; then
                 echo "  Image updated ($old_id -> $new_id); restarting all consumers"
                 rollback_tag=""
@@ -119,6 +126,8 @@
                   <<<"$updates_json")
                 ${concatMapStringsSep "\n" (c: ''
                   unit="docker-${c.container}"
+                  # Require a loaded unit before restart. Optional sidecars (e.g. gated
+                  # out of systemdUnits / oci-containers) must not flip failed=true.
                   load_state=$(${pkgs.systemd}/bin/systemctl show -p LoadState --value "$unit" 2>/dev/null || echo not-found)
                   if [ "$load_state" != "loaded" ]; then
                     echo "    skipped $unit (${c.service}): unit not found (LoadState=$load_state)"
