@@ -271,10 +271,15 @@
             }
             // lib.neo.mkContainerDefinitions {
               tinyauth = "ghcr.io/tinyauthapp/tinyauth:v5.2.0";
+              # Image override only; the bridge unit is created under mkIf entra
+              # and listed in systemdUnits only when entra is on. docker-updater
+              # uses systemdUnits ∩ containers, so this image is not pulled when
+              # the sidecar is disabled.
               tinyauth-entra = "python:3.13-alpine";
             }
             // {
-              # The Entra userinfo bridge only runs with Entra sign-in.
+              # Gate the Entra userinfo bridge unit (and thus docker-updater
+              # consumers) the same way oci-containers uses mkIf entra.enabled.
               systemdUnits = mkOption {
                 type = types.listOf types.str;
                 default =

@@ -134,20 +134,28 @@ in {
       toOciBindMounts = mounts:
         map (m: "${m.localPath}:${m.containerPath}") mounts;
 
+      # Enabled services' container image registry for docker-updater.
+      # Only containers whose docker-<name> unit is listed in systemdUnits are
+      # included, so optional sidecars gated out of systemdUnits (e.g. tinyauth
+      # Entra bridge when entra is off) are not pulled or restarted.
       getAllContainers = config:
         lib.concatLists (
           lib.mapAttrsToList (
             sname: svc:
               if (svc.enabled or false)
-              then
-                lib.mapAttrsToList (
-                  cname: cimg: {
-                    service = sname;
-                    container = cname;
-                    image = cimg;
-                    unit = "docker-${cname}";
-                  }
-                ) (svc.containers or {})
+              then let
+                units = svc.systemdUnits or [];
+              in
+                lib.filter (c: lib.elem c.unit units) (
+                  lib.mapAttrsToList (
+                    cname: cimg: {
+                      service = sname;
+                      container = cname;
+                      image = cimg;
+                      unit = "docker-${cname}";
+                    }
+                  ) (svc.containers or {})
+                )
               else []
           ) (config.neo.services or {})
         );

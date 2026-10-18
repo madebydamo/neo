@@ -87,9 +87,15 @@
               unitsJson = builtins.toJSON (map (c: "docker-${c.container}") cs);
             in ''
               echo "[$(date -Iseconds)] Checking ${escapeShellArg image} (used by: ${consumers})..."
-              old_id=$(${pkgs.docker}/bin/docker image inspect --format '{{.Id}}' ${escapeShellArg image} 2>/dev/null || echo "none")
+              # Normalize inspect output: trim whitespace; missing image => none.
+              # A bare "none" or empty id is a first pull — never pass it to docker tag.
+              old_id=$(${pkgs.docker}/bin/docker image inspect --format '{{.Id}}' ${escapeShellArg image} 2>/dev/null || true)
+              old_id=$(printf '%s' "$old_id" | tr -d '[:space:]')
+              if [ -z "$old_id" ]; then old_id=none; fi
               ${pkgs.docker}/bin/docker pull ${escapeShellArg image} || true
-              new_id=$(${pkgs.docker}/bin/docker image inspect --format '{{.Id}}' ${escapeShellArg image} 2>/dev/null || echo "none")
+              new_id=$(${pkgs.docker}/bin/docker image inspect --format '{{.Id}}' ${escapeShellArg image} 2>/dev/null || true)
+              new_id=$(printf '%s' "$new_id" | tr -d '[:space:]')
+              if [ -z "$new_id" ]; then new_id=none; fi
               if [ "$old_id" != "$new_id" ] && [ "$new_id" != "none" ]; then
                 echo "  Image updated ($old_id -> $new_id); restarting all consumers"
                 rollback_tag=""
@@ -98,6 +104,8 @@
                   echo "  Tagging previous image as ${escapeShellArg rollbackTag}"
                   ${pkgs.docker}/bin/docker tag "$old_id" ${escapeShellArg rollbackTag} || true
                   rollback_tag=${escapeShellArg rollbackTag}
+                else
+                  echo "  First pull (no previous image id); skipping rollback tag"
                 fi
               ''}
                 changed=1
@@ -110,16 +118,22 @@
                   '. + [{image:$image, old_id:$old, new_id:$new, rollback_tag:$tag, units:$units}]' \
                   <<<"$updates_json")
                 ${concatMapStringsSep "\n" (c: ''
-                  echo "    systemctl restart docker-${c.container} (${c.service})"
-                  rc=0
-                  ${pkgs.util-linux}/bin/flock -E 75 -w 120 \
-                    ${escapeShellArg "/run/neo/locks/unit_docker-${c.container}.service.lock"} \
-                    ${pkgs.systemd}/bin/systemctl restart "docker-${c.container}" || rc=$?
-                  if [ "$rc" -eq 75 ]; then
-                    echo "    skipped docker-${c.container}: locked by a neo operation (restore / clear appdata / pull)"
-                  elif [ "$rc" -ne 0 ]; then
-                    echo "    restart failed: docker-${c.container}"
-                    failed=1
+                  unit="docker-${c.container}"
+                  load_state=$(${pkgs.systemd}/bin/systemctl show -p LoadState --value "$unit" 2>/dev/null || echo not-found)
+                  if [ "$load_state" != "loaded" ]; then
+                    echo "    skipped $unit (${c.service}): unit not found (LoadState=$load_state)"
+                  else
+                    echo "    systemctl restart $unit (${c.service})"
+                    rc=0
+                    ${pkgs.util-linux}/bin/flock -E 75 -w 120 \
+                      ${escapeShellArg "/run/neo/locks/unit_docker-${c.container}.service.lock"} \
+                      ${pkgs.systemd}/bin/systemctl restart "$unit" || rc=$?
+                    if [ "$rc" -eq 75 ]; then
+                      echo "    skipped $unit: locked by a neo operation (restore / clear appdata / pull)"
+                    elif [ "$rc" -ne 0 ]; then
+                      echo "    restart failed: $unit"
+                      failed=1
+                    fi
                   fi
                 '')
                 cs}
