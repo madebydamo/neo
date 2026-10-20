@@ -91,7 +91,7 @@ Enable what you want in the web UI.
 - **Media.** Jellyfin, Sonarr, Radarr, the rest of the \*arr stack, from the [highsea.neo](https://github.com/madebydamo/highsea.neo) plugin
 - **Passwords and SSO.** Vaultwarden, Authentik
 - **Calendar.** RustiCal (CalDAV, CardDAV), Calino, iCal subscriptions
-- **Utilities.** SearXNG, Karakeep, pastebin, change detection, Activepieces, Dawarich, Webtop, Firefox, iSponsorBlockTV
+- **Utilities.** SearXNG, Karakeep, pastebin, change detection, Activepieces, Dawarich, Mealie, Webtop, Firefox, iSponsorBlockTV
 - **Network.** Pi-hole, Tailscale, WireGuard
 - **Monitoring.** Beszel
 - **AI support.** Hermes
