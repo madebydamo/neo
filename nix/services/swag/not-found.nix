@@ -34,7 +34,6 @@
           mkdir -p ${appdataSwag}/www/neo-404
           cp -a --no-preserve=mode,ownership ${pages} ${appdataSwag}/www/neo-404/p
           find ${appdataSwag}/www/neo-404 -type f -name '*.html' -exec sed -i 's|__NEO_HOME__|${neoHome}|g' {} +
-          find ${appdataSwag}/www/neo-404 -type f -name '*.test.js' -delete
           chown -R ${toString config.neo.core.uid}:${toString config.neo.core.gid} ${appdataSwag}/www/neo-404
         '';
       };

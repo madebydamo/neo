@@ -48,7 +48,7 @@
           443, and the PROXY-protocol port. Missing that flag on 8443 made
           public unknown names fall through to whichever vhost nginx loaded
           first (wrong app, cert warning). Nginx-generated 404s (unknown
-          host, ingress deny, geo deny) share the packet-run page via
+          host, ingress deny, geo deny) share the neo 404 page via
           `error-pages.conf` (`/_neo404/` → `www/neo-404/p/index.html`).
           Upstream application 404s are not intercepted.
       '';
