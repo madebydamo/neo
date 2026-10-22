@@ -96,6 +96,8 @@ host_virtfs:
 launch: shutdown build
   #!/usr/bin/env bash
   shares=$(just host_virtfs)
+  # Host libs (e.g. alsa-lib) built against another glibc break QEMU.
+  unset LD_LIBRARY_PATH
   if [ -f ./build/result/bin/run-nixos-vm ]; then
     QEMU_NET_OPTS="hostfwd=tcp::2222-:22" \
     QEMU_OPTS="-smp 4 -m 8G -monitor tcp:{{qemu_monitor}},server,nowait ${shares}" \
