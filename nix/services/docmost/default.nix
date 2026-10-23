@@ -4,6 +4,8 @@
 # With sso + tinyauth, docmost-sso (sso.py) signs tinyauth users in: SWAG sends
 # /login there; docmost-sso-setup creates the workspace / service account and
 # sets every account's password to HMAC(ssoKey, email) so the bridge can log in.
+# With mcp as well, docmost-mcp (mcp.py, imports sso.py) serves /mcp; its OAuth
+# authorize step is behind tinyauth and tools log in to Docmost as that user.
 {...}: {
   flake.modules.nixos.docmost = {
     config,
@@ -19,12 +21,16 @@
       dbPassword = cfg.dbPassword or "";
       tinyauthCfg = config.neo.services.tinyauth;
       ssoActive = cfg.sso && cfg.auth.enabled && tinyauthCfg.enabled;
+      mcpActive = ssoActive && cfg.mcp;
       # Derived from appSecret: no extra secret to manage. Must match swag.nix.
       ssoKey = builtins.hashString "sha256" "${cfg.appSecret or ""}:docmost-sso";
       swagKey = builtins.hashString "sha256" "${cfg.appSecret or ""}:docmost-sso-swag";
+      # Signs MCP OAuth clients, codes and tokens; a new appSecret revokes them all.
+      mcpKey = builtins.hashString "sha256" "${cfg.appSecret or ""}:docmost-mcp";
       # Never a real mailbox, so no tinyauth user can map onto it.
       serviceEmail = "docmost-sso@neo.invalid";
       ssoPort = 8080;
+      mcpPort = 8081; # Must match swag.nix.
     in {
       config = mkIf cfg.enabled {
         assertions = [
@@ -105,6 +111,30 @@
               ADMIN_GROUPS = concatStringsSep "," cfg.adminGroups;
             };
             volumes = ["${./sso.py}:/app/sso.py:ro"];
+            networks = ["internal"];
+          };
+
+          docmost-mcp = mkIf mcpActive {
+            image = cfg.containers."docmost-mcp";
+            autoStart = true;
+            cmd = ["python3" "/app/mcp.py"];
+            environment = {
+              PORT = toString mcpPort;
+              PUBLIC_URL = "https://${cfg.subdomain}.${domain}";
+              MCP_KEY = mcpKey;
+              # sso.py (sign-in, Docmost login) reads these.
+              DOCMOST_URL = "http://docmost:${toString cfg.port}";
+              SSO_KEY = ssoKey;
+              SWAG_KEY = swagKey;
+              SERVICE_EMAIL = serviceEmail;
+              MAIL_DOMAIN = domain;
+              ADMINS = concatStringsSep "," cfg.admins;
+              ADMIN_GROUPS = concatStringsSep "," cfg.adminGroups;
+            };
+            volumes = [
+              "${./sso.py}:/app/sso.py:ro"
+              "${./mcp.py}:/app/mcp.py:ro"
+            ];
             networks = ["internal"];
           };
         };

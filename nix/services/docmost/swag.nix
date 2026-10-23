@@ -7,6 +7,11 @@
 # password, setup and invite flows are closed: accounts and passwords belong
 # to the bridge. Auth stays in the access phase: like rustical, try_files
 # (content phase) jumps to the named location after tinyauth succeeded.
+#
+# With mcp, /mcp, the OAuth metadata, register and token endpoints go to
+# docmost-mcp without tinyauth (MCP clients cannot follow a login page; /mcp
+# checks its own bearer tokens). Only /mcp/oauth/authorize, which the user
+# opens in a browser, is behind tinyauth, like /login.
 {...}: {
   flake.modules.nixos.docmost-swag = {
     config,
@@ -16,6 +21,7 @@
     cfg = config.neo.services.docmost;
     tinyauthCfg = config.neo.services.tinyauth;
     ssoActive = cfg.sso && cfg.auth.enabled && tinyauthCfg.enabled;
+    mcpActive = ssoActive && cfg.mcp;
     # Must match default.nix.
     swagKey = builtins.hashString "sha256" "${cfg.appSecret or ""}:docmost-sso-swag";
     auth = lib.neo.authBlock config cfg;
@@ -27,6 +33,44 @@
       set $upstream_port ${toString cfg.port};
       set $upstream_proto http;
       proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+    '';
+    mcpCore = ''
+      include /config/nginx/proxy.conf;
+      include /config/nginx/resolver.conf;
+      set $upstream_app docmost-mcp;
+      set $upstream_port 8081;
+      proxy_pass http://$upstream_app:$upstream_port;
+    '';
+    mcpConf = ''
+      location = /mcp {
+        ${mcpCore}
+        # Answers are single JSON bodies, but do not hold back streamed ones.
+        proxy_buffering off;
+      }
+
+      location ~ ^/(\.well-known/oauth-(protected-resource(/mcp)?|authorization-server)|mcp/oauth/(register|token))$ {
+        ${mcpCore}
+      }
+
+      location = /mcp/oauth/authorize {
+        ${auth}
+        try_files /__docmost_mcp_no_such_file @docmost_mcp_authorize;
+      }
+
+      location @docmost_mcp_authorize {
+        internal;
+        # proxy.conf rewrites http:// redirects to https://, which breaks
+        # loopback OAuth callbacks (http://localhost:<port>/callback). The first
+        # matching mapping wins, so keep those as they are; "off" cannot be
+        # combined with proxy.conf's mapping (nginx emerg: duplicate).
+        proxy_redirect ~^(http://(localhost|127\.0\.0\.1|\[::1\])([:/?].*)?)$ $1;
+        ${mcpCore}
+        proxy_set_header X-Neo-SSO-Key "${swagKey}";
+        proxy_set_header Remote-User $user;
+        proxy_set_header Remote-Email $email;
+        proxy_set_header Remote-Name $name;
+        proxy_set_header Remote-Groups $groups;
+      }
     '';
     ssoConf = ''
       server {
@@ -71,6 +115,7 @@
           return 302 /login;
         }
 
+        ${lib.optionalString mcpActive mcpConf}
         location / {
       ${proxyCore} ${auth}
         }

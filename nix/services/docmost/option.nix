@@ -1,6 +1,7 @@
 # Docmost (open-source collaborative wiki / Notion alternative) service options.
 # Production layout: app + Postgres + Redis. UI behind tinyauth; /api/health for probes.
-# With sso (default) the docmost-sso bridge signs tinyauth users into Docmost.
+# With sso (default) the docmost-sso bridge signs tinyauth users into Docmost;
+# with mcp (default) docmost-mcp serves /mcp with OAuth sign-in through tinyauth.
 {...}: {
   flake.modules.nixos.docmost-option = {
     config,
@@ -19,6 +20,7 @@
       tinyauthCfg = config.neo.services.tinyauth;
       docmostCfg = config.neo.services.docmost;
       ssoActive = docmostCfg.sso && docmostCfg.auth.enabled && tinyauthCfg.enabled;
+      mcpActive = ssoActive && docmostCfg.mcp;
     in {
       options.neo.services.docmost = mkOption {
         type = types.submodule {
@@ -89,6 +91,21 @@
                   visibleWhen = "sso";
                 };
               };
+              mcp = mkOption {
+                type = types.bool;
+                default = true;
+                rank = 40;
+                description = ''
+                  MCP server at https://<subdomain>.<domain>/mcp so AI clients (Claude, Cursor, …) can search,
+                  read and edit pages as the signed-in user. Clients connect with only the URL: OAuth sign-in
+                  opens tinyauth in the browser, then asks to approve the client. Needs sso.
+                '';
+                ui = lib.neo.ui.mkUi {
+                  group = lib.neo.ui.groups.assistant;
+                  label = "MCP server";
+                  summary = true;
+                };
+              };
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "docmost";
@@ -103,15 +120,18 @@
               "docmost-redis" = "redis:8";
               # Tinyauth sign-in bridge (sso.py); only run while sso is active.
               "docmost-sso" = "python:3.13-alpine";
+              # MCP server with tinyauth OAuth (mcp.py); only run while mcp is active.
+              "docmost-mcp" = "python:3.13-alpine";
             }
             // {
               systemdUnits = mkOption {
                 type = types.listOf types.str;
                 default =
                   ["docker-docmost" "docker-docmost-db" "docker-docmost-redis"]
-                  ++ optionals ssoActive ["docker-docmost-sso" "docmost-sso-setup"];
+                  ++ optionals ssoActive ["docker-docmost-sso" "docmost-sso-setup"]
+                  ++ optionals mcpActive ["docker-docmost-mcp"];
                 internal = true;
-                description = "Systemd units of Docmost and, with tinyauth SSO, its sign-in bridge.";
+                description = "Systemd units of Docmost and, with tinyauth SSO, its sign-in bridge and MCP server.";
               };
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/docmost"
