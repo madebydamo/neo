@@ -23,11 +23,14 @@
         - Public URL must match `APP_URL` (Neo sets `https://<subdomain>.<domain>`)
         - `/api/health` is on publicPaths (tinyauth bypass) for probes
         - Real-time editor needs WebSockets (SWAG `proxy.conf` already enables Upgrade/Connection)
-        - First visit shows workspace setup; that account becomes the workspace owner
+        - `sso` (default on, needs tinyauth): `docmost-sso` bridge signs tinyauth users in on `/login`; accounts are created on first visit and join "Everyone" (writer in the default space)
+        - Admin role from `admins` (usernames/emails) / `adminGroups` (OAuth groups), synced at each sign-in; both empty → first user becomes admin, roles left to the UI
+        - `docmost-sso-setup` creates the workspace (service account `docmost-sso@neo.invalid` as owner) or adds that account as admin, and sets all passwords to HMAC(appSecret-derived key, email)
+        - SWAG returns 403 for Docmost password/setup/invite-accept APIs and redirects their pages to `/login`; Docmost logout goes to tinyauth `/logout`
 
         ## Credentials
         - Neo: `services.docmost.appSecret` (32+ chars), `dbPassword` (internal DB only)
-        - App users: create on first visit / invites — not stored by Neo
+        - App users: with `sso`, from tinyauth (no Docmost password); without, create on first visit / invites
         - Edge: tinyauth
 
         ## Procedures
@@ -41,9 +44,12 @@
         - Wrong domain / APP_URL breaks links and the editor
         - Do not clear appdata without confirmation — destroys wiki and DB
         - Postgres 18 volume is `/var/lib/postgresql` (not `.../data`)
+        - With `sso`, a Docmost account whose email differs from the tinyauth email is not matched: a new account is created
+        - Changing `appSecret` re-keys all SSO passwords (setup unit reruns); sessions are invalidated
 
         ## Verification
         - Units active; `/api/health` returns 200; UI loads after tinyauth (302 to login when unauthenticated)
+        - SSO: `just logs docmost-sso-setup` ends in "done"; `docker logs docmost-sso` shows `created <email>` on first sign-in
       '';
     };
   };

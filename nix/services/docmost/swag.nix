@@ -1,6 +1,12 @@
 # Docmost reverse proxy for SWAG.
 # UI protected by tinyauth; /api/health bypasses via publicPaths.
 # proxy.conf already sets Upgrade/Connection for WebSockets — do not re-set them.
+#
+# With sso + tinyauth, /login goes to the docmost-sso bridge (after tinyauth),
+# which answers with Docmost's authToken cookie and a redirect. Docmost's own
+# password, setup and invite flows are closed: accounts and passwords belong
+# to the bridge. Auth stays in the access phase: like rustical, try_files
+# (content phase) jumps to the named location after tinyauth succeeded.
 {...}: {
   flake.modules.nixos.docmost-swag = {
     config,
@@ -8,13 +14,82 @@
     ...
   }: let
     cfg = config.neo.services.docmost;
+    tinyauthCfg = config.neo.services.tinyauth;
+    ssoActive = cfg.sso && cfg.auth.enabled && tinyauthCfg.enabled;
+    # Must match default.nix.
+    swagKey = builtins.hashString "sha256" "${cfg.appSecret or ""}:docmost-sso-swag";
+    auth = lib.neo.authBlock config cfg;
+    authLoc = lib.neo.authLocations config cfg;
+    proxyCore = ''
+      include /config/nginx/proxy.conf;
+      include /config/nginx/resolver.conf;
+      set $upstream_app docmost;
+      set $upstream_port ${toString cfg.port};
+      set $upstream_proto http;
+      proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+    '';
+    ssoConf = ''
+      server {
+        include /config/nginx/listen-https.conf;
+        http2 on;
+        server_name ${cfg.subdomain}.*;
+        include /config/nginx/ssl.conf;
+        # Wiki attachments / page assets can be large.
+        client_max_body_size 100M;
+        include /config/nginx/geo-access.conf;
+        # Streamproxy/rathole terminates on SWAG :8443 (PROXY protocol).
+        absolute_redirect off;
+        port_in_redirect off;
+
+        location = /login {
+          ${auth}
+          try_files /__docmost_sso_no_such_file @docmost_sso;
+        }
+
+        location @docmost_sso {
+          internal;
+          include /config/nginx/proxy.conf;
+          include /config/nginx/resolver.conf;
+          set $upstream_app docmost-sso;
+          set $upstream_port 8080;
+          proxy_set_header X-Neo-SSO-Key "${swagKey}";
+          proxy_set_header Remote-User $user;
+          proxy_set_header Remote-Email $email;
+          proxy_set_header Remote-Name $name;
+          proxy_set_header Remote-Groups $groups;
+          proxy_pass http://$upstream_app:$upstream_port;
+        }
+
+        # Password sign-in, setup and invite acceptance: only the bridge
+        # (straight to docmost:3000 on the internal network) may use these.
+        location ~ ^/api/(auth/(login|setup|change-password|forgot-password|password-reset)|workspace/invites/accept)$ {
+          return 403;
+        }
+
+        # Their pages: back to tinyauth sign-in.
+        location ~ ^/(setup|signup|forgot-password|password-reset|invites)(/|$) {
+          return 302 /login;
+        }
+
+        location / {
+      ${proxyCore} ${auth}
+        }
+
+        ${authLoc}
+      }
+    '';
   in {
-    config.neo.services.docmost.proxyConf = lib.mkDefault (lib.neo.mkSubdomainProxyConf {
-      inherit config cfg;
-      upstream = "docmost";
-      port = cfg.port;
-      # Wiki attachments / page assets can be large.
-      maxBodySize = "100M";
-    });
+    config.neo.services.docmost.proxyConf = lib.mkDefault (
+      if ssoActive
+      then ssoConf
+      else
+        lib.neo.mkSubdomainProxyConf {
+          inherit config cfg;
+          upstream = "docmost";
+          port = cfg.port;
+          # Wiki attachments / page assets can be large.
+          maxBodySize = "100M";
+        }
+    );
   };
 }

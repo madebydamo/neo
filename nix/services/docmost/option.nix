@@ -1,5 +1,6 @@
 # Docmost (open-source collaborative wiki / Notion alternative) service options.
 # Production layout: app + Postgres + Redis. UI behind tinyauth; /api/health for probes.
+# With sso (default) the docmost-sso bridge signs tinyauth users into Docmost.
 {...}: {
   flake.modules.nixos.docmost-option = {
     config,
@@ -7,7 +8,18 @@
     ...
   }:
     with lib;
-    with {inherit (lib.neo) mkOption mkEnableOption;}; {
+    with {inherit (lib.neo) mkOption mkEnableOption;}; let
+      ssoGroup = lib.neo.ui.mkGroup {
+        id = "sso";
+        label = "Single sign-on";
+        description = "Sign tinyauth users into Docmost; admin role by user or group";
+        icon = "key";
+        rank = 50;
+      };
+      tinyauthCfg = config.neo.services.tinyauth;
+      docmostCfg = config.neo.services.docmost;
+      ssoActive = docmostCfg.sso && docmostCfg.auth.enabled && tinyauthCfg.enabled;
+    in {
       options.neo.services.docmost = mkOption {
         type = types.submodule {
           options =
@@ -36,6 +48,47 @@
                 description = "Password for the internal Postgres container (POSTGRES_PASSWORD / DATABASE_URL)";
                 helper = lib.neo.helpers.randomToken;
               };
+              sso = mkOption {
+                type = types.bool;
+                default = true;
+                rank = 30;
+                description = ''
+                  Sign tinyauth users straight into Docmost (no second login). Accounts are created on
+                  first visit and join the "Everyone" group, so all users can edit the shared spaces.
+                  Docmost's own password, invite and setup pages are disabled. Needs tinyauth.
+                '';
+                ui = lib.neo.ui.mkUi {
+                  group = ssoGroup;
+                  summary = true;
+                };
+              };
+              admins = mkOption {
+                type = types.listOf types.str;
+                default = [];
+                rank = 31;
+                description = ''
+                  Tinyauth usernames or emails that get the Docmost admin role at sign-in.
+                  With admins and adminGroups both empty, the first user to sign in becomes admin
+                  and roles are left to the Docmost UI; otherwise everyone else is set to member.
+                '';
+                ui = lib.neo.ui.mkUi {
+                  group = ssoGroup;
+                  visibleWhen = "sso";
+                };
+              };
+              adminGroups = mkOption {
+                type = types.listOf types.str;
+                default = [];
+                rank = 32;
+                description = ''
+                  OAuth groups (as in tinyauth oauthGroups; for Entra the display name or object ID)
+                  whose members get the Docmost admin role at sign-in.
+                '';
+                ui = lib.neo.ui.mkUi {
+                  group = ssoGroup;
+                  visibleWhen = "sso";
+                };
+              };
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "docmost";
@@ -48,6 +101,18 @@
               docmost = "docmost/docmost:latest";
               "docmost-db" = "postgres:18";
               "docmost-redis" = "redis:8";
+              # Tinyauth sign-in bridge (sso.py); only run while sso is active.
+              "docmost-sso" = "python:3.13-alpine";
+            }
+            // {
+              systemdUnits = mkOption {
+                type = types.listOf types.str;
+                default =
+                  ["docker-docmost" "docker-docmost-db" "docker-docmost-redis"]
+                  ++ optionals ssoActive ["docker-docmost-sso" "docmost-sso-setup"];
+                internal = true;
+                description = "Systemd units of Docmost and, with tinyauth SSO, its sign-in bridge.";
+              };
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/docmost"
             // lib.neo.mkServiceMeta {

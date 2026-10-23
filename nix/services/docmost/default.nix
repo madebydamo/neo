@@ -1,10 +1,14 @@
 # Docmost service implementation (app + Postgres + Redis).
 # UI behind tinyauth via SWAG; /api/health on publicPaths for probes.
 # WebSockets for the real-time editor are covered by SWAG proxy.conf (do not re-set Upgrade/Connection).
+# With sso + tinyauth, docmost-sso (sso.py) signs tinyauth users in: SWAG sends
+# /login there; docmost-sso-setup creates the workspace / service account and
+# sets every account's password to HMAC(ssoKey, email) so the bridge can log in.
 {...}: {
   flake.modules.nixos.docmost = {
     config,
     lib,
+    pkgs,
     ...
   }:
     with lib; let
@@ -13,6 +17,14 @@
       domain = config.neo.services.swag.domain;
       secretSet = v: v != null && v != "";
       dbPassword = cfg.dbPassword or "";
+      tinyauthCfg = config.neo.services.tinyauth;
+      ssoActive = cfg.sso && cfg.auth.enabled && tinyauthCfg.enabled;
+      # Derived from appSecret: no extra secret to manage. Must match swag.nix.
+      ssoKey = builtins.hashString "sha256" "${cfg.appSecret or ""}:docmost-sso";
+      swagKey = builtins.hashString "sha256" "${cfg.appSecret or ""}:docmost-sso-swag";
+      # Never a real mailbox, so no tinyauth user can map onto it.
+      serviceEmail = "docmost-sso@neo.invalid";
+      ssoPort = 8080;
     in {
       config = mkIf cfg.enabled {
         assertions = [
@@ -76,7 +88,68 @@
             ];
             networks = ["internal"];
           };
+
+          docmost-sso = mkIf ssoActive {
+            image = cfg.containers."docmost-sso";
+            autoStart = true;
+            cmd = ["python3" "/app/sso.py"];
+            environment = {
+              PORT = toString ssoPort;
+              DOCMOST_URL = "http://docmost:${toString cfg.port}";
+              SSO_KEY = ssoKey;
+              SWAG_KEY = swagKey;
+              SERVICE_EMAIL = serviceEmail;
+              MAIL_DOMAIN = domain;
+              LOGOUT_URL = "https://${tinyauthCfg.subdomain}.${domain}/logout";
+              ADMINS = concatStringsSep "," cfg.admins;
+              ADMIN_GROUPS = concatStringsSep "," cfg.adminGroups;
+            };
+            volumes = ["${./sso.py}:/app/sso.py:ro"];
+            networks = ["internal"];
+          };
         };
+
+        # Fresh Docmost: create the workspace with the service account as owner.
+        # Existing workspace: add the service account as admin in SQL. Then set
+        # every account's password to HMAC(ssoKey, email) (pgcrypto, bcrypt like
+        # Docmost); accounts made before SSO switch over here. Runs again on
+        # every container restart, so a new appSecret re-keys all accounts.
+        systemd.services.docmost-sso-setup = mkIf ssoActive (lib.neo.mkSetupService {
+          inherit pkgs;
+          name = "docmost-sso-setup";
+          description = "Prepare Docmost accounts for tinyauth sign-in";
+          containers = ["docmost" "docmost-db" "docmost-sso"];
+          path = [pkgs.docker];
+          retryInterval = 10;
+          script = ''
+            set -euo pipefail
+            docker exec docmost-sso python3 /app/sso.py setup
+            docker exec -i docmost-db psql -U docmost -d docmost -q -v ON_ERROR_STOP=1 \
+              -v key=${escapeShellArg ssoKey} -v svc=${escapeShellArg serviceEmail} <<'SQL'
+            SET client_min_messages = warning;
+            CREATE EXTENSION IF NOT EXISTS pgcrypto;
+            INSERT INTO users (email, name, role, workspace_id, email_verified_at)
+            SELECT :'svc', 'Neo SSO', 'admin', w.id, now()
+            FROM (SELECT id FROM workspaces ORDER BY created_at LIMIT 1) w
+            WHERE NOT EXISTS (
+              SELECT 1 FROM users u WHERE u.email = :'svc' AND u.workspace_id = w.id
+            );
+            -- pgcrypto only reads $2a$; Docmost's $2b$ hashes are the same bcrypt.
+            UPDATE users SET password = crypt(p.pw, gen_salt('bf', 12))
+            FROM (
+              SELECT id, encode(hmac(lower(email), :'key', 'sha256'), 'hex') AS pw
+              FROM users WHERE deleted_at IS NULL
+            ) p
+            WHERE users.id = p.id
+              AND (
+                users.password IS NULL
+                OR users.password NOT LIKE '$2_$%'
+                OR overlay(users.password placing '$2a$' from 1 for 4)
+                  <> crypt(p.pw, overlay(users.password placing '$2a$' from 1 for 4))
+              );
+            SQL
+          '';
+        });
       };
     };
 }
