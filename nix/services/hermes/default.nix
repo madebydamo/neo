@@ -243,7 +243,7 @@
         # Also on hermes user profile + gateway systemd PATH (see hermes-agent module).
         extraPackages = agentCliTools;
         settings = hermesSettings;
-        extraDependencyGroups = ["all" "messaging" "homeassistant" "youtube" "voice"];
+        extraDependencyGroups = ["all" "messaging" "youtube" "voice"];
         environment = hermesEnv;
         # Workspace AGENTS.md + skill tree: hermes/skills.nix.
         restart = "always";
