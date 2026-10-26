@@ -89,7 +89,7 @@
       options.neo.core.git.knownHosts = mkOption {
         type = types.attrsOf types.str;
         default = {};
-        description = "Extra git hosts reached over SSH with the machine git key, with their pinned SSH host public key (from ssh-keyscan -t ed25519 <host>, without the leading host name). github.com, gitlab.com and codeberg.org are always included. Use host:port as the name for a non-standard SSH port (e.g. a Gitea at git.example.com:2222). Apply a new host before adding a plugin that lives on it";
+        description = "Extra git hosts reached over SSH with the machine git key, with their pinned SSH host public key (from ssh-keyscan -t ed25519 <host>, without the leading host name). github.com and gitlab.com are always included. Use host:port as the name for a non-standard SSH port (e.g. a Gitea at git.example.com:2222). Apply a new host before adding a plugin that lives on it";
         rank = 30;
         ui = inGroup group.git;
       };
