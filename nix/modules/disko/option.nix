@@ -66,7 +66,7 @@
                   id = "snapshots";
                   label = "Automatic snapshots";
                   description = "How long automatic snapshots of all Neo data are kept";
-                  icon = "camera";
+                  icon = lib.neo.ui.icons.camera;
                   rank = 100;
                 };
               };

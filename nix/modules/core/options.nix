@@ -15,28 +15,28 @@
           id = "ssh";
           label = "SSH";
           description = "Login keys for admin and homeserver, and the optional console password";
-          icon = "key";
+          icon = ui.icons.key;
           rank = 10;
         };
         git = ui.mkGroup {
           id = "git";
           label = "Git";
           description = "Machine git identity for commits, private plugins and Hermes";
-          icon = "git";
+          icon = ui.icons.git;
           rank = 20;
         };
         volumes = ui.mkGroup {
           id = "volumes";
           label = "Volumes";
           description = "Where Neo stores service data, media and documents";
-          icon = "folder";
+          icon = ui.icons.folder;
           rank = 30;
         };
         nix = ui.mkGroup {
           id = "nix";
           label = "Nix";
           description = "Local build limits and the remote builder";
-          icon = "cpu";
+          icon = ui.icons.cpu;
           rank = 40;
         };
       };

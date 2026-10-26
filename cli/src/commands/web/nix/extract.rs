@@ -234,7 +234,11 @@ impl NixEvaluator {
             rename_scalar_core_option(section, &mut opts);
         }
         super::sections::label_options(&mut opts);
-        let sections = super::sections::build_sections(&opts);
+        let mut sections = super::sections::build_sections(&opts);
+        for section in &mut sections {
+            self.icons.link(&mut section.icon);
+            section.icon_tint = section.icon.as_deref().is_some_and(super::sections::is_svg);
+        }
         let options_json = serde_json::to_string(&opts).unwrap_or_else(|_| "[]".to_string());
         let units = map_units(raw.units, &raw.timers, &raw.setup_units, &raw.containers);
         let mut meta = raw.meta;

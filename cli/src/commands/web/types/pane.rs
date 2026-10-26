@@ -51,8 +51,11 @@ pub struct OptionSection {
     pub label: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Image URL (`mkGroup.icon`, published store files as `/service-icons/…`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
+    /// SVG icon drawn as a mask in the theme text colour instead of as an image.
+    pub icon_tint: bool,
     /// False for General (rendered open, no collapse chrome).
     pub collapsible: bool,
     pub options: Vec<OptionSchema>,

@@ -11,7 +11,7 @@
         id = "oauth";
         label = "Single sign-on";
         description = "Sign in with OAuth providers (Entra ID, Authentik, …); app access per group";
-        icon = "key";
+        icon = lib.neo.ui.icons.key;
         rank = 50;
       };
     in {

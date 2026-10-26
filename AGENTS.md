@@ -80,7 +80,7 @@ Recommended top-level **rank bands** for `neo.services.<name>` (siblings only; s
 
 ### Sections and labels (`ui.group` / `label` / `summary` / `choiceLabels` / `visibleWhen`)
 
-The service pane shows **General** (ungrouped options, always open) followed by collapsible **groups**. `ui.group = lib.neo.ui.groups.access` (or `mkGroup { id; label; description; icon; rank; }`) on an option puts it and all its descendants in that section; generated option sets already do this (`mkReverseProxyOptions`/`mkVpnOptions` → access, `mkSkillOptions` → assistant, `mkContainerDefinitions` → advanced). Section split + humanized labels happen in `cli/src/commands/web/nix/sections.rs`.
+The service pane shows **General** (ungrouped options, always open) followed by collapsible **groups**. `ui.group = lib.neo.ui.groups.access` (or `mkGroup { id; label; description; icon; rank; }`) on an option puts it and all its descendants in that section; generated option sets already do this (`mkReverseProxyOptions`/`mkVpnOptions` → access, `mkSkillOptions` → assistant, `mkContainerDefinitions` → advanced). Section split + humanized labels happen in `cli/src/commands/web/nix/sections.rs`. Group `icon` takes a path or URL like `mkServiceMeta.icon`: built-ins are `lib.neo.ui.icons.<name>` (every `nix/lib/icons/<name>.svg`), and a plugin can pass its own `./icon.svg`. SVGs are drawn as a `currentColor` mask so they follow the theme; other images render as-is.
 
 - `label` — human name (default: humanized last path segment)
 - `summary = true` — value chip on the collapsed group header

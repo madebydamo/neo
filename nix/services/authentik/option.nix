@@ -120,7 +120,7 @@
                     id = "email";
                     label = "Email";
                     description = "SMTP server Authentik sends magic links and recovery emails through";
-                    icon = "mail";
+                    icon = lib.neo.ui.icons.mail;
                     rank = 40;
                   };
                 };

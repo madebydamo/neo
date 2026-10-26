@@ -115,6 +115,12 @@ pub fn label_options(opts: &mut [OptionSchema]) {
 }
 
 /// Drop crumb segments that repeat the section title ("Git" inside Git).
+/// Section icons that are SVGs render tinted (CSS mask) so they follow the theme.
+pub fn is_svg(url: &str) -> bool {
+    let path = url.split(['?', '#']).next().unwrap_or(url);
+    path.to_ascii_lowercase().ends_with(".svg")
+}
+
 fn crumb_without_group(crumb: &str, group_label: &str) -> String {
     if crumb.is_empty() || group_label.is_empty() {
         return crumb.to_string();
@@ -188,6 +194,13 @@ pub fn build_sections(opts: &[OptionSchema]) -> Vec<OptionSection> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn svg_icons_are_tinted() {
+        assert!(is_svg("/service-icons/abc-shield.svg"));
+        assert!(is_svg("https://cdn.example/Icon.SVG?v=2"));
+        assert!(!is_svg("/service-icons/abc-logo.png"));
+    }
 
     #[test]
     fn humanize_camel_snake_and_acronyms() {

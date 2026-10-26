@@ -14,7 +14,7 @@
         id = "sso";
         label = "Single sign-on";
         description = "Sign tinyauth users into Docmost; admin role by user or group";
-        icon = "key";
+        icon = lib.neo.ui.icons.key;
         rank = 50;
       };
       tinyauthCfg = config.neo.services.tinyauth;

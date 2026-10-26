@@ -620,7 +620,15 @@
         g = tryOr null (u.group or null);
       in
         if builtins.isAttrs g && (g.id or "") != ""
-        then toSafeValue g
+        then
+          # A path icon stays a path (toSafeValue would null it): toJSON copies
+          # it to the store and the web UI rewrites it to /service-icons/….
+          toSafeValue (removeAttrs g ["icon"])
+          // (
+            if builtins.isPath (g.icon or null) || builtins.isString (g.icon or null)
+            then {inherit (g) icon;}
+            else {}
+          )
         else null;
       label = tryOr null (u.label or null);
       summary = tryOr false (u.summary or false);
