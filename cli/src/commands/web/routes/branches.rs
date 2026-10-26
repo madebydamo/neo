@@ -8,7 +8,7 @@ use rocket_dyn_templates::Template;
 use crate::commands::web::diff::{render_changes, RenderOptions};
 use crate::commands::web::git::{
     activation_branch_for_rev, collect_changes, enabled_services_at_rev, is_worktree_dirty,
-    resolve_rev, settings_semantic, DiffRange,
+    lock_updates, resolve_rev, settings_semantic, DiffRange,
 };
 use crate::commands::web::locks::{try_lock, Blocked};
 use crate::commands::web::settings::save::refresh_after_settings_change;
@@ -129,11 +129,13 @@ pub fn versioning_diff(config: &State<Arc<AppConfig>>, a: &str, b: &str) -> RawH
         ),
         Ok(set) => {
             let semantic = settings_semantic(&dir, &set, range);
+            let inputs = lock_updates(&dir, &set, range);
             RawHtml(render_changes(
                 &set,
                 &RenderOptions {
                     subtitle: None,
                     semantic: semantic.as_ref(),
+                    inputs: &inputs,
                 },
             ))
         }

@@ -5,7 +5,7 @@ use rocket::{get, post, State};
 
 use crate::commands::web::action_bar::{action_bar_dynamic_element, broadcast_action_bar};
 use crate::commands::web::diff::{render_changes, RenderOptions};
-use crate::commands::web::git::{collect_changes, settings_semantic, DiffRange};
+use crate::commands::web::git::{collect_changes, lock_updates, settings_semantic, DiffRange};
 use crate::commands::web::locks::{try_lock, Blocked};
 use crate::commands::web::settings::discard_pending_changes;
 use crate::commands::web::trigger::trigger_activation;
@@ -42,6 +42,7 @@ pub fn changes_summary(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
         return RawHtml(ALL_APPLIED.to_string());
     }
     let semantic = settings_semantic(&dir, &set, DiffRange::Worktree);
+    let inputs = lock_updates(&dir, &set, DiffRange::Worktree);
     let html = render_changes(
         &set,
         &RenderOptions {
@@ -49,6 +50,7 @@ pub fn changes_summary(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
                 "Saved but not yet activated. Activate to apply, or discard to return to the last applied state.",
             ),
             semantic: semantic.as_ref(),
+            inputs: &inputs,
         },
     );
     RawHtml(format!("{html}{}", changes_actions_row()))

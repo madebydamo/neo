@@ -6,6 +6,7 @@
 //! the markup works whether it is swapped in by htmx or `innerHTML`.
 use std::collections::BTreeMap;
 
+use super::flake_lock::InputUpdate;
 use super::intraline::{word_diff, Segment};
 use super::model::{ChangeSet, DiffLine, FileChange, FileStatus, Hunk, LineKind};
 use super::settings_semantic::{SettingsDiff, Transition, ValueChange};
@@ -28,6 +29,8 @@ pub struct RenderOptions<'a> {
     pub subtitle: Option<&'a str>,
     /// Semantic `settings.toml` summary (`Err` = could not be computed).
     pub semantic: Option<&'a Result<SettingsDiff, String>>,
+    /// Flake inputs updated in `flake.lock` (empty = section hidden).
+    pub inputs: &'a [InputUpdate],
 }
 
 const ICON_CHEVRON: &str = r#"<svg class="neo-chev" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.2 14.8a.75.75 0 010-1.06L10.94 10 7.2 6.26a.75.75 0 111.06-1.06l4.27 4.27a.75.75 0 010 1.06L8.26 14.8a.75.75 0 01-1.06 0z" clip-rule="evenodd"/></svg>"#;
@@ -266,6 +269,58 @@ fn render_semantic(sem: &Result<SettingsDiff, String>) -> String {
         s.push_str("</ul>");
     }
     s.push_str("</section>");
+    s
+}
+
+// ---------------------------------------------------------------------------
+// Flake input updates
+// ---------------------------------------------------------------------------
+
+fn render_inputs(inputs: &[InputUpdate]) -> String {
+    let mut s = format!(
+        r#"<section class="neo-sem" aria-label="Dependency updates"><div class="neo-sem-title">Dependency updates <span class="neo-sem-meta">{}</span></div><ul class="neo-sem-list">"#,
+        plural(inputs.len(), "input", "inputs")
+    );
+    for u in inputs {
+        let badge = match (&u.old, &u.new) {
+            (None, Some(_)) => {
+                r#"<span class="neo-sem-badge" data-kind="enabled"><span aria-hidden="true">+</span> Added</span>"#
+            }
+            (Some(_), None) => {
+                r#"<span class="neo-sem-badge" data-kind="disabled"><span aria-hidden="true">−</span> Removed</span>"#
+            }
+            _ => {
+                r#"<span class="neo-sem-badge" data-kind="changed"><span aria-hidden="true">↑</span> Updated</span>"#
+            }
+        };
+        let mut rows = Vec::new();
+        if u.old.is_some() || u.new.is_some() {
+            rows.push(ValueChange {
+                path: "revision".into(),
+                old: u.old.as_ref().map(|r| r.rev.clone()),
+                new: u.new.as_ref().map(|r| r.rev.clone()),
+                secret: false,
+            });
+            let (od, nd) = (
+                u.old.as_ref().and_then(|r| r.date.clone()),
+                u.new.as_ref().and_then(|r| r.date.clone()),
+            );
+            if od.is_some() || nd.is_some() {
+                rows.push(ValueChange {
+                    path: "date".into(),
+                    old: od,
+                    new: nd,
+                    secret: false,
+                });
+            }
+        }
+        s.push_str(&format!(
+            r#"<li class="neo-sem-item"><div class="neo-sem-item-head"><span class="neo-sem-name">{}</span>{badge}</div>{}</li>"#,
+            escape_html(&u.name),
+            changes_table(&rows)
+        ));
+    }
+    s.push_str("</ul></section>");
     s
 }
 
@@ -711,6 +766,9 @@ pub fn render_changes(set: &ChangeSet, opts: &RenderOptions) -> String {
     if let Some(sem) = opts.semantic {
         s.push_str(&render_semantic(sem));
     }
+    if !opts.inputs.is_empty() {
+        s.push_str(&render_inputs(opts.inputs));
+    }
     s.push_str(r#"<div class="neo-changes-grid">"#);
     s.push_str(&render_tree(set));
     s.push_str(r#"<div class="neo-files">"#);
@@ -724,6 +782,7 @@ pub fn render_changes(set: &ChangeSet, opts: &RenderOptions) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::super::flake_lock::LockedRev;
     use super::super::parse::parse_patch;
     use super::super::settings_semantic::diff_settings_toml;
     use super::*;
@@ -777,6 +836,7 @@ mod tests {
             &RenderOptions {
                 subtitle: Some("sub"),
                 semantic: Some(&sem),
+                inputs: &[],
             },
         );
         assert!(html.contains("2 files changed"));
@@ -826,8 +886,23 @@ mod tests {
             &RenderOptions {
                 subtitle: None,
                 semantic: None,
+                inputs: &[InputUpdate {
+                    name: "high_sea".into(),
+                    old: Some(LockedRev {
+                        rev: "aaaaaaa".into(),
+                        date: None,
+                    }),
+                    new: Some(LockedRev {
+                        rev: "bbbbbbb".into(),
+                        date: Some("2026-10-26".into()),
+                    }),
+                }],
             },
         );
+        assert!(html.contains("Dependency updates"));
+        assert!(html.contains(">high_sea<"));
+        assert!(html.contains("<code>bbbbbbb</code>"));
+        assert!(html.contains("<code>2026-10-26</code>"));
         assert!(html.contains("Binary file"));
         assert!(html.contains("moved without content changes"));
         assert!(html.contains("a.nix →"));

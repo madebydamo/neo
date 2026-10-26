@@ -1,4 +1,5 @@
 //! Changes preview: git output parsing, semantic settings diff and HTML rendering.
+pub mod flake_lock;
 mod intraline;
 pub mod model;
 pub mod parse;

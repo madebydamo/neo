@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 
+use super::super::diff::flake_lock::{input_updates, InputUpdate};
 use super::super::diff::model::{ChangeSet, DiffLine, FileChange, FileStatus, Hunk, LineKind};
 use super::super::diff::parse::{
     parse_name_status_z, parse_numstat_z, parse_patch, parse_status_z, NumstatEntry,
@@ -19,6 +20,7 @@ const MAX_UNTRACKED_BYTES: u64 = 512 * 1024;
 /// At most this many untracked files get their content loaded.
 const MAX_UNTRACKED_FILES: usize = 200;
 const SETTINGS_FILE: &str = "settings.toml";
+const LOCK_FILE: &str = "flake.lock";
 
 /// Which changes to collect.
 #[derive(Debug, Clone, Copy)]
@@ -279,7 +281,37 @@ pub fn collect_changes(dir: &Path, range: DiffRange) -> Result<ChangeSet> {
 
 /// `settings.toml` at a rev (`""` when absent there).
 fn settings_at(dir: &Path, rev: &str) -> String {
-    git(dir, &["show", &format!("{rev}:{SETTINGS_FILE}")]).unwrap_or_default()
+    file_at(dir, rev, SETTINGS_FILE)
+}
+
+/// A file at a rev (`""` when absent there).
+fn file_at(dir: &Path, rev: &str, file: &str) -> String {
+    git(dir, &["show", &format!("{rev}:{file}")]).unwrap_or_default()
+}
+
+fn touches(set: &ChangeSet, file: &str) -> bool {
+    set.files
+        .iter()
+        .any(|f| f.path == file || f.old_path.as_deref() == Some(file))
+}
+
+/// Updated flake inputs when `flake.lock` is part of `set`.
+pub fn lock_updates(dir: &Path, set: &ChangeSet, range: DiffRange) -> Vec<InputUpdate> {
+    if !touches(set, LOCK_FILE) {
+        return Vec::new();
+    }
+    let (old, new) = match range {
+        DiffRange::Worktree => (
+            worktree_base(dir)
+                .map(|b| file_at(dir, &b, LOCK_FILE))
+                .unwrap_or_default(),
+            std::fs::read_to_string(toplevel(dir).join(LOCK_FILE)).unwrap_or_default(),
+        ),
+        DiffRange::Revs { from, to } => {
+            (file_at(dir, from, LOCK_FILE), file_at(dir, to, LOCK_FILE))
+        }
+    };
+    input_updates(&old, &new)
 }
 
 /// Semantic settings summary when `settings.toml` is part of `set`.
@@ -288,11 +320,7 @@ pub fn settings_semantic(
     set: &ChangeSet,
     range: DiffRange,
 ) -> Option<Result<SettingsDiff, String>> {
-    let touched = set
-        .files
-        .iter()
-        .any(|f| f.path == SETTINGS_FILE || f.old_path.as_deref() == Some(SETTINGS_FILE));
-    if !touched {
+    if !touches(set, SETTINGS_FILE) {
         return None;
     }
     let texts: Result<(String, String)> = match range {
