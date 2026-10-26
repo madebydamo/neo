@@ -1,4 +1,6 @@
-# Example service options.
+# Example service options: a static web page (linuxserver/nginx) behind SWAG and tinyauth.
+# Every file under modules/ is auto-imported (import-tree). Do not `imports` siblings.
+# Rename `example` everywhere (directory, module names, neo.services.<name>, container) for your service.
 {...}: {
   flake.modules.nixos.example-option = {
     config,
@@ -11,36 +13,57 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Example service" {rank = 0;};
+              enabled = mkEnableOption "Example static web page" {rank = 0;};
+              # Internal options are not shown in the web UI or written to settings.toml.
+              port = mkOption {
+                type = types.port;
+                internal = true;
+                default = 80;
+                description = "Port the container listens on inside the internal network";
+              };
+              # Service-specific options use ranks 10–89 (see nix/lib/option.nix in neo).
+              greeting = mkOption {
+                type = types.str;
+                default = "Hello from a Neo plugin";
+                rank = 10;
+                description = "Text shown on the example page";
+              };
             }
-            // neo.mkReverseProxyOptions {
+            # subdomain / ingress / auth / customDomains (ranks 100–130).
+            // lib.neo.mkReverseProxyOptions {
               subdomain = "example";
+              # Regexes that bypass tinyauth, e.g. a health check for monitoring.
               auth.publicPaths = [
-                "^/share/"
-                "^/static/"
-                "^/api/public"
+                "^/health$"
               ];
             }
-            // neo.mkVpnOptions {
+            # Optional: route outbound traffic through the vpn service (gluetun).
+            # Delete this block if the service does not need it.
+            // lib.neo.mkVpnOptions {
               containers = ["example"];
               networks = ["internal"];
-              ports = [8080];
+              ports = [80];
             }
+            # containers.<name> = image. Overridable in settings; drives updates and the units list.
+            # Extra non-docker units (setup services, timers) go in extraUnits / timerUnits.
             // lib.neo.mkContainerDefinitions {
-              example = "filebrowser/filebrowser:latest";
+              example = "lscr.io/linuxserver/nginx:latest";
             }
+            # Mutable state lives here, so Clear appdata and snapshots cover it.
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/example"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
-              # A URL string, or a file path next to this module (`./icon.png`).
-              icon = "https://filebrowser.org/static/logo.png";
+              # A file next to this module (svg, png, …) or a URL.
+              icon = ./icon.svg;
               description = ''
-                Example service. Replace with your own description.
-                It provides some functionality behind the reverse proxy and optional VPN.
+                Example plugin service: a static page served by linuxserver/nginx.
+                Replace this with what your service does and how Neo runs it.
               '';
-              projectUrl = "https://example.com/";
-              githubUrl = "https://github.com/example/example";
-            };
+              projectUrl = "https://docs.linuxserver.io/images/docker-nginx/";
+              githubUrl = "https://github.com/linuxserver/docker-nginx";
+            }
+            # Hermes skill toggle. The content is filled in skills.nix.
+            // lib.neo.mkSkillOptions {};
         };
         default = {};
         description = "Example service configuration";

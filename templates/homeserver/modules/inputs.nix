@@ -12,24 +12,25 @@
   neoCli = raw."neo-cli" or {};
   localCli = neoCli.local or {};
   serverCli = neoCli.server or {};
-  # Directory of a local flake ref (git+file:, path:, or an absolute path).
+  # Directory of a local flake ref (git+file:, path:, file:, or an absolute path).
   # The part after # is a flake output name, not part of the directory.
-  localDir = url: let
-    base =
-      if lib.hasPrefix "git+file://" url
-      then lib.removePrefix "git+file://" url
-      else if lib.hasPrefix "git+file:" url
-      then lib.removePrefix "git+file:" url
-      else if lib.hasPrefix "path:" url
-      then lib.removePrefix "path:" url
-      else if lib.hasPrefix "/" url
-      then url
-      else "";
-    dir = lib.head (lib.splitString "#" base);
+  # Mirrors local_flake_dir / is_local_flake_ref in the neo CLI (cli/src/utils/profile.rs).
+  localBase = url: let
+    ref = lib.head (lib.splitString "#" url);
+    prefix = lib.findFirst (p: lib.hasPrefix p ref) "" ["git+file://" "git+file:" "path:" "file://" "file:"];
   in
-    if dir == ""
-    then null
-    else dir;
+    lib.removePrefix prefix ref;
+  localDir = url: let
+    dir = localBase url;
+  in
+    if lib.hasPrefix "/" dir
+    then dir
+    else null;
+  # Relative refs (./, ../) only exist next to a checkout, never on the server.
+  isLocalRef = url: let
+    dir = localBase url;
+  in
+    lib.hasPrefix "/" dir || lib.hasPrefix "./" dir || lib.hasPrefix "../" dir;
   localUrl = localCli.neoInput or "";
   localPath = localDir localUrl;
   # Laptop builds follow the checkout when that directory exists. On the
@@ -38,7 +39,7 @@
   # `nix run --impure .#write-flake` for this check. `--impure` follows `run`.
   useLocal = localPath != null && builtins.pathExists localPath;
   sharedUrl = neoCli.neoInput or "";
-  sharedIsLocal = (localDir sharedUrl) != null;
+  sharedIsLocal = isLocalRef sharedUrl;
   serverUrl =
     if (serverCli.neoInput or "") != ""
     then serverCli.neoInput
