@@ -54,7 +54,7 @@ function el(attrs) {
   const classes = new Set();
   return {
     disabled: false,
-    classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c), has: (c) => classes.has(c) },
+    classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c), has: (c) => classes.has(c), contains: (c) => classes.has(c) },
     getAttribute: (k) => (k in a ? a[k] : null),
     setAttribute: (k, v) => { a[k] = String(v); },
     removeAttribute: (k) => { delete a[k]; },
@@ -92,6 +92,20 @@ test('apply: disables with reason and restores title/disabled state', () => {
   assert.ok(!activate.hasAttribute('data-neo-locked'));
   // Was disabled before the lock: stays disabled.
   assert.equal(already.disabled, true);
+});
+
+test('apply: in-flight htmx disable does not leave the grey class behind', () => {
+  // hx-disabled-elt disabled the button when the lock arrived; htmx re-enables it later.
+  const b = el({ 'data-neo-lock': 'system' });
+  b.disabled = true;
+  const d = doc([activation], [b]);
+  L.apply(d);
+  assert.ok(b.classList.has('btn-disabled'));
+  b.disabled = false;
+  d.locks.setAttribute('data-locks', '[]');
+  L.apply(d);
+  assert.equal(b.disabled, false);
+  assert.ok(!b.classList.has('btn-disabled'));
 });
 
 test('apply: bad JSON means no holders', () => {

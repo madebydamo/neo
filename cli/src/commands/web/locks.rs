@@ -107,6 +107,16 @@ pub async fn locks_element() -> String {
     element(&holders_json(&holders), false)
 }
 
+/// OOB `#neo-locks` with the current holders: sent on every `/ws/status` (re)connect,
+/// since the watcher only pushes changes and a client that was away (neo-web restart
+/// during a switch, lagged channel) would otherwise keep stale holders.
+pub async fn locks_oob_element() -> String {
+    let holders = tokio::task::spawn_blocking(|| manager().holders())
+        .await
+        .unwrap_or_default();
+    element(&holders_json(&holders), true)
+}
+
 /// Push `#neo-locks` whenever the set of holders changes. Also cleans up
 /// holders (and unit start guards) of processes that died.
 pub fn start_lock_watcher(config: Arc<AppConfig>) {

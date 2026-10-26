@@ -6,6 +6,7 @@ use rocket::{get, State};
 use rocket_ws::{Channel, Message, WebSocket};
 
 use crate::commands::web::action_bar::action_bar_oob_fragment;
+use crate::commands::web::locks::locks_oob_element;
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::units::{
     extract_unit_state_from_oob, is_pull_in_flight, query_unit_states,
@@ -109,6 +110,14 @@ pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel
             if stream.send(Message::Text(initial_bar)).await.is_err() {
                 return Ok(());
             }
+            // Lock holders too: changes made while this client was away are not re-sent.
+            if stream
+                .send(Message::Text(locks_oob_element().await))
+                .await
+                .is_err()
+            {
+                return Ok(());
+            }
 
             let mut watch = UnitWatch::default();
             let mut tick = tokio::time::interval(Duration::from_millis(500));
@@ -144,8 +153,11 @@ pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel
                                 watch.note_broadcast(&config, &fragment);
                                 vec![fragment]
                             }
-                            // Lagged: drop missed messages and keep the socket alive.
-                            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                            // Lagged: drop missed messages, keep the socket alive and
+                            // resend the state they may have carried.
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                                vec![action_bar_oob_fragment(&config), locks_oob_element().await]
+                            }
                             Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                         }
                     }

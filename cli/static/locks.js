@@ -71,6 +71,7 @@
     if (!el.hasAttribute('data-neo-locked')) {
       el.setAttribute('data-neo-title', el.getAttribute('title') || '');
       el.setAttribute('data-neo-was-disabled', el.disabled ? '1' : '0');
+      el.setAttribute('data-neo-had-btn-disabled', el.classList.contains('btn-disabled') ? '1' : '0');
     }
     el.setAttribute('data-neo-locked', '');
     el.disabled = true;
@@ -83,13 +84,15 @@
     var title = el.getAttribute('data-neo-title');
     if (title) el.setAttribute('title', title);
     else el.removeAttribute('title');
-    if (el.getAttribute('data-neo-was-disabled') !== '1') {
-      el.disabled = false;
-      el.classList.remove('btn-disabled');
-    }
+    // Disabled by its own markup or an in-flight htmx request (hx-disabled-elt, which
+    // re-enables it itself): leave `disabled` alone, but always drop the grey class
+    // unless the markup had it.
+    if (el.getAttribute('data-neo-was-disabled') !== '1') el.disabled = false;
+    if (el.getAttribute('data-neo-had-btn-disabled') !== '1') el.classList.remove('btn-disabled');
     el.removeAttribute('data-neo-locked');
     el.removeAttribute('data-neo-title');
     el.removeAttribute('data-neo-was-disabled');
+    el.removeAttribute('data-neo-had-btn-disabled');
   }
 
   /** Disable / restore every [data-neo-lock] element under `doc`. */
