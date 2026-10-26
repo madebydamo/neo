@@ -36,7 +36,7 @@ NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) + Rust *
 4. Enable in **`settings.toml`**: `[services.<name>] enabled = true`
 5. `git add` → **`just launch`** → smoke test below → `just format && just check`
 
-Naming: options snake_case under `neo.services.*`; plain-string descriptions; volumes via `config.neo.core.volumes.*`.
+Naming: options camelCase under `neo.services.*`; plain-string descriptions; volumes via `config.neo.core.volumes.*`.
 
 **Service icons:** `mkServiceMeta.icon` is a URL string or a file path (`./icon.svg`, png, webp, ico, …). Paths are copied into the Nix store and served at `/service-icons/…` in the services grid, navigator, and option pane. `https://…` and site paths such as `/static/neo-icon.png` stay as written.
 
