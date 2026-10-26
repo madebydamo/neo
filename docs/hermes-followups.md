@@ -36,7 +36,7 @@ Hermes docs: WAL is unsafe on some virtiofs / network mounts; existing WAL DBs a
 
 ### Discord / Slack / other messaging
 
-Only Telegram is a Neo option. Upstream messaging extras are already in `extraDependencyGroups` (`all`, `messaging`, `homeassistant`, `youtube`, `voice`). Tokens belong in env (same pattern as `TELEGRAM_BOT_TOKEN`).
+Only Telegram is a Neo option. Upstream messaging extras are already in `extraDependencyGroups` (`all`, `messaging`, `youtube`, `voice`). Tokens belong in env (same pattern as `TELEGRAM_BOT_TOKEN`).
 
 ---
 
