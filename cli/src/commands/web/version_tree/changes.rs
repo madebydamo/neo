@@ -12,6 +12,7 @@ use serde::Serialize;
 use toml_edit::{DocumentMut, Item};
 
 use crate::commands::web::diff::settings_semantic::{diff_settings_toml, Transition};
+use crate::commands::web::plugins::plugin_label;
 
 #[derive(Serialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -66,11 +67,41 @@ pub fn updated_inputs(old: &str, new: &str) -> Vec<String> {
     let mut out: Vec<String> = names
         .into_iter()
         .filter(|n| locked(&old, n) != locked(&new, n))
+        .map(|n| {
+            plugin_input_label(&new, &n)
+                .or_else(|| plugin_input_label(&old, &n))
+                .unwrap_or(n)
+        })
         .collect();
+    out.sort();
+    out.dedup();
     if out.is_empty() && old.get("nodes") != new.get("nodes") {
         out.push("flake.lock".to_string());
     }
     out
+}
+
+/// Plugin inputs are keyed `plugin<N>` in the generated flake; name them
+/// after the plugin's source (`original` in the lock) instead.
+fn plugin_input_label(doc: &serde_json::Value, input: &str) -> Option<String> {
+    let index = input.strip_prefix("plugin")?;
+    if index.is_empty() || !index.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let nodes = doc.get("nodes")?;
+    let root = doc.get("root")?.as_str()?;
+    let node = nodes.get(root)?.get("inputs")?.get(input)?.as_str()?;
+    let original = nodes.get(node)?.get("original")?;
+    let label = match original.get("repo").and_then(|r| r.as_str()) {
+        Some(repo) => plugin_label(repo),
+        None => plugin_label(
+            original
+                .get("url")
+                .or_else(|| original.get("path"))?
+                .as_str()?,
+        ),
+    };
+    (!label.is_empty()).then_some(label)
 }
 
 impl ChangeSummary {
@@ -318,6 +349,30 @@ enabled = true
         )
         .unwrap();
         assert!(updated_inputs(&base, &pretty).is_empty());
+    }
+
+    fn plugin_lock(rev: &str, original: &str) -> String {
+        format!(
+            r#"{{"root":"root","version":7,"nodes":{{
+  "root":{{"inputs":{{"plugin0":"plugin0","plugin1":"plugin1"}}}},
+  "plugin0":{{"locked":{{"rev":"{rev}"}},"original":{original}}},
+  "plugin1":{{"locked":{{"rev":"x"}},"original":{{"type":"path","path":"/opt/plugins/portrait"}}}}
+}}}}"#
+        )
+    }
+
+    #[test]
+    fn plugin_inputs_use_source_name() {
+        let github = r#"{"type":"github","owner":"me","repo":"high_sea","ref":"prod"}"#;
+        assert_eq!(
+            updated_inputs(&plugin_lock("a", github), &plugin_lock("b", github)),
+            vec!["high_sea"]
+        );
+        let git = r#"{"type":"git","url":"https://example.org/me/portal.git","ref":"prod"}"#;
+        assert_eq!(
+            updated_inputs(&plugin_lock("a", git), &plugin_lock("b", git)),
+            vec!["portal"]
+        );
     }
 
     #[test]

@@ -32,14 +32,23 @@ pub fn normalize_plugin_url(url: &str) -> String {
     format!("{base}{query}")
 }
 
-/// Display label from a flake URL: last path segment, query/fragment stripped.
+/// Display label from a flake URL: the repository name for `github:` /
+/// `gitlab:` / `sourcehut:` refs (a trailing `/<branch>` is not the name),
+/// otherwise the last path segment; query/fragment and `.git` stripped.
 /// Labels may overlap; never use this as an identity.
 pub fn plugin_label(url: &str) -> String {
+    let trimmed = url.trim();
     let path = url_path(url);
-    path.rsplit('/')
-        .find(|s| !s.is_empty())
-        .unwrap_or(url.trim())
-        .to_string()
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    let forge = ["github:", "gitlab:", "sourcehut:"]
+        .iter()
+        .any(|p| trimmed.starts_with(p));
+    let name = match segments.as_slice() {
+        [_, repo, ..] if forge => repo,
+        [.., last] => last,
+        [] => trimmed,
+    };
+    name.strip_suffix(".git").unwrap_or(name).to_string()
 }
 
 /// Services whose settings tables should be dropped when the plugin list changes.
@@ -258,6 +267,17 @@ mod tests {
         assert_eq!(
             plugin_label("github:madebydamo/highsea.neo?dir=modules"),
             "highsea.neo"
+        );
+    }
+
+    #[test]
+    fn plugin_label_ignores_forge_branch() {
+        assert_eq!(plugin_label("github:madebydamo/high_sea/prod"), "high_sea");
+        assert_eq!(plugin_label("gitlab:me/portrait/v1.2"), "portrait");
+        assert_eq!(plugin_label("sourcehut:~me/portrait/prod"), "portrait");
+        assert_eq!(
+            plugin_label("git+https://github.com/me/portrait.git?ref=prod"),
+            "portrait"
         );
     }
 
