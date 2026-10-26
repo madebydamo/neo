@@ -26,17 +26,35 @@ Full steps: [Installation guide](docs/INSTALL.md).
 
 ## What it looks like
 
-**Services.** Everything you can turn on.
+**Every service, one click away.** Over 50 apps across media, files, security, AI and more. Search, filter by category, and see at a glance what's running. The live CPU, RAM and disk bar sits on top.
 
 ![Services overview in the Neo web UI](docs/images/services-overview.jpg)
 
-**One service.** Immich, with live status, options, save, activate.
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/service-immich.jpg" alt="Immich service page: settings grouped into sections" /></td>
+    <td width="50%"><img src="docs/images/service-status.jpg" alt="Immich status tab: running units with start, restart, update and logs" /></td>
+  </tr>
+  <tr>
+    <td><b>Configure without YAML.</b> Each service gets a form with plain-language options in tidy sections: where it's reachable from (home network, Tailscale, internet), whether it needs a login, and more.</td>
+    <td><b>See what's running.</b> Live status for every container, with start, stop, restart, image pull and logs one click away. Snapshots and clearing app data live right next to it.</td>
+  </tr>
+</table>
 
-![Immich service page in the Neo web UI](docs/images/service-immich.jpg)
+**Never fear a change.** Every save is a version and every activation is a system generation, shown on one timeline. Roll back, boot into an older generation, or restore old settings.
 
-**Versioning.** History of the machine, a diff between two generations (including updated inputs and plugins), rollback, boot into an older generation, data snapshots.
+![Versioning timeline: settings versions and system generations](docs/images/versioning.jpg)
 
-![Versioning and rollback in the Neo web UI](docs/images/versioning.jpg)
+<table>
+  <tr>
+    <td width="68%"><img src="docs/images/what-changed.jpg" alt="What changed: dependency updates and a file diff between two generations" /></td>
+    <td width="32%"><img src="docs/images/mobile.jpg" alt="The Neo web UI on a phone" /></td>
+  </tr>
+  <tr>
+    <td><b>Know exactly what changed.</b> Compare any two points in history: updated inputs and plugins with their old and new revisions, plus a full diff.</td>
+    <td><b>In your pocket.</b> The whole UI works on a phone.</td>
+  </tr>
+</table>
 
 ## What you need
 
