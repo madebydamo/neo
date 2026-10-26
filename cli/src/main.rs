@@ -132,6 +132,16 @@ enum GenerationAction {
 
 fn main() {
     let cli = Cli::parse();
+    // Rust ignores SIGPIPE, so `println!` panics once a pipe reader such as
+    // `neo generation list | head` exits. One-shot commands get the default
+    // back and end quietly; `neo web` keeps it ignored so a closed pipe to a
+    // child process is an error instead of killing the server.
+    if !matches!(cli.command, Some(Commands::Web)) {
+        // SAFETY: single-threaded here, before any other thread or handler exists.
+        unsafe {
+            libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+        }
+    }
     if let Err(e) = run(cli) {
         eprintln!("Error: {e}");
         std::process::exit(1);

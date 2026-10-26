@@ -2,6 +2,7 @@
 
 use anyhow::{Context, Result};
 use std::ffi::OsStr;
+use std::os::unix::process::ExitStatusExt;
 use std::process::{Command, Stdio};
 
 /// Quote a string for safe copy-paste into a POSIX shell (bash/sh).
@@ -86,6 +87,12 @@ pub fn execute_command(cmd: &mut Command) -> Result<()> {
         .stderr(Stdio::inherit())
         .status()
         .with_context(|| format!("failed to spawn: {display}"))?;
+    // The child shares our stdout; SIGPIPE means its reader went away
+    // (`neo … | head`, also through the `sudo -u homeserver` re-exec). Stop
+    // quietly like the child did instead of reporting a failure.
+    if status.signal() == Some(libc::SIGPIPE) {
+        std::process::exit(128 + libc::SIGPIPE);
+    }
     if !status.success() {
         anyhow::bail!("Command failed: {display}");
     }
