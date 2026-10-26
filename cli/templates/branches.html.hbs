@@ -432,9 +432,10 @@
                             <dd><button type="button" class="link link-hover" @click="jumpToGen(it.row.system.identicalTo)" x-text="'generation ' + it.row.system.identicalTo"></button> <span class="text-base-content/60">(identical system)</span></dd>
                           </template>
                         </dl>
-                        <p class="text-xs text-base-content/60" x-show="!it.row.system.isRunning">Switching changes the running system right away; your settings stay as they are.</p>
+                        <p class="text-xs text-base-content/60" x-show="!it.row.system.isRunning">Switching changes the running system right away; booting into it makes it the boot default and restarts the server. Your settings stay as they are.</p>
                         <div class="flex flex-wrap items-center gap-2">
                           <button type="button" data-neo-lock="system" class="btn btn-sm btn-ghost bg-base-100 border-base-300" x-show="!it.row.system.isRunning" @click="switchGen(it.row.system.number)" x-text="'Switch to generation ' + it.row.system.number"></button>
+                          <button type="button" data-neo-lock="system" class="btn btn-sm btn-ghost bg-base-100 border-base-300" x-show="!(it.row.system.isRunning && it.row.system.isBoot)" @click="bootGen(it.row.system.number)" x-text="'Boot into generation ' + it.row.system.number"></button>
                           <span x-show="it.row.system.isRunning" class="text-xs text-base-content/60">This system is running now.</span>
                           <button type="button" class="btn btn-sm btn-ghost text-base-content/60 gap-1 sm:ml-auto" @click="editNote('generation', it.row.system.number, 'generation ' + it.row.system.number)" title="Label this generation, e.g. known good">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>

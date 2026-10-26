@@ -8,6 +8,7 @@ mod locks;
 mod nix_repair;
 mod oauth;
 mod pages;
+mod power;
 mod resources;
 mod save;
 mod settings_file;
@@ -47,6 +48,9 @@ pub fn routes() -> Vec<rocket::Route> {
         branches::versioning_diff,
         branches::versioning_activate,
         branches::versioning_gen_switch,
+        power::versioning_gen_boot,
+        power::system_reboot,
+        power::system_poweroff,
         branches::versioning_note,
         activation::op_monitor,
         locks::locks_state,

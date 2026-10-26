@@ -403,6 +403,15 @@ pub fn switch_system_generation(
         return Err(format!("generation {} not found ({})", n, link.display()));
     }
 
+    // Check before touching the profile: a failure must not leave it moved
+    // to a generation whose bootloader entry / activation never ran.
+    let stc = link.join("bin/switch-to-configuration");
+    if !stc.exists() {
+        return Err(format!(
+            "switch-to-configuration missing for generation {n} (store path gone?)"
+        ));
+    }
+
     // Point the system profile at this generation (boot default + current pointer).
     let status = Command::new(sudo_cmd)
         .args([
@@ -423,18 +432,6 @@ pub fn switch_system_generation(
         ));
     }
 
-    // Prefer the generation link path (stable even mid-switch); fall back to profile.
-    let stc_gen = link.join("bin/switch-to-configuration");
-    let stc_profile = PathBuf::from(SYSTEM_PROFILE).join("bin/switch-to-configuration");
-    let stc = if stc_gen.exists() {
-        stc_gen
-    } else if stc_profile.exists() {
-        stc_profile
-    } else {
-        return Err(format!(
-            "switch-to-configuration missing for generation {n}"
-        ));
-    };
     let action = mode.as_str();
     let stc_s = stc.to_string_lossy();
     println!("→ {sudo_cmd} -n {stc_s} {action}");

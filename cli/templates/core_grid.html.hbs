@@ -1,4 +1,4 @@
-{{!-- Settings tab: system-wide option sections + SSH key + settings.toml backup. --}}
+{{!-- Settings tab: system-wide option sections + SSH key + settings.toml backup + power. --}}
 <div id="core-grid" class="space-y-6 sm:space-y-8">
   <div>
     <h2 class="text-xl sm:text-2xl font-semibold tracking-tight">Settings</h2>
@@ -83,6 +83,33 @@
         </div>
       </div>
       <div id="settings-toml-status" class="mt-3 empty:hidden"></div>
+    </div>
+  </div>
+  <div class="space-y-3">
+    <div class="flex items-center gap-2.5 px-0.5">
+      <h3 class="text-xs font-semibold uppercase tracking-wider text-base-content/55">Power</h3>
+      <div class="flex-1 h-px bg-base-content/10" aria-hidden="true"></div>
+    </div>
+
+    <div id="power-card" class="rounded-box border border-base-300 bg-base-100 p-4">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+        <span class="w-9 h-9 shrink-0 rounded-xl bg-base-200 text-base-content/70 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="w-5 h-5" aria-hidden="true"><path d="M12 3.5v8"/><path d="M7.2 6.6a7.5 7.5 0 109.6 0"/></svg>
+        </span>
+        <div class="min-w-0 flex-1">
+          <div class="font-semibold text-sm">Restart or shut down</div>
+          <div class="text-xs text-base-content/60">Restart boots the current boot default (see Versioning to boot another generation). All services are down meanwhile.</div>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button type="button" class="btn btn-sm btn-ghost" data-neo-lock="system"
+                  hx-post="/system/reboot" hx-target="#power-status" hx-swap="innerHTML"
+                  hx-confirm="Restart the server now? All services are down until it is back.">Restart</button>
+          <button type="button" class="btn btn-sm btn-soft btn-error" data-neo-lock="system"
+                  hx-post="/system/poweroff" hx-target="#power-status" hx-swap="innerHTML"
+                  hx-confirm="Shut down the server now? It stays off until it is powered on again — this web UI cannot turn it back on.">Shut down</button>
+        </div>
+      </div>
+      <div id="power-status" class="mt-3 empty:hidden"></div>
     </div>
   </div>
 </div>

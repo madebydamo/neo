@@ -749,5 +749,14 @@ window.versioningPage = function versioningPage() {
         }, 15000);
       });
     },
+
+    bootGen(n) {
+      var msg =
+        'Boot into generation ' + n + '?\n\n' +
+        'Generation ' + n + ' becomes the boot default and the server restarts right away. ' +
+        'All services are down until it is back. Your settings are not changed.';
+      if (!window.confirm(msg)) return;
+      this.post('/versioning/generations/' + n + '/boot', 'Booting into generation ' + n);
+    },
   };
 };

@@ -9,10 +9,7 @@
 //! Optionally the boot generation is switched to the one that was running when
 //! the snapshot was taken ([`GenerationTimeline`]), so restored settings and
 //! system match.
-use std::time::Duration;
-
-use tokio::process::Command as AsyncCommand;
-
+use super::super::power::{self, PowerAction};
 use super::super::util::{escape_attr, escape_html, sudo_cmd};
 use super::render::{self, ManageCtx, BTN_SECONDARY};
 use super::{
@@ -399,20 +396,6 @@ pub async fn restore_scheduled() -> bool {
     }
 }
 
-/// Reboot shortly after answering, so the response reaches the browser.
-fn schedule_reboot() {
-    tokio::spawn(async {
-        tokio::time::sleep(Duration::from_secs(2)).await;
-        let out = AsyncCommand::new(sudo_cmd())
-            .args(["-n", "systemctl", "reboot", "--no-ask-password"])
-            .output()
-            .await;
-        if let Err(e) = out {
-            eprintln!("web: reboot for zfs restore: {e}");
-        }
-    });
-}
-
 fn rebooting_card(msg: &str) -> String {
     format!(
         r#"<div id="{CARD_ID}" class="rounded-box border border-base-300 bg-base-100 p-4 space-y-2"><div role="alert" class="alert alert-warning text-sm"><span class="loading loading-spinner loading-sm"></span><span>{}</span></div><p class="text-xs opacity-70">The UI reconnects once the server is back. Check the result banner in this tab afterwards.</p></div>"#,
@@ -432,7 +415,7 @@ pub async fn reboot_now() -> String {
     {
         return render_card(err_notice("no restore is scheduled")).await;
     }
-    schedule_reboot();
+    power::schedule(PowerAction::Reboot);
     rebooting_card("Rebooting to restore Neo data…")
 }
 
@@ -483,7 +466,7 @@ pub async fn restore(ds: &str, snap: &str, gen: Option<u64>) -> String {
     // A stale result would read like the outcome of this restore.
     let _ = inherit_property(&pool, PROP_RESULT).await;
 
-    schedule_reboot();
+    power::schedule(PowerAction::Reboot);
     let gen_msg = gen
         .map(|g| format!(" and booting generation {g}"))
         .unwrap_or_default();
