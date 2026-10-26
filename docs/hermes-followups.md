@@ -14,7 +14,13 @@ flake input. SuperGrok OAuth (`xai-oauth`) is a Hermes overlay in
 plugin. Neo parses both. Custom endpoints take an optional `llm.apiKey` written
 to `model.api_key`.
 OAuth status / device-code / PKCE / refresh runs as user `hermes` via
-`neo-hermes-auth`.
+`neo-hermes-auth`. Telegram has per-group settings (`telegramGroups`,
+`requireMention`) and the first `telegramAllowedUserId` is the home channel.
+`superviseUpdates` lets Hermes review updater runs and roll back broken
+containers.
+
+Still open as of the last check: everything below. None of these settings are
+pinned or exposed by `nix/services/hermes` yet.
 
 ---
 
@@ -30,7 +36,7 @@ Hermes docs: WAL is unsafe on some virtiofs / network mounts; existing WAL DBs a
 
 ### Discord / Slack / other messaging
 
-Only Telegram is a Neo option. Upstream messaging extras are already in `extraDependencyGroups` (`messaging`, plus matrix / dingtalk / feishu). Tokens belong in env (same pattern as `TELEGRAM_BOT_TOKEN`).
+Only Telegram is a Neo option. Upstream messaging extras are already in `extraDependencyGroups` (`all`, `messaging`, `homeassistant`, `youtube`, `voice`). Tokens belong in env (same pattern as `TELEGRAM_BOT_TOKEN`).
 
 ---
 

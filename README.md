@@ -34,7 +34,7 @@ Full steps: [Installation guide](docs/INSTALL.md).
 
 ![Immich service page in the Neo web UI](docs/images/service-immich.jpg)
 
-**Versioning.** History of the machine, a diff between two generations, rollback.
+**Versioning.** History of the machine, a diff between two generations (including updated inputs and plugins), rollback, boot into an older generation, data snapshots.
 
 ![Versioning and rollback in the Neo web UI](docs/images/versioning.jpg)
 
@@ -51,27 +51,29 @@ If the machine at home has no public IP, route the traffic with [streamproxy](do
 ### Every day
 
 - **Opinionated defaults.** A firewalled host, services on an internal network, packaging chosen for you.
-- **Simple web interface.** Full control in the browser. Enable a service, edit it, apply it, revert an edit before it goes live.
-- **User management.** Add people. Provision the services each person should have.
+- **Simple web interface.** Full control in the browser. Enable a service, edit it, preview the changes, apply them, revert an edit before it goes live. Start, stop and restart services, read their logs, restart or shut down the machine.
+- **User management.** Add people. Choose the services each person or group may open. Sign in with a password, or with an OAuth provider such as Authentik, Google or Microsoft Entra ID.
 - **Automatic HTTPS.** Certificates stay current. Traffic stays encrypted until it reaches your server.
-- **Automatic updates.** The operating system, the containers, the apps. Everything, on a schedule, all the way through.
+- **Automatic updates.** The operating system, the containers, the apps. Everything, on a schedule, all the way through. A broken container update can be rolled back to the previous image.
 
 ### AI support
 
 - **Your IT support.** Hermes helps you run the homeserver. Useful on day one. Useful after you know the system well.
 - **Your provider.** The model comes from the AI provider you choose.
 - **In every service.** Each service you enable is integrated with Hermes, and Hermes can operate it.
-- **Health, reports, recommendations.** Hermes checks the machine, reports what broke, and recommends the next step.
+- **Health, reports, recommendations.** Hermes checks the machine, reports what broke, and recommends the next step. Optionally it reviews every update and tells you on Telegram when something went wrong.
 
 ### Your hardware
 
 - **Your machine.** The homeserver is hardware you control.
 - **Home or anywhere.** Host it at home. Host it anywhere. Safe on a public Wi-Fi uplink.
-- **Fine-grained access control.** Per service, per person: who can reach it on the LAN, on Tailscale, on the public web.
+- **Fine-grained access control.** Per service: reachable on the LAN, on Tailscale, on the public web, or any mix. Per person: which apps they may open.
+- **Edge protection.** Allow or block countries and IP ranges. Ban IPs that keep failing to log in, bad bots and exploit scanners (fail2ban, on by default).
 
 ### Privacy
 
 - **LAN privacy.** Pi-hole across the network. WireGuard egress for the apps you choose. Tailscale for private reach. NTP for the LAN.
+- **Snapshots.** Automatic ZFS snapshots of all Neo data. Restore one service, or everything, from the web UI.
 - **Off-site backup.** Scheduled rsync over SSH to a machine you choose.
 
 ### Extend
@@ -80,22 +82,21 @@ If the machine at home has no public IP, route the traffic with [streamproxy](do
 
 ### Under the hood
 
-- **Nix-based.** This is why the system is reproducible, revertible, recoverable. Rebuild the same machine. Switch back to an earlier generation. Recover from configuration you still hold.
+- **Nix-based.** This is why the system is reproducible, revertible, recoverable. Rebuild the same machine. Switch or boot back into an earlier generation. Recover from configuration you still hold.
 
 ## Services
 
 Enable what you want in the web UI.
 
-- **Files.** Filebrowser, Dufs (WebDAV), Syncthing, Nextcloud, Collabora, Paperless, Docmost, Stirling PDF, Gitea, Docker registry
-- **Photos.** Immich, Immich Drop
-- **Media.** Jellyfin, Sonarr, Radarr, the rest of the \*arr stack, from the [highsea.neo](https://github.com/madebydamo/highsea.neo) plugin
-- **Passwords and SSO.** Vaultwarden, Authentik
-- **Calendar.** RustiCal (CalDAV, CardDAV), Calino, iCal subscriptions
-- **Utilities.** SearXNG, Karakeep, pastebin, change detection, Activepieces, Dawarich, Mealie, Webtop, Firefox, iSponsorBlockTV
-- **Network.** Pi-hole, Tailscale, WireGuard
+- **Files.** Filebrowser, Dufs (WebDAV), Syncthing, Nextcloud, Collabora, Paperless, Docmost (wiki, with single sign-on and an MCP server for AI clients), Stirling PDF, Gitea, Docker registry, off-site backup
+- **Media.** Immich, Immich Drop, iSponsorBlockTV. Jellyfin, Sonarr, Radarr and the rest of the \*arr stack come from the [highsea.neo](https://github.com/madebydamo/highsea.neo) plugin
+- **Security.** Tinyauth (login in front of every app), Authentik (single sign-on), Vaultwarden (passwords)
+- **Calendar and contacts.** RustiCal (CalDAV, CardDAV), Calino, iCal subscriptions
+- **Utilities.** Vikunja (tasks), Mealie (recipes), Karakeep (bookmarks), SearXNG (search), pastebin, change detection, Activepieces (automation), Dawarich (location history), Webtop and Firefox (in the browser)
+- **Network.** Pi-hole, Tailscale, WireGuard VPN (Gluetun), NTP, Rathole and streamproxy (no public IP)
 - **Monitoring.** Beszel
 - **AI support.** Hermes
-- **Administration.** Neo web
+- **Core.** Neo web, SWAG (HTTPS and routing), system and container updaters
 - **Your own.** Neo is fully extendable with your own Nix plugins. Whatever you can imagine. [Plugins](docs/PLUGINS.md).
 
 ## For contributors

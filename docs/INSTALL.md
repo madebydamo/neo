@@ -10,7 +10,7 @@ Two paths, plus a fallback when the laptop cannot build the system:
 | **[B — Install from your laptop](#path-b--install-from-your-laptop-nixos-anywhere)** | Linux laptop that can build `x86_64-linux`; prepare config locally, install remotely with nixos-anywhere |
 | **[Laptop cannot build](#when-the-laptop-cannot-build-mac-live-usb-or-wrong-architecture)** | Mac, architecture mismatch, or a live USB with too little disk — build **on the target** |
 
-Also: [what you need](#what-you-need), [first login](#first-login), [minimal starter config](#minimal-starter-config), [disks (Disko)](#automatic-disk-layout-disko), [no public IP](#no-public-ip-streamproxy), [per-service ingress](#per-service-ingress), [after install](#after-install), [learning links](#learning-links).
+Also: [what you need](#what-you-need), [first login](#first-login), [minimal starter config](#minimal-starter-config), [sign-in with OAuth](#sign-in-with-oauth-optional), [disks (Disko)](#automatic-disk-layout-disko), [no public IP](#no-public-ip-streamproxy), [per-service ingress](#per-service-ingress), [after install](#after-install), [learning links](#learning-links).
 
 ---
 
@@ -274,7 +274,7 @@ users = [
 ]
 # Optional per-user app ACLs (neo service names). Empty = full access.
 # [services.tinyauth.access.guest]
-# allow = ["searxng", "homarr"]
+# allow = ["searxng", "pastebin"]
 # [services.tinyauth.access.kid]
 # block = ["webtop"]
 
@@ -293,6 +293,30 @@ enabled = true
 mainDisk = "/dev/sda"
 ```
 
+### Sign in with OAuth (optional)
+
+Tinyauth can offer one or more OAuth sign-in buttons next to (or instead of) the local `users`. You need at least one user or one enabled provider. Each provider has an ID (lowercase letters and digits). Register this redirect URI at the provider: `https://<tinyauth subdomain>.<domain>/api/oauth/callback/<id>`.
+
+| Type | Use for |
+|------|---------|
+| `generic` | Any OAuth2 / OIDC server: Authentik on this box, Keycloak, Google, … Set `authUrl`, `tokenUrl`, `userinfoUrl`. |
+| `entra` | Microsoft Entra ID. Set `tenantId`; URLs and groups come from Microsoft. |
+
+```toml
+[services.tinyauth.oauth.authentik]
+type = "generic"
+buttonName = "Authentik"
+clientId = "..."
+clientSecret = "..."
+authUrl = "https://authentik.example.com/application/o/authorize/"
+tokenUrl = "https://authentik.example.com/application/o/token/"
+userinfoUrl = "https://authentik.example.com/application/o/userinfo/"
+```
+
+`oauthGroups` lists the groups whose members may use apps at all; `groupAccess` narrows each group to some apps. `oauthAutoRedirect` skips the login page and goes straight to one provider. In the web UI all of this sits in the tinyauth OAuth section.
+
+Authentik itself is an optional service (`[services.authentik]`). It is the login for its own site, so tinyauth does not sit in front of it. Fill `services.authentik.email` (SMTP) if you want password recovery and magic-link mails.
+
 ---
 
 ## Automatic disk layout (Disko)
@@ -305,8 +329,9 @@ For greenfield installs, Neo can partition with [Disko](https://github.com/nix-c
 | `mainDisk` | Disk to wipe for the OS (EFI + ZFS) |
 | `poolName` | ZFS pool name (default `zroot`) |
 | `additionalDisks` | Extra disks → mount points (e.g. media) |
+| `autoSnapshot` | Automatic snapshots of Neo data and how many to keep (default: 4 × 15-minute, 12 hourly, 7 daily, 4 weekly, 3 monthly) |
 
-Default: boot partition + ZFS for the system and Neo data (with snapshots on Neo’s data dataset). One disk today: `mainDisk` becomes the OS pool (`zroot`). Extra disks in `additionalDisks` each get their own pool.
+Default: boot partition + ZFS for the system and Neo data (with snapshots on Neo’s data dataset). Snapshots you take by hand in the web UI are never pruned, and pinned ones are kept. One disk today: `mainDisk` becomes the OS pool (`zroot`). Extra disks in `additionalDisks` each get their own pool.
 
 Snapshots are restorable from the web UI (only Neo's data dataset is snapshotted, never the system or `/nix`):
 
@@ -365,6 +390,8 @@ port = 2223
 name = "home"
 ```
 
+`port` must be the streamproxy tunnel port, **2223**. The rathole default (2333) does not match it, so set it. `name` is the streamproxy entry name (`home` above).
+
 One public IP and one homeserver? Run SWAG on that IP and leave streamproxy off.
 
 ### Per-service ingress
@@ -383,9 +410,12 @@ ingress = ["local"]
 
 1. SSH as `homeserver@…` if you need a shell ([first login](#first-login))  
 2. Open **Neo web**  
-3. Enable services, set users, add [plugins](PLUGINS.md) under **Settings → core → plugins**  
-4. **Activate** from the UI  
+3. Enable services, set users, add [plugins](PLUGINS.md) under **Settings → System → Plugins**  
+4. **Activate** from the UI. The changes preview shows what will change first, including updated flake inputs and plugins  
 5. Leave **system-updater** (and **docker-updater**) on if you want hands-off upgrades  
+6. Optional: set up [backups](#automatic-disk-layout-disko) (ZFS snapshots, the **backup** service for off-site rsync), and the SWAG **Geo & IP filter** and **Auto ban** sections if the machine is on the public web  
+
+Restart and shut down live under **Settings → Power**. Booting an older generation lives under **Versioning**.
 
 Optional terminal tools: [CLI.md](CLI.md).
 

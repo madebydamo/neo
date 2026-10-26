@@ -21,6 +21,8 @@ NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) + Rust *
 | **`just launch`** | Default loop: shutdown → build → QEMU (SSH **:2222**, key `tools/development_ed25519`) |
 | `just build` | `neo nuke` → `init` → `build` |
 | `just status` / `shutdown` | VM health / stop |
+| `just web` | Web UI on the host against the existing `build/` (run `just build` once first) |
+| `just test-widgets` | JS tests for the web UI widgets and static scripts |
 | `just exec 'CMD'` / `just logs SVC` / `just ssh` | Guest shell / `journalctl -b -u SVC` |
 | `just format` / `just check` | alejandra + cargo fmt / flake check. Tracked pre-commit in `.githooks` runs `just format`; `nix develop` sets `core.hooksPath` (skip with `git commit --no-verify`) |
 
@@ -116,7 +118,7 @@ Extract prunes orphan keys from `current`; the form re-syncs when the source lis
 | `providerAuth` | submodule of provider + API key and/or OAuth login + model (Hermes `llm`). Catalog rows declare `hasApiKey` / `hasOauth` / `oauthFlow` / `needsBaseUrl`; child option descriptions render as ⓘ on each input; `ui.oauth.script` runs status/login/refresh |
 | `proxyRouteList` | attrsOf str of public domain → plain `http://` upstream (SWAG `proxyPass`). Route cards `https://domain → TLS at SWAG → upstream` with add/remove, inline checks (hostname only, `http://host[:port]`, duplicates = error; `https://`, path, loopback = warning; no port = hint) and one-click fixes. Errors block save through the optional widget `validate(name) → string[]` hook |
 
-Implementations: `cli/templates/options/widgets/<name>.html.hbs` + `<name>.js` (registers on `NeoWidgets`) + `<name>.test.js`. `option_form.js` mixes in registered widgets and dispatches init/save/reset on `ui.widget` only; a widget may also define `validate(name)` returning error strings, and `save()` refuses (toast + error flash) while any remain. Dispatch in `attrs_of.html.hbs` / field templates on `ui.widget`, not on option names. Run `just test-widgets`.
+Implementations: `cli/templates/options/widgets/<name>.html.hbs` + `<name>.js` (file names in snake_case, e.g. `proxy_route_list.js`) (registers on `NeoWidgets`) + `<name>.test.js`. `option_form.js` mixes in registered widgets and dispatches init/save/reset on `ui.widget` only; a widget may also define `validate(name)` returning error strings, and `save()` refuses (toast + error flash) while any remain. Dispatch in `attrs_of.html.hbs` / field templates on `ui.widget`, not on option names. Run `just test-widgets`.
 
 ### Adding a new special UI (checklist)
 
