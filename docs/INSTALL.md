@@ -386,11 +386,10 @@ email = "you@example.com"
 enabled = true
 token = "shared-secret-token"
 remoteAddr = "edge.example.com"
-port = 2223
 name = "home"
 ```
 
-`port` must be the streamproxy tunnel port, **2223**. The rathole default (2333) does not match it, so set it. `name` is the streamproxy entry name (`home` above).
+`port` defaults to 2223, the streamproxy tunnel port. Change it only if your edge uses another port. `name` is the streamproxy entry name (`home` above).
 
 One public IP and one homeserver? Run SWAG on that IP and leave streamproxy off.
 

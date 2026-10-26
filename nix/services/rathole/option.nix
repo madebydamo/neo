@@ -25,8 +25,8 @@
               };
               port = mkOption {
                 type = types.port;
-                default = 2333;
-                description = "Remote server port for rathole";
+                default = 2223;
+                description = "Remote server port for rathole (the Neo streamproxy tunnel port is 2223)";
                 rank = 30;
               };
               name = mkOption {
