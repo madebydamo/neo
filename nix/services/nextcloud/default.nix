@@ -27,6 +27,15 @@
             group = "33";
           }
         ];
+        # The db password reaches the containers through env files rendered at activation.
+        neo.core.secrets.containerEnv = {
+          nextcloud-db = {
+            MYSQL_ROOT_PASSWORD = cfg.dbPassword;
+            MYSQL_PASSWORD = cfg.dbPassword;
+          };
+          nextcloud.MYSQL_PASSWORD = cfg.dbPassword;
+          nextcloud-cron.MYSQL_PASSWORD = cfg.dbPassword;
+        };
         virtualisation.oci-containers.containers = {
           nextcloud-db = {
             image = cfg.containers."nextcloud-db";
@@ -37,8 +46,6 @@
               "--binlog-format=ROW"
             ];
             environment = {
-              MYSQL_ROOT_PASSWORD = cfg.dbPassword;
-              MYSQL_PASSWORD = cfg.dbPassword;
               MYSQL_DATABASE = "nextcloud";
               MYSQL_USER = "nextcloud";
             };
@@ -61,7 +68,6 @@
               MYSQL_HOST = "nextcloud-db";
               MYSQL_DATABASE = "nextcloud";
               MYSQL_USER = "nextcloud";
-              MYSQL_PASSWORD = cfg.dbPassword;
               REDIS_HOST = "nextcloud-redis";
               OVERWRITEPROTOCOL = "https";
               OVERWRITEHOST = nextcloudUrl;
@@ -83,7 +89,6 @@
               MYSQL_HOST = "nextcloud-db";
               MYSQL_DATABASE = "nextcloud";
               MYSQL_USER = "nextcloud";
-              MYSQL_PASSWORD = cfg.dbPassword;
               REDIS_HOST = "nextcloud-redis";
               OVERWRITEPROTOCOL = "https";
               OVERWRITEHOST = nextcloudUrl;

@@ -18,7 +18,7 @@
                 default = 80;
                 description = "Internal port for nextcloud apache web server";
               };
-              dbPassword = mkOption {
+              dbPassword = lib.neo.mkSecretOption {
                 type = types.str;
                 default = "your_strong_password_here";
                 rank = 10;
