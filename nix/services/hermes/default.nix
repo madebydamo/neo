@@ -32,8 +32,12 @@
       // (lib.optionalAttrs (nonEmpty llm.baseUrl) {
         base_url = llm.baseUrl;
       })
+      # The key itself comes from the env (lib.neo.mkHermesLlmEnv → hermes.env).
+      # config.yaml is deep-merged, so an empty api_key clears an inline key an
+      # older generation wrote there; an empty key counts as unset upstream.
       // (lib.optionalAttrs (nonEmpty llm.provider && llm.provider == "custom" && nonEmpty llm.apiKey) {
-        api_key = llm.apiKey;
+        key_env = lib.neo.hermesCustomKeyEnv;
+        api_key = "";
       });
 
     hermesSettings =
@@ -206,11 +210,6 @@
             Hermes 0.17+ requires an auth provider for non-loopback dashboard binds; neo uses this
             password for internal basic auth and SWAG auto-login so only tinyauth is user-facing.
           '';
-        }
-        # config.yaml carries the custom endpoint key, built at evaluation.
-        {
-          assertion = !(modelSection ? api_key && lib.neo.secrets.hasPlaceholder modelSection.api_key);
-          message = "neo.services.hermes.llm.apiKey: encrypted secrets are not supported here yet with provider custom (value is derived at evaluation)";
         }
       ];
 

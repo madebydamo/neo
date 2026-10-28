@@ -23,7 +23,11 @@
     ssoActive = cfg.sso && cfg.auth.enabled && tinyauthCfg.enabled;
     mcpActive = ssoActive && cfg.mcp;
     # Must match default.nix.
-    swagKey = builtins.hashString "sha256" "${cfg.appSecret or ""}:docmost-sso-swag";
+    swagKey = lib.neo.secrets.sha256 "${cfg.appSecret or ""}:docmost-sso-swag";
+    # The key header is derived from appSecret: a rendered snippet (secrets).
+    keyHeader = lib.neo.secrets.swagSnippet config "docmost-sso-key" ''
+      proxy_set_header X-Neo-SSO-Key "${swagKey}";
+    '';
     auth = lib.neo.authBlock config cfg;
     authLoc = lib.neo.authLocations config cfg;
     proxyCore = ''
@@ -65,7 +69,7 @@
         # combined with proxy.conf's mapping (nginx emerg: duplicate).
         proxy_redirect ~^(http://(localhost|127\.0\.0\.1|\[::1\])([:/?].*)?)$ $1;
         ${mcpCore}
-        proxy_set_header X-Neo-SSO-Key "${swagKey}";
+        ${keyHeader.include}
         proxy_set_header Remote-User $user;
         proxy_set_header Remote-Email $email;
         proxy_set_header Remote-Name $name;
@@ -96,7 +100,7 @@
           include /config/nginx/resolver.conf;
           set $upstream_app docmost-sso;
           set $upstream_port 8080;
-          proxy_set_header X-Neo-SSO-Key "${swagKey}";
+          ${keyHeader.include}
           proxy_set_header Remote-User $user;
           proxy_set_header Remote-Email $email;
           proxy_set_header Remote-Name $name;
@@ -124,6 +128,8 @@
       }
     '';
   in {
+    config.neo.core.secrets.templates = lib.mkIf (cfg.enabled && ssoActive) keyHeader.templates;
+
     config.neo.services.docmost.proxyConf = lib.mkDefault (
       if ssoActive
       then ssoConf

@@ -23,10 +23,12 @@
       ssoActive = cfg.sso && cfg.auth.enabled && tinyauthCfg.enabled;
       mcpActive = ssoActive && cfg.mcp;
       # Derived from appSecret: no extra secret to manage. Must match swag.nix.
-      ssoKey = builtins.hashString "sha256" "${cfg.appSecret or ""}:docmost-sso";
-      swagKey = builtins.hashString "sha256" "${cfg.appSecret or ""}:docmost-sso-swag";
+      # Hashed at activation when appSecret is encrypted (lib.neo.secrets.sha256).
+      ssoKey = lib.neo.secrets.sha256 "${cfg.appSecret or ""}:docmost-sso";
+      swagKey = lib.neo.secrets.sha256 "${cfg.appSecret or ""}:docmost-sso-swag";
       # Signs MCP OAuth clients, codes and tokens; a new appSecret revokes them all.
-      mcpKey = builtins.hashString "sha256" "${cfg.appSecret or ""}:docmost-mcp";
+      mcpKey = lib.neo.secrets.sha256 "${cfg.appSecret or ""}:docmost-mcp";
+      ssoKeyFile = config.neo.core.secrets.templates."docmost-sso-key".path;
       # Never a real mailbox, so no tinyauth user can map onto it.
       serviceEmail = "docmost-sso@neo.invalid";
       ssoPort = 8080;
@@ -41,11 +43,6 @@
           {
             assertion = secretSet cfg.dbPassword;
             message = "neo.services.docmost: dbPassword must be set when enabled.";
-          }
-          {
-            # ssoKey / swagKey / mcpKey are hashed from appSecret at evaluation.
-            assertion = !(ssoActive && lib.neo.secrets.hasPlaceholder cfg.appSecret);
-            message = "neo.services.docmost.appSecret: encrypted secrets are not supported here yet (value is derived at evaluation)";
           }
         ];
 
@@ -104,8 +101,6 @@
             environment = {
               PORT = toString ssoPort;
               DOCMOST_URL = "http://docmost:${toString cfg.port}";
-              SSO_KEY = ssoKey;
-              SWAG_KEY = swagKey;
               SERVICE_EMAIL = serviceEmail;
               MAIL_DOMAIN = domain;
               LOGOUT_URL = "https://${tinyauthCfg.subdomain}.${domain}/logout";
@@ -123,11 +118,8 @@
             environment = {
               PORT = toString mcpPort;
               PUBLIC_URL = "https://${cfg.subdomain}.${domain}";
-              MCP_KEY = mcpKey;
-              # sso.py (sign-in, Docmost login) reads these.
+              # sso.py (sign-in, Docmost login) reads these (keys: containerEnv).
               DOCMOST_URL = "http://docmost:${toString cfg.port}";
-              SSO_KEY = ssoKey;
-              SWAG_KEY = swagKey;
               SERVICE_EMAIL = serviceEmail;
               MAIL_DOMAIN = domain;
               ADMINS = concatStringsSep "," cfg.admins;
@@ -142,11 +134,33 @@
         };
 
         # Secrets reach the containers through rendered env files.
-        neo.core.secrets.containerEnv = {
-          docmost-db.POSTGRES_PASSWORD = dbPassword;
-          docmost = {
-            APP_SECRET = cfg.appSecret or "";
-            DATABASE_URL = "postgresql://docmost:${dbPassword}@docmost-db:5432/docmost";
+        neo.core.secrets.containerEnv =
+          {
+            docmost-db.POSTGRES_PASSWORD = dbPassword;
+            docmost = {
+              APP_SECRET = cfg.appSecret or "";
+              DATABASE_URL = "postgresql://docmost:${dbPassword}@docmost-db:5432/docmost";
+            };
+          }
+          // lib.optionalAttrs ssoActive {
+            docmost-sso = {
+              SSO_KEY = ssoKey;
+              SWAG_KEY = swagKey;
+            };
+          }
+          // lib.optionalAttrs mcpActive {
+            docmost-mcp = {
+              MCP_KEY = mcpKey;
+              SSO_KEY = ssoKey;
+              SWAG_KEY = swagKey;
+            };
+          };
+
+        # The SQL setup below reads the SSO key at runtime.
+        neo.core.secrets.templates = mkIf ssoActive {
+          "docmost-sso-key" = {
+            content = ssoKey;
+            restartUnits = ["docmost-sso-setup.service"];
           };
         };
 
@@ -166,7 +180,7 @@
             set -euo pipefail
             docker exec docmost-sso python3 /app/sso.py setup
             docker exec -i docmost-db psql -U docmost -d docmost -q -v ON_ERROR_STOP=1 \
-              -v key=${escapeShellArg ssoKey} -v svc=${escapeShellArg serviceEmail} <<'SQL'
+              -v key="$(cat ${ssoKeyFile})" -v svc=${escapeShellArg serviceEmail} <<'SQL'
             SET client_min_messages = warning;
             CREATE EXTENSION IF NOT EXISTS pgcrypto;
             INSERT INTO users (email, name, role, workspace_id, email_verified_at)

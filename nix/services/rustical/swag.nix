@@ -39,6 +39,10 @@
       else null;
     auth = lib.neo.authBlock config cfg;
     authLoc = lib.neo.authLocations config cfg;
+    # The login body carries the password: a rendered snippet (secrets).
+    loginBody = lib.neo.secrets.swagSnippet config "rustical-sso-body" ''
+      proxy_set_body "username=$user&password=${cfg.ssoPassword or ""}";
+    '';
     proxyCore = ''
       include /config/nginx/proxy.conf;
       include /config/nginx/resolver.conf;
@@ -189,7 +193,7 @@
           proxy_method POST;
           proxy_set_header Content-Type application/x-www-form-urlencoded;
           proxy_set_header X-Forwarded-Port 443;
-          proxy_set_body "username=$user&password=${cfg.ssoPassword}";
+          ${loginBody.include}
           proxy_pass $upstream_proto://$upstream_app:$upstream_port/frontend/login;
         }
 
@@ -201,12 +205,7 @@
       }
     '';
   in {
-    # SWAG proxy confs are written from the store, so the login body above
-    # carries the password as evaluated.
-    config.assertions = lib.optional (cfg.enabled && ssoEnabled) {
-      assertion = !(lib.neo.secrets.hasPlaceholder cfg.ssoPassword);
-      message = "neo.services.rustical.ssoPassword: encrypted secrets are not supported here yet (value is written into the SWAG config at evaluation)";
-    };
+    config.neo.core.secrets.templates = lib.mkIf (cfg.enabled && ssoEnabled) loginBody.templates;
 
     config.neo.services.rustical.proxyConf =
       lib.mkDefault

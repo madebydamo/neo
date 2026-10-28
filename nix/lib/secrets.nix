@@ -49,6 +49,66 @@
         # (also the JSON variant below).
         hasPlaceholder = v: builtins.isString v && lib.hasInfix "@NEO_SECRET" v;
 
+        # RFC 4648 base64 of a (byte) string; nixpkgs lib has no toBase64.
+        toBase64 = str: let
+          inherit (lib) stringToCharacters concatStrings elemAt;
+          inherit (lib.strings) charToInt;
+          alphabet = stringToCharacters "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+          bytes = map charToInt (stringToCharacters str);
+          len = builtins.length bytes;
+          at = i:
+            if i < len
+            then elemAt bytes i
+            else 0;
+          chunk = i: let
+            n = (at (i * 3)) * 65536 + (at (i * 3 + 1)) * 256 + (at (i * 3 + 2));
+            c = k: elemAt alphabet (lib.mod (n / k) 64);
+          in
+            c 262144
+            + c 4096
+            + (
+              if i * 3 + 1 < len
+              then c 64
+              else "="
+            )
+            + (
+              if i * 3 + 2 < len
+              then c 1
+              else "="
+            );
+        in
+          concatStrings (builtins.genList chunk ((len + 2) / 3));
+
+        # Values derived from text that may hold secrets: computed now for plain
+        # text, else a placeholder the renderer computes after filling it in.
+        derived = fn: compute: text:
+          if hasPlaceholder text
+          then "@NEO_SECRET_${fn}:${toBase64 text}@"
+          else compute text;
+        # Hex SHA-256 of text (e.g. keys derived from an app secret).
+        sha256 = derived "SHA256" (builtins.hashString "sha256");
+        # Base64 of text (e.g. an HTTP Basic header).
+        base64 = derived "BASE64" toBase64;
+
+        # nginx lines holding secrets for a SWAG conf: rendered as a snippet the
+        # conf includes. SWAG's preStart rewrites proxy-confs/ from the store on
+        # every start, but leaves nginx/neo-secrets/ alone. A change restarts SWAG.
+        #   s = lib.neo.secrets.swagSnippet config "dufs-auth" ''proxy_set_header …;'';
+        #   neo.core.secrets.templates = s.templates;   … ''${s.include} in the conf
+        swagSnippet = config: name: lines: let
+          file = "neo-secrets/${name}.conf";
+        in {
+          templates."swag-${name}.conf" = {
+            content = lines;
+            owner = toString config.neo.core.uid;
+            group = toString config.neo.core.gid;
+            mode = "0440";
+            copies = ["${config.neo.core.volumes.appdata}/swag/nginx/${file}"];
+            restartUnits = ["docker-swag.service"];
+          };
+          include = "include /config/nginx/${file};";
+        };
+
         # A secret as a JSON string literal (quotes included), for JSON or a
         # <script>: toJSON of a plain value; for a placeholder the renderer
         # inserts the JSON-escaped value ("</" escaped too).

@@ -291,49 +291,76 @@
             ''}
               # Placeholders are matched on a copy that drops each one once handled,
               # so a value that itself looks like a placeholder cannot loop.
-              neo_secrets_render() {
-                local src=$1 dst=$2 owner=$3 group=$4 mode=$5 copies=$6
-                shift 6
-                local content rest ph key val tmp
-                local re='@NEO_SECRET:([A-Za-z0-9._/:-]+)@'
-                content=$(cat "$src"; printf x)
-                content=''${content%x}
-                rest=$content
+              # Fill placeholders in the global $text. Plain values as-is, the JSON
+              # variant as an escaped string literal, derived ones (SHA256/BASE64)
+              # computed from their base64-encoded input after filling it.
+              neo_secrets_value() {
+                if [ ! -f "$raw/$1" ]; then
+                  echo "neo-secrets: no value for setting $1 (needed by $2)" >&2
+                  failed=1
+                  return 1
+                fi
+              }
+              neo_secrets_fill_plain() {
+                local re='@NEO_SECRET:([A-Za-z0-9._/:-]+)@' rest=$text ph key val
                 while [[ $rest =~ $re ]]; do
                   ph=''${BASH_REMATCH[0]}
                   key=''${BASH_REMATCH[1]}
-                  if [ ! -f "$raw/$key" ]; then
-                    echo "neo-secrets: no value for setting $key (needed by $dst)" >&2
-                    failed=1
-                    return 0
-                  fi
+                  neo_secrets_value "$key" "$1" || return 1
                   val=$(cat "$raw/$key"; printf x)
                   val=''${val%x}
-                  content=''${content//"$ph"/"$val"}
+                  text=''${text//"$ph"/"$val"}
                   rest=''${rest//"$ph"/}
                 done
-                # JSON string variant: quoted, escaped, "</" made script-safe.
+              }
+              neo_secrets_fill() {
+                local red='@NEO_SECRET_(SHA256|BASE64):([A-Za-z0-9+/=]+)@'
                 local rej='@NEO_SECRET_JSON:([A-Za-z0-9._/:-]+)@'
-                rest=$content
+                local rest ph fn key val outer
+                rest=$text
+                while [[ $rest =~ $red ]]; do
+                  ph=''${BASH_REMATCH[0]}
+                  fn=''${BASH_REMATCH[1]}
+                  outer=$text
+                  text=$(printf '%s' "''${BASH_REMATCH[2]}" | ${pkgs.coreutils}/bin/base64 -d; printf x)
+                  text=''${text%x}
+                  neo_secrets_fill_plain "$1" || return 1
+                  case $fn in
+                    SHA256)
+                      val=$(printf '%s' "$text" | ${pkgs.coreutils}/bin/sha256sum)
+                      val=''${val%% *}
+                      ;;
+                    BASE64) val=$(printf '%s' "$text" | ${pkgs.coreutils}/bin/base64 -w0) ;;
+                  esac
+                  text=''${outer//"$ph"/"$val"}
+                  rest=''${rest//"$ph"/}
+                done
+                rest=$text
                 while [[ $rest =~ $rej ]]; do
                   ph=''${BASH_REMATCH[0]}
                   key=''${BASH_REMATCH[1]}
-                  if [ ! -f "$raw/$key" ]; then
-                    echo "neo-secrets: no value for setting $key (needed by $dst)" >&2
-                    failed=1
-                    return 0
-                  fi
+                  neo_secrets_value "$key" "$1" || return 1
                   val=$(${pkgs.jq}/bin/jq -Rs . < "$raw/$key")
                   val=''${val//<\//<\\/}
-                  content=''${content//"$ph"/"$val"}
+                  text=''${text//"$ph"/"$val"}
                   rest=''${rest//"$ph"/}
                 done
+                neo_secrets_fill_plain "$1"
+              }
+
+              neo_secrets_render() {
+                local src=$1 dst=$2 owner=$3 group=$4 mode=$5 copies=$6
+                shift 6
+                local text tmp
+                text=$(cat "$src"; printf x)
+                text=''${text%x}
+                neo_secrets_fill "$dst" || return 0
                 tmp=$(mktemp "$dst.XXXXXX")
-                printf '%s' "$content" > "$tmp"
+                printf '%s' "$text" > "$tmp"
                 chown "$owner:$group" "$tmp"
                 chmod "$mode" "$tmp"
                 # Changed (not new: boot renders everything) → restart its units.
-                if [ -e "$dst" ] && ! cmp -s "$tmp" "$dst"; then
+                if [ -e "$dst" ] && ! ${pkgs.diffutils}/bin/cmp -s "$tmp" "$dst"; then
                   for u in "$@"; do echo "$u" >> /run/nixos/activation-restart-list; done
                 fi
                 mv -f "$tmp" "$dst"

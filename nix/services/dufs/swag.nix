@@ -22,33 +22,6 @@
       (cfg.password or null)
       != null
       && cfg.password != "";
-    # RFC 4648 base64; this nixpkgs lib.strings has no toBase64.
-    toBase64 = str: let
-      inherit (lib) stringToCharacters concatStrings elemAt;
-      inherit (lib.strings) charToInt;
-      alphabet = stringToCharacters "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-      bytes = map charToInt (stringToCharacters str);
-      len = builtins.length bytes;
-      at = i:
-        if i < len
-        then elemAt bytes i
-        else 0;
-      nChunks = (len + 2) / 3;
-      chunk = i: let
-        n = (at (i * 3)) * 65536 + (at (i * 3 + 1)) * 256 + (at (i * 3 + 2));
-        c0 = elemAt alphabet (n / 262144);
-        c1 = elemAt alphabet (lib.mod (n / 4096) 64);
-        c2 = elemAt alphabet (lib.mod (n / 64) 64);
-        c3 = elemAt alphabet (lib.mod n 64);
-        remaining = len - i * 3;
-      in
-        if remaining == 1
-        then c0 + c1 + "=="
-        else if remaining == 2
-        then c0 + c1 + c2 + "="
-        else c0 + c1 + c2 + c3;
-    in
-      concatStrings (map chunk (lib.range 0 (nChunks - 1)));
     auth = lib.neo.authBlock config cfg;
     authLoc = lib.neo.authLocations config cfg;
     proxyCore = ''
@@ -61,9 +34,11 @@
       proxy_request_buffering off;
       proxy_pass $upstream_proto://$upstream_app:$upstream_port;
     '';
-    injectAuth = lib.optionalString webdavAuth ''
-      proxy_set_header Authorization "Basic ${toBase64 "${cfg.username}:${cfg.password}"}";
+    # The UI Basic header carries the password: a rendered snippet (secrets).
+    authSnippet = lib.neo.secrets.swagSnippet config "dufs-auth" ''
+      proxy_set_header Authorization "Basic ${lib.neo.secrets.base64 "${cfg.username}:${cfg.password}"}";
     '';
+    injectAuth = lib.optionalString webdavAuth authSnippet.include;
     davSkipAuth = lib.optionalString webdavAuth ''
       error_page 418 = @dufs_dav;
       if ($request_method ~ ^(OPTIONS|PROPFIND|PROPPATCH|MKCOL|COPY|MOVE|LOCK|UNLOCK)$) {
@@ -80,11 +55,7 @@
       }
     '';
   in {
-    # The UI Basic header is base64 of the password, computed at evaluation.
-    config.assertions = lib.optional cfg.enabled {
-      assertion = !(lib.neo.secrets.hasPlaceholder cfg.password);
-      message = "neo.services.dufs.password: encrypted secrets are not supported here yet (value is derived at evaluation)";
-    };
+    config.neo.core.secrets.templates = lib.mkIf (cfg.enabled && webdavAuth) authSnippet.templates;
 
     config.neo.services.dufs.proxyConf = lib.mkDefault ''
       server {

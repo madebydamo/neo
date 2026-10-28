@@ -311,18 +311,25 @@ in
   assert catalogById ? custom && catalogById.custom.hasApiKey && catalogById.custom.needsBaseUrl && catalogById.custom.envVar == null;
   assert builtins.length (lib.attrNames envVars) > 20; {
     libExtensions.hermesProviders = {
-      neo = {
+      neo = rec {
         hermesProviderEnvVars = envVars;
         hermesProviderIds = lib.sort (a: b: a < b) (lib.attrNames envVars);
         hermesProviderCatalog = lib.sort (a: b: a.id < b.id) catalog;
         hermesProviderById = catalogById;
+
+        # Provider "custom" has no env var of its own: config.yaml names this one
+        # as model.key_env (Hermes resolves it from the env / $HERMES_HOME/.env),
+        # so the key never sits in config.yaml.
+        hermesCustomKeyEnv = "NEO_HERMES_LLM_API_KEY";
 
         mkHermesLlmEnv = {
           provider ? null,
           apiKey ? null,
         }: let
           envName =
-            if nonEmpty provider && builtins.hasAttr provider envVars
+            if provider == "custom"
+            then hermesCustomKeyEnv
+            else if nonEmpty provider && builtins.hasAttr provider envVars
             then envVars.${provider}
             else null;
         in

@@ -497,8 +497,12 @@ VM's host key, identical rendered files), web saves in every mode, key escrow ro
 - Recipients: `core.ssh.authorizedKeys` (ssh-ed25519 only) + `core.secrets.hostKey`, recorded by
   `enable`. `.sops.yaml` is generated for manual `sops edit` on a checkout.
 
-Still refused with encrypted values (assertion, plain mode unaffected): dufs and rustical SWAG
-confs, docmost SSO keys, Hermes `llm.apiKey` for provider `custom`.
+Every secret option in this repo works encrypted. Secrets used inside other values go through
+derived placeholders the renderer computes: `lib.neo.secrets.base64` (dufs Basic header),
+`lib.neo.secrets.sha256` (docmost SSO/MCP keys), `lib.neo.secrets.jsonString` (Hermes auto-login).
+SWAG lines with secrets are rendered snippets (`lib.neo.secrets.swagSnippet`, included from
+`nginx/neo-secrets/`, which SWAG's preStart leaves alone). Hermes' custom provider key goes to the
+env as `NEO_HERMES_LLM_API_KEY`, named by `model.key_env` in config.yaml (upstream resolves it).
 
 Open: config repo remote + push (open question 1), token expiry warnings, `secrets.yaml` in
 `paste_settings`/upload, and plugin options (e.g. highsea.neo arr `apiKey`s still plain options).
