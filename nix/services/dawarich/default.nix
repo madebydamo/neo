@@ -12,6 +12,7 @@
       appdata = "${config.neo.core.volumes.appdata}/dawarich";
       domain = config.neo.services.swag.domain or null;
       secretSet = v: v != null && v != "";
+      inherit (lib.neo.secrets) isPlaceholder;
       dbUser = "dawarich";
       dbName = "dawarich";
       publicHost =
@@ -36,7 +37,6 @@
         RAILS_LOG_TO_STDOUT = "true";
         SELF_HOSTED = "true";
         STORE_GEODATA = "true";
-        SECRET_KEY_BASE = secretKeyBase;
         APPLICATION_PROTOCOL = "https";
         APPLICATION_HOSTS = applicationHosts;
         # Absolute links in mail (invites, password reset). No scheme, no slash.
@@ -46,8 +46,12 @@
         DATABASE_HOST = "dawarich-db";
         DATABASE_PORT = "5432";
         DATABASE_USERNAME = dbUser;
-        DATABASE_PASSWORD = dbPassword;
         DATABASE_NAME = dbName;
+      };
+      # Secret part of commonEnv: rendered env file per container (neo.core.secrets).
+      commonSecretEnv = {
+        SECRET_KEY_BASE = secretKeyBase;
+        DATABASE_PASSWORD = dbPassword;
       };
     in {
       config = mkIf cfg.enabled {
@@ -57,7 +61,8 @@
             message = "neo.services.dawarich: subdomain and services.swag.domain must be set when enabled.";
           }
           {
-            assertion = secretSet cfg.secretKeyBase && cfg.secretKeyBase != "CHANGE_ME" && (stringLength cfg.secretKeyBase) >= 32;
+            # An encrypted value is only checked for presence (its text is a placeholder).
+            assertion = secretSet cfg.secretKeyBase && (isPlaceholder cfg.secretKeyBase || (cfg.secretKeyBase != "CHANGE_ME" && (stringLength cfg.secretKeyBase) >= 32));
             message = "neo.services.dawarich: secretKeyBase must be at least 32 characters when enabled (use the Generate helper; not CHANGE_ME).";
           }
           {
@@ -82,6 +87,12 @@
           "${appdata}/storage"
           "${appdata}/watched"
         ];
+
+        neo.core.secrets.containerEnv = {
+          dawarich-db.POSTGRES_PASSWORD = dbPassword;
+          dawarich = commonSecretEnv;
+          dawarich-sidekiq = commonSecretEnv;
+        };
 
         virtualisation.oci-containers.containers = {
           dawarich-redis = {
@@ -118,7 +129,6 @@
             environment = {
               POSTGRES_DB = dbName;
               POSTGRES_USER = dbUser;
-              POSTGRES_PASSWORD = dbPassword;
             };
             volumes = [
               "${appdata}/pgdata:/var/lib/postgresql/data"

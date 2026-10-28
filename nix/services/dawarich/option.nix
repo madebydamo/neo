@@ -21,7 +21,7 @@
                 default = 3000;
                 description = "Internal port Dawarich listens on (container port 3000)";
               };
-              secretKeyBase = mkOption {
+              secretKeyBase = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
@@ -32,7 +32,7 @@
                 '';
                 helper = lib.neo.helpers.randomToken;
               };
-              dbPassword = mkOption {
+              dbPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 20;
