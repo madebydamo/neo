@@ -139,7 +139,8 @@
         --inherit-argv0 \
         --set TEMPLATE_DIR ${templateDir} \
         --set STATIC_DIR ${staticDir} \
-        --set DEFAULT_SETTINGS_PATH ${defaults}
+        --set DEFAULT_SETTINGS_PATH ${defaults} \
+        --set-default SOPS_BINARY_PATH ${pkgs.sops}/bin/sops
     '';
   cfgPackage = self.nixosConfigurations.homeserver.config.neo;
 in {

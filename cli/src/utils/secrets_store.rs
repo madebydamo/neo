@@ -196,30 +196,40 @@ fn json_to_tree(v: &serde_json::Value) -> Result<Tree> {
 /// else sops with the caller's own SSH key (~/.ssh/id_ed25519).
 pub fn decrypt(path: &Path) -> Result<Tree> {
     let abs = fs::canonicalize(path).with_context(|| format!("resolve {}", path.display()))?;
-    let abs_s = abs.to_string_lossy().to_string();
-    let json = if let Some(helper) = root_helper() {
-        helper_output(&helper, &["decrypt", &abs_s])?
-    } else {
-        let out = Command::new(sops_bin())
-            .args([
-                "decrypt",
-                "--input-type",
-                "yaml",
-                "--output-type",
-                "json",
-                &abs_s,
-            ])
-            .output()
-            .context("run sops decrypt (is sops installed?)")?;
-        if !out.status.success() {
-            bail!(
-                "sops decrypt failed (is your ssh-ed25519 key a recipient?): {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
+    match root_helper() {
+        Some(helper) => {
+            let json = helper_output(&helper, &["decrypt", &abs.to_string_lossy()])?;
+            let v: serde_json::Value =
+                serde_json::from_slice(&json).context("parse decrypted secrets")?;
+            json_to_tree(&v)
         }
-        out.stdout
-    };
-    let v: serde_json::Value = serde_json::from_slice(&json).context("parse decrypted secrets")?;
+        None => decrypt_with_key(&abs, None),
+    }
+}
+
+/// Decrypt with sops directly, using `key` (an ssh-ed25519 private key) or
+/// sops' default (~/.ssh/id_ed25519, prompting for its passphrase).
+pub fn decrypt_with_key(path: &Path, key: Option<&Path>) -> Result<Tree> {
+    let mut cmd = Command::new(sops_bin());
+    cmd.args(["decrypt", "--input-type", "yaml", "--output-type", "json"])
+        .arg(path)
+        .stdin(Stdio::inherit())
+        .stderr(Stdio::piped());
+    if let Some(k) = key {
+        cmd.env("SOPS_AGE_SSH_PRIVATE_KEY_FILE", k);
+    }
+    let out = cmd
+        .output()
+        .context("run sops decrypt (is sops installed?)")?;
+    if !out.status.success() {
+        bail!(
+            "sops decrypt of {} failed (is your ssh-ed25519 key a recipient?): {}",
+            path.display(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    let v: serde_json::Value =
+        serde_json::from_slice(&out.stdout).context("parse decrypted secrets")?;
     json_to_tree(&v)
 }
 

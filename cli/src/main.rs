@@ -118,6 +118,25 @@ enum Commands {
         #[command(subcommand)]
         action: Option<GenerationAction>,
     },
+    /// Reinstall a machine from its config repository (run as root on a live
+    /// system with the target mounted): restores the escrowed host key, then
+    /// nixos-install.
+    Restore {
+        /// Config repository URL (git clone).
+        repo: String,
+        /// Root of the mounted target system.
+        #[arg(long, default_value = "/mnt")]
+        target: PathBuf,
+        /// Admin ssh-ed25519 private key (default: sops uses ~/.ssh/id_ed25519).
+        #[arg(long)]
+        key: Option<PathBuf>,
+        /// nixosConfigurations entry to install.
+        #[arg(long, default_value = "neo")]
+        config: String,
+        /// Only clone the repo and restore the host key.
+        #[arg(long)]
+        no_install: bool,
+    },
     /// Secret settings kept outside settings.toml.
     Secrets {
         #[command(subcommand)]
@@ -186,7 +205,10 @@ fn run(cli: Cli) -> Result<()> {
     let profile = resolve_profile(&cli.profile, &cli.section, etc_settings.exists());
 
     // On a full install, run as homeserver so configPath ownership and git identity match.
-    if etc_settings.exists() && env::var("USER").unwrap_or_default() != "homeserver" {
+    // `restore` writes into a mounted target (host key, repo) and needs root.
+    let needs_root = matches!(command, Commands::Restore { .. });
+    if etc_settings.exists() && env::var("USER").unwrap_or_default() != "homeserver" && !needs_root
+    {
         let sudo_bin = cli.sudo_path.as_deref().unwrap_or("sudo");
         // The child prints its own error. A failed `neo init` still exits
         // through this sudo, so do not describe that as a user-switch failure.
@@ -287,6 +309,22 @@ fn run(cli: Cli) -> Result<()> {
             Some(GenerationAction::Boot { n }) => generation_boot(n, dry_run, sudo_cmd),
             None => generation_help(),
         },
+        Commands::Restore {
+            repo,
+            target,
+            key,
+            config,
+            no_install,
+        } => commands::restore::restore(
+            &commands::restore::RestoreArgs {
+                repo,
+                target,
+                key,
+                config,
+                no_install,
+            },
+            dry_run,
+        ),
         Commands::Secrets { action } => match action {
             SecretsAction::Split => commands::secrets::split(&config_path, dry_run, nix_cmd),
             SecretsAction::Enable => commands::secrets::enable(&config_path, dry_run, nix_cmd),
@@ -359,7 +397,8 @@ fn command_lock(command: &Commands) -> Option<(LockSpec, OpInfo, Option<Operatio
         | Commands::Edit
         | Commands::Git
         | Commands::Lg
-        | Commands::Generation { .. } => None,
+        | Commands::Generation { .. }
+        | Commands::Restore { .. } => None,
     }
 }
 
