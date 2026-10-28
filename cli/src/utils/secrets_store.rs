@@ -321,7 +321,42 @@ impl Store {
     }
 
     /// Move inline secret settings into secrets.yaml. Returns the moved paths.
+    /// Whether the config's Nix files read the secrets files (the deploy
+    /// template's settings.nix since secrets support). An older settings.nix
+    /// (a config repo whose modules `neo update` does not refresh) would
+    /// evaluate without the moved values.
+    fn loads_secret_files(&self) -> bool {
+        fn scan(dir: &Path, depth: usize) -> bool {
+            let Ok(entries) = fs::read_dir(dir) else {
+                return false;
+            };
+            entries.flatten().any(|e| {
+                let path = e.path();
+                let name = e.file_name();
+                let name = name.to_string_lossy();
+                if path.is_dir() {
+                    depth > 0
+                        && !name.starts_with('.')
+                        && name != "result"
+                        && scan(&path, depth - 1)
+                } else {
+                    name.ends_with(".nix")
+                        && fs::read_to_string(&path).is_ok_and(|t| t.contains(secrets::SOPS_FILE))
+                }
+            })
+        }
+        scan(&self.dir, 4)
+    }
+
     pub fn split(&self, patterns: &[Vec<String>]) -> Result<Vec<Vec<String>>> {
+        if !self.loads_secret_files() {
+            bail!(
+                "this configuration does not load {} / {} yet (modules/settings.nix is older than secrets support): \
+                 refresh it from the neo homeserver template first",
+                secrets::PLAIN_FILE,
+                secrets::SOPS_FILE
+            );
+        }
         let mut tree = match self.backend() {
             Backend::Sops(_) => bail!("secrets are already encrypted"),
             Backend::Plain(p) => secrets::read_plain(&p)?,
@@ -529,6 +564,31 @@ fn prune_tree(tree: &Tree) -> Tree {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn split_refuses_a_settings_nix_without_secrets_support() {
+        let dir = std::env::temp_dir().join(format!("neo-store-guard-{}", std::process::id()));
+        fs::create_dir_all(dir.join("modules")).unwrap();
+        fs::write(dir.join("settings.toml"), "[services.a]\ntoken = \"x\"\n").unwrap();
+        fs::write(dir.join("modules/settings.nix"), "{...}: {}\n").unwrap();
+        let store = Store::new(&dir);
+        let patterns = vec![vec![
+            "services".to_string(),
+            "a".to_string(),
+            "token".to_string(),
+        ]];
+        assert!(store.split(&patterns).is_err());
+        assert!(fs::read_to_string(dir.join("settings.toml"))
+            .unwrap()
+            .contains("token"));
+        fs::write(
+            dir.join("modules/settings.nix"),
+            "sopsFile = ../secrets.sops.yaml;\n",
+        )
+        .unwrap();
+        assert!(store.loads_secret_files());
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn admin_keys_keep_only_ed25519_without_comment() {
