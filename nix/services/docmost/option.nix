@@ -33,7 +33,7 @@
                 default = 3000;
                 description = "Internal port Docmost listens on (container port 3000)";
               };
-              appSecret = mkOption {
+              appSecret = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
@@ -43,7 +43,7 @@
                 '';
                 helper = lib.neo.helpers.randomToken;
               };
-              dbPassword = mkOption {
+              dbPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 20;

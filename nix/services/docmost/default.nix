@@ -42,6 +42,11 @@
             assertion = secretSet cfg.dbPassword;
             message = "neo.services.docmost: dbPassword must be set when enabled.";
           }
+          {
+            # ssoKey / swagKey / mcpKey are hashed from appSecret at evaluation.
+            assertion = !(ssoActive && lib.neo.secrets.hasPlaceholder cfg.appSecret);
+            message = "neo.services.docmost.appSecret: encrypted secrets are not supported here yet (value is derived at evaluation)";
+          }
         ];
 
         # Postgres 18 official image expects the volume at /var/lib/postgresql (not .../data).
@@ -72,7 +77,6 @@
             environment = {
               POSTGRES_DB = "docmost";
               POSTGRES_USER = "docmost";
-              POSTGRES_PASSWORD = dbPassword;
             };
             volumes = [
               "${appdata}/pgdata:/var/lib/postgresql"
@@ -85,8 +89,6 @@
             autoStart = true;
             environment = {
               APP_URL = "https://${cfg.subdomain}.${domain}";
-              APP_SECRET = cfg.appSecret or "";
-              DATABASE_URL = "postgresql://docmost:${dbPassword}@docmost-db:5432/docmost";
               REDIS_URL = "redis://docmost-redis:6379";
             };
             volumes = [
@@ -136,6 +138,15 @@
               "${./mcp.py}:/app/mcp.py:ro"
             ];
             networks = ["internal"];
+          };
+        };
+
+        # Secrets reach the containers through rendered env files.
+        neo.core.secrets.containerEnv = {
+          docmost-db.POSTGRES_PASSWORD = dbPassword;
+          docmost = {
+            APP_SECRET = cfg.appSecret or "";
+            DATABASE_URL = "postgresql://docmost:${dbPassword}@docmost-db:5432/docmost";
           };
         };
 
