@@ -21,8 +21,8 @@
       };
   in {
     neo = lib.foldl' lib.recursiveUpdate tomlSettings [
-      secrets.values
-      secrets.settings
+      (secrets.values or {})
+      (secrets.settings or {})
     ];
     environment.etc."neo/settings.toml" = lib.mkIf hasSettings {
       source = settingsPath;
