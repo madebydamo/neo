@@ -20,6 +20,11 @@
           "${appdata}/pipeline"
         ];
 
+        # The initial password reaches the container through an env file rendered at activation.
+        neo.core.secrets.containerEnv."stirling-pdf" = mkIf cfg.enableLogin {
+          SECURITY_INITIALLOGIN_PASSWORD = cfg.initialLoginPassword;
+        };
+
         virtualisation.oci-containers.containers."stirling-pdf" = {
           image = cfg.containers."stirling-pdf";
           autoStart = true;
@@ -32,7 +37,6 @@
             }
             // optionalAttrs cfg.enableLogin {
               SECURITY_INITIALLOGIN_USERNAME = cfg.initialLoginUsername;
-              SECURITY_INITIALLOGIN_PASSWORD = cfg.initialLoginPassword;
             };
           volumes = [
             "${appdata}/tessdata:/usr/share/tessdata"

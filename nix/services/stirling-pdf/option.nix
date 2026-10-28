@@ -32,7 +32,7 @@
                 rank = 11;
                 description = "Initial admin username (only applied on first startup before the DB exists)";
               };
-              initialLoginPassword = mkOption {
+              initialLoginPassword = lib.neo.mkSecretOption {
                 type = types.str;
                 default = "stirling";
                 rank = 12;
