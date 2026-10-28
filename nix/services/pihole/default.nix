@@ -32,6 +32,9 @@
           allowedUDPPorts = [53];
         };
 
+        # The web password reaches the container through an env file rendered at activation.
+        neo.core.secrets.containerEnv.pihole.FTLCONF_webserver_api_password = cfg.webPassword;
+
         virtualisation.oci-containers.containers.pihole = {
           image = cfg.containers.pihole;
           autoStart = true;
@@ -39,7 +42,6 @@
             {
               TZ = config.neo.core.timeZone;
               FTLCONF_dns_listeningMode = "ALL";
-              FTLCONF_webserver_api_password = cfg.webPassword;
               FTLCONF_dns_upstreams = cfg.upstream;
             }
             // optionalAttrs (cfg.localIP != null) {

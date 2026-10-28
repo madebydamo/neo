@@ -24,7 +24,7 @@
                 description = "Local IP address to forward services.swag.domain toward to. Required when Tailscale split DNS is enabled, so Pi-hole binds this address only and leaves the Tailscale IP for dnsmasq.";
                 rank = 20;
               };
-              webPassword = mkOption {
+              webPassword = lib.neo.mkSecretOption {
                 type = types.str;
                 default = "";
                 description = "Optional Password for Pi-hole web admin interface. Do not leave it blank and turn auth off.";
