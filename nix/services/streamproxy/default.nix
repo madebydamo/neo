@@ -113,7 +113,12 @@
           ]
         )
         cfg.tcpForwards);
-      configFile = pkgs.writeText "rathole-server.toml" ''
+      # Tokens are secrets: the server config is rendered on the host at
+      # activation and bind-mounted read-only into the container.
+      ratholeEnabled = nonSwagEntries != {};
+      ratholeTemplate = "streamproxy-rathole-server.toml";
+      ratholeConfigPath = "/etc/rathole/server.toml";
+      configText = ''
         [server]
         bind_addr = "0.0.0.0:2223"
 
@@ -150,6 +155,13 @@
       };
     in
       mkIf cfg.enabled {
+        # A changed file is a new inode, which the bind mount does not follow:
+        # restart the container (as before, when the config was in its store path).
+        neo.core.secrets.templates.${ratholeTemplate} = mkIf ratholeEnabled {
+          content = configText;
+          restartUnits = ["container@streamproxy.service"];
+        };
+
         assertions =
           mapAttrsToList (_n: fwd: {
             assertion = builtins.hasAttr fwd.entry cfg.entries;
@@ -200,6 +212,13 @@
               tcpForwardPorts);
           hostAddress = localIp;
           localAddress = streamproxyIp;
+
+          bindMounts = mkIf ratholeEnabled {
+            ${ratholeConfigPath} = {
+              hostPath = config.neo.core.secrets.templates.${ratholeTemplate}.path;
+              isReadOnly = true;
+            };
+          };
 
           config = {pkgs, ...}: {
             networking.firewall.allowedTCPPorts =
@@ -277,12 +296,14 @@
               '';
             };
 
-            systemd.services.rathole-server = mkIf (nonSwagEntries != {}) {
+            systemd.services.rathole-server = mkIf ratholeEnabled {
               description = "Rathole server";
               after = ["network.target"];
               wantedBy = ["multi-user.target"];
               serviceConfig = {
-                ExecStart = "${pkgs.rathole}/bin/rathole --server ${configFile}";
+                # Root-only on the host; the DynamicUser reads it as a credential.
+                LoadCredential = "config.toml:${ratholeConfigPath}";
+                ExecStart = "${pkgs.rathole}/bin/rathole --server %d/config.toml";
                 Restart = "always";
                 DynamicUser = true;
               };

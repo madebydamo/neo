@@ -34,7 +34,7 @@
                           description = "The domain name for this ingress entry";
                           rank = 0;
                         };
-                        token = mkOption {
+                        token = lib.neo.mkSecretOption {
                           type = types.str;
                           description = "The authentication token for rathole";
                           helper = lib.neo.helpers.randomToken;
