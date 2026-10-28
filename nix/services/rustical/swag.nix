@@ -201,6 +201,13 @@
       }
     '';
   in {
+    # SWAG proxy confs are written from the store, so the login body above
+    # carries the password as evaluated.
+    config.assertions = lib.optional (cfg.enabled && ssoEnabled) {
+      assertion = !(lib.neo.secrets.hasPlaceholder cfg.ssoPassword);
+      message = "neo.services.rustical.ssoPassword: encrypted secrets are not supported here yet (value is written into the SWAG config at evaluation)";
+    };
+
     config.neo.services.rustical.proxyConf =
       lib.mkDefault
       (

@@ -30,6 +30,7 @@
         != null
         && cfg.ssoPassword != ""
         && principalIds != [];
+      passwordFile = config.neo.core.secrets.templates."rustical-sso-password".path;
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-rustical.preStart = lib.neo.mkEnsureDirs config [appdata];
@@ -49,6 +50,13 @@
           networks = ["internal"];
         };
 
+        # The password is a secret: provisioning reads it from a rendered file
+        # (one line, as the CLI prompt expects).
+        neo.core.secrets.templates."rustical-sso-password" = mkIf ssoEnabled {
+          content = "${cfg.ssoPassword}\n";
+          restartUnits = ["rustical-provision.service"];
+        };
+
         # Setup unit (lib.neo.mkSetupService). Always defined because the
         # option lists it in systemdUnits; without SSO it has nothing to do
         # and finishes at once. Retries every 10s until rustical is healthy.
@@ -62,7 +70,6 @@
           script =
             if ssoEnabled
             then let
-              password = lib.escapeShellArg cfg.ssoPassword;
               idList = lib.concatMapStringsSep " " lib.escapeShellArg principalIds;
             in ''
               set -euo pipefail
@@ -72,7 +79,7 @@
               rustical health >/dev/null
               for id in ${idList}; do
                 rustical principals create "$id" || true
-                printf '%s\n' ${password} | docker exec -i rustical /usr/local/bin/rustical principals edit "$id" --password
+                docker exec -i rustical /usr/local/bin/rustical principals edit "$id" --password <${passwordFile}
               done
             ''
             else ''

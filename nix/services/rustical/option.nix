@@ -20,7 +20,7 @@
                 default = 4000;
                 description = "Internal port RustiCal listens on";
               };
-              ssoPassword = mkOption {
+              ssoPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
