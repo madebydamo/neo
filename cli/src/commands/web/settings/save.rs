@@ -7,6 +7,7 @@ use toml_edit::{DocumentMut, Table};
 use super::{insert_dotted, json_to_toml_item, json_to_toml_value};
 use crate::commands::web::action_bar::broadcast_action_bar;
 use crate::commands::web::types::AppConfig;
+use crate::utils::secrets_store::Store;
 use crate::utils::{secrets, sort_document_alphabetically};
 
 pub fn load_settings_doc(path: &Path) -> Result<DocumentMut, Status> {
@@ -98,19 +99,16 @@ pub async fn route_secrets(
             })
         }
         secrets::Backend::Sops(_) => {
-            // Encrypted values come back as placeholders and are dropped here.
-            // Changing one needs the root helper (sops backend, not yet).
-            let mut scratch = secrets::Tree::new();
-            let split = secrets::split_into(doc, &mut scratch, &patterns, None);
-            if split.moved.is_empty() {
-                Ok(())
-            } else {
-                eprintln!(
-                    "web: refusing save; editing encrypted secrets is not supported yet: {:?}",
-                    split.moved
-                );
-                Err(Status::Conflict)
-            }
+            // Placeholders (unchanged values) are dropped; changed or cleared
+            // secrets are re-encrypted (decrypting needs the root helper).
+            let store = Store::new(config.settings_path.parent().unwrap_or(Path::new(".")));
+            store
+                .save_encrypted(doc, &patterns, scope)
+                .map(|_| ())
+                .map_err(|e| {
+                    eprintln!("web: refusing save; encrypted secrets: {e:#}");
+                    Status::InternalServerError
+                })
         }
     }
 }
@@ -118,6 +116,14 @@ pub async fn route_secrets(
 pub fn finish_save(path: &Path, doc: &mut DocumentMut, config: &AppConfig) -> Status {
     if write_settings_doc(path, doc).is_err() {
         return Status::InternalServerError;
+    }
+    // New or removed SSH keys change who may decrypt: re-encrypt right away.
+    let store = Store::new(path.parent().unwrap_or(Path::new(".")));
+    if store.needs_rekey() {
+        if let Err(e) = store.rekey() {
+            eprintln!("web: re-encrypting secrets for the new SSH keys failed: {e:#}");
+            return Status::InternalServerError;
+        }
     }
     refresh_after_settings_change(config);
     Status::Ok

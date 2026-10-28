@@ -8,6 +8,7 @@ pub mod locks;
 pub mod ops;
 pub mod profile;
 pub mod secrets;
+pub mod secrets_store;
 pub mod settings;
 pub mod stdio_tee;
 pub mod toml_sort;

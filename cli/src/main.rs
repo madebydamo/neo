@@ -129,6 +129,12 @@ enum Commands {
 enum SecretsAction {
     /// Move secret settings from settings.toml into secrets.yaml (unencrypted).
     Split,
+    /// Encrypt the secrets for this machine and core.ssh.authorizedKeys (sops).
+    Enable,
+    /// Decrypt secrets.sops.yaml back into secrets.yaml.
+    Disable,
+    /// Re-encrypt for the current host and authorized keys.
+    Rekey,
 }
 
 #[derive(Subcommand, Debug)]
@@ -281,9 +287,12 @@ fn run(cli: Cli) -> Result<()> {
             Some(GenerationAction::Boot { n }) => generation_boot(n, dry_run, sudo_cmd),
             None => generation_help(),
         },
-        Commands::Secrets {
-            action: SecretsAction::Split,
-        } => commands::secrets::split(&config_path, dry_run, nix_cmd),
+        Commands::Secrets { action } => match action {
+            SecretsAction::Split => commands::secrets::split(&config_path, dry_run, nix_cmd),
+            SecretsAction::Enable => commands::secrets::enable(&config_path, dry_run, nix_cmd),
+            SecretsAction::Disable => commands::secrets::disable(&config_path, dry_run),
+            SecretsAction::Rekey => commands::secrets::rekey(&config_path, dry_run),
+        },
     }
 }
 

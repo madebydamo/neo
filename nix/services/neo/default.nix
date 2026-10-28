@@ -153,6 +153,8 @@
             pkgs.bash
             pkgs.openssl
             pkgs.jq
+            # secrets.sops.yaml: encrypt (public keys only) and read metadata
+            pkgs.sops
             pkgs.apacheHttpd
             pkgs.whois
             config.virtualisation.docker.package
@@ -203,6 +205,10 @@
               # web UI "Regenerate" on the root-owned machine git key (core/git.nix)
               {
                 command = "/run/current-system/sw/bin/neo-git-ssh-key";
+              }
+              # decrypt secrets.sops.yaml / escrow the host key (core/secrets.nix)
+              {
+                command = "/run/current-system/sw/bin/neo-secrets-root";
               }
               # after profile switch: `/nix/var/nix/profiles/system/bin/switch-to-configuration`
               {

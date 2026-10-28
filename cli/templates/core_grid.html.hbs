@@ -62,6 +62,11 @@
         <span class="loading loading-spinner loading-xs"></span> Loading git SSH public key…
       </div>
     </div>
+    <div hx-get="/secrets/card" hx-trigger="load" hx-swap="outerHTML">
+      <div class="rounded-box border border-base-300 bg-base-100 p-4 text-xs text-base-content/50 flex items-center gap-2">
+        <span class="loading loading-spinner loading-xs"></span> Loading secrets…
+      </div>
+    </div>
 
     <div id="settings-toml-card" class="rounded-box border border-base-300 bg-base-100 p-4">
       <div class="flex flex-col sm:flex-row sm:items-center gap-3">

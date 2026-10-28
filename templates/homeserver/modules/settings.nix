@@ -22,7 +22,7 @@
   in {
     neo = lib.foldl' lib.recursiveUpdate tomlSettings [
       secrets.values
-      (lib.optionalAttrs (secrets.backend != "plain") {core.secrets.backend = secrets.backend;})
+      (lib.optionalAttrs (secrets.backend != "plain") {core.secrets = {inherit (secrets) backend sopsFile;};})
     ];
     environment.etc."neo/settings.toml" = lib.mkIf hasSettings {
       source = settingsPath;

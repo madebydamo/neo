@@ -1,18 +1,19 @@
 //! `neo secrets …`: secret settings outside settings.toml (docs/design/secrets.md).
 //!
-//! `split` moves every secret option value from settings.toml into secrets.yaml
-//! (plain, the unencrypted backend). Saves in the web UI keep routing secrets
-//! there from then on.
+//!   split    settings.toml → secrets.yaml (plain)
+//!   enable   → secrets.sops.yaml for the host + core.ssh.authorizedKeys (ssh-ed25519),
+//!            host key escrowed for the admins in identity.sops.yaml
+//!   disable  secrets.sops.yaml → secrets.yaml
+//!   rekey    re-encrypt for the current keys
+//! The web UI Secrets card runs the same operations (utils/secrets_store.rs).
 
 use anyhow::{bail, Context, Result};
 use std::fs;
-use std::path::Path;
 use std::process::Command;
-use toml_edit::DocumentMut;
 
 use crate::commands::web::nix::registry::{EXTRACT_LIB, EXTRACT_SECRET_PATHS};
 use crate::utils::secrets::{self, Backend};
-use crate::utils::{git_cmd, sort_document_alphabetically};
+use crate::utils::secrets_store::{Store, IDENTITY_FILE};
 
 /// Secret option paths of the config flake at `config_path` ("*" = any attrsOf key).
 pub fn secret_paths(config_path: &str, nix_cmd: &str) -> Result<Vec<Vec<String>>> {
@@ -49,45 +50,76 @@ pub fn secret_paths(config_path: &str, nix_cmd: &str) -> Result<Vec<Vec<String>>
 }
 
 pub fn split(config_path: &str, dry_run: bool, nix_cmd: &str) -> Result<()> {
-    let settings_path = Path::new(config_path).join("settings.toml");
-    let plain_path = Path::new(config_path).join(secrets::PLAIN_FILE);
-    let mut tree = match secrets::backend_for(&settings_path) {
-        Backend::Sops(p) => bail!(
-            "{} exists: secrets are already encrypted, nothing to split",
-            p.display()
-        ),
-        Backend::Plain(p) => secrets::read_plain(&p)?,
-        Backend::Inline => secrets::Tree::new(),
-    };
+    let store = Store::new(config_path);
+    if let Backend::Sops(p) = store.backend() {
+        bail!("{} exists: secrets are already encrypted", p.display());
+    }
     let patterns = secret_paths(config_path, nix_cmd)?;
-    let content = fs::read_to_string(&settings_path)
-        .with_context(|| format!("read {}", settings_path.display()))?;
-    let mut doc: DocumentMut = content.parse().context("parse settings.toml")?;
-    let split = secrets::split_into(&mut doc, &mut tree, &patterns, None);
-    if split.moved.is_empty() && plain_path.exists() {
-        println!("No secret settings left in settings.toml");
-        return Ok(());
-    }
-    for p in &split.moved {
-        println!("  {} → {}", p.join("."), secrets::PLAIN_FILE);
-    }
     if dry_run {
         println!(
-            "DRY-RUN: would write {} and settings.toml",
-            plain_path.display()
+            "DRY-RUN: would move secret settings into {}",
+            secrets::PLAIN_FILE
         );
         return Ok(());
     }
-    // Secrets first: if settings.toml fails to write, the values still exist
-    // in both files and the secrets file wins on evaluation.
-    secrets::write_plain(&plain_path, &tree)?;
-    sort_document_alphabetically(&mut doc);
-    fs::write(&settings_path, doc.to_string()).context("write settings.toml")?;
-    git_cmd(config_path, &["add", secrets::PLAIN_FILE, "settings.toml"])?;
+    let moved = store.split(&patterns)?;
+    for p in &moved {
+        println!("  {} → {}", p.join("."), secrets::PLAIN_FILE);
+    }
+    if moved.is_empty() {
+        println!("No secret settings left in settings.toml");
+    } else {
+        println!("Moved {} secret setting(s); activate to apply", moved.len());
+    }
+    Ok(())
+}
+
+pub fn enable(config_path: &str, dry_run: bool, nix_cmd: &str) -> Result<()> {
+    let store = Store::new(config_path);
+    let patterns = secret_paths(config_path, nix_cmd)?;
+    if dry_run {
+        println!("DRY-RUN: would encrypt secrets into {}", secrets::SOPS_FILE);
+        return Ok(());
+    }
+    let r = store.enable(&patterns)?;
     println!(
-        "Moved {} secret setting(s) to {}",
-        split.moved.len(),
-        plain_path.display()
+        "Encrypted {} secret(s) for {} recipient(s) into {}",
+        r.values,
+        r.recipients,
+        secrets::SOPS_FILE
     );
+    if r.escrowed {
+        println!("Host key escrowed for the admins in {IDENTITY_FILE}");
+    } else {
+        println!("Host key not escrowed (run on the machine to write {IDENTITY_FILE})");
+    }
+    println!("Activate to apply.");
+    Ok(())
+}
+
+pub fn disable(config_path: &str, dry_run: bool) -> Result<()> {
+    if dry_run {
+        println!(
+            "DRY-RUN: would decrypt {} into {}",
+            secrets::SOPS_FILE,
+            secrets::PLAIN_FILE
+        );
+        return Ok(());
+    }
+    let n = Store::new(config_path).disable()?;
+    println!(
+        "Decrypted {n} secret(s) into {}; activate to apply",
+        secrets::PLAIN_FILE
+    );
+    Ok(())
+}
+
+pub fn rekey(config_path: &str, dry_run: bool) -> Result<()> {
+    if dry_run {
+        println!("DRY-RUN: would re-encrypt {}", secrets::SOPS_FILE);
+        return Ok(());
+    }
+    let n = Store::new(config_path).rekey()?;
+    println!("Re-encrypted for {n} recipient(s)");
     Ok(())
 }

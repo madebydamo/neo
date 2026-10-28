@@ -2,7 +2,7 @@
 #
 # A secret option is a plain string option tagged `secret = true` (web UI:
 # masked input). Its value is the secret itself on an unencrypted config, or a
-# placeholder `@NEO_SECRET:<path>:<stamp>@` once the value comes from an
+# placeholder `@NEO_SECRET:<path>@` once the value comes from an
 # encrypted file. Services never put a secret into the store-visible unit
 # environment directly; they go through neo.core.secrets (nix/modules/core/secrets.nix):
 #
@@ -40,9 +40,8 @@
         # Marker that every placeholder starts with (leak guard, web UI masking).
         placeholderPrefix = "@NEO_SECRET:";
 
-        # `path` mirrors the settings path below neo (services/dufs/password);
-        # `stamp` changes whenever the stored value changes (restart trigger).
-        mkPlaceholder = path: stamp: "${placeholderPrefix}${path}:${stamp}@";
+        # `path` mirrors the settings path below neo (services/dufs/password).
+        mkPlaceholder = path: "${placeholderPrefix}${path}@";
 
         isPlaceholder = v: builtins.isString v && lib.hasPrefix placeholderPrefix v;
 
@@ -69,14 +68,13 @@
             if builtins.isAttrs v
             then lib.mapAttrs (k: walk leaf (path ++ [(checkSegment path k)])) v
             else leaf path v;
-          stamp = v: builtins.substring 0 16 (builtins.hashString "sha256" v);
           plain =
             if exists plainFile
             then walk (_: v: v) [] (readYaml (builtins.readFile plainFile))
             else {};
           encrypted =
             if exists sopsFile
-            then walk (path: v: mkPlaceholder (lib.concatStringsSep "/" path) (stamp v)) [] (readYaml (builtins.readFile sopsFile))
+            then walk (path: _: mkPlaceholder (lib.concatStringsSep "/" path)) [] (readYaml (builtins.readFile sopsFile))
             else {};
         in
           if exists plainFile && exists sopsFile
@@ -87,6 +85,10 @@
               if exists sopsFile
               then "sops"
               else "plain";
+            sopsFile =
+              if exists sopsFile
+              then sopsFile
+              else null;
           };
       };
     };

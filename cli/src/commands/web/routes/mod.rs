@@ -11,6 +11,7 @@ mod pages;
 mod power;
 mod resources;
 mod save;
+mod secrets;
 mod settings_file;
 mod snapshots;
 mod ssh;
@@ -86,6 +87,11 @@ pub fn routes() -> Vec<rocket::Route> {
         ws::ws_op,
         ssh::ssh_public_key_card,
         ssh::ssh_regenerate,
+        secrets::secrets_card,
+        secrets::secrets_split,
+        secrets::secrets_enable,
+        secrets::secrets_disable,
+        secrets::secrets_rekey,
         settings_file::download_settings,
         settings_file::upload_settings,
     ]

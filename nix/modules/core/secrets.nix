@@ -7,10 +7,15 @@
 # template whose placeholder has no raw value fails the activation and names
 # the setting, instead of starting a service with a literal placeholder.
 #
-# Restarts: each template's store source is a restartTrigger of its units. The
-# source holds the value (unencrypted config) or a placeholder with the
-# ciphertext stamp (encrypted config), so a changed secret restarts exactly the
-# units that use it.
+# Encrypted config (backend sops, secrets.sops.yaml): before rendering, the
+# file is decrypted with the SSH host key (identityFile) into raw/. The
+# `neo-secrets-root` helper (sudo for neo-web) decrypts the same way and escrows
+# the host key for admins (identity.sops.yaml).
+#
+# Restarts: a template whose rendered content changed queues its restartUnits
+# in /run/nixos/activation-restart-list (switch-to-configuration restarts them).
+# On an unencrypted config the store source (holding the value) is also a
+# restartTrigger; with sops it only holds placeholders.
 #
 # Leak guard: a placeholder in a container or unit environment, or in an
 # /etc text file, is a build error. Those paths never get rendered.
@@ -90,6 +95,44 @@
 
     sources = lib.mapAttrs (name: t: pkgs.writeText "neo-secret-template-${name}" t.text) templates;
 
+    sopsEnv = "SOPS_AGE_SSH_PRIVATE_KEY_FILE=${lib.escapeShellArg cfg.identityFile}";
+
+    # Root helper (sudo for neo-web, see nix/services/neo/default.nix):
+    #   decrypt <file.sops.yaml>       decrypted document as JSON on stdout
+    #   escrow <ssh-ed25519 pub>...    the host key as identity.sops.yaml, encrypted to those keys only
+    rootHelper = pkgs.writeShellApplication {
+      name = "neo-secrets-root";
+      runtimeInputs = [pkgs.sops pkgs.coreutils pkgs.gnused];
+      text = ''
+        export ${sopsEnv}
+        case "''${1:-}" in
+          decrypt)
+            f=''${2:?usage: neo-secrets-root decrypt <file.sops.yaml>}
+            case "$f" in *.sops.yaml) ;; *) echo "not a .sops.yaml file: $f" >&2; exit 2 ;; esac
+            exec sops decrypt --input-type yaml --output-type json "$f"
+            ;;
+          escrow)
+            shift
+            [ "$#" -gt 0 ] || { echo "usage: neo-secrets-root escrow <ssh-ed25519 public key>..." >&2; exit 2; }
+            recipients=$(IFS=,; echo "$*")
+            tmp=$(mktemp -d)
+            trap 'rm -rf "$tmp"' EXIT
+            chmod 700 "$tmp"
+            {
+              echo "ssh_host_ed25519_key: |"
+              sed 's/^/  /' ${lib.escapeShellArg cfg.identityFile}
+              printf 'ssh_host_ed25519_key_pub: "%s"\n' "$(cat ${lib.escapeShellArg "${cfg.identityFile}.pub"})"
+            } > "$tmp/identity.yaml"
+            sops encrypt --age "$recipients" --input-type yaml --output-type yaml "$tmp/identity.yaml"
+            ;;
+          *)
+            echo "usage: neo-secrets-root decrypt <file.sops.yaml> | escrow <ssh-ed25519 public key>..." >&2
+            exit 2
+            ;;
+        esac
+      '';
+    };
+
     unitName = u: lib.removeSuffix ".service" u;
 
     # Every unit that some template restarts → its template sources.
@@ -98,7 +141,7 @@
       templates.${name}.restartUnits) {} (lib.attrNames templates);
 
     renderLines =
-      lib.concatStringsSep "\n" (lib.mapAttrsToList (name: t: "neo_secrets_render ${lib.escapeShellArgs [sources.${name} t.path t.owner t.group t.mode]}")
+      lib.concatStringsSep "\n" (lib.mapAttrsToList (name: t: "neo_secrets_render ${lib.escapeShellArgs ([sources.${name} t.path t.owner t.group t.mode] ++ t.restartUnits)}")
         templates);
 
     keep = lib.concatStringsSep " " (map lib.escapeShellArg (lib.attrNames templates));
@@ -116,6 +159,30 @@
       (lib.filterAttrs (_: e: hasPlaceholder (e.text or null)) config.environment.etc);
   in {
     options.neo.core.secrets = {
+      sopsFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        internal = true;
+        visible = false;
+        description = "secrets.sops.yaml of the config repo (backend sops). Set by the deploy template's settings.nix";
+      };
+
+      identityFile = lib.mkOption {
+        type = lib.types.str;
+        default = "/etc/ssh/ssh_host_ed25519_key";
+        internal = true;
+        visible = false;
+        description = "SSH ed25519 private key that decrypts secrets.sops.yaml (the machine identity)";
+      };
+
+      hostKey = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+        internal = true;
+        visible = false;
+        description = "Public half of identityFile, recorded by `neo secrets enable` so the repo knows its recipients";
+      };
+
       backend = lib.mkOption {
         type = lib.types.enum ["plain" "sops"];
         default = "plain";
@@ -158,11 +225,19 @@
 
         systemd.services = lib.mapAttrs (_: srcs: {restartTriggers = srcs;}) triggers;
 
+        environment.systemPackages = [rootHelper];
+
         assertions =
           [
             {
               assertion = leaks == [];
               message = "neo secrets: a secret placeholder would be used literally in ${lib.concatStringsSep ", " leaks}. Pass the secret through neo.core.secrets.containerEnv or neo.core.secrets.templates.";
+            }
+          ]
+          ++ [
+            {
+              assertion = cfg.backend != "sops" || cfg.sopsFile != null;
+              message = "neo.core.secrets: backend sops needs sopsFile (secrets.sops.yaml)";
             }
           ]
           ++ lib.mapAttrsToList (name: t: {
@@ -182,7 +257,7 @@
           templates);
 
         system.activationScripts.neo-secrets = {
-          deps = ["users" "groups" "specialfs"];
+          deps = ["users" "groups" "specialfs" "etc"];
           text = ''
             (
               set -u
@@ -192,13 +267,30 @@
               install -d -m 0751 -o root -g root ${dir} "$rendered"
               install -d -m 0700 -o root -g root "$raw"
               failed=0
-
+              ${lib.optionalString (cfg.backend == "sops") ''
+              # Decrypt every value into raw/<path> (keys joined with /).
+              rm -rf "$raw"
+              install -d -m 0700 -o root -g root "$raw"
+              if json=$(${sopsEnv} ${pkgs.sops}/bin/sops decrypt --input-type yaml --output-type json ${cfg.sopsFile}); then
+                while IFS=$'\t' read -r key b64; do
+                  case "$key" in "" | /* | *..*) continue ;; esac
+                  install -d -m 0700 "$raw/$(dirname "$key")"
+                  printf '%s' "$b64" | ${pkgs.coreutils}/bin/base64 -d > "$raw/$key"
+                  chmod 0400 "$raw/$key"
+                done < <(printf '%s' "$json" | ${pkgs.jq}/bin/jq -r 'paths(scalars) as $p | [($p | map(tostring) | join("/")), (getpath($p) | tostring | @base64)] | @tsv')
+              else
+                echo "neo-secrets: cannot decrypt ${cfg.sopsFile} with ${cfg.identityFile}" >&2
+                failed=1
+              fi
+              unset json
+            ''}
               # Placeholders are matched on a copy that drops each one once handled,
               # so a value that itself looks like a placeholder cannot loop.
               neo_secrets_render() {
                 local src=$1 dst=$2 owner=$3 group=$4 mode=$5
+                shift 5
                 local content rest ph key val tmp
-                local re='@NEO_SECRET:([A-Za-z0-9._/:-]+):([A-Za-z0-9]*)@'
+                local re='@NEO_SECRET:([A-Za-z0-9._/:-]+)@'
                 content=$(cat "$src"; printf x)
                 content=''${content%x}
                 rest=$content
@@ -219,6 +311,10 @@
                 printf '%s' "$content" > "$tmp"
                 chown "$owner:$group" "$tmp"
                 chmod "$mode" "$tmp"
+                # Changed (not new: boot renders everything) → restart its units.
+                if [ -e "$dst" ] && ! cmp -s "$tmp" "$dst"; then
+                  for u in "$@"; do echo "$u" >> /run/nixos/activation-restart-list; done
+                fi
                 mv -f "$tmp" "$dst"
               }
 
