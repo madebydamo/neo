@@ -20,7 +20,7 @@
                 default = 80;
                 description = "Internal port Activepieces listens on (container port 80)";
               };
-              encryptionKey = mkOption {
+              encryptionKey = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
@@ -30,7 +30,7 @@
                 '';
                 helper = lib.neo.helpers.randomToken32Hex;
               };
-              jwtSecret = mkOption {
+              jwtSecret = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 20;
@@ -40,7 +40,7 @@
                 '';
                 helper = lib.neo.helpers.randomToken;
               };
-              dbPassword = mkOption {
+              dbPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 30;

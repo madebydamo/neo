@@ -11,11 +11,13 @@
       appdata = "${config.neo.core.volumes.appdata}/activepieces";
       domain = config.neo.services.swag.domain;
       secretSet = v: v != null && v != "";
+      inherit (lib.neo.secrets) isPlaceholder;
     in {
       config = mkIf cfg.enabled {
         assertions = [
           {
-            assertion = secretSet cfg.encryptionKey && builtins.match "[A-Za-z0-9]{32}" cfg.encryptionKey != null;
+            # An encrypted value is only checked for presence (its text is a placeholder).
+            assertion = secretSet cfg.encryptionKey && (isPlaceholder cfg.encryptionKey || builtins.match "[A-Za-z0-9]{32}" cfg.encryptionKey != null);
             message = "neo.services.activepieces: encryptionKey must be exactly 32 alphanumeric characters (openssl rand -hex 16).";
           }
           {
@@ -38,6 +40,16 @@
           "${appdata}/cache"
         ];
 
+        # Secrets reach the containers through env files rendered at activation.
+        neo.core.secrets.containerEnv = {
+          activepieces-db.POSTGRES_PASSWORD = cfg.dbPassword or "";
+          activepieces = {
+            AP_ENCRYPTION_KEY = cfg.encryptionKey or "";
+            AP_JWT_SECRET = cfg.jwtSecret or "";
+            AP_POSTGRES_PASSWORD = cfg.dbPassword or "";
+          };
+        };
+
         virtualisation.oci-containers.containers = {
           activepieces-redis = {
             image = cfg.containers."activepieces-redis";
@@ -54,7 +66,6 @@
             environment = {
               POSTGRES_DB = "activepieces";
               POSTGRES_USER = "activepieces";
-              POSTGRES_PASSWORD = cfg.dbPassword or "";
             };
             volumes = [
               "${appdata}/pgdata:/var/lib/postgresql/data"
@@ -68,8 +79,6 @@
             environment = {
               AP_ENVIRONMENT = "prod";
               AP_FRONTEND_URL = "https://${cfg.subdomain}.${domain}";
-              AP_ENCRYPTION_KEY = cfg.encryptionKey or "";
-              AP_JWT_SECRET = cfg.jwtSecret or "";
               AP_CONTAINER_TYPE = "WORKER_AND_APP";
               AP_EXECUTION_MODE = "UNSANDBOXED";
               AP_DB_TYPE = "POSTGRES";
@@ -77,7 +86,6 @@
               AP_POSTGRES_PORT = "5432";
               AP_POSTGRES_DATABASE = "activepieces";
               AP_POSTGRES_USERNAME = "activepieces";
-              AP_POSTGRES_PASSWORD = cfg.dbPassword or "";
               AP_REDIS_TYPE = "STANDALONE";
               AP_REDIS_HOST = "activepieces-redis";
               AP_REDIS_PORT = "6379";
