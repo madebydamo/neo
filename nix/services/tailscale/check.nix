@@ -9,11 +9,13 @@
     ...
   }: let
     tailscaleModule = (import ./default.nix {}).flake.modules.nixos.tailscale;
+    secretsModule = (import ../../modules/core/secrets.nix {}).flake.modules.nixos.core-secrets;
     extendedLib = lib.extend (
       _: super: {
         neo =
           (super.neo or {})
           // (import ../../lib/setup-service.nix {inherit lib;}).libExtensions.setup-service.neo
+          // (import ../../lib/secrets.nix {inherit lib;}).libExtensions.secrets.neo
           // {
             localDnsNamesFromConfig = _: ["app.example.test"];
           };
@@ -24,11 +26,16 @@
       specialArgs = {lib = extendedLib;};
       modules = [
         tailscaleModule
+        secretsModule
         {
           options.neo.services.tailscale = lib.mkOption {
             type = lib.types.submodule {
               options = {
                 enabled = lib.mkEnableOption "tailscale";
+                authKey = lib.mkOption {
+                  type = lib.types.nullOr lib.types.str;
+                  default = null;
+                };
                 splitDns = lib.mkOption {
                   type = lib.types.bool;
                   default = false;

@@ -8,10 +8,20 @@
   }:
     with lib; let
       cfg = config.neo.services.tailscale;
+      # Rendered at activation (secret template); absent without an authKey.
+      authKeyFile = "${lib.neo.secretsDir}/rendered/tailscale-auth-key";
     in {
       config = mkIf cfg.enabled (mkMerge [
         {
           services.tailscale.enable = true;
+
+          neo.core.secrets.templates = mkIf (cfg.authKey != null) {
+            "tailscale-auth-key" = {
+              content = "${cfg.authKey}\n";
+              mode = "0600";
+            };
+          };
+
           system.activationScripts.create-tailscale-files = let
             flags =
               []
@@ -66,16 +76,10 @@
           in {
             text = ''
               mkdir -p /etc/tailscale
-              ${
-                if cfg.authKey != null
-                then ''
-                  echo '${cfg.authKey}' > /etc/tailscale/auth-key
-                  chmod 600 /etc/tailscale/auth-key
-                ''
-                else ""
-              }
-              echo 'if [ -f /etc/tailscale/auth-key ] && ! ${checkLoggedIn}; then' > /etc/tailscale/up.sh
-              echo '  /run/current-system/sw/bin/tailscale up --auth-key=file:/etc/tailscale/auth-key ${flagStr}' >> /etc/tailscale/up.sh
+              # The key used to be written here; it is a secret template now.
+              rm -f /etc/tailscale/auth-key
+              echo 'if [ -f ${authKeyFile} ] && ! ${checkLoggedIn}; then' > /etc/tailscale/up.sh
+              echo '  /run/current-system/sw/bin/tailscale up --auth-key=file:${authKeyFile} ${flagStr}' >> /etc/tailscale/up.sh
               echo 'else' >> /etc/tailscale/up.sh
               echo '  /run/current-system/sw/bin/tailscale up ${flagStr}' >> /etc/tailscale/up.sh
               echo 'fi' >> /etc/tailscale/up.sh

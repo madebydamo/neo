@@ -23,7 +23,7 @@
           options =
             {
               enabled = mkEnableOption "Tailscale service" {rank = 0;};
-              authKey = mkOption {
+              authKey = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Node authorization key; if provided and device not logged in, will be used for authentication";
