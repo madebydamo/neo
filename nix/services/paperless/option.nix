@@ -18,7 +18,7 @@
                 default = 8000;
                 description = "Internal port for paperless web UI";
               };
-              dbPassword = mkOption {
+              dbPassword = lib.neo.mkSecretOption {
                 type = types.str;
                 default = "your_strong_password_here";
                 rank = 10;
@@ -28,7 +28,7 @@
               # Required since paperless-ngx 3.0.0 — refuses to start with unset or default 'change-me'.
               # See https://docs.paperless-ngx.com/configuration/ (PAPERLESS_SECRET_KEY) and
               # https://github.com/paperless-ngx/paperless-ngx/issues/13215
-              secretKey = mkOption {
+              secretKey = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 20;

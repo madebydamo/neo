@@ -33,6 +33,15 @@
           "${appdata}/consume"
         ];
 
+        # Secrets reach the containers through env files rendered at activation.
+        neo.core.secrets.containerEnv = {
+          paperless-db.POSTGRES_PASSWORD = cfg.dbPassword;
+          paperless = {
+            PAPERLESS_DBPASS = cfg.dbPassword;
+            PAPERLESS_SECRET_KEY = cfg.secretKey;
+          };
+        };
+
         virtualisation.oci-containers.containers = {
           paperless-redis = {
             image = cfg.containers."paperless-redis";
@@ -49,7 +58,6 @@
             environment = {
               POSTGRES_DB = "paperless";
               POSTGRES_USER = "paperless_user";
-              POSTGRES_PASSWORD = cfg.dbPassword;
             };
             volumes = [
               "${appdata}/pgdata:/var/lib/postgresql/data"
@@ -65,8 +73,6 @@
               PAPERLESS_DBHOST = "paperless-db";
               PAPERLESS_DBNAME = "paperless";
               PAPERLESS_DBUSER = "paperless_user";
-              PAPERLESS_DBPASS = cfg.dbPassword;
-              PAPERLESS_SECRET_KEY = cfg.secretKey;
               PAPERLESS_TIME_ZONE = config.neo.core.timeZone;
               PAPERLESS_OCR_LANGUAGE = "deu+eng";
               PAPERLESS_CSRF_TRUSTED_ORIGINS = "https://${cfg.subdomain}.${domain}";
