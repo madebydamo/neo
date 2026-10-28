@@ -1,6 +1,6 @@
 # Design: runtime secrets, sops encryption and machine recovery
 
-Status: proposal · 2026-10-27
+Status: phases 1–2 implemented (2026-10-28); phases 0, 3–5 open · see "Implementation status" at the end
 
 A machine's whole configuration can live in a git repo on GitHub, and an admin's SSH key is
 enough to rebuild the machine from it. Secrets never reach `/nix/store` (once encrypted), and
@@ -463,3 +463,24 @@ the VM disk → restore → same host key.
    with the `core.git.tokens` entry for that host, and push failures shown in the web UI.
 2. **Token expiry:** warn ahead of time (a daily GitHub REST call, which returns the
    `GitHub-Authentication-Token-Expiration` header for PATs), or just surface the push failure?
+
+## Implementation status (2026-10-28)
+
+Done, VM-tested (fresh boot, old→new and new→old switches, `secrets.yaml` switch with byte-identical
+rendered files and no restarts):
+
+- `lib.neo.mkSecretOption`, `neo.core.secrets.{templates,containerEnv,backend}`, activation renderer,
+  leak guard (`nix/lib/secrets.nix`, `nix/modules/core/secrets.nix`).
+- Every secret option in this repo migrated (containers, Hermes, git tokens, tailscale, rathole,
+  streamproxy, ical-sync, rustical, docmost, dufs).
+- Encrypted values are refused by assertion where a secret is still used at eval: dufs and rustical
+  SWAG confs, docmost SSO keys, Hermes `dashboardPassword` (autologin HTML) and `llm.apiKey` for
+  provider `custom`.
+- `lib.neo.secrets.readYaml` / `load`; the homeserver template merges `secrets.yaml` /
+  `secrets.sops.yaml` over `settings.toml` (guarded for template/lib skew).
+- CLI: `neo secrets split`; web saves route secret fields into `secrets.yaml` once it exists (and
+  refuse changed values while only `secrets.sops.yaml` exists); masked inputs.
+
+Open: phase 0 (identity), phase 3 (sops-nix decryption into `raw/`, recipients, root helper),
+`neo secrets enable`, `neo restore`, `secrets.yaml` support in `paste_settings`/upload, and plugin
+options (e.g. the arr `apiKey`s in highsea.neo still use plain options and stay inline).
