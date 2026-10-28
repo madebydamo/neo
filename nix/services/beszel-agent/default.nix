@@ -32,10 +32,11 @@
             })
             // (optionalAttrs (cfg.key != null) {
               KEY = cfg.key;
-            })
-            // (optionalAttrs (cfg.token != null) {
-              TOKEN = cfg.token;
             });
+        };
+        # The token is a secret: rendered env file (neo.core.secrets).
+        neo.core.secrets.containerEnv.beszel-agent = mkIf (cfg.token != null) {
+          TOKEN = cfg.token;
         };
       };
     };

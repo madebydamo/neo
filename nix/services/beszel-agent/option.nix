@@ -24,7 +24,7 @@
                 description = "Public key from hub (shown when adding system)";
                 rank = 20;
               };
-              token = mkOption {
+              token = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Universal or system token for websocket auth (from hub /settings/tokens)";
