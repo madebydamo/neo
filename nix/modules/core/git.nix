@@ -7,9 +7,12 @@
 #
 #   /var/lib/neo/git/id_ed25519   root:neo-git 0640 (ssh rejects a group-readable
 #                                 key only for its owner, and root never uses it)
-#   /etc/neo/git/tokens/<host>    root:neo-git 0640, read by neo-git-credential
+#   /etc/neo/git/tokens/<host>    read by neo-git-credential
 #   /etc/neo/git/access-tokens.conf  Nix access-tokens, !include'd by nix.conf
 #                                 (unreadable for non-members: Nix skips it)
+#
+# Both are symlinks to secret templates rendered at activation
+# (/run/neo-secrets/rendered/git-*, root:neo-git 0440), so no token is in the store.
 {...}: {
   flake.modules.nixos.core-git = {
     config,
@@ -69,6 +72,11 @@
     };
 
     validHost = name: builtins.match "[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]+)?" name != null;
+
+    # Template names allow no ':'; '_' never occurs in a host name, so no clashes.
+    tokenTemplate = host: "git-token-${builtins.replaceStrings [":"] ["_"] host}";
+    accessTokensTemplate = "git-access-tokens.conf";
+    templatePath = name: config.neo.core.secrets.templates.${name}.path;
   in {
     neo.core.git = {
       users = ["homeserver"];
@@ -118,20 +126,31 @@
       };
     };
 
-    environment.etc =
+    neo.core.secrets.templates =
       lib.mapAttrs' (host: token:
-        lib.nameValuePair "neo/git/tokens/${host}" {
-          text = token;
-          mode = "0640";
+        lib.nameValuePair (tokenTemplate host) {
+          content = token;
           inherit group;
+          mode = "0440";
         })
       cfg.tokens
       // lib.optionalAttrs (cfg.tokens != {}) {
-        "neo/git/access-tokens.conf" = {
-          text = "access-tokens = ${lib.concatStringsSep " " (lib.mapAttrsToList (host: token: "${host}=${token}") cfg.tokens)}\n";
-          mode = "0640";
+        ${accessTokensTemplate} = {
+          content = "access-tokens = ${lib.concatStringsSep " " (lib.mapAttrsToList (host: token: "${host}=${token}") cfg.tokens)}\n";
           inherit group;
+          mode = "0440";
         };
+      };
+
+    # The paths the credential helper and nix.conf read stay under /etc.
+    environment.etc =
+      lib.mapAttrs' (host: _:
+        lib.nameValuePair "neo/git/tokens/${host}" {
+          source = templatePath (tokenTemplate host);
+        })
+      cfg.tokens
+      // lib.optionalAttrs (cfg.tokens != {}) {
+        "neo/git/access-tokens.conf".source = templatePath accessTokensTemplate;
       };
 
     nix.extraOptions = lib.mkIf (cfg.tokens != {}) ''

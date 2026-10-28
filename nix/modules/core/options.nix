@@ -77,7 +77,7 @@
         ui = summarized group.git;
       };
 
-      options.neo.core.git.tokens = mkOption {
+      options.neo.core.git.tokens = lib.neo.mkSecretOption {
         type = types.attrsOf types.str;
         default = {};
         example = {"github.com" = "github_pat_…";};
