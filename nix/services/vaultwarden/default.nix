@@ -21,6 +21,11 @@
           "${config.neo.core.volumes.appdata}/vaultwarden"
         ];
 
+        # The admin token reaches the container through an env file rendered at activation.
+        neo.core.secrets.containerEnv.vaultwarden = mkIf (cfg.adminToken != null) {
+          ADMIN_TOKEN = cfg.adminToken;
+        };
+
         virtualisation.oci-containers.containers.vaultwarden = {
           image = cfg.containers.vaultwarden;
           autoStart = true;
@@ -31,9 +36,6 @@
             }
             // optionalAttrs (publicUrl != null) {
               DOMAIN = publicUrl;
-            }
-            // optionalAttrs (cfg.adminToken != null) {
-              ADMIN_TOKEN = cfg.adminToken;
             };
           volumes = [
             "${config.neo.core.volumes.appdata}/vaultwarden:/data"

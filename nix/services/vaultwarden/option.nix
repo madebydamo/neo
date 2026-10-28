@@ -18,7 +18,7 @@
                 internal = true;
                 description = "Internal port vaultwarden listens on (ROCKET_PORT)";
               };
-              adminToken = mkOption {
+              adminToken = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Random auth token to authenticate in admin page";
