@@ -146,7 +146,7 @@
                       description = "OAuth client ID.";
                       rank = 20;
                     };
-                    clientSecret = mkOption {
+                    clientSecret = lib.neo.mkSecretOption {
                       type = types.str;
                       default = "";
                       description = "OAuth client secret (for Entra: the secret value, not the secret ID).";

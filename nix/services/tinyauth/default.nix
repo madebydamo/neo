@@ -120,9 +120,11 @@
       mixedAllowBlockUsers = mixedAllowBlock activeAccess;
       mixedAllowBlockGroups = mixedAllowBlock activeGroupAccess;
 
-      # TINYAUTH_OAUTH_PROVIDERS_<ID>_* for one provider.
+      providerPrefix = id: "TINYAUTH_OAUTH_PROVIDERS_${toUpper id}";
+
+      # TINYAUTH_OAUTH_PROVIDERS_<ID>_* for one provider (the client secret is in oauthSecretEnv).
       providerEnv = id: p: let
-        prefix = "TINYAUTH_OAUTH_PROVIDERS_${toUpper id}";
+        prefix = providerPrefix id;
         login = "https://login.microsoftonline.com/${p.tenantId}/oauth2/v2.0";
         urls =
           if p.type == "entra"
@@ -152,7 +154,6 @@
           // {
             NAME = name;
             CLIENTID = p.clientId;
-            CLIENTSECRET = p.clientSecret;
             SCOPES = concatStringsSep "," scopes;
           });
 
@@ -161,6 +162,10 @@
         // optionalAttrs (cfg.oauthAutoRedirect != null) {
           TINYAUTH_OAUTH_AUTOREDIRECT = cfg.oauthAutoRedirect;
         };
+
+      # Client secrets: rendered env file (neo.core.secrets).
+      oauthSecretEnv =
+        mapAttrs' (id: p: nameValuePair "${providerPrefix id}_CLIENTSECRET" p.clientSecret) providers;
 
       # Provider IDs become env var segments and callback paths.
       badProviderIds = filter (id: builtins.match "[a-z0-9]+" id == null) (attrNames cfg.oauth);
@@ -228,6 +233,8 @@
         systemd.services.docker-tinyauth.preStart = lib.neo.mkEnsureDirs config [
           "${config.neo.core.volumes.appdata}/tinyauth"
         ];
+
+        neo.core.secrets.containerEnv.tinyauth = mkIf (oauthSecretEnv != {}) oauthSecretEnv;
 
         virtualisation.oci-containers.containers.tinyauth = {
           image = cfg.containers.tinyauth;
