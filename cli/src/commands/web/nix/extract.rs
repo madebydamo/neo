@@ -1,7 +1,7 @@
 use super::errors::eval_error_ui;
 use super::registry::{
     NixExtractor, EXTRACT_NEO_THEME, EXTRACT_PLUGIN_INVENTORY, EXTRACT_PROXIED_SERVICES,
-    EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
+    EXTRACT_SECRET_PATHS, EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
 };
 use super::repl::NixEvaluator;
 use crate::commands::web::plugins::{attach_service_plugin_badges, plugin_badges, plugin_filters};
@@ -322,5 +322,16 @@ impl NixEvaluator {
         }
         let raw: RawOwners = self.query_extractor(&EXTRACT_PLUGIN_INVENTORY).await?;
         Ok(raw.owners)
+    }
+
+    /// Settings paths of every secret option ("*" = any attrsOf key).
+    pub async fn extract_secret_paths(&mut self) -> anyhow::Result<Vec<Vec<String>>> {
+        #[derive(serde::Deserialize)]
+        struct RawPaths {
+            #[serde(default)]
+            paths: Vec<Vec<String>>,
+        }
+        let raw: RawPaths = self.query_extractor(&EXTRACT_SECRET_PATHS).await?;
+        Ok(raw.paths)
     }
 }

@@ -1,6 +1,6 @@
 mod errors;
 mod extract;
-mod registry;
+pub(crate) mod registry;
 mod repl;
 mod sections;
 

@@ -7,7 +7,7 @@ use toml_edit::{DocumentMut, Table};
 use super::{insert_dotted, json_to_toml_item, json_to_toml_value};
 use crate::commands::web::action_bar::broadcast_action_bar;
 use crate::commands::web::types::AppConfig;
-use crate::utils::sort_document_alphabetically;
+use crate::utils::{secrets, sort_document_alphabetically};
 
 pub fn load_settings_doc(path: &Path) -> Result<DocumentMut, Status> {
     if let Some(parent) = path.parent() {
@@ -61,6 +61,58 @@ pub fn refresh_after_settings_change(config: &AppConfig) {
         let mut c = cache.write().await;
         c.invalidate_all();
     });
+}
+
+/// Move secret settings out of `doc` once the config repo keeps them in a
+/// secrets file (docs/design/secrets.md §3.3). Without one they stay inline, as
+/// before. `scope` is the table this save replaced: a secret missing from it
+/// was cleared in the form and leaves secrets.yaml too.
+pub async fn route_secrets(
+    config: &AppConfig,
+    doc: &mut DocumentMut,
+    scope: Option<&[String]>,
+) -> Result<(), Status> {
+    let backend = secrets::backend_for(&config.settings_path);
+    if backend == secrets::Backend::Inline {
+        return Ok(());
+    }
+    // Without the list of secret paths a save could write secrets inline: refuse.
+    let patterns = {
+        let mut ev = config.evaluator.lock().await;
+        ev.extract_secret_paths().await.map_err(|e| {
+            eprintln!("web: refusing save; secret path extract failed: {e:#}");
+            Status::InternalServerError
+        })?
+    };
+    match backend {
+        secrets::Backend::Inline => Ok(()),
+        secrets::Backend::Plain(path) => {
+            let mut tree = secrets::read_plain(&path).map_err(|e| {
+                eprintln!("web: refusing save: {e:#}");
+                Status::InternalServerError
+            })?;
+            secrets::split_into(doc, &mut tree, &patterns, scope);
+            secrets::write_plain(&path, &tree).map_err(|e| {
+                eprintln!("web: writing secrets failed: {e:#}");
+                Status::InternalServerError
+            })
+        }
+        secrets::Backend::Sops(_) => {
+            // Encrypted values come back as placeholders and are dropped here.
+            // Changing one needs the root helper (sops backend, not yet).
+            let mut scratch = secrets::Tree::new();
+            let split = secrets::split_into(doc, &mut scratch, &patterns, None);
+            if split.moved.is_empty() {
+                Ok(())
+            } else {
+                eprintln!(
+                    "web: refusing save; editing encrypted secrets is not supported yet: {:?}",
+                    split.moved
+                );
+                Err(Status::Conflict)
+            }
+        }
+    }
 }
 
 pub fn finish_save(path: &Path, doc: &mut DocumentMut, config: &AppConfig) -> Status {

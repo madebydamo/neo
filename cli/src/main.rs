@@ -118,6 +118,17 @@ enum Commands {
         #[command(subcommand)]
         action: Option<GenerationAction>,
     },
+    /// Secret settings kept outside settings.toml.
+    Secrets {
+        #[command(subcommand)]
+        action: SecretsAction,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum SecretsAction {
+    /// Move secret settings from settings.toml into secrets.yaml (unencrypted).
+    Split,
 }
 
 #[derive(Subcommand, Debug)]
@@ -270,6 +281,9 @@ fn run(cli: Cli) -> Result<()> {
             Some(GenerationAction::Boot { n }) => generation_boot(n, dry_run, sudo_cmd),
             None => generation_help(),
         },
+        Commands::Secrets {
+            action: SecretsAction::Split,
+        } => commands::secrets::split(&config_path, dry_run, nix_cmd),
     }
 }
 
@@ -319,6 +333,7 @@ fn command_lock(command: &Commands) -> Option<(LockSpec, OpInfo, Option<Operatio
         Commands::PasteSettings => system("paste-settings", "Settings paste"),
         Commands::GenerateHardware => system("generate-hardware", "Hardware config generation"),
         Commands::Nuke => system("nuke", "Config removal"),
+        Commands::Secrets { .. } => system("secrets", "Secret settings change"),
         Commands::DockerUpdate { container } => {
             let unit = format!(
                 "docker-{}",

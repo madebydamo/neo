@@ -11,6 +11,7 @@ pub mod init;
 pub mod migrate;
 pub mod nuke;
 pub mod paste_settings;
+pub mod secrets;
 pub mod update;
 pub mod update_inputs;
 pub mod web;

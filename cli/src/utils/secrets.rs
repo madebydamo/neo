@@ -629,11 +629,7 @@ fn collect_paths(tree: &Tree, prefix: &mut Vec<String>, out: &mut Vec<Vec<String
 
 /// A leaf path lies at or below a secret pattern.
 fn pattern_covers(pattern: &[String], path: &[String]) -> bool {
-    path.len() >= pattern.len()
-        && pattern
-            .iter()
-            .zip(path)
-            .all(|(p, k)| p == "*" || p == k)
+    path.len() >= pattern.len() && pattern.iter().zip(path).all(|(p, k)| p == "*" || p == k)
 }
 
 #[cfg(test)]
@@ -694,13 +690,26 @@ mod tests {
     #[test]
     fn emit_round_trips() {
         let mut t = Tree::new();
-        set_node(&mut t, &p("services.dufs.password"), Node::Leaf("a\"b\\c\nd".into()));
         set_node(
             &mut t,
-            &["core".into(), "git".into(), "tokens".into(), "git.example.com:2222".into()],
+            &p("services.dufs.password"),
+            Node::Leaf("a\"b\\c\nd".into()),
+        );
+        set_node(
+            &mut t,
+            &[
+                "core".into(),
+                "git".into(),
+                "tokens".into(),
+                "git.example.com:2222".into(),
+            ],
             Node::Leaf("x".into()),
         );
-        set_node(&mut t, &p("services.odd"), Node::Leaf("#not comment".into()));
+        set_node(
+            &mut t,
+            &p("services.odd"),
+            Node::Leaf("#not comment".into()),
+        );
         let text = emit(&t);
         assert_eq!(parse(&text).unwrap(), t);
     }
@@ -744,9 +753,17 @@ wireguardPrivateKey = "@NEO_SECRET:services/vpn/wireguardPrivateKey:ab@"
         );
         let split = split_into(&mut doc, &mut tree, &patterns, None);
         assert_eq!(split.moved.len(), 3);
-        assert_eq!(split.kept_encrypted, vec![p("services.vpn.wireguardPrivateKey")]);
+        assert_eq!(
+            split.kept_encrypted,
+            vec![p("services.vpn.wireguardPrivateKey")]
+        );
         let s = doc.to_string();
-        assert!(!s.contains("tok") && !s.contains("sec") && !s.contains("pat") && !s.contains("NEO_SECRET"));
+        assert!(
+            !s.contains("tok")
+                && !s.contains("sec")
+                && !s.contains("pat")
+                && !s.contains("NEO_SECRET")
+        );
         assert!(s.contains("clientId"));
         assert_eq!(
             lookup(&tree, &p("services.vpn.wireguardPrivateKey")),
@@ -762,8 +779,16 @@ wireguardPrivateKey = "@NEO_SECRET:services/vpn/wireguardPrivateKey:ab@"
     fn split_scope_removes_cleared_secret() {
         let mut doc: DocumentMut = "[services.rathole]\nenabled = true\n".parse().unwrap();
         let mut tree = Tree::new();
-        set_node(&mut tree, &p("services.rathole.token"), Node::Leaf("old".into()));
-        set_node(&mut tree, &p("services.dufs.password"), Node::Leaf("keep".into()));
+        set_node(
+            &mut tree,
+            &p("services.rathole.token"),
+            Node::Leaf("old".into()),
+        );
+        set_node(
+            &mut tree,
+            &p("services.dufs.password"),
+            Node::Leaf("keep".into()),
+        );
         let patterns = vec![p("services.rathole.token"), p("services.dufs.password")];
         let scope = p("services.rathole");
         split_into(&mut doc, &mut tree, &patterns, Some(&scope));

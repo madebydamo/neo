@@ -9,7 +9,7 @@ use crate::commands::web::locks::{try_lock, Blocked};
 use crate::commands::web::plugins::{plugins_from_doc, services_to_remove, strip_service_tables};
 use crate::commands::web::settings::json_to_toml_value;
 use crate::commands::web::settings::save::{
-    apply_payload_to_table, finish_save, load_settings_doc,
+    apply_payload_to_table, finish_save, load_settings_doc, route_secrets,
 };
 use crate::commands::web::types::AppConfig;
 use crate::utils::locks::{LockGuard, LockSpec, OpInfo};
@@ -37,7 +37,7 @@ fn payload_table(payload: &serde_json::Map<String, serde_json::Value>) -> Option
 }
 
 #[post("/save/<service>", data = "<payload>")]
-pub fn save_service(
+pub async fn save_service(
     config: &State<Arc<AppConfig>>,
     service: &str,
     payload: Json<serde_json::Value>,
@@ -47,10 +47,14 @@ pub fn save_service(
         return Ok(Status::BadRequest);
     }
     let _lock = settings_lock()?;
-    Ok(save_service_inner(config, service, &payload))
+    Ok(save_service_inner(config, service, &payload).await)
 }
 
-fn save_service_inner(config: &AppConfig, service: &str, payload: &serde_json::Value) -> Status {
+async fn save_service_inner(
+    config: &AppConfig,
+    service: &str,
+    payload: &serde_json::Value,
+) -> Status {
     let settings_path = &config.settings_path;
     let mut doc = match load_settings_doc(settings_path) {
         Ok(d) => d,
@@ -71,6 +75,10 @@ fn save_service_inner(config: &AppConfig, service: &str, payload: &serde_json::V
         services_table.insert(service, Item::Table(tbl));
     }
 
+    let scope = ["services".to_string(), service.to_string()];
+    if let Err(s) = route_secrets(config, &mut doc, Some(&scope)).await {
+        return s;
+    }
     finish_save(settings_path, &mut doc, config)
 }
 
@@ -135,6 +143,13 @@ async fn save_core_section_inner(
         }
     }
 
+    // A nested core section is replaced whole; the aggregate merges deltas.
+    let scope = ["core".to_string(), section.to_string()];
+    let scope =
+        (CORE_NESTED_SECTIONS.contains(&section) && section != "core").then_some(&scope[..]);
+    if let Err(s) = route_secrets(config, &mut doc, scope).await {
+        return s;
+    }
     finish_save(settings_path, &mut doc, config)
 }
 
