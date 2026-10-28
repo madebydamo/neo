@@ -2,15 +2,16 @@
 
 Neo aims to be usable without a sysadmin background. **After setup, you mostly use the web UI.** This page covers getting the machine installed once; the command snippets below are the bootstrap steps—you will not live in the terminal day to day.
 
-Two paths, plus a fallback when the laptop cannot build the system:
+Two paths, a fallback when the laptop cannot build the system, and the way back after a dead machine:
 
 | Path | When to use |
 |------|-------------|
 | **[A — Machine already runs NixOS](#path-a--machine-already-runs-nixos)** | Fresh or existing NixOS host you want to turn into Neo |
 | **[B — Install from your laptop](#path-b--install-from-your-laptop-nixos-anywhere)** | Linux laptop that can build `x86_64-linux`; prepare config locally, install remotely with nixos-anywhere |
 | **[Laptop cannot build](#when-the-laptop-cannot-build-mac-live-usb-or-wrong-architecture)** | Mac, architecture mismatch, or a live USB with too little disk — build **on the target** |
+| **[Rebuild from the config repo](#rebuild-a-machine-from-its-config-repo)** | A machine died: reinstall a new one from its config repo with `neo restore` |
 
-Also: [what you need](#what-you-need), [first login](#first-login), [minimal starter config](#minimal-starter-config), [sign-in with OAuth](#sign-in-with-oauth-optional), [disks (Disko)](#automatic-disk-layout-disko), [no public IP](#no-public-ip-streamproxy), [per-service ingress](#per-service-ingress), [after install](#after-install), [learning links](#learning-links).
+Also: [what you need](#what-you-need), [first login](#first-login), [minimal starter config](#minimal-starter-config), [sign-in with OAuth](#sign-in-with-oauth-optional), [disks (Disko)](#automatic-disk-layout-disko), [no public IP](#no-public-ip-streamproxy), [per-service ingress](#per-service-ingress), [secrets and encryption](#secrets-and-encryption), [after install](#after-install), [learning links](#learning-links).
 
 ---
 
@@ -403,6 +404,69 @@ enabled = true
 ingress = ["local"]
 ```
 
+## Secrets and encryption
+
+Passwords, tokens and API keys (settings marked as secret, shown masked in the web UI) can live in three places. Pick one under **Settings → Secrets**:
+
+| Where | What it means |
+|-------|---------------|
+| **In settings.toml** (default) | As before: everything in one file. Keep the config repo private. |
+| **secrets.yaml** (*Move to secrets.yaml*) | Secrets in their own file next to `settings.toml`, still plain text. |
+| **Encrypted** (*Encrypt*) | Secrets in `secrets.sops.yaml`, encrypted with [sops](https://github.com/getsops/sops). Safe to keep in a repo on GitHub. |
+
+Editing doesn't change: the web UI shows and saves secrets the same way in all three modes. **Activate** after switching.
+
+**Who can decrypt.** The machine itself (its SSH host key, `/etc/ssh/ssh_host_ed25519_key`) and every `ssh-ed25519` key in **System → SSH** (`core.ssh.authorizedKeys`). If you can log in with an ed25519 key, you can decrypt. RSA and other key types can still log in but can't decrypt. Encrypting refuses to start without at least one ed25519 key.
+
+**Escrow.** When you encrypt on the machine, Neo also writes `identity.sops.yaml`: the machine's SSH host key, encrypted to your SSH keys only (not to the machine). With it, a reinstalled machine gets its old identity back and can decrypt its secrets again ([rebuild from the config repo](#rebuild-a-machine-from-its-config-repo)).
+
+**Adding or removing SSH keys.** A save in the web UI re-encrypts right away. After editing `authorizedKeys` by hand, run `neo secrets rekey`. A removed key can still read old versions in the git history: change the secrets themselves if a key is compromised.
+
+**Terminal.** `neo secrets split | enable | disable | rekey` do the same as the buttons ([CLI](CLI.md)). On a checkout with your own key, `sops edit secrets.sops.yaml` works too (`.sops.yaml` is generated). sops reads your key from `~/.ssh/id_ed25519`, or from `SOPS_AGE_SSH_PRIVATE_KEY_FILE`.
+
+What stays out of git anyway: decrypted values only exist in `/run/neo-secrets` (RAM) on the running machine, readable by root and the service that needs them.
+
+## Rebuild a machine from its config repo
+
+If the machine dies, a new one can install itself from the config repo. You need:
+
+- the config repo on a git host. Neo doesn't push it yet. Push it yourself, as `homeserver` on the machine:
+
+  ```bash
+  cd /var/neo/DATA/AppData/configuration     # neo-cli.server.configPath
+  git remote add origin git@github.com:you/homeserver-config.git
+  git push -u origin HEAD
+  ```
+
+  Encrypt first ([above](#secrets-and-encryption)) if the repo isn't private.
+- one of the ed25519 private keys listed in **System → SSH** at the time of the last push.
+- your data from backups (snapshots and the **backup** service). The repo holds configuration, not appdata.
+
+**Steps** (on the new machine, booted from a NixOS installer, as root):
+
+1. Partition and mount the target at `/mnt`. With Neo's Disko layout, Disko can do it from the repo (check `mainDisk` first, it is wiped):
+
+   ```bash
+   git clone git@github.com:you/homeserver-config.git /tmp/config
+   nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- \
+     --mode destroy,format,mount --flake /tmp/config#neo
+   ```
+
+   Without Disko, partition by hand and adjust `hardware-configuration.nix` in the repo.
+2. Restore and install:
+
+   ```bash
+   nix --extra-experimental-features "nix-command flakes" run github:madebydamo/neo#neo -- \
+     restore git@github.com:you/homeserver-config.git --key ~/.ssh/id_ed25519
+   ```
+
+   This clones the repo to `/mnt/<configPath>`, decrypts `identity.sops.yaml` with your key and writes the old SSH host key to `/mnt/etc/ssh`. It refuses a key that doesn't match `core.secrets.hostKey` in the repo. It then hands `core.git.tokens` to Nix (for private plugins) and runs `nixos-install`. `--no-install` stops after the clone and the host key, `--target` changes `/mnt`, `--config` the configuration name (default `neo`).
+3. Reboot. The machine has its old SSH host key, so clients don't warn about it, and it decrypts its secrets on first boot. Restore appdata from your backups, then **Activate**.
+
+For a private repo, use an SSH URL with your key loaded (`ssh-agent`, or `ssh -A` into the installer). Don't put a token in the URL: it would end up as the restored repo's remote.
+
+Without `identity.sops.yaml` (plain secrets, or a repo that was never encrypted on the machine), the restore still works, but the machine gets a new host key. Re-trust it on your clients, and update forges if `core.git.useHostKey` is on. An encrypted repo without an escrow can't be restored this way: decrypt (`neo secrets disable`) and re-encrypt on a running machine first.
+
 ---
 
 ## After install
@@ -412,7 +476,8 @@ ingress = ["local"]
 3. Enable services, set users, add [plugins](PLUGINS.md) under **Settings → System → Plugins**  
 4. **Activate** from the UI. The changes preview shows what will change first, including updated flake inputs and plugins  
 5. Leave **system-updater** (and **docker-updater**) on if you want hands-off upgrades  
-6. Optional: set up [backups](#automatic-disk-layout-disko) (ZFS snapshots, the **backup** service for off-site rsync), and the SWAG **Geo & IP filter** and **Auto ban** sections if the machine is on the public web  
+6. Optional: [encrypt secrets](#secrets-and-encryption) and push the config repo, so the machine can be [rebuilt from it](#rebuild-a-machine-from-its-config-repo)
+7. Optional: set up [backups](#automatic-disk-layout-disko) (ZFS snapshots, the **backup** service for off-site rsync), and the SWAG **Geo & IP filter** and **Auto ban** sections if the machine is on the public web  
 
 Restart and shut down live under **Settings → Power**. Booting an older generation lives under **Versioning**.
 

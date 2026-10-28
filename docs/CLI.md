@@ -27,7 +27,7 @@ neo --help
 
 ## Operation locks
 
-Commands that change the system take Neo's **system lock** exclusively: `activate`, `update`, `update-inputs`, `generation switch|boot`, `init`, `build`, `migrate`, `paste-settings`, `generate-hardware`, `nuke`. Only one of them runs at a time, and never while the web UI restores a snapshot, clears app data, repairs the Nix store, or restarts the machine. `docker-update <c>` locks only that container's unit. `web`, `edit`, `git` / `lg` and `generation list` take no lock. A conflict fails right away with the holder, e.g. `Error: Blocked: Activation in progress (started 12:03)`; pass `--lock-wait 600` to wait instead. The scheduled system updater waits up to an hour. Locks are `flock`s under `/run/neo/locks` and are released when the process exits, even after a crash.
+Commands that change the system take Neo's **system lock** exclusively: `activate`, `update`, `update-inputs`, `generation switch|boot`, `init`, `build`, `migrate`, `paste-settings`, `generate-hardware`, `nuke`, `secrets …`. Only one of them runs at a time, and never while the web UI restores a snapshot, clears app data, repairs the Nix store, or restarts the machine. `docker-update <c>` locks only that container's unit. `web`, `edit`, `git` / `lg`, `generation list` and `restore` (it runs on an installer) take no lock. A conflict fails right away with the holder, e.g. `Error: Blocked: Activation in progress (started 12:03)`; pass `--lock-wait 600` to wait instead. The scheduled system updater waits up to an hour. Locks are `flock`s under `/run/neo/locks` and are released when the process exits, even after a crash.
 
 ## Profiles and users
 
@@ -55,6 +55,11 @@ SSH to a finished host as **`homeserver@…`** for `neo`. **`admin@…`** uses t
 | `neo git` / `neo lg` | Open `lazygit` in the config repo |
 | `neo migrate` | Apply settings migrations from older layouts (`update` runs it for you) |
 | `neo docker-update <container>` | Pull the container's current image again and restart its `docker-<container>` unit |
+| `neo secrets split` | Move secret settings from `settings.toml` into `secrets.yaml` (still plain text) |
+| `neo secrets enable` | Encrypt them into `secrets.sops.yaml` for this machine's SSH host key and the ssh-ed25519 `authorizedKeys`, and escrow the host key in `identity.sops.yaml`. Run on the machine |
+| `neo secrets disable` | Decrypt back into a plain `secrets.yaml` |
+| `neo secrets rekey` | Re-encrypt for the current keys (after editing `authorizedKeys` by hand) |
+| `neo restore <repo>` | Reinstall a machine from its config repo (as root on a NixOS installer, target mounted at `/mnt`): clone, restore the escrowed host key with `--key`, `nixos-install`. `--no-install`, `--target`, `--config`. See [Rebuild a machine](INSTALL.md#rebuild-a-machine-from-its-config-repo) |
 
 **Do not** `activate` a remote machine's config from your laptop. Use [nixos-anywhere](INSTALL.md#path-b--install-from-your-laptop-nixos-anywhere) for the first install, then activate **on** the server (or use Activate in the web UI there).
 

@@ -81,6 +81,7 @@ Combined with Nix rollbacks, updates are something Neo does *for* you, not a sec
 | **Service snapshot** | Service page → Snapshots | One service's data. The other services keep running. |
 | **Data snapshot** | Web UI → Versioning → Data snapshots | All Neo data and the config repo. The machine restarts. A restore can be undone. |
 | **Off-site backup** | `backup` service | A copy of your data on another machine (rsync over SSH, on a schedule). |
+| **Config repo** | `neo restore <repo>` on a new machine | The whole machine configuration, including its SSH host key and (encrypted) secrets, from git. Data comes from backups. See [Rebuild a machine](INSTALL.md#rebuild-a-machine-from-its-config-repo). |
 
 Snapshots need the default ZFS disk layout ([Disko](INSTALL.md#automatic-disk-layout-disko)).
 
