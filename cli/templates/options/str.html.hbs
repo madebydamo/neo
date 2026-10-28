@@ -1,11 +1,18 @@
 <div class="flex flex-col gap-1 min-w-0">
-  <div class="flex gap-2 items-center">
-    <input type="text" class="input input-sm w-full flex-1 font-mono"
+  <div class="flex gap-2 items-center"{{#if secret}} x-data="{ reveal: false }"{{/if}}>
+    <input {{#if secret}}:type="reveal ? 'text' : 'password'" autocomplete="off"{{else}}type="text"{{/if}} class="input input-sm w-full flex-1 font-mono"
            :class="{ 'input-error': !!patternError('{{name}}') }"
            x-model="values['{{name}}']"
            placeholder="{{defaultDisplay}}"
            aria-label="{{label}}"
            :aria-invalid="!!patternError('{{name}}')">
+    {{#if secret}}
+      <button type="button" class="btn btn-ghost btn-sm shrink-0"
+              @click="reveal = !reveal"
+              :aria-pressed="reveal"
+              x-text="reveal ? 'Hide' : 'Show'"
+              aria-label="Show or hide {{label}}"></button>
+    {{/if}}
     <template x-if="resolveHelper('{{name}}')">
       <button type="button" class="btn btn-soft btn-primary btn-sm shrink-0"
               @click="runHelper('{{name}}')"

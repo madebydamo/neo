@@ -12,8 +12,7 @@
           options =
             {
               enabled = mkEnableOption "rathole client service" {rank = 0;};
-              token = mkOption {
-                type = types.str;
+              token = lib.neo.mkSecretOption {
                 description = "Authentication token for rathole";
                 rank = 10;
                 helper = lib.neo.helpers.randomToken;

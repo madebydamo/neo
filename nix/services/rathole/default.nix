@@ -19,7 +19,7 @@
         '')
         cfg.extraServices
       );
-      configFile = pkgs.writeText "rathole-client.toml" ''
+      configText = ''
         [client]
         remote_addr = "${cfg.remoteAddr}:${toString cfg.port}"
 
@@ -42,13 +42,21 @@
             message = "neo.services.rathole.certificateOnly requires Pi-hole with localIP or Tailscale split DNS, so services remain reachable on LAN or the tailnet after public HTTPS is dropped.";
           }
         ];
+        # The token is a secret: rendered at activation, handed to the
+        # DynamicUser service as a credential.
+        neo.core.secrets.templates."rathole-client.toml" = {
+          content = configText;
+          restartUnits = ["rathole.service"];
+        };
+
         systemd.services.rathole = {
           description = "Rathole client tunnel";
           after = ["network-online.target"];
           wants = ["network-online.target"];
           wantedBy = ["multi-user.target"];
           serviceConfig = {
-            ExecStart = "${pkgs.rathole}/bin/rathole --client ${configFile}";
+            LoadCredential = "config.toml:${config.neo.core.secrets.templates."rathole-client.toml".path}";
+            ExecStart = "${pkgs.rathole}/bin/rathole --client %d/config.toml";
             Restart = "always";
             RestartSec = 5;
             DynamicUser = true;

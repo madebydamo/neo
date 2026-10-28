@@ -10,7 +10,7 @@ decryption identity.
 ## Goals
 
 - **Runtime secrets:** every secret option resolves at activation to a file under
-  `/run/neo/secrets`, never to a value at eval time.
+  `/run/neo-secrets`, never to a value baked into a unit.
 - **Two backends, one layout:** `plain` (an unencrypted repo, the same security level as
   today) and `sops` (an encrypted repo). Services and lib helpers can't tell them apart.
 - **One machine key:** a single ed25519 key is the SSH host key, the machine's SSH client key
@@ -35,10 +35,10 @@ password is just another secret), and secrets shared across machines (v1).
                    .sops.yaml          (generated recipients)┘
                          │ eval: structure only (ciphertext / presence, never values)
                          ▼
- activation:  backend ──► /run/neo/secrets/raw/<option/path>          root 0400
+ activation:  backend ──► /run/neo-secrets/raw/<option/path>           root 0400
                               │  neo-secrets render (templates, owner, mode)
                               ▼
-              /run/neo/secrets/rendered/<name>  ──► environmentFiles / *File / bind mounts
+              /run/neo-secrets/rendered/<name>  ──► environmentFiles / *File / bind mounts
 ```
 
 The **backend** decides only how raw values arrive in `raw/`. Everything above it (layout,
@@ -143,118 +143,100 @@ It is useful on its own: once `/run` holds the secrets, encryption is just a bac
 ### 2.1 Declaring: `lib.neo.mkSecretOption`
 
 ```nix
-# option.nix
+# option.nix (same extra keys as lib.neo.mkOption: rank, helper, ui)
 password = lib.neo.mkSecretOption {
+  default = "";
   description = "WebDAV password";
-  optional = true;                       # unset → isSet = false (no value required)
-  generate = lib.neo.secrets.gen.hex 32;  # web UI "Generate" + neo init autofill
-} // { rank = 20; };
-
-tokens = lib.neo.mkOption {              # attrsOf works: the attr name joins the path
-  type = types.attrsOf lib.neo.types.secret;
-  default = {};
+  rank = 20;
 };
 ```
 
-`lib.neo.types.secret` is an option type whose `merge` uses `loc`. Its eval-time value is a
-**handle**, never the secret:
+A secret option is still a **plain string option**, tagged `secret = true`. Its value is:
+
+- **the secret itself** on an unencrypted config (inline in `settings.toml` today, `secrets.yaml`
+  after phase 2). That's the same exposure as today, and every field machine keeps working
+  unchanged;
+- **a placeholder** `@NEO_SECRET:<path>:<stamp>@` once the value comes from `secrets.sops.yaml`.
+  `<path>` mirrors the settings path (`services/dufs/password`), and `<stamp>` is a hash of the
+  ciphertext, so it changes whenever the value does. `settings.nix` puts the placeholder in place
+  of the value.
+
+Because a set secret is always a non-empty string, eval-time checks like `cfg.password != ""`
+keep working in both modes. No handle type and no migration of existing settings is needed.
+
+Extract passes `secret` through to the form, which renders a masked input with a Show toggle.
+
+### 2.2 Consuming: `neo.core.secrets` (`nix/modules/core/secrets.nix`)
+
+A secret only ever reaches a service through a **template**: text in which secret values (or
+their placeholders) appear anywhere. It is rendered at activation with an owner and mode, and it
+exposes a `path`.
 
 ```nix
-{
-  _type = "neo-secret";
-  name  = "services/dufs/password";                  # from loc, minus "neo"
-  isSet = true;                                      # presence is known at eval
-  path  = "/run/neo/secrets/raw/services/dufs/password";
-  stamp = "<sha256 of ciphertext | of value>";       # restart trigger, see 2.4
-}
-```
+# 1. OCI env vars (most services): a rendered env file, added to the container's
+#    environmentFiles, restarts docker-<container> when it changes.
+neo.core.secrets.containerEnv.dufs = {
+  DUFS_AUTH = "${cfg.username}:${cfg.password}@/:rw";
+};
 
-The type accepts three kinds of definitions:
+# 2. Whole config files (rathole toml, app config, nginx snippets)
+neo.core.secrets.templates."rathole-client.toml" = {
+  content = configText;                 # cfg.token interpolated as usual
+  restartUnits = ["rathole.service"];
+};
+serviceConfig.LoadCredential =
+  "config.toml:${config.neo.core.secrets.templates."rathole-client.toml".path}";
 
-1. **Marker** `{ _neoSecret = <stamp>; }`, produced by `settings.nix` from the secrets file.
-2. **Legacy inline string** in `settings.toml`. It is accepted with a deprecation warning and
-   stored in the plain backend. This means services can migrate **before** any settings file
-   changes, and field machines keep building in between.
-3. Nothing → `isSet = false`. An assertion fires unless `optional = true`.
-
-Extract (`extract_service_options.nix`) sees the type name `neoSecret`, and the web UI renders a
-password field (see §3).
-
-### 2.2 Consuming: helpers in `nix/lib/secrets.nix`
-
-Every consumer goes through one primitive, a **template**. A template is content with
-placeholders, rendered at activation with an owner and mode, and it returns a path.
-
-```nix
-s = lib.neo.secrets;
-
-# A placeholder token that is only valid inside templates:
-s.ref cfg.password                   # → "@NEO_SECRET:services/dufs/password@"
-
-# 1. OCI env vars (most services). Docker reads the file as root.
-environmentFiles = [
-  (s.envFile config "dufs" {
-    DUFS_AUTH = "${cfg.username}:${s.ref cfg.password}@/:rw";
-  })
-];
-
-# 2. Native NixOS *File options (copy with ownership)
-services.vikunja.settings.database.passwordFile =
-  s.file config cfg.dbPassword { owner = "homeserver"; };
-
-# 3. Whole config files (rathole toml, nginx snippets, app config)
-volumes = [ "${s.template config "rathole.toml" {
-  content = ''
-    [client]
-    remote_addr = "${cfg.remote}"
-    token = "${s.ref cfg.token}"
-  '';
+# 3. Native NixOS *File options: a template whose content is the value
+neo.core.secrets.templates."vikunja-db-password" = {
+  content = cfg.dbPassword;
   owner = "homeserver";
-}}:/app/config.toml:ro" ];
-
-# 4. Presence only (eval-time branching stays possible)
-webdavAuth = cfg.password.isSet;
+  restartUnits = ["vikunja.service"];
+};
 ```
 
-Behind each helper is the internal registry
-`neo.core.secrets.templates.<name> = { content; owner; group; mode; restartUnits; }`.
-`restartUnits` defaults to the calling service's `systemdUnits`. It's filled in by `mkSecretsFor`,
-which the service-meta plumbing already knows about, so a service never lists its units twice.
+Template options: `content` or `env` (attrs → `KEY=value` lines), `owner`/`group` (default
+root), `mode` (default 0400), `restartUnits`, and `path` (read-only). Rendered files live in
+`/run/neo-secrets/rendered/` (tmpfs), never in appdata. Apps that rewrite their config file are
+the exception: they need a `mkSetupService` that copies the file into appdata (decided case by
+case). `DynamicUser` services read root-owned templates through `LoadCredential`.
 
-Rendered files live in `/run/neo/secrets/rendered/` (tmpfs), never in appdata. Apps that rewrite
-their config file are the exception: they need a `mkSetupService` that copies the file into
-appdata (decided case by case).
+`/run/neo-secrets` is a root-owned directory (0751) of its own. `/run/neo` belongs to homeserver,
+which could swap a subdirectory out from under root.
 
 **Leak guard:** an assertion scans `virtualisation.oci-containers.containers.*.environment`,
-`environment.etc.*.text` and `systemd.services.*.environment` for `@NEO_SECRET:`. A placeholder
-outside a template is a build error, never a silent literal.
+`systemd.services.*.environment` and `environment.etc.*.text` for `@NEO_SECRET:`. A placeholder
+outside a template is a build error, never a silent literal. In plain mode there are no
+placeholders, so unmigrated services keep working. In sops mode the guard blocks the switch until
+every service that consumes a secret goes through a template, which is the precondition for
+`neo secrets enable`.
 
 ### 2.3 Rendering: `neo-secrets` activation
 
-`system.activationScripts.neo-secrets` (deps: `users`, `groups`, and `setupSecrets` in sops mode):
+`system.activationScripts.neo-secrets` runs on every switch and boot (deps: `users`, `groups`,
+`specialfs`, plus `setupSecrets` in sops mode):
 
-1. The backend has already filled `raw/`: sops-nix writes it in sops mode, and a small installer
-   does it in plain mode (§3.2).
-2. For each template, substitute placeholders from `raw/`, then write atomically
-   (`rendered/<name>.tmp` → `mv`) with the owner and mode.
-3. A missing raw secret for a placeholder fails activation and names the option. A partly
+1. The backend has already filled `/run/neo-secrets/raw/` (sops-nix in sops mode; nothing to do
+   in plain mode, where the values are already in the template text).
+2. For each template, substitute each placeholder with `raw/<path>`, then write atomically
+   (`mktemp` → chown/chmod → `mv`). Files of templates that no longer exist are removed.
+3. A missing raw value for a placeholder fails the activation and names the setting. A partly
    rendered system is worse than a failed switch.
 
 ### 2.4 Restarts
 
-Every template's `restartUnits` get
-`restartTriggers = [ <stamps of every secret it references> ]`. This is computed **at eval** from
-the stamps (the ciphertext hash in sops mode), so changing a secret restarts exactly the affected
-units. No runtime diffing is needed.
+The store source of each template is a `restartTrigger` of its `restartUnits`. The source holds
+the value (plain) or a placeholder with the ciphertext stamp (sops), so changing a secret
+restarts exactly the units that use it. No runtime diffing is needed.
 
 ### 2.5 Things that can't simply move
 
 | Pattern today | Migration |
 |---------------|-----------|
-| `environment = { X = cfg.secret; }` | `environmentFiles` + `s.envFile` |
-| Secret inside a generated config file | `s.template` |
-| `environment.etc."…".text = token` (`core/git.nix` tokens, access-tokens.conf) | `s.template` with owner `root:neo-git`; nix.conf already `!include`s it |
-| Branch on "is it set" | `.isSet` |
+| `environment = { X = cfg.secret; }` | `neo.core.secrets.containerEnv.<container>` |
+| Secret inside a generated config file | `neo.core.secrets.templates` |
+| `environment.etc."…".text = token` (`core/git.nix` tokens, access-tokens.conf) | a template with owner `root:neo-git`; nix.conf already `!include`s it |
+| Branch on "is it set" | unchanged (`!= ""`): a placeholder is non-empty |
 | Derived values (bcrypt/htpasswd, e.g. tinyauth users) | stored as the finished string, as today (`user:$2a$…`). The web UI helper hashes on input; no template filters |
 | Secret needed **before eval** (private plugin inputs) | rendered access-tokens `!include`; during `neo restore`, passed as `NIX_CONFIG` from the decrypted file |
 
@@ -290,7 +272,7 @@ core:
 
 **YAML, not TOML:** sops can't encrypt TOML, and YAML is sops' and sops-nix's default format.
 sops keeps the keys in cleartext, so eval only needs the **structure** of the file plus the raw
-leaf text (`ENC[…]` in sops mode). That's where `isSet` and `stamp` come from, without
+leaf text (`ENC[…]` in sops mode). That's where the placeholders and their stamps come from, without
 decrypting anything.
 
 **Nix has no `fromYAML`**, so `lib.neo.secrets.readKeys` is a small reader for the subset that
@@ -305,7 +287,7 @@ Rejected: import-from-derivation with `yq` (IFD slows every eval and breaks `nix
 a generated JSON sidecar (a second copy of the key list that can drift).
 
 `templates/homeserver/modules/settings.nix` deep-merges `fromTOML settings.toml` with
-`markers(readKeys secrets*.yaml)`, and stops putting secrets into `environment.etc."neo/settings.toml"`.
+`placeholders(readKeys secrets.sops.yaml)` (or the plain values of `secrets.yaml`), and stops putting secrets into `environment.etc."neo/settings.toml"`.
 
 ### 3.2 Is supporting both easy? Yes
 
@@ -315,8 +297,8 @@ The plain backend costs very little, and it's the stepping stone for the migrati
   `settings.toml` does today: **no worse than now, not better**. An activation snippet copies the
   values from the store path into `raw/` (root 0400) using `yq-go` at runtime. The rest of the pipeline is identical.
 - **sops:** sops-nix with `defaultSopsFile = ../secrets.sops.yaml; defaultSopsFormat = "yaml";`.
-  One `sops.secrets."<path>" = { path = "/run/neo/secrets/raw/<path>"; }` entry is generated per
-  handle with `isSet`. Only ciphertext reaches the store.
+  One `sops.secrets."<path>" = { path = "/run/neo-secrets/raw/<path>"; }` entry is generated per
+  key in the file. Only ciphertext reaches the store.
 
 That makes `neo secrets enable` a small step: encrypt `secrets.yaml`, flip `backend`, switch. The
 rendered files come out byte-identical, so nothing restarts (§5 uses this as its verification).
@@ -452,7 +434,7 @@ operator enters one during the restore.
 | Phase | Deliverable | Depends on |
 |-------|-------------|------------|
 | 0 | Unified identity + agent, `neo identity unify` | — |
-| 1 | `lib.neo.types.secret`, `mkSecretOption`, `secrets.nix` helpers, plain backend, leak guard + lint | — |
+| 1 | `mkSecretOption`, `neo.core.secrets` templates + renderer, leak guard, lint | — |
 | 1b | Migrate services (one PR per few services; legacy inline keeps working) | 1 |
 | 2 | `secrets.yaml` split, `neo migrate` step, web UI secret fields + root helper | 1 |
 | 3 | sops backend, generated `.sops.yaml`, auto re-key | 0, 2 |

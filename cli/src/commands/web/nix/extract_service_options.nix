@@ -825,6 +825,8 @@
     readOnly = tryOr false (o.readOnly or false);
     rank = tryOr null (o.rank or null);
     helper = toHelperMeta (o.helper or null);
+    # lib.neo.mkSecretOption: masked in the form (nix/lib/secrets.nix).
+    secret = tryOr false (o.secret or false);
   in {
     name = path;
     type = ti;
@@ -836,7 +838,7 @@
     readOnly = readOnly;
     current = toSafeValue curVal;
     rank = rank;
-    inherit helper;
+    inherit helper secret;
     ui = uiMeta;
   };
 

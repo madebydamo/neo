@@ -229,6 +229,9 @@ pub struct OptionSchema {
     pub rank: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub helper: Option<OptionHelper>,
+    /// lib.neo.mkSecretOption: the form masks the value.
+    #[serde(default)]
+    pub secret: bool,
     /// Declarative presentation metadata from option.ui (widgets, keysFrom, …).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui: Option<OptionUi>,
