@@ -27,14 +27,14 @@
                 rank = 20;
               };
 
-              wireguardPrivateKey = mkOption {
+              wireguardPrivateKey = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "WireGuard private key (sensitive)";
                 rank = 30;
               };
 
-              wireguardPresharedKey = mkOption {
+              wireguardPresharedKey = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "WireGuard preshared key";

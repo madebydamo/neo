@@ -76,6 +76,12 @@
           }
         ];
 
+        # WireGuard keys reach gluetun through an env file rendered at activation.
+        neo.core.secrets.containerEnv.vpn = {
+          WIREGUARD_PRIVATE_KEY = cfg.wireguardPrivateKey;
+          WIREGUARD_PRESHARED_KEY = cfg.wireguardPresharedKey;
+        };
+
         virtualisation.oci-containers.containers =
           {
             vpn = {
@@ -91,8 +97,6 @@
                 {
                   VPN_SERVICE_PROVIDER = cfg.vpnServiceProvider;
                   VPN_TYPE = "wireguard";
-                  WIREGUARD_PRIVATE_KEY = cfg.wireguardPrivateKey;
-                  WIREGUARD_PRESHARED_KEY = cfg.wireguardPresharedKey;
                   WIREGUARD_ADDRESSES = cfg.wireguardAddresses;
                   SERVER_COUNTRIES = cfg.serverCountries;
                 }
