@@ -11,6 +11,7 @@ pub mod secrets;
 pub mod secrets_store;
 pub mod settings;
 pub mod stdio_tee;
+pub mod template;
 pub mod toml_sort;
 
 pub use command::{

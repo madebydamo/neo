@@ -1,10 +1,8 @@
-use anyhow::{Context, Result};
-use std::fs;
-use std::path::Path;
+use anyhow::Result;
 use toml_edit::DocumentMut;
 
 use crate::utils::{
-    neo_cli_get, resolve_suffix, resolve_template, run_nix, run_write_flake, OperationKind,
+    neo_cli_get, resolve_suffix, resolve_template, run_nix, run_write_flake, template, OperationKind,
     OperationLog,
 };
 
@@ -21,7 +19,7 @@ pub fn update(
             "DRY-RUN: nix flake update in {} (profile={})",
             config_path, profile
         );
-        println!("DRY-RUN: would delete modules/ and run nix flake init -t <template> (refresh from neo template, if set as bootstrapMethod)");
+        println!("DRY-RUN: would roll back the files the last template provided and apply the current template (if bootstrapMethod is template)");
         println!("DRY-RUN: would nix run .#neo -- migrate (from updated input)");
         return Ok(());
     }
@@ -31,41 +29,18 @@ pub fn update(
     op.write_state("in_progress", "starting", None, None);
     let _tee = op.capture_stdio();
 
-    // Delete modules/ folder and re-run the exact same nix flake init as init.rs does.
-    // This refreshes the template-provided modules (imports, inputs, nixos, settings) from the
-    // (possibly newly updated) neo template, without clobbering user files like settings.toml or
-    // the committed flake.nix (we temp-move it to let init succeed, then restore).
-
+    // Roll back the files the previous template provided and apply the
+    // (possibly newly updated) template; files the operator added stay
+    // (utils/template.rs). A cloned repo is its own source of truth.
     let bootstrap_method = neo_cli_get(config, profile, "bootstrapMethod").unwrap_or("template");
 
     if bootstrap_method != "clone" {
-        let modules_dir = Path::new(config_path).join("modules");
-        if modules_dir.exists() {
-            fs::remove_dir_all(&modules_dir).context("delete modules folder")?;
-        }
-        let flake_path = Path::new(config_path).join("flake.nix");
-        let flake_backup = Path::new(config_path).join("flake.nix.update-backup");
-        let had_flake = flake_path.exists();
-        if had_flake {
-            fs::rename(&flake_path, &flake_backup)
-                .context("backup flake.nix for template refresh init")?;
-        }
         let template = resolve_template(config, profile);
-
-        let init_result = op.step("flake init", || {
-            run_nix(config_path, nix_cmd, &["flake", "init", "-t", &template])
-        });
-        if had_flake && flake_backup.exists() {
-            if let Err(rerr) = fs::rename(&flake_backup, &flake_path) {
-                eprintln!("warning: could not restore flake.nix backup: {}", rerr);
-                if init_result.is_ok() {
-                    op.write_state("failed", "post-init restore", Some(&rerr.to_string()), None);
-                    return Err(rerr)
-                        .context("failed to restore flake.nix after successful template init");
-                }
-            }
-        }
-        init_result?;
+        let report = op.step("flake init", || {
+            template::install(config_path, &template, nix_cmd)
+        })?;
+        report.print();
+        template::stage(config_path, &report)?;
     }
 
     op.step("write-flake", || run_write_flake(config_path, nix_cmd))?;

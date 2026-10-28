@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 use toml_edit::DocumentMut;
 
-use crate::utils::{git_cmd, has_staged_changes, neo_cli_get, resolve_template, run_nix};
+use crate::utils::{git_cmd, has_staged_changes, neo_cli_get, resolve_template, template};
 
 pub fn init(
     config_path: &str,
@@ -59,7 +59,7 @@ pub fn init(
         if let (Some(url), "clone") = (repo_url, bootstrap_method) {
             git_cmd(config_path, &["clone", url, "."])?;
         } else {
-            run_nix(config_path, nix_cmd, &["flake", "init", "-t", &template])?;
+            template::install(config_path, &template, nix_cmd)?;
             git_cmd(config_path, &["init"])?;
 
             if let Some(url) = repo_url {
