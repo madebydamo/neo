@@ -23,6 +23,12 @@
         then "https://${removePrefix "webcals://" url}"
         else url;
 
+      # The password is a secret: rendered at activation and handed to the
+      # DynamicUser unit as a credential, read by vdirsyncer (password.fetch)
+      # and by the MKCALENDAR pre-start.
+      unit = "vdirsyncer@ical-sync";
+      passwordCredential = "/run/credentials/${unit}.service/password";
+
       caldavBase = removeSuffix "/" cfg.caldavUrl;
       collectionUrl = sub: "${caldavBase}/principal/${cfg.user}/${sub.calendar}/";
 
@@ -61,7 +67,7 @@
                 type = "caldav";
                 url = collectionUrl sub;
                 username = cfg.user;
-                password = cfg.password;
+                "password.fetch" = ["command" "${pkgs.coreutils}/bin/cat" passwordCredential];
                 item_types = ["VEVENT"];
               };
             }
@@ -82,6 +88,7 @@
 
       ensureCalendars = pkgs.writeShellScript "ical-sync-mkcalendar" ''
         set -euo pipefail
+        auth=${escapeShellArg "${cfg.user}:"}"$(cat "$CREDENTIALS_DIRECTORY/password")"
         create_calendar() {
           local url="$1"
           local body="$2"
@@ -91,7 +98,7 @@
           echo "Ensuring calendar $name exists"
           code=$(${pkgs.curl}/bin/curl -sS -o "$out" -w '%{http_code}' \
             -X MKCALENDAR \
-            -u ${escapeShellArg "${cfg.user}:${cfg.password}"} \
+            -u "$auth" \
             -H 'Content-Type: application/xml; charset=utf-8' \
             --data "$body" \
             "$url" || true)
@@ -160,11 +167,19 @@
           };
         };
 
-        systemd.services."vdirsyncer@ical-sync" = mkIf hasSubscriptions {
+        neo.core.secrets.templates."ical-sync-password" = mkIf hasSubscriptions {
+          content = cfg.password;
+          restartUnits = ["${unit}.service"];
+        };
+
+        systemd.services.${unit} = mkIf hasSubscriptions {
           after =
             optional rusticalEnabled "docker-rustical.service"
             ++ optional swagEnabled "docker-swag.service";
-          serviceConfig.ExecStartPre = [ensureCalendars];
+          serviceConfig = {
+            LoadCredential = "password:${config.neo.core.secrets.templates."ical-sync-password".path}";
+            ExecStartPre = [ensureCalendars];
+          };
         };
       };
     };

@@ -46,7 +46,7 @@
                 rank = 20;
               };
 
-              password = mkOption {
+              password = lib.neo.mkSecretOption {
                 type = types.str;
                 default = "";
                 description = ''
