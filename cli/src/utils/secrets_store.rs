@@ -320,12 +320,11 @@ impl Store {
         fs::rename(&tmp, self.path(name)).with_context(|| format!("replace {name}"))
     }
 
-    /// Move inline secret settings into secrets.yaml. Returns the moved paths.
     /// Whether the config's Nix files read the secrets files (the deploy
     /// template's settings.nix since secrets support). An older settings.nix
-    /// (a config repo whose modules `neo update` does not refresh) would
+    /// (modules not refreshed from the template by `neo update` since) would
     /// evaluate without the moved values.
-    fn loads_secret_files(&self) -> bool {
+    pub fn loads_secret_files(&self) -> bool {
         fn scan(dir: &Path, depth: usize) -> bool {
             let Ok(entries) = fs::read_dir(dir) else {
                 return false;
@@ -348,6 +347,7 @@ impl Store {
         scan(&self.dir, 4)
     }
 
+    /// Move inline secret settings into secrets.yaml. Returns the moved paths.
     pub fn split(&self, patterns: &[Vec<String>]) -> Result<Vec<Vec<String>>> {
         if !self.loads_secret_files() {
             bail!(

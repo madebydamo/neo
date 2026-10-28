@@ -77,6 +77,17 @@ pub async fn route_secrets(
     if backend == secrets::Backend::Inline {
         return Ok(());
     }
+    // A settings.nix older than secrets support never reads the secrets file:
+    // a value saved there would silently drop out of the evaluated config.
+    let store = Store::new(config.settings_path.parent().unwrap_or(Path::new(".")));
+    if !store.loads_secret_files() {
+        eprintln!(
+            "web: refusing save; modules/settings.nix does not load {} / {} (refresh the config from the neo homeserver template, e.g. neo update)",
+            secrets::PLAIN_FILE,
+            secrets::SOPS_FILE
+        );
+        return Err(Status::InternalServerError);
+    }
     // Without the list of secret paths a save could write secrets inline: refuse.
     let patterns = {
         let mut ev = config.evaluator.lock().await;
@@ -105,7 +116,6 @@ pub async fn route_secrets(
         secrets::Backend::Sops(_) => {
             // Placeholders (unchanged values) are dropped; changed or cleared
             // secrets are re-encrypted (decrypting needs the root helper).
-            let store = Store::new(config.settings_path.parent().unwrap_or(Path::new(".")));
             store
                 .save_encrypted(doc, &patterns, scope)
                 .map(|_| ())

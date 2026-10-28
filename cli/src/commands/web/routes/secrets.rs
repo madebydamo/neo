@@ -139,7 +139,15 @@ fn card(config: &AppConfig, message: Option<(&str, &str)>) -> String {
         ),
         None => String::new(),
     };
+    let stale = (backend != Backend::Inline && !store.loads_secret_files()).then(|| {
+        format!(
+            "This configuration's modules/settings.nix does not load {PLAIN_FILE} / {SOPS_FILE}: \
+             the secrets kept there are missing from the evaluated system and saves are refused. \
+             Refresh the modules from the neo homeserver template (neo update) first."
+        )
+    });
     let message = message
+        .or(stale.as_deref().map(|t| ("warning", t)))
         .map(|(kind, text)| {
             format!(
                 r#"<div role="alert" class="alert alert-{kind} alert-soft text-xs mt-3 py-2">{}</div>"#,
