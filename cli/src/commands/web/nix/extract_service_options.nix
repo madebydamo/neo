@@ -282,6 +282,7 @@
             current = null;
             rank = tryOr null (o.rank or null);
             helper = toHelperMeta (o.helper or null);
+            secret = tryOr false (o.secret or false);
             ui = uiMeta;
           };
           childSet =

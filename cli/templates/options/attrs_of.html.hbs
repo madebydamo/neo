@@ -182,7 +182,7 @@
 
                 {{#if (or (eq type.kind "str") (or (eq type.kind "path") (eq type.kind "strMatching")))}}
                   <div class="flex gap-2 items-center">
-                    <input type="text" class="input input-sm flex-1 font-mono"
+                    <input type="{{#if secret}}password{{else}}text{{/if}}"{{#if secret}} autocomplete="off"{{/if}} class="input input-sm flex-1 font-mono"
                            x-model="values['{{../name}}'][key]['{{name}}']"
                            placeholder="{{defaultDisplay}}">
                     <template x-if="resolveHelper('{{../name}}', { field: '{{name}}' })">
