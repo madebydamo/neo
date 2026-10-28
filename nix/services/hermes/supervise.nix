@@ -20,18 +20,23 @@
       then null
       else toString (builtins.head cfg.telegramAllowedUserId);
 
-    superviseEnv =
+    superviseEnv = lib.filterAttrs (_: v: v != null && v != "") {
+      HOME = cfg.stateDir;
+      HERMES_HOME = "${cfg.stateDir}/.hermes";
+      TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," (map toString cfg.telegramAllowedUserId);
+      TELEGRAM_HOME_CHANNEL = telegramHomeChannel;
+    };
+
+    # Secret half: rendered at activation, read through EnvironmentFile=.
+    superviseSecretEnv =
       lib.filterAttrs (_: v: v != null && v != "") {
-        HOME = cfg.stateDir;
-        HERMES_HOME = "${cfg.stateDir}/.hermes";
         TELEGRAM_BOT_TOKEN = cfg.telegramBotToken;
         HERMES_GATEWAY_TOKEN = cfg.gatewayToken;
-        TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," (map toString cfg.telegramAllowedUserId);
-        TELEGRAM_HOME_CHANNEL = telegramHomeChannel;
       }
       // lib.neo.mkHermesLlmEnv {
         inherit (cfg.llm) provider apiKey;
       };
+    superviseEnvFile = config.neo.core.secrets.templates."hermes-supervise.env".path;
 
     promptFor = kind: ''
       You are supervising a Neo homeserver ${kind} update. Load skill /neo-update-supervisor and follow it exactly.
@@ -121,6 +126,8 @@
     config = lib.mkIf supervise {
       environment.systemPackages = [superviseScript];
 
+      neo.core.secrets.templates."hermes-supervise.env".env = superviseSecretEnv;
+
       system.activationScripts.neo-updater-state = lib.neo.mkEnsureDirs config [
         {
           dirPath = updaterStateDir;
@@ -155,6 +162,7 @@
           WorkingDirectory = "${cfg.stateDir}/workspace";
           TimeoutStartSec = "15min";
           ExecStart = "${superviseScript}/bin/neo-hermes-supervise system";
+          EnvironmentFile = superviseEnvFile;
         };
       };
 
@@ -171,6 +179,7 @@
           WorkingDirectory = "${cfg.stateDir}/workspace";
           TimeoutStartSec = "15min";
           ExecStart = "${superviseScript}/bin/neo-hermes-supervise docker";
+          EnvironmentFile = superviseEnvFile;
         };
       };
 

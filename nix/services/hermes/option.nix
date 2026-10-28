@@ -31,7 +31,7 @@
                 description = "Port for the Hermes web dashboard UI (uses tinyauth via SWAG)";
               };
 
-              dashboardPassword = mkOption {
+              dashboardPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = ''
@@ -42,7 +42,7 @@
                 helper = lib.neo.helpers.randomToken // {label = "Generate dashboard password";};
               };
 
-              gatewayToken = mkOption {
+              gatewayToken = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = "Gateway authentication token";
@@ -50,7 +50,7 @@
                 helper = lib.neo.helpers.randomToken;
               };
 
-              telegramBotToken = mkOption {
+              telegramBotToken = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = ''
@@ -120,7 +120,7 @@
                       '';
                     };
 
-                    apiKey = mkOption {
+                    apiKey = lib.neo.mkSecretOption {
                       type = types.nullOr types.str;
                       default = null;
                       rank = 10;

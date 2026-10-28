@@ -124,11 +124,22 @@
 
     hermesEnv =
       lib.filterAttrs (_: v: v != null && v != "") {
-        TELEGRAM_BOT_TOKEN = cfg.telegramBotToken;
-        HERMES_GATEWAY_TOKEN = cfg.gatewayToken;
         TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," (map toString cfg.telegramAllowedUserId);
         TELEGRAM_HOME_CHANNEL = telegramHomeChannel;
         GATEWAY_HEALTH_URL = "http://127.0.0.1:${toString cfg.gatewayPort}";
+      }
+      // lib.optionalAttrs dashboardPasswordSet {
+        # Hermes 0.17+ refuses non-loopback binds without an auth provider.
+        # SWAG intercepts /login and auto-posts these so only tinyauth is user-facing.
+        HERMES_DASHBOARD_BASIC_AUTH_USERNAME = dashboardAuthUsername;
+      };
+
+    # Secret half of the environment: rendered at activation (hermesEnvFile),
+    # never in the store.
+    hermesSecretEnv =
+      lib.filterAttrs (_: v: v != null && v != "") {
+        TELEGRAM_BOT_TOKEN = cfg.telegramBotToken;
+        HERMES_GATEWAY_TOKEN = cfg.gatewayToken;
         # gh CLI; git itself gets the token from the machine git identity.
         GH_TOKEN = config.neo.core.git.tokens."github.com" or null;
       }
@@ -136,12 +147,10 @@
         inherit (llm) provider apiKey;
       }
       // lib.optionalAttrs dashboardPasswordSet {
-        # Hermes 0.17+ refuses non-loopback binds without an auth provider.
-        # SWAG intercepts /login and auto-posts these so only tinyauth is user-facing.
-        HERMES_DASHBOARD_BASIC_AUTH_USERNAME = dashboardAuthUsername;
         HERMES_DASHBOARD_BASIC_AUTH_PASSWORD = cfg.dashboardPassword;
         HERMES_DASHBOARD_BASIC_AUTH_SECRET = cfg.dashboardPassword;
       };
+    hermesEnvFile = config.neo.core.secrets.templates."hermes.env".path;
 
     # Credentials JSON for the SWAG auto-login page (safe JS embedding via toJSON).
     autologinCredsJson = builtins.toJSON {
@@ -201,7 +210,24 @@
             password for internal basic auth and SWAG auto-login so only tinyauth is user-facing.
           '';
         }
+        # Both are derived at evaluation: the auto-login page embeds the
+        # password as JSON, and config.yaml carries the custom endpoint key.
+        {
+          assertion = !(lib.neo.secrets.hasPlaceholder cfg.dashboardPassword);
+          message = "neo.services.hermes.dashboardPassword: encrypted secrets are not supported here yet (value is derived at evaluation)";
+        }
+        {
+          assertion = !(modelSection ? api_key && lib.neo.secrets.hasPlaceholder modelSection.api_key);
+          message = "neo.services.hermes.llm.apiKey: encrypted secrets are not supported here yet with provider custom (value is derived at evaluation)";
+        }
       ];
+
+      # The gateway reads it via $HERMES_HOME/.env and, as before, is not
+      # restarted on a change (it may be driving the very switch).
+      neo.core.secrets.templates."hermes.env" = {
+        env = hermesSecretEnv;
+        restartUnits = ["hermes-dashboard.service"];
+      };
 
       # Machine git identity (neo.core.git): SSH key, tokens, user.name/email.
       neo.core.git.users = ["hermes"];
@@ -245,10 +271,15 @@
         settings = hermesSettings;
         extraDependencyGroups = ["all" "messaging" "youtube" "voice"];
         environment = hermesEnv;
+        # Appended to $HERMES_HOME/.env by the hermes-agent-setup activation.
+        environmentFiles = [hermesEnvFile];
         # Workspace AGENTS.md + skill tree: hermes/skills.nix.
         restart = "always";
         restartSec = 5;
       };
+
+      # .env is assembled at activation: read hermes.env after it is rendered.
+      system.activationScripts.hermes-agent-setup.deps = ["neo-secrets"];
 
       # Disable ALL sandboxing/hardening (full system access)
       systemd.services.hermes-agent.serviceConfig = {
@@ -308,6 +339,7 @@
           ProtectHome = lib.mkForce false;
           ProtectSystem = lib.mkForce false;
           PrivateTmp = lib.mkForce false;
+          EnvironmentFile = hermesEnvFile;
         };
 
         environment = hermesEnv;
