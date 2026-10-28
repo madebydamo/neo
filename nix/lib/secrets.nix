@@ -48,6 +48,46 @@
 
         # True when a string (any config text) still carries a placeholder.
         hasPlaceholder = v: builtins.isString v && lib.hasInfix placeholderPrefix v;
+
+        # Secret values for the deploy template's settings.nix, merged over
+        # settings.toml (a value in both wins from the secrets file):
+        #   secrets.yaml       plain values (unencrypted repo)
+        #   secrets.sops.yaml  placeholders; sops-nix decrypts at activation
+        # Only one of the two may exist.
+        load = {
+          plainFile ? null,
+          sopsFile ? null,
+        }: let
+          exists = f: f != null && builtins.pathExists f;
+          # `lib` here is plain nixpkgs lib, so take the reader from its file.
+          inherit ((import ./secrets-yaml.nix {inherit lib;}).libExtensions.secrets-yaml.neo.secrets) readYaml;
+          checkSegment = path: k:
+            if builtins.match "[A-Za-z0-9._:-]+" k != null
+            then k
+            else throw "secrets: key `${k}` under ${lib.concatStringsSep "." path} may only use letters, digits and . _ : -";
+          walk = leaf: path: v:
+            if builtins.isAttrs v
+            then lib.mapAttrs (k: walk leaf (path ++ [(checkSegment path k)])) v
+            else leaf path v;
+          stamp = v: builtins.substring 0 16 (builtins.hashString "sha256" v);
+          plain =
+            if exists plainFile
+            then walk (_: v: v) [] (readYaml (builtins.readFile plainFile))
+            else {};
+          encrypted =
+            if exists sopsFile
+            then walk (path: v: mkPlaceholder (lib.concatStringsSep "/" path) (stamp v)) [] (readYaml (builtins.readFile sopsFile))
+            else {};
+        in
+          if exists plainFile && exists sopsFile
+          then throw "secrets: both secrets.yaml and secrets.sops.yaml exist; keep only one (neo secrets enable removes the plain file)"
+          else {
+            values = lib.recursiveUpdate plain encrypted;
+            backend =
+              if exists sopsFile
+              then "sops"
+              else "plain";
+          };
       };
     };
   };

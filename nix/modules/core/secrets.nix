@@ -116,6 +116,14 @@
       (lib.filterAttrs (_: e: hasPlaceholder (e.text or null)) config.environment.etc);
   in {
     options.neo.core.secrets = {
+      backend = lib.mkOption {
+        type = lib.types.enum ["plain" "sops"];
+        default = "plain";
+        internal = true;
+        visible = false;
+        description = "Where secret values come from: plain (settings.toml / secrets.yaml) or sops (secrets.sops.yaml). Set by the deploy template's settings.nix";
+      };
+
       templates = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule templateModule);
         default = {};
@@ -190,7 +198,7 @@
               neo_secrets_render() {
                 local src=$1 dst=$2 owner=$3 group=$4 mode=$5
                 local content rest ph key val tmp
-                local re='@NEO_SECRET:([A-Za-z0-9._/-]+):([A-Za-z0-9]*)@'
+                local re='@NEO_SECRET:([A-Za-z0-9._/:-]+):([A-Za-z0-9]*)@'
                 content=$(cat "$src"; printf x)
                 content=''${content%x}
                 rest=$content
