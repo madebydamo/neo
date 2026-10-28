@@ -13,6 +13,12 @@
 #
 # Both are symlinks to secret templates rendered at activation
 # (/run/neo-secrets/rendered/git-*, root:neo-git 0440), so no token is in the store.
+#
+# useHostKey: git uses a root:neo-git 0640 copy of the SSH host key instead
+# (/var/lib/neo/git/host_ed25519, refreshed at activation and after sshd made
+# the key). ssh-agent refuses other uids, so a copy it is; every member is
+# root-equivalent already (homeserver switches systems, Hermes has sudo).
+#   /etc/neo/git/key              path of the key in use (web UI key card)
 {...}: {
   flake.modules.nixos.core-git = {
     config,
@@ -77,6 +83,20 @@
     tokenTemplate = host: "git-token-${builtins.replaceStrings [":"] ["_"] host}";
     accessTokensTemplate = "git-access-tokens.conf";
     templatePath = name: config.neo.core.secrets.templates.${name}.path;
+
+    hostKey = "/etc/ssh/ssh_host_ed25519_key";
+    hostKeyCopy = "/var/lib/neo/git/host_ed25519";
+    gitKey =
+      if cfg.useHostKey
+      then hostKeyCopy
+      else lib.neo.gitSshKey;
+    copyHostKey = pkgs.writeShellScript "neo-git-host-key" ''
+      [ -f ${hostKey} ] || exit 0
+      mkdir -p /var/lib/neo/git
+      install -m 0640 -o root -g ${group} ${hostKey} ${hostKeyCopy}.tmp
+      mv -f ${hostKeyCopy}.tmp ${hostKeyCopy}
+      install -m 0644 -o root -g ${group} ${hostKey}.pub ${hostKeyCopy}.pub
+    '';
   in {
     neo.core.git = {
       users = ["homeserver"];
@@ -110,7 +130,7 @@
     # `Match all` closes the block so later ssh_config lines stay global.
     programs.ssh.extraConfig = lib.mkIf (sshHosts != [] && cfg.users != []) ''
       Match host ${lib.concatStringsSep "," sshHosts} localuser ${lib.concatStringsSep "," cfg.users}
-        IdentityFile ${lib.neo.gitSshKey}
+        IdentityFile ${gitKey}
         IdentitiesOnly yes
       Match all
     '';
@@ -151,7 +171,27 @@
       cfg.tokens
       // lib.optionalAttrs (cfg.tokens != {}) {
         "neo/git/access-tokens.conf".source = templatePath accessTokensTemplate;
+      }
+      // {
+        "neo/git/key".text = gitKey;
       };
+
+    system.activationScripts.neo-git-host-key = lib.mkIf cfg.useHostKey {
+      deps = ["users" "groups"];
+      text = "${copyHostKey}";
+    };
+
+    # First boot: sshd generates the host key after activation.
+    systemd.services.neo-git-host-key = lib.mkIf cfg.useHostKey {
+      description = "Copy the SSH host key for the machine git identity";
+      wantedBy = ["multi-user.target"];
+      after = ["sshd.service"];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${copyHostKey}";
+      };
+    };
 
     nix.extraOptions = lib.mkIf (cfg.tokens != {}) ''
       !include ${accessTokensFile}

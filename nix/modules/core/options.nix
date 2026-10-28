@@ -94,6 +94,14 @@
         ui = inGroup group.git;
       };
 
+      options.neo.core.git.useHostKey = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Use the machine's SSH host key as the git SSH key too (one identity for SSH, git and secret decryption, docs/design/secrets.md). Forges and SSH remotes then need the host public key instead of the separate git key. Off keeps the separate key at /var/lib/neo/git/id_ed25519";
+        rank = 40;
+        ui = inGroup group.git;
+      };
+
       options.neo.core.git.users = mkOption {
         type = types.listOf types.str;
         default = [];

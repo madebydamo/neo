@@ -54,8 +54,28 @@ fn spec(id: &str) -> Option<&'static KeySpec> {
     KEYS.iter().find(|k| k.id == id)
 }
 
+/// Key actually in use: core.git.useHostKey points git at a copy of the host
+/// key, published in /etc/neo/git/key (nix/modules/core/git.nix).
+fn key_path(spec: &KeySpec) -> String {
+    if spec.id == "git" {
+        let marker = std::env::var("NEO_GIT_KEY_FILE").unwrap_or_else(|_| "/etc/neo/git/key".into());
+        if let Ok(p) = fs::read_to_string(marker) {
+            let p = p.trim();
+            if !p.is_empty() {
+                return p.to_string();
+            }
+        }
+    }
+    spec.key_path.to_string()
+}
+
+/// The git key is the machine host key (no separate rotation).
+fn uses_host_key(spec: &KeySpec) -> bool {
+    key_path(spec) != spec.key_path
+}
+
 fn pub_path(spec: &KeySpec) -> String {
-    format!("{}.pub", spec.key_path)
+    format!("{}.pub", key_path(spec))
 }
 
 fn read_public_key(spec: &KeySpec) -> Result<String, String> {
@@ -76,6 +96,9 @@ fn read_public_key(spec: &KeySpec) -> Result<String, String> {
 
 /// Run the key script with `rotate` (rm + ensure), as activation would.
 fn rotate_key(spec: &KeySpec) -> Result<String, String> {
+    if uses_host_key(spec) {
+        return Err("git uses the machine host key (core.git.useHostKey); turn that off for a separate, rotatable key".into());
+    }
     let script = std::env::var(spec.script_env).unwrap_or_else(|_| spec.script.to_string());
     if Path::new(&script).is_file() {
         let out = if spec.sudo {
@@ -145,7 +168,11 @@ fn card_ok(spec: &KeySpec, key: &str) -> String {
     let escaped = escape_html(key);
     let path = escape_html(&pub_path(spec));
     let title = escape_html(spec.title);
-    let hint = escape_html(spec.hint);
+    let hint = if uses_host_key(spec) {
+        escape_html("This is the machine's SSH host key (core.git.useHostKey): add it to your git forge. It also decrypts the secrets, so it is not rotated here.")
+    } else {
+        escape_html(spec.hint)
+    };
     let confirm = escape_html(spec.confirm);
     let id = spec.id;
     format!(
