@@ -85,6 +85,10 @@ pub async fn route_secrets(
             Status::InternalServerError
         })?
     };
+    if patterns.is_empty() {
+        eprintln!("web: refusing save; no secret settings found (evaluation problem?)");
+        return Err(Status::InternalServerError);
+    }
     match backend {
         secrets::Backend::Inline => Ok(()),
         secrets::Backend::Plain(path) => {

@@ -57,8 +57,9 @@
           then "@NEO_SECRET_JSON:${lib.removeSuffix "@" (lib.removePrefix placeholderPrefix v)}@"
           else builtins.replaceStrings ["</"] ["<\\/"] (builtins.toJSON v);
 
-        # Secret values for the deploy template's settings.nix, merged over
-        # settings.toml (a value in both wins from the secrets file):
+        # Secret values (and the matching neo.core.secrets settings) for the
+        # deploy template's settings.nix, merged over settings.toml (a value in
+        # both wins from the secrets file):
         #   secrets.yaml       plain values (unencrypted repo)
         #   secrets.sops.yaml  placeholders; sops-nix decrypts at activation
         # Only one of the two may exist.
@@ -90,14 +91,13 @@
           then throw "secrets: both secrets.yaml and secrets.sops.yaml exist; keep only one (neo secrets enable removes the plain file)"
           else {
             values = lib.recursiveUpdate plain encrypted;
-            backend =
-              if exists sopsFile
-              then "sops"
-              else "plain";
-            sopsFile =
-              if exists sopsFile
-              then sopsFile
-              else null;
+            # Options to merge too; built here so they always match this neo version.
+            settings = lib.optionalAttrs (exists sopsFile) {
+              core.secrets = {
+                backend = "sops";
+                inherit sopsFile;
+              };
+            };
           };
       };
     };

@@ -17,12 +17,12 @@
         }
       else {
         values = {};
-        backend = "plain";
+        settings = {};
       };
   in {
     neo = lib.foldl' lib.recursiveUpdate tomlSettings [
       secrets.values
-      (lib.optionalAttrs (secrets.backend != "plain") {core.secrets = {inherit (secrets) backend sopsFile;};})
+      secrets.settings
     ];
     environment.etc."neo/settings.toml" = lib.mkIf hasSettings {
       source = settingsPath;

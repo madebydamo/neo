@@ -46,6 +46,9 @@ pub fn secret_paths(config_path: &str, nix_cmd: &str) -> Result<Vec<Vec<String>>
     }
     let raw: RawPaths =
         serde_json::from_slice(&out.stdout).context("parse secret paths from nix eval")?;
+    if raw.paths.is_empty() {
+        bail!("no secret settings found in the config flake (evaluation problem?)");
+    }
     Ok(raw.paths)
 }
 

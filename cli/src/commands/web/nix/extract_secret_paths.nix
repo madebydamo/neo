@@ -5,6 +5,8 @@
 # these values out of settings.toml into secrets.yaml.
 {neoFlake}: let
   inherit (import ./extract_lib.nix {inherit neoFlake;}) f cfg tryOr;
+  # No tryOr at the top: an evaluation error must fail the save, never yield
+  # an empty list (that would write secrets inline).
 
   isOption = o: builtins.isAttrs o && (o._type or null) == "option";
   pubNames = o: builtins.filter (k: builtins.substring 0 1 k != "_") (builtins.attrNames o);
@@ -34,7 +36,7 @@
     then sub path elem
     else [];
 
-  neoOptions = tryOr {} (f.nixosConfigurations.${cfg}.options.neo or {});
+  neoOptions = f.nixosConfigurations.${cfg}.options.neo or {};
 in {
-  paths = tryOr [] (builtins.deepSeq (walk [] neoOptions) (walk [] neoOptions));
+  paths = walk [] neoOptions;
 }
