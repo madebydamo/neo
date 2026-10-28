@@ -32,13 +32,26 @@
           "${appdata}/meilisearch"
         ];
 
+        # Secrets reach the containers through env files rendered at activation.
+        neo.core.secrets.containerEnv = {
+          karakeep-meilisearch.MEILI_MASTER_KEY = cfg.meiliMasterKey or "";
+          karakeep =
+            {
+              # Strings coerced for env typing; assertions require non-empty when enabled.
+              NEXTAUTH_SECRET = cfg.nextauthSecret or "";
+              MEILI_MASTER_KEY = cfg.meiliMasterKey or "";
+            }
+            // optionalAttrs (secretSet cfg.openaiApiKey) {
+              OPENAI_API_KEY = cfg.openaiApiKey;
+            };
+        };
+
         virtualisation.oci-containers.containers = {
           karakeep-meilisearch = {
             image = cfg.containers."karakeep-meilisearch";
             autoStart = true;
             environment = {
               MEILI_NO_ANALYTICS = "true";
-              MEILI_MASTER_KEY = cfg.meiliMasterKey or "";
             };
             volumes = [
               "${appdata}/meilisearch:/meili_data"
@@ -65,26 +78,19 @@
           karakeep = {
             image = cfg.containers.karakeep;
             autoStart = true;
-            environment =
-              {
-                DATA_DIR = "/data";
-                NEXTAUTH_URL = "https://${cfg.subdomain}.${domain}";
-                # Strings coerced for oci-containers typing; assertions require non-empty when enabled.
-                NEXTAUTH_SECRET = cfg.nextauthSecret or "";
-                MEILI_ADDR = "http://karakeep-meilisearch:7700";
-                MEILI_MASTER_KEY = cfg.meiliMasterKey or "";
-                BROWSER_WEB_URL = "http://karakeep-chrome:9222";
-                DISABLE_SIGNUPS = boolToString cfg.disableSignups;
-                DB_WAL_MODE = "true";
-                LOG_LEVEL = "warning";
-                # OpenAI-compatible inference (default: xAI Grok).
-                OPENAI_BASE_URL = cfg.openaiBaseUrl;
-                INFERENCE_TEXT_MODEL = cfg.inferenceTextModel;
-                INFERENCE_IMAGE_MODEL = cfg.inferenceImageModel;
-              }
-              // optionalAttrs (secretSet cfg.openaiApiKey) {
-                OPENAI_API_KEY = cfg.openaiApiKey;
-              };
+            environment = {
+              DATA_DIR = "/data";
+              NEXTAUTH_URL = "https://${cfg.subdomain}.${domain}";
+              MEILI_ADDR = "http://karakeep-meilisearch:7700";
+              BROWSER_WEB_URL = "http://karakeep-chrome:9222";
+              DISABLE_SIGNUPS = boolToString cfg.disableSignups;
+              DB_WAL_MODE = "true";
+              LOG_LEVEL = "warning";
+              # OpenAI-compatible inference (default: xAI Grok).
+              OPENAI_BASE_URL = cfg.openaiBaseUrl;
+              INFERENCE_TEXT_MODEL = cfg.inferenceTextModel;
+              INFERENCE_IMAGE_MODEL = cfg.inferenceImageModel;
+            };
             volumes = [
               "${appdata}/data:/data"
             ];

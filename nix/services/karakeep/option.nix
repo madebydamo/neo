@@ -13,7 +13,7 @@
           options =
             {
               enabled = mkEnableOption "karakeep bookmark and link archival service" {rank = 0;};
-              nextauthSecret = mkOption {
+              nextauthSecret = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
@@ -23,7 +23,7 @@
                 '';
                 helper = lib.neo.helpers.randomToken;
               };
-              meiliMasterKey = mkOption {
+              meiliMasterKey = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 20;
@@ -45,7 +45,7 @@
                 rank = 30;
                 description = "Disable public signups, should only be activated if a user is already created.";
               };
-              openaiApiKey = mkOption {
+              openaiApiKey = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 40;
