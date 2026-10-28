@@ -1,6 +1,6 @@
 # Design: runtime secrets, sops encryption and machine recovery
 
-Status: phases 1–2 implemented (2026-10-28); phases 0, 3–5 open · see "Implementation status" at the end
+Status: implemented (2026-10-28) except the config-repo remote/push · see "Implementation status" at the end
 
 A machine's whole configuration can live in a git repo on GitHub, and an admin's SSH key is
 enough to rebuild the machine from it. Secrets never reach `/nix/store` (once encrypted), and
@@ -466,21 +466,39 @@ the VM disk → restore → same host key.
 
 ## Implementation status (2026-10-28)
 
-Done, VM-tested (fresh boot, old→new and new→old switches, `secrets.yaml` switch with byte-identical
-rendered files and no restarts):
+All VM-tested on the dev VM: fresh boot, old→new and new→old switches, switching to `secrets.yaml`
+(byte-identical rendered files, no restarts), switching to `secrets.sops.yaml` (decrypted with the
+VM's host key, identical rendered files), web saves in every mode, key escrow round trip,
+`neo restore --no-install`, `core.git.useHostKey` on and off.
 
-- `lib.neo.mkSecretOption`, `neo.core.secrets.{templates,containerEnv,backend}`, activation renderer,
-  leak guard (`nix/lib/secrets.nix`, `nix/modules/core/secrets.nix`).
-- Every secret option in this repo migrated (containers, Hermes, git tokens, tailscale, rathole,
-  streamproxy, ical-sync, rustical, docmost, dufs).
-- Encrypted values are refused by assertion where a secret is still used at eval: dufs and rustical
-  SWAG confs, docmost SSO keys, Hermes `dashboardPassword` (autologin HTML) and `llm.apiKey` for
-  provider `custom`.
-- `lib.neo.secrets.readYaml` / `load`; the homeserver template merges `secrets.yaml` /
-  `secrets.sops.yaml` over `settings.toml` (guarded for template/lib skew).
-- CLI: `neo secrets split`; web saves route secret fields into `secrets.yaml` once it exists (and
-  refuse changed values while only `secrets.sops.yaml` exists); masked inputs.
+| Piece | Where |
+|-------|-------|
+| `mkSecretOption`, templates, renderer, leak guard, `jsonString`, `copies` | `nix/lib/secrets.nix`, `nix/modules/core/secrets.nix` |
+| YAML reader (Nix / Rust) | `nix/lib/secrets-yaml.nix`, `cli/src/utils/secrets.rs` |
+| Template loading (`secrets.yaml` / `secrets.sops.yaml`) | `templates/homeserver/modules/settings.nix` |
+| split / enable / disable / rekey, encrypted saves, auto-rekey on SSH key change | `cli/src/utils/secrets_store.rs`, `neo secrets …` |
+| Settings → Secrets card (the switch) | `cli/src/commands/web/routes/secrets.rs` |
+| Root helper (decrypt, escrow) | `neo-secrets-root` in `nix/modules/core/secrets.nix`, sudo rule in `nix/services/neo` |
+| Restore | `neo restore <repo> [--target /mnt] [--key …] [--no-install]` |
+| One machine key for git | `core.git.useHostKey` (opt-in), `nix/modules/core/git.nix` |
 
-Open: phase 0 (identity), phase 3 (sops-nix decryption into `raw/`, recipients, root helper),
-`neo secrets enable`, `neo restore`, `secrets.yaml` support in `paste_settings`/upload, and plugin
-options (e.g. the arr `apiKey`s in highsea.neo still use plain options and stay inline).
+**Changes against the design above:**
+
+- **No sops-nix.** Activation runs `sops decrypt` with the host key into `raw/` itself: no new flake
+  input for field machines, and the template layer already covers templates, owners and restarts.
+- **Placeholders carry no stamp** (`@NEO_SECRET:<path>@`). sops re-encrypts every value on each
+  write, so ciphertext hashes would restart everything. Instead the renderer queues the
+  `restartUnits` of templates whose rendered content changed in
+  `/run/nixos/activation-restart-list`.
+- **Identity stays at `/etc/ssh/ssh_host_ed25519_key`** (no move to `/var/lib/neo/identity`). Git
+  uses a `root:neo-git` 0640 copy when `core.git.useHostKey` is on: `ssh-agent` refuses other uids,
+  and every `neo-git` member is root-equivalent already. The homeserver key is unchanged.
+- **neo-web decrypts through `neo-secrets-root`** (sudo); encryption needs public keys only.
+- Recipients: `core.ssh.authorizedKeys` (ssh-ed25519 only) + `core.secrets.hostKey`, recorded by
+  `enable`. `.sops.yaml` is generated for manual `sops edit` on a checkout.
+
+Still refused with encrypted values (assertion, plain mode unaffected): dufs and rustical SWAG
+confs, docmost SSO keys, Hermes `llm.apiKey` for provider `custom`.
+
+Open: config repo remote + push (open question 1), token expiry warnings, `secrets.yaml` in
+`paste_settings`/upload, and plugin options (e.g. highsea.neo arr `apiKey`s still plain options).

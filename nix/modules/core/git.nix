@@ -176,9 +176,13 @@
         "neo/git/key".text = gitKey;
       };
 
-    system.activationScripts.neo-git-host-key = lib.mkIf cfg.useHostKey {
+    # Off again: no copy of the host key stays behind.
+    system.activationScripts.neo-git-host-key = {
       deps = ["users" "groups"];
-      text = "${copyHostKey}";
+      text =
+        if cfg.useHostKey
+        then "${copyHostKey}"
+        else "rm -f ${hostKeyCopy} ${hostKeyCopy}.pub ${hostKeyCopy}.tmp";
     };
 
     # First boot: sshd generates the host key after activation.

@@ -58,7 +58,8 @@ fn spec(id: &str) -> Option<&'static KeySpec> {
 /// key, published in /etc/neo/git/key (nix/modules/core/git.nix).
 fn key_path(spec: &KeySpec) -> String {
     if spec.id == "git" {
-        let marker = std::env::var("NEO_GIT_KEY_FILE").unwrap_or_else(|_| "/etc/neo/git/key".into());
+        let marker =
+            std::env::var("NEO_GIT_KEY_FILE").unwrap_or_else(|_| "/etc/neo/git/key".into());
         if let Ok(p) = fs::read_to_string(marker) {
             let p = p.trim();
             if !p.is_empty() {
