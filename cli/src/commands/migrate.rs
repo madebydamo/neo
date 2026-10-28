@@ -109,6 +109,11 @@ const CUSTOM_MIGRATIONS: &[(&str, MigrationFn)] = &[
         "010-tinyauth-oauth-providers",
         migrate_010_tinyauth_oauth_providers,
     ),
+    // After 003/004, which may carry the key over from retired tables.
+    (
+        "011-drop-bootstrap-method",
+        migrate_011_drop_bootstrap_method,
+    ),
 ];
 
 /// Delete retired [neo-service] and [nixos] tables.
@@ -420,6 +425,17 @@ fn migrate_009_system_updater_gc_older_than(doc: &mut DocumentMut) {
         .is_some_and(|t| t.contains_key("garbageCollectOlderThan"));
     if !taken {
         insert_dotted(doc, "services.system-updater.garbageCollectOlderThan", val);
+    }
+}
+
+/// `neo-cli.bootstrapMethod` is gone: config repos always come from the template.
+fn migrate_011_drop_bootstrap_method(doc: &mut DocumentMut) {
+    for path in [
+        "neo-cli.bootstrapMethod",
+        "neo-cli.local.bootstrapMethod",
+        "neo-cli.server.bootstrapMethod",
+    ] {
+        remove_dotted(doc, path);
     }
 }
 
@@ -1011,6 +1027,33 @@ xaiApiKey = "secret-xai"
         assert_eq!(
             llm.get("apiKey").and_then(|v| v.as_str()),
             Some("secret-xai")
+        );
+    }
+
+    #[test]
+    fn migration_011_drops_bootstrap_method_everywhere() {
+        let raw = r#"
+[neo-cli]
+bootstrapMethod = "clone"
+repoUrl = "https://example.test/cfg.git"
+
+[neo-cli.server]
+bootstrapMethod = "template"
+
+[neo-service]
+bootstrapMethod = "clone"
+"#;
+        let mut doc: DocumentMut = raw.parse().unwrap();
+        assert!(apply_migrations(&mut doc));
+        let cli = doc.get("neo-cli").and_then(|t| t.as_table()).unwrap();
+        assert!(cli.get("bootstrapMethod").is_none());
+        assert!(cli
+            .get("server")
+            .and_then(|t| t.get("bootstrapMethod"))
+            .is_none());
+        assert_eq!(
+            cli.get("repoUrl").and_then(|v| v.as_str()),
+            Some("https://example.test/cfg.git")
         );
     }
 

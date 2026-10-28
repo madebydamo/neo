@@ -112,9 +112,6 @@ Official docs require **kexec** (or a NixOS installer)—not KVM—on the target
 mkdir -p ~/neo-homeserver && cd ~/neo-homeserver
 
 cat > settings.toml << 'EOF'
-[neo-cli]
-bootstrapMethod = "template"
-
 # neoInput defaults to github:madebydamo/neo on both profiles.
 # Put a laptop checkout on local only; the server profile stays on GitHub.
 # [neo-cli.local]
@@ -254,8 +251,7 @@ authorizedKeys = [
   "ssh-ed25519 AAAA... your-key",
 ]
 
-[neo-cli]
-bootstrapMethod = "template"
+# [neo-cli]
 # local and server neoInput default to github:madebydamo/neo
 # local.configPath defaults to ./build; server.configPath defaults to appdata/configuration
 

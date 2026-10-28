@@ -64,15 +64,6 @@
               description = "Fallback template when a profile sets neither template nor neoInput. The server profile ignores a local filesystem path here.";
               rank = 30;
             };
-            bootstrapMethod = mkOption {
-              type = types.enum [
-                "template"
-                "clone"
-              ];
-              default = "template";
-              description = "Bootstrap method: 'template' uses flake init, 'clone' uses git clone from repoUrl";
-              rank = 40;
-            };
             defaultBranch = mkOption {
               type = types.str;
               default = "master";

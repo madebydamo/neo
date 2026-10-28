@@ -16,7 +16,7 @@ build:
     PWD=$(pwd)
     # local follows this checkout. server.neoInput stays the default
     # github:madebydamo/neo so a guest init does not use this path.
-    printf '[neo-cli]\nbootstrapMethod = "template"\n\n[neo-cli.local]\nconfigPath = "%s/build"\nneoInput = "git+file:%s"\ntemplate = "%s#homeserver"\n\n[services.system-updater]\nenabled = false\n' \
+    printf '[neo-cli.local]\nconfigPath = "%s/build"\nneoInput = "git+file:%s"\ntemplate = "%s#homeserver"\n\n[services.system-updater]\nenabled = false\n' \
       "$PWD" "$PWD" "$PWD" > settings.toml
     git add settings.toml
   fi

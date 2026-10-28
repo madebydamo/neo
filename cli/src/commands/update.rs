@@ -2,7 +2,7 @@ use anyhow::Result;
 use toml_edit::DocumentMut;
 
 use crate::utils::{
-    neo_cli_get, resolve_suffix, resolve_template, run_nix, run_write_flake, template, OperationKind,
+    resolve_suffix, resolve_template, run_nix, run_write_flake, template, OperationKind,
     OperationLog,
 };
 
@@ -19,7 +19,7 @@ pub fn update(
             "DRY-RUN: nix flake update in {} (profile={})",
             config_path, profile
         );
-        println!("DRY-RUN: would roll back the files the last template provided and apply the current template (if bootstrapMethod is template)");
+        println!("DRY-RUN: would roll back the files the last template provided and apply the current template");
         println!("DRY-RUN: would nix run .#neo -- migrate (from updated input)");
         return Ok(());
     }
@@ -31,17 +31,13 @@ pub fn update(
 
     // Roll back the files the previous template provided and apply the
     // (possibly newly updated) template; files the operator added stay
-    // (utils/template.rs). A cloned repo is its own source of truth.
-    let bootstrap_method = neo_cli_get(config, profile, "bootstrapMethod").unwrap_or("template");
-
-    if bootstrap_method != "clone" {
-        let template = resolve_template(config, profile);
-        let report = op.step("flake init", || {
-            template::install(config_path, &template, nix_cmd)
-        })?;
-        report.print();
-        template::stage(config_path, &report)?;
-    }
+    // (utils/template.rs).
+    let template = resolve_template(config, profile);
+    let report = op.step("flake init", || {
+        template::install(config_path, &template, nix_cmd)
+    })?;
+    report.print();
+    template::stage(config_path, &report)?;
 
     op.step("write-flake", || run_write_flake(config_path, nix_cmd))?;
     op.step("flake update", || {

@@ -13,7 +13,6 @@ pub fn init(
     nix_cmd: &str,
 ) -> Result<()> {
     let repo_url = neo_cli_get(config, profile, "repoUrl").filter(|s| !s.is_empty());
-    let bootstrap_method = neo_cli_get(config, profile, "bootstrapMethod").unwrap_or("template");
     let template = resolve_template(config, profile);
     // Machine git identity (core.git); baked defaults always carry both keys.
     let git_user_name = core_git_get(config, "userName").unwrap_or("Neo");
@@ -24,7 +23,6 @@ pub fn init(
             "DRY-RUN: smart init at {} (profile={})",
             config_path, profile
         );
-        println!("  bootstrapMethod: {}", bootstrap_method);
         if let Some(url) = repo_url {
             println!("  repoUrl: {}", url);
         }
@@ -56,15 +54,11 @@ pub fn init(
     }
 
     if !has_flake {
-        if let (Some(url), "clone") = (repo_url, bootstrap_method) {
-            git_cmd(config_path, &["clone", url, "."])?;
-        } else {
-            template::install(config_path, &template, nix_cmd)?;
-            git_cmd(config_path, &["init"])?;
+        template::install(config_path, &template, nix_cmd)?;
+        git_cmd(config_path, &["init"])?;
 
-            if let Some(url) = repo_url {
-                git_cmd(config_path, &["remote", "add", "origin", url])?;
-            }
+        if let Some(url) = repo_url {
+            git_cmd(config_path, &["remote", "add", "origin", url])?;
         }
     }
 

@@ -95,7 +95,6 @@
       [neo-cli]
       neoInput = "${neoCli.neoInput or "github:madebydamo/neo"}"
       template = "${neoCli.template or "github:madebydamo/neo#homeserver"}"
-      bootstrapMethod = "${neoCli.bootstrapMethod or "template"}"
       repoUrl = "${neoCli.repoUrl or ""}"
       defaultBranch = "${neoCli.defaultBranch or "master"}"
       rebuildBranchFormat = "${neoCli.rebuildBranchFormat or "%Y%m%d-%H%M%S"}"
