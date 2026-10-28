@@ -27,19 +27,15 @@
           image = cfg.containers.dufs;
           autoStart = true;
           user = "${toString config.neo.core.uid}:${toString config.neo.core.gid}";
-          environment =
-            {
-              TZ = config.neo.core.timeZone;
-              DUFS_SERVE_PATH = "/data";
-              DUFS_BIND = "0.0.0.0";
-              DUFS_PORT = toString cfg.port;
-              DUFS_ALLOW_ALL = "true";
-              DUFS_ENABLE_CORS = "true";
-              DUFS_HIDDEN = ".git,.DS_Store";
-            }
-            // optionalAttrs webdavAuth {
-              DUFS_AUTH = "${cfg.username}:${cfg.password}@/:rw";
-            };
+          environment = {
+            TZ = config.neo.core.timeZone;
+            DUFS_SERVE_PATH = "/data";
+            DUFS_BIND = "0.0.0.0";
+            DUFS_PORT = toString cfg.port;
+            DUFS_ALLOW_ALL = "true";
+            DUFS_ENABLE_CORS = "true";
+            DUFS_HIDDEN = ".git,.DS_Store";
+          };
           volumes =
             [
               "${dataDir}:/data"
@@ -48,6 +44,12 @@
             ]
             ++ lib.neo.toOciBindMounts cfg.additionalMountPoints;
           networks = ["internal"];
+        };
+
+        # The password is a secret: DUFS_AUTH reaches the container through
+        # a rendered env file.
+        neo.core.secrets.containerEnv.dufs = mkIf webdavAuth {
+          DUFS_AUTH = "${cfg.username}:${cfg.password}@/:rw";
         };
       };
     };

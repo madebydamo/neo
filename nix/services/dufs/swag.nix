@@ -80,6 +80,12 @@
       }
     '';
   in {
+    # The UI Basic header is base64 of the password, computed at evaluation.
+    config.assertions = lib.optional cfg.enabled {
+      assertion = !(lib.neo.secrets.hasPlaceholder cfg.password);
+      message = "neo.services.dufs.password: encrypted secrets are not supported here yet (value is derived at evaluation)";
+    };
+
     config.neo.services.dufs.proxyConf = lib.mkDefault ''
       server {
         include /config/nginx/listen-https.conf;

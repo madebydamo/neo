@@ -26,7 +26,7 @@
                 rank = 10;
                 description = "HTTP Basic username for dufs and WebDAV clients. Used when password is set.";
               };
-              password = mkOption {
+              password = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 11;
