@@ -45,8 +45,17 @@
 
         isPlaceholder = v: builtins.isString v && lib.hasPrefix placeholderPrefix v;
 
-        # True when a string (any config text) still carries a placeholder.
-        hasPlaceholder = v: builtins.isString v && lib.hasInfix placeholderPrefix v;
+        # True when a string (any config text) still carries a placeholder
+        # (also the JSON variant below).
+        hasPlaceholder = v: builtins.isString v && lib.hasInfix "@NEO_SECRET" v;
+
+        # A secret as a JSON string literal (quotes included), for JSON or a
+        # <script>: toJSON of a plain value; for a placeholder the renderer
+        # inserts the JSON-escaped value ("</" escaped too).
+        jsonString = v:
+          if isPlaceholder v
+          then "@NEO_SECRET_JSON:${lib.removeSuffix "@" (lib.removePrefix placeholderPrefix v)}@"
+          else builtins.replaceStrings ["</"] ["<\\/"] (builtins.toJSON v);
 
         # Secret values for the deploy template's settings.nix, merged over
         # settings.toml (a value in both wins from the secrets file):

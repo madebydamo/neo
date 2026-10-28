@@ -152,12 +152,9 @@
       };
     hermesEnvFile = config.neo.core.secrets.templates."hermes.env".path;
 
-    # Credentials JSON for the SWAG auto-login page (safe JS embedding via toJSON).
-    autologinCredsJson = builtins.toJSON {
-      provider = "basic";
-      username = dashboardAuthUsername;
-      password = cfg.dashboardPassword or "";
-    };
+    # Credentials for the SWAG auto-login page. The password is a secret: a JSON
+    # string literal rendered at activation (lib.neo.secrets.jsonString).
+    autologinCredsJson = "{\"provider\": \"basic\", \"username\": ${builtins.toJSON dashboardAuthUsername}, \"password\": ${lib.neo.secrets.jsonString (cfg.dashboardPassword or "")}}";
 
     autologinHtml = ''
       <!DOCTYPE html>
@@ -210,12 +207,7 @@
             password for internal basic auth and SWAG auto-login so only tinyauth is user-facing.
           '';
         }
-        # Both are derived at evaluation: the auto-login page embeds the
-        # password as JSON, and config.yaml carries the custom endpoint key.
-        {
-          assertion = !(lib.neo.secrets.hasPlaceholder cfg.dashboardPassword);
-          message = "neo.services.hermes.dashboardPassword: encrypted secrets are not supported here yet (value is derived at evaluation)";
-        }
+        # config.yaml carries the custom endpoint key, built at evaluation.
         {
           assertion = !(modelSection ? api_key && lib.neo.secrets.hasPlaceholder modelSection.api_key);
           message = "neo.services.hermes.llm.apiKey: encrypted secrets are not supported here yet with provider custom (value is derived at evaluation)";
@@ -307,10 +299,13 @@
       ];
 
       # SWAG serves this at /login so Hermes form-auth is invisible behind tinyauth.
-      system.activationScripts.hermes-dashboard-autologin = lib.neo.mkActivationScriptForFile config {
-        filePath = "${config.neo.core.volumes.appdata}/swag/www/hermes-autologin.html";
+      # It holds the dashboard password: rendered at activation, readable by SWAG only.
+      neo.core.secrets.templates."hermes-autologin.html" = {
         content = autologinHtml;
-        mode = "0644";
+        owner = toString config.neo.core.uid;
+        group = toString config.neo.core.gid;
+        mode = "0440";
+        copies = ["${config.neo.core.volumes.appdata}/swag/www/hermes-autologin.html"];
       };
 
       environment.variables.HERMES_HOME = "${cfg.stateDir}/.hermes";

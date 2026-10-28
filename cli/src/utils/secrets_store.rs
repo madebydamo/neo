@@ -286,11 +286,22 @@ impl Store {
         fs::write(self.settings_path(), doc.to_string()).context("write settings.toml")
     }
 
+    /// Stage these files: existing ones added, missing ones removed from the index.
     fn git_add(&self, names: &[&str]) -> Result<()> {
         let dir = self.dir.to_string_lossy().to_string();
-        let mut args = vec!["add", "-A", "--"];
-        args.extend_from_slice(names);
-        git_cmd(&dir, &args)
+        let (present, gone): (Vec<&str>, Vec<&str>) =
+            names.iter().partition(|n| self.path(n).exists());
+        if !present.is_empty() {
+            let mut args = vec!["add", "--"];
+            args.extend_from_slice(&present);
+            git_cmd(&dir, &args)?;
+        }
+        if !gone.is_empty() {
+            let mut args = vec!["rm", "-q", "--cached", "--ignore-unmatch", "--"];
+            args.extend_from_slice(&gone);
+            git_cmd(&dir, &args)?;
+        }
+        Ok(())
     }
 
     fn write_atomic(&self, name: &str, content: &str) -> Result<()> {

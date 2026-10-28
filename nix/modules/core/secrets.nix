@@ -69,6 +69,11 @@
           default = [];
           description = "Units (name.service) restarted when the rendered content changes";
         };
+        copies = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+          description = "Extra paths that get the same rendered file (owner/mode too), for services that expect it at a fixed place";
+        };
         path = lib.mkOption {
           type = lib.types.str;
           readOnly = true;
@@ -141,7 +146,7 @@
       templates.${name}.restartUnits) {} (lib.attrNames templates);
 
     renderLines =
-      lib.concatStringsSep "\n" (lib.mapAttrsToList (name: t: "neo_secrets_render ${lib.escapeShellArgs ([sources.${name} t.path t.owner t.group t.mode] ++ t.restartUnits)}")
+      lib.concatStringsSep "\n" (lib.mapAttrsToList (name: t: "neo_secrets_render ${lib.escapeShellArgs ([sources.${name} t.path t.owner t.group t.mode (lib.concatStringsSep ":" t.copies)] ++ t.restartUnits)}")
         templates);
 
     keep = lib.concatStringsSep " " (map lib.escapeShellArg (lib.attrNames templates));
@@ -287,8 +292,8 @@
               # Placeholders are matched on a copy that drops each one once handled,
               # so a value that itself looks like a placeholder cannot loop.
               neo_secrets_render() {
-                local src=$1 dst=$2 owner=$3 group=$4 mode=$5
-                shift 5
+                local src=$1 dst=$2 owner=$3 group=$4 mode=$5 copies=$6
+                shift 6
                 local content rest ph key val tmp
                 local re='@NEO_SECRET:([A-Za-z0-9._/:-]+)@'
                 content=$(cat "$src"; printf x)
@@ -307,6 +312,22 @@
                   content=''${content//"$ph"/"$val"}
                   rest=''${rest//"$ph"/}
                 done
+                # JSON string variant: quoted, escaped, "</" made script-safe.
+                local rej='@NEO_SECRET_JSON:([A-Za-z0-9._/:-]+)@'
+                rest=$content
+                while [[ $rest =~ $rej ]]; do
+                  ph=''${BASH_REMATCH[0]}
+                  key=''${BASH_REMATCH[1]}
+                  if [ ! -f "$raw/$key" ]; then
+                    echo "neo-secrets: no value for setting $key (needed by $dst)" >&2
+                    failed=1
+                    return 0
+                  fi
+                  val=$(${pkgs.jq}/bin/jq -Rs . < "$raw/$key")
+                  val=''${val//<\//<\\/}
+                  content=''${content//"$ph"/"$val"}
+                  rest=''${rest//"$ph"/}
+                done
                 tmp=$(mktemp "$dst.XXXXXX")
                 printf '%s' "$content" > "$tmp"
                 chown "$owner:$group" "$tmp"
@@ -316,6 +337,11 @@
                   for u in "$@"; do echo "$u" >> /run/nixos/activation-restart-list; done
                 fi
                 mv -f "$tmp" "$dst"
+                local IFS=:
+                for c in $copies; do
+                  mkdir -p "$(dirname "$c")"
+                  cp -p "$dst" "$c.neo-tmp" && mv -f "$c.neo-tmp" "$c"
+                done
               }
 
               ${renderLines}
