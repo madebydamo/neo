@@ -20,7 +20,7 @@
                 default = 9000;
                 description = "Internal HTTP port the Authentik server listens on (container port 9000)";
               };
-              secretKey = mkOption {
+              secretKey = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
@@ -30,7 +30,7 @@
                 '';
                 helper = lib.neo.helpers.randomToken;
               };
-              dbPassword = mkOption {
+              dbPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 20;
@@ -46,7 +46,7 @@
                   Only read on the very first start (empty database).
                 '';
               };
-              bootstrapPassword = mkOption {
+              bootstrapPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 40;
@@ -80,7 +80,7 @@
                       description = "SMTP login. Empty for an unauthenticated relay (e.g. M365 connector by IP).";
                       rank = 20;
                     };
-                    password = mkOption {
+                    password = lib.neo.mkSecretOption {
                       type = types.str;
                       default = "";
                       description = "SMTP password.";

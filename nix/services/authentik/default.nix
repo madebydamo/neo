@@ -20,6 +20,7 @@
         then "https://${cfg.subdomain}.${domain}"
         else null;
       secretSet = v: v != null && v != "";
+      inherit (lib.neo.secrets) isPlaceholder;
       dbUser = "authentik";
       dbName = "authentik";
       dbPassword =
@@ -31,11 +32,9 @@
       # Shared by server and worker. Bootstrap values are only read on an empty database.
       commonEnv =
         {
-          AUTHENTIK_SECRET_KEY = cfg.secretKey or "";
           AUTHENTIK_POSTGRESQL__HOST = "authentik-db";
           AUTHENTIK_POSTGRESQL__NAME = dbName;
           AUTHENTIK_POSTGRESQL__USER = dbUser;
-          AUTHENTIK_POSTGRESQL__PASSWORD = dbPassword;
         }
         // optionalAttrs (publicUrl != null) {
           AUTHENTIK_WEB__BASE_URL = publicUrl;
@@ -44,7 +43,6 @@
           AUTHENTIK_EMAIL__HOST = cfg.email.host;
           AUTHENTIK_EMAIL__PORT = toString cfg.email.port;
           AUTHENTIK_EMAIL__USERNAME = cfg.email.username;
-          AUTHENTIK_EMAIL__PASSWORD = cfg.email.password;
           AUTHENTIK_EMAIL__USE_TLS = boolToString cfg.email.useTls;
           AUTHENTIK_EMAIL__USE_SSL = boolToString cfg.email.useSsl;
           AUTHENTIK_EMAIL__TIMEOUT = toString cfg.email.timeout;
@@ -52,6 +50,15 @@
         }
         // optionalAttrs (secretSet cfg.bootstrapEmail) {
           AUTHENTIK_BOOTSTRAP_EMAIL = cfg.bootstrapEmail;
+        };
+      # Secret part of commonEnv: rendered env file per container (neo.core.secrets).
+      commonSecretEnv =
+        {
+          AUTHENTIK_SECRET_KEY = cfg.secretKey or "";
+          AUTHENTIK_POSTGRESQL__PASSWORD = dbPassword;
+        }
+        // optionalAttrs (cfg.email.host != "") {
+          AUTHENTIK_EMAIL__PASSWORD = cfg.email.password;
         }
         // optionalAttrs (secretSet cfg.bootstrapPassword) {
           AUTHENTIK_BOOTSTRAP_PASSWORD = cfg.bootstrapPassword;
@@ -60,7 +67,8 @@
       config = mkIf cfg.enabled {
         assertions = [
           {
-            assertion = secretSet cfg.secretKey && (stringLength cfg.secretKey) >= 50;
+            # An encrypted value is only checked for presence (its text is a placeholder).
+            assertion = secretSet cfg.secretKey && (isPlaceholder cfg.secretKey || (stringLength cfg.secretKey) >= 50);
             message = "neo.services.authentik: secretKey must be at least 50 characters when enabled (use the Generate helper).";
           }
           {
@@ -91,6 +99,12 @@
           "${appdata}/certs"
         ];
 
+        neo.core.secrets.containerEnv = {
+          authentik-db.POSTGRES_PASSWORD = dbPassword;
+          authentik = commonSecretEnv;
+          authentik-worker = commonSecretEnv;
+        };
+
         virtualisation.oci-containers.containers = {
           authentik-db = {
             image = cfg.containers."authentik-db";
@@ -98,7 +112,6 @@
             environment = {
               POSTGRES_DB = dbName;
               POSTGRES_USER = dbUser;
-              POSTGRES_PASSWORD = dbPassword;
             };
             volumes = [
               "${appdata}/pgdata:/var/lib/postgresql/data"
