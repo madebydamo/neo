@@ -28,6 +28,8 @@
                 rank = 10;
                 description = "Text shown on the example page";
               };
+              # Passwords, tokens and API keys: lib.neo.mkSecretOption, passed to the
+              # container through neo.core.secrets.containerEnv (docs/PLUGINS.md → Secrets).
             }
             # subdomain / ingress / auth / customDomains (ranks 100–130).
             // lib.neo.mkReverseProxyOptions {

@@ -11,7 +11,7 @@ use crate::commands::web::types::{
 };
 use crate::commands::web::util::{escape_nix_string, service_name_ok};
 
-fn value_to_display(v: &serde_json::Value) -> String {
+pub(crate) fn value_to_display(v: &serde_json::Value) -> String {
     match v {
         serde_json::Value::Null => "null".to_string(),
         serde_json::Value::Bool(b) => b.to_string(),

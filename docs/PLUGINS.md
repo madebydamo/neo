@@ -244,7 +244,7 @@ Work through every item. Each one exists because it is easy to forget.
 - [ ] `// lib.neo.mkServiceMeta { category; icon; description; projectUrl; githubUrl; releaseUrl; }`.
 - [ ] `// lib.neo.mkSkillOptions {}` if you ship a `skills.nix`.
 - [ ] `// lib.neo.mkVpnOptions { … }` if containers may route through the VPN.
-- [ ] Secrets are ordinary options (`types.nullOr types.str`, `default = null`) with `helper = lib.neo.helpers.randomToken`; never a real secret as a default.
+- [ ] Secrets (passwords, tokens, API keys) use `lib.neo.mkSecretOption` (same arguments as `mkOption`, e.g. `type = types.nullOr types.str; default = null; helper = lib.neo.helpers.randomToken;`); never a real secret as a default.
 - [ ] Presentation metadata where useful: `label`, `ui.group`, `visibleWhen`, `choices`, `choiceLabels`.
 
 **`default.nix`** ([details](#defaultnix))
@@ -257,6 +257,7 @@ Work through every item. Each one exists because it is easy to forget.
 - [ ] No host ports for web UIs; SWAG reaches containers over `internal`. Only publish non-HTTP protocol ports.
 - [ ] Post-start configuration in `lib.neo.mkSetupService`, also listed in `extraUnits`.
 - [ ] `assertions` for required secrets and invalid combinations.
+- [ ] Secrets never in `environment`, `/etc` text or a script: `neo.core.secrets.containerEnv.<container>` or `neo.core.secrets.templates` ([details](#secrets)).
 - [ ] Native NixOS services: `User`/`Group = "homeserver"`, data paths in appdata, `ReadWritePaths`, tmpfiles `d` rule, no `DynamicUser`/`StateDirectory`, nothing in `/var/lib/<name>`.
 - [ ] Host listeners bind `127.0.0.1` and use `lib.neo.mkDockerToLocalhostForward port`.
 - [ ] Privileged commands via `lib.neo.mkSudoExtraRules`; git access via `neo.core.git.users`.
@@ -303,7 +304,8 @@ The examples use a service `myapp`: one container `myapp` on port 8080, a setup 
                 description = "Port MyApp listens on inside the container";
               };
 
-              adminPassword = mkOption {
+              # Secret: kept out of settings.toml once the operator encrypts.
+              adminPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
@@ -385,7 +387,6 @@ Notes:
           PUID = toString config.neo.core.uid;
           PGID = toString config.neo.core.gid;
           TZ = config.neo.core.timeZone;
-          MYAPP_ADMIN_PASSWORD = cfg.adminPassword;
           MYAPP_PUBLIC_URL = "https://${cfg.subdomain}.${domain}";
           MYAPP_SIGNUP = lib.boolToString cfg.allowSignup;
         };
@@ -394,6 +395,11 @@ Notes:
           "${config.neo.core.volumes.documents}:/documents"
         ];
         networks = ["internal"];
+      };
+
+      # Secrets reach the container through a rendered env file, never `environment`.
+      neo.core.secrets.containerEnv.myapp = {
+        MYAPP_ADMIN_PASSWORD = cfg.adminPassword;
       };
 
       # Post-start configuration. Also listed in extraUnits (option.nix).
@@ -421,7 +427,7 @@ Notes:
 - **Ports.** Do not publish web UI ports (`ports = [ … ]`): that bypasses SWAG, tinyauth, ingress and the NixOS firewall (Docker publishes ports through its own iptables rules). Publish only protocol ports clients need directly, like Syncthing's `22000`.
 - **Setup units.** `mkSetupService` retries the script until it exits 0, stays "active (exited)" after success, and runs again when the container restarts. Use `blocking = true` only when another unit must wait for it.
 - **Timers.** For scheduled jobs pass `timerUnits = [ "myapp-sync" ];` to `mkContainerDefinitions` (or `mkSystemdUnits` + `mkSystemdTimers` without containers). The service target arms the timer and does not run the job on start.
-- **Secrets.** Neo services take secrets as plain options in `settings.toml` (written `0600` to `/etc/neo/settings.toml`), offer a Generate helper, and assert that they are set. Like the built-in services, values passed through `environment` end up in the Nix store.
+- **Secrets.** Declare them with `lib.neo.mkSecretOption`, offer a Generate helper, assert that they are set, and hand them to the service through `neo.core.secrets` (see [Secrets](#secrets)). Never through `environment`: that lands in the Nix store, and on an encrypted config the build fails.
 - **Domain.** `config.neo.services.swag.domain` can be `null` on a fresh install; guard it (`or "localhost"`) where a null would break evaluation.
 
 ### swag.nix
@@ -509,7 +515,7 @@ Hermes, Neo's AI assistant, gets one skill per enabled service that sets `skill.
         2. docker logs myapp --tail 100
 
         ## Credentials
-        - Admin password: `services.myapp.adminPassword` in settings.toml
+        - Admin password: setting `services.myapp.adminPassword`
       '';
     };
   };
@@ -627,6 +633,7 @@ The `homeserver` user and group own all appdata. It is in the `docker` group.
 | Function | Arguments | Returns |
 |----------|-----------|---------|
 | `mkOption` | Same as `lib.mkOption`, plus optional `rank` (int), `helper` (from `mkHelper`), `ui` (from `ui.mkUi`) | Option with the extra keys attached |
+| `mkSecretOption` | Same as `mkOption` (`type` defaults to `types.str`) | Option tagged `secret = true`: masked in the web UI, moved to `secrets.yaml` / `secrets.sops.yaml` by the operator. See [Secrets](#secrets) |
 | `mkEnableOption` | `description: args:`, both required; `args` is an attrset like `{rank = 0; ui = …;}` (may be `{}`) | `lib.mkEnableOption description // args` |
 
 ```nix
@@ -662,6 +669,20 @@ Merge these with `//` into `neo.services.<name>`'s `options`.
 # default.nix:
 volumes = ["${appdata}:/config"] ++ lib.neo.toOciBindMounts cfg.additionalMountPoints;
 ```
+
+### Secrets
+
+The operator decides where secret settings live (Settings → Secrets or `neo secrets split|enable`): inline in `settings.toml`, in a plain `secrets.yaml`, or encrypted in `secrets.sops.yaml`. A plugin works the same in all three if it follows these rules. Options declared with plain `mkOption` keep working, but their values always stay in `settings.toml` in plain text.
+
+On an encrypted config, a secret option evaluates to a placeholder (`@NEO_SECRET:services/myapp/adminPassword@`). The real value is filled in only when the system activates, by root, into files under `/run/neo-secrets/rendered/`. The service code therefore passes the option on as a string and never inspects it:
+
+- **Container environment:** `neo.core.secrets.containerEnv.<container> = { VAR = cfg.secret; };` renders an env file, adds it to the container's `environmentFiles`, and restarts `docker-<container>` when it changes.
+- **Files:** `neo.core.secrets.templates."<name>" = { content = "…${cfg.secret}…"; owner; group; mode ? "0400"; restartUnits ? []; copies ? []; };` (or `env = { … }` for an env file). Read it from `config.neo.core.secrets.templates."<name>".path`; `copies` writes the same file to paths the app expects (for example in appdata). DynamicUser units take it with `LoadCredential`.
+- **Derived values:** never hash or encode a secret in Nix. Use `lib.neo.secrets.sha256 s`, `lib.neo.secrets.base64 s` (computed when the system activates) and `lib.neo.secrets.jsonString s` (a quoted JSON string, for JSON or JS files).
+- **SWAG lines with a secret** (an `Authorization` header, for example): `let snip = lib.neo.secrets.swagSnippet config "myapp-auth" "proxy_set_header Authorization \"Bearer ${cfg.token}\";"; in` put `${snip.include}` in the proxy conf and set `neo.core.secrets.templates = snip.templates;`.
+- A required-secret assertion (`cfg.secret != null && cfg.secret != ""`) works unchanged: a placeholder is never empty.
+
+The build fails if a placeholder would end up in a container or unit `environment` or in `/etc` text.
 
 ### Containers and units
 

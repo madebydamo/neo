@@ -496,6 +496,10 @@ VM's host key, identical rendered files), web saves in every mode, key escrow ro
 - **neo-web decrypts through `neo-secrets-root`** (sudo); encryption needs public keys only.
 - Recipients: `core.ssh.authorizedKeys` (ssh-ed25519 only) + `core.secrets.hostKey`, recorded by
   `enable`. `.sops.yaml` is generated for manual `sops edit` on a checkout.
+- **The form shows secrets like plain settings** (masked, with Show), not set/not set chips. On an
+  encrypted config neo-web decrypts once per page and replaces the placeholders in the form
+  (`reveal_secrets`, `cli/src/commands/web/schema_cache.rs`); saving an unchanged value
+  re-encrypts nothing.
 
 Every secret option in this repo works encrypted. Secrets used inside other values go through
 derived placeholders the renderer computes: `lib.neo.secrets.base64` (dufs Basic header),
@@ -504,5 +508,9 @@ SWAG lines with secrets are rendered snippets (`lib.neo.secrets.swagSnippet`, in
 `nginx/neo-secrets/`, which SWAG's preStart leaves alone). Hermes' custom provider key goes to the
 env as `NEO_HERMES_LLM_API_KEY`, named by `model.key_env` in config.yaml (upstream resolves it).
 
+Plugins: `docs/PLUGINS.md` → Secrets documents `mkSecretOption` and `neo.core.secrets`. Plugin
+options declared with plain `mkOption` keep working but stay in `settings.toml` in plain text.
+
 Open: config repo remote + push (open question 1), token expiry warnings, `secrets.yaml` in
-`paste_settings`/upload, and plugin options (e.g. highsea.neo arr `apiKey`s still plain options).
+`paste_settings`/upload, and migrating plugin options (e.g. highsea.neo arr `apiKey`s, still plain
+options).
