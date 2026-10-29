@@ -21,7 +21,8 @@ in {
                     mkOption {
                       type = types.bool;
                       default = enabled;
-                      description = "Put selected outbound containers behind the VPN (gluetun)";
+                      # Routes vpn.containers through the gluetun network namespace.
+                      description = "Send this app's internet traffic through your VPN service. Needs the VPN app to be turned on.";
                     }
                     // {
                       rank = 0;
@@ -63,7 +64,7 @@ in {
               default = {
                 inherit enabled containers internalContainers ports networks;
               };
-              description = "VPN routing options for this service";
+              description = "Whether this app's internet traffic goes through your VPN.";
             }
             // {
               rank = 110;

@@ -20,7 +20,8 @@ in {
                     mkOption {
                       type = types.bool;
                       default = enabled;
-                      description = "Publish a Hermes skill for this service when it is enabled";
+                      # Publishes the neo-<service> Hermes skill while the service is enabled.
+                      description = "Let the assistant (Hermes) use and look after this app.";
                     }
                     // {
                       rank = 0;
@@ -74,7 +75,7 @@ in {
                 };
               };
               default = {};
-              description = "Hermes agent skill published for this Neo service";
+              description = "What the assistant (Hermes) may do with this app.";
             }
             // {
               rank = 200;

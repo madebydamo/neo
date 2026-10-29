@@ -29,13 +29,15 @@ in {
                       mkOption {
                         type = types.str;
                         default = image;
-                        description = "Docker image for container \"${name}\" (\"repo:tag\"). Enables image switching via settings, auto-updates, and UI.";
+                        # Docker image ("repo:tag") for container ${name}; read by the updater and web UI.
+                        description = "Which version of the app to run (image name and tag). Change only if you need a specific version.";
                       }
                   )
                   containers;
               };
               default = {};
-              description = "Docker image overrides for this service's declared containers";
+              # Docker image overrides for this service's declared containers.
+              description = "Which version of each part of this app runs.";
             }
             // {
               inherit rank;
@@ -100,10 +102,8 @@ in {
       #   volumes = [ ... ] ++ lib.neo.toOciBindMounts cfg.additionalMountPoints;
       mkAdditionalMountPoints = {
         rank ? 20,
-        description ? ''
-          Extra host directories to bind-mount into the container.
-          Each entry is a localPath (absolute host path) and containerPath (path inside the container).
-        '',
+        # Host directories bind-mounted into the container (localPath:containerPath).
+        description ? "Extra folders on the server this app can use. Each one needs the folder on the server and where the app sees it.",
       }:
         with lib; {
           additionalMountPoints =
@@ -113,21 +113,30 @@ in {
                   localPath =
                     mkOption {
                       type = types.str;
-                      description = "Absolute path on the host to mount";
+                      description = "Full path of the folder on the server, e.g. /var/neo/DATA/Media/Movies.";
                     }
-                    // {rank = 0;};
+                    // {
+                      rank = 0;
+                      ui = neoUi.mkUi {label = "Folder on the server";};
+                    };
                   containerPath =
                     mkOption {
                       type = types.str;
-                      description = "Absolute path inside the container";
+                      description = "Full path where the app sees this folder (inside the app, not on the server).";
                     }
-                    // {rank = 10;};
+                    // {
+                      rank = 10;
+                      ui = neoUi.mkUi {label = "Path in the app";};
+                    };
                 };
               });
               default = [];
               description = description;
             }
-            // {inherit rank;};
+            // {
+              inherit rank;
+              ui = neoUi.mkUi {label = "Extra folders";};
+            };
         };
 
       # Turn additionalMountPoints entries into docker/OCI volume specs ("host:container").
