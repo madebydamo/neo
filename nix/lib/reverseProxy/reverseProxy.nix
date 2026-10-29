@@ -2,7 +2,7 @@
 # Ranks are level-dependent — see nix/lib/option.nix for the service band table.
 {lib, ...}: let
   neoUi = (import ../ui.nix {inherit lib;}).libExtensions.ui.neo.ui;
-  inherit (neoUi.groups) access;
+  inherit (neoUi.groups) access advanced;
 in {
   libExtensions.reverseProxy = {
     neo = {
@@ -23,7 +23,7 @@ in {
             mkOption {
               type = types.nullOr types.str;
               default = subdomain;
-              description = "Subdomain for the service. Must be unique among enabled services and consist of lowercase a-z only";
+              description = "First part of this app's web address, e.g. photos gives photos.<your domain>. Lowercase letters only, and each app needs its own.";
             }
             // {
               rank = 100;
@@ -38,7 +38,9 @@ in {
             mkOption {
               type = types.listOf (types.enum ["local" "tailscale" "web"]);
               default = ["local" "tailscale" "web"];
-              description = "Where this service can be opened from. Home network = your LAN, Tailscale = devices on your tailnet, Internet = public HTTPS via rathole/streamproxy. Requests from anywhere not selected are blocked (Let's Encrypt HTTP-01 on port 80 is always allowed).";
+              # Internet = public HTTPS via the rathole/streamproxy listener; unticked
+              # places get the neo 404 page. Let's Encrypt HTTP-01 on port 80 is always allowed.
+              description = "Where this app can be opened from. Places not ticked are blocked. Home network means devices at home, Tailscale your own devices anywhere, Internet everyone.";
             }
             // {
               rank = 105;
@@ -66,7 +68,8 @@ in {
             mkOption {
               type = types.listOf types.str;
               default = customDomains;
-              description = "Custom domains (one domain per string, e.g. example.com or www.example.com) that should resolve to this service; automatically added to SWAG for certificates and to Pi-hole for local DNS";
+              # Added to SWAG (certificates) and Pi-hole (local DNS).
+              description = "Extra domain names you own that should open this app (e.g. www.example.com). HTTPS is set up automatically.";
             }
             // {
               rank = 130;
@@ -84,7 +87,7 @@ in {
                     mkOption {
                       type = types.bool;
                       default = auth.enabled;
-                      description = "Require a tinyauth login before anyone can open this service";
+                      description = "Ask everyone to log in before they can open this app.";
                     }
                     // {
                       rank = 0;
@@ -97,11 +100,13 @@ in {
                     mkOption {
                       type = types.listOf types.str;
                       default = auth.publicPaths;
-                      description = "Regex paths that bypass tinyauth authentication (e.g. share links, health checks)";
+                      # Regexes matched against the request path; matches bypass tinyauth.
+                      description = "Web addresses (patterns) that open without login, e.g. share links or phone app APIs.";
                     }
                     // {
                       rank = 10;
                       ui = neoUi.mkUi {
+                        group = advanced;
                         label = "Public paths";
                         visibleWhen = "enabled";
                       };
@@ -110,7 +115,8 @@ in {
               };
               default = auth;
               internal = !authAvailable;
-              description = "Tinyauth forward authentication settings";
+              # Tinyauth forward authentication.
+              description = "Login protection for this app.";
             }
             // {
               rank = 120;
