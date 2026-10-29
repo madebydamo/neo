@@ -17,10 +17,9 @@
             # container); media, documents and appdata are under /srv by default.
             // lib.neo.mkAdditionalMountPoints {
               rank = 10;
-              description = ''
-                Extra folders on your server to show in Filebrowser, next to media, documents and app data.
-                For each, pick the folder on the server and where it appears in Filebrowser (for example /srv/MyShare).
-              '';
+              app = "Filebrowser";
+              example = "/srv/Holiday photos";
+              description = "More folders from your server to show in Filebrowser, next to Media, Documents and app data.";
             }
             // neo.mkReverseProxyOptions {
               subdomain = "filebrowser";
@@ -42,7 +41,7 @@
                 Browse, upload, rename, preview and edit the files on your server, such as photos, documents and app data, from any browser.
               '';
               notes = ''
-                Neo mounts media, documents and appdata under /srv by default; add more folders with additionalMountPoints.
+                Neo mounts media, documents and appdata under /srv by default; add more under Extra folders.
               '';
               privacy = ["files"];
               projectUrl = "https://filebrowser.org/";

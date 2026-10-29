@@ -58,10 +58,9 @@
             # media and documents are mounted under /data by default.
             // lib.neo.mkAdditionalMountPoints {
               rank = 20;
-              description = ''
-                Extra folders on your server to show in Dufs, next to media and documents.
-                For each, pick the folder on the server and where it appears in Dufs (for example /data/MyShare).
-              '';
+              app = "Dufs";
+              example = "/data/Holiday photos";
+              description = "More folders from your server to show in Dufs, next to Media and Documents.";
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "dufs";
@@ -86,7 +85,7 @@
                 Your computer can also connect to it as a network drive in Windows Explorer or Mac Finder.
               '';
               notes = ''
-                Neo mounts media and documents under /data and adds a writable share; extra folders go in additionalMountPoints.
+                Neo mounts media and documents under /data and adds a writable share; add more under Extra folders.
                 The web UI is behind tinyauth. Set username and password so rclone, davfs2, Windows Explorer and macOS Finder can use WebDAV over HTTPS with Basic auth; SWAG adds those credentials after tinyauth, so the browser does not ask twice.
                 GET /__dufs__/health skips the login for health checks.
               '';

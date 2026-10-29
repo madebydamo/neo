@@ -30,7 +30,9 @@
             }
             // lib.neo.mkAdditionalMountPoints {
               rank = 20;
-              description = "Server folders to make available inside the desktop. Each entry pairs a folder on the server with where it appears in the desktop.";
+              app = "the desktop";
+              example = "/config/Holiday photos";
+              description = "Folders from your server to open inside the desktop. They appear in your home folder at the path you choose.";
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "webtop";

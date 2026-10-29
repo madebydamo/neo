@@ -97,13 +97,17 @@ in {
       # Extra host→container bind mounts as a list of { localPath, containerPath }.
       # Better UI/TOML than attrsOf string: each entry has two clear fields.
       # Merge into a service submodule:
-      #   // lib.neo.mkAdditionalMountPoints { rank = 20; }
+      #   // lib.neo.mkAdditionalMountPoints { rank = 20; app = "Dufs"; example = "/data/Holiday photos"; }
       # Apply in default.nix:
       #   volumes = [ ... ] ++ lib.neo.toOciBindMounts cfg.additionalMountPoints;
       mkAdditionalMountPoints = {
         rank ? 20,
+        # App name used in the texts ("Shown in Dufs as").
+        app ? "the app",
+        # Example containerPath under the app's folder root.
+        example ? "/data/Holiday photos",
         # Host directories bind-mounted into the container (localPath:containerPath).
-        description ? "Extra folders on the server this app can use. Each one needs the folder on the server and where the app sees it.",
+        description ? "More folders from your server to show in ${app}.",
       }:
         with lib; {
           additionalMountPoints =
@@ -113,7 +117,7 @@ in {
                   localPath =
                     mkOption {
                       type = types.str;
-                      description = "Full path of the folder on the server, e.g. /var/neo/DATA/Media/Movies.";
+                      description = "The folder on your server, e.g. /var/neo/DATA/Media/Movies.";
                     }
                     // {
                       rank = 0;
@@ -122,11 +126,11 @@ in {
                   containerPath =
                     mkOption {
                       type = types.str;
-                      description = "Full path where the app sees this folder (inside the app, not on the server).";
+                      description = "Where the folder shows up in ${app}, e.g. ${example}.";
                     }
                     // {
                       rank = 10;
-                      ui = neoUi.mkUi {label = "Path in the app";};
+                      ui = neoUi.mkUi {label = "Shown in ${app} as";};
                     };
                 };
               });
