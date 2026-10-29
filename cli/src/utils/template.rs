@@ -26,6 +26,7 @@ pub const PRISTINE_DIR: &str = ".neo-template";
 /// Suffix of the new template version of a file whose edits did not merge.
 pub const NEW_SUFFIX: &str = ".neo-new";
 const FLAKE: &str = "flake.nix";
+const GITIGNORE: &str = ".gitignore";
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Report {
@@ -226,28 +227,38 @@ pub fn apply(dir: &Path, new_dir: &Path) -> Result<Report> {
             write(&pristine_dir.join(rel), &text)?;
         }
     }
-    ignore_pristine(dir)?;
+    let reported = report
+        .written
+        .iter()
+        .chain(&report.merged)
+        .any(|f| f == GITIGNORE);
+    if ignore_pristine(dir)? && !reported {
+        report.written.push(GITIGNORE.to_string());
+    }
     Ok(report)
 }
 
-/// Keep the pristine copy out of the repo even when `.gitignore` is the
-/// operator's own (the template's lists it already).
-fn ignore_pristine(dir: &Path) -> Result<()> {
-    let path = dir.join(".gitignore");
+/// Keep the pristine copy out of the repo. The template's `.gitignore` does not
+/// list it: CLIs before the pristine copy run `flake init` in place and refuse
+/// to overwrite a `.gitignore` that differs from the template's. Returns
+/// whether the entry was added.
+fn ignore_pristine(dir: &Path) -> Result<bool> {
+    let path = dir.join(GITIGNORE);
     let text = fs::read_to_string(&path).unwrap_or_default();
     let listed = text.lines().any(|l| {
         let l = l.trim().trim_start_matches('/').trim_end_matches('/');
         l == PRISTINE_DIR
     });
     if listed {
-        return Ok(());
+        return Ok(false);
     }
     let sep = if text.is_empty() || text.ends_with('\n') {
         ""
     } else {
         "\n"
     };
-    write(&path, format!("{text}{sep}/{PRISTINE_DIR}/\n").as_bytes())
+    write(&path, format!("{text}{sep}/{PRISTINE_DIR}/\n").as_bytes())?;
+    Ok(true)
 }
 
 /// Clean three-way merge of `cur` (local) and `new` over `base`, or `None` on conflict.
@@ -471,7 +482,7 @@ mod tests {
             &[("flake.nix", "f\n"), ("modules/settings.nix", "new\n")],
         );
         let r = apply(&d.cfg(), &v).unwrap();
-        assert_eq!(r.written, vec!["modules/settings.nix"]);
+        assert_eq!(r.written, vec!["modules/settings.nix", ".gitignore"]);
         assert_eq!(d.read("modules/settings.nix").as_deref(), Some("new\n"));
         assert_eq!(d.read("modules/machine.nix").as_deref(), Some("mine\n"));
         assert_eq!(d.read("flake.nix").as_deref(), Some("existing\n"));
@@ -482,8 +493,10 @@ mod tests {
         let d = Dirs::new("ignore");
         d.put(".gitignore", "result");
         let v = d.template("v", &[("modules/a.nix", "a\n")]);
-        apply(&d.cfg(), &v).unwrap();
-        apply(&d.cfg(), &v).unwrap();
+        let r = apply(&d.cfg(), &v).unwrap();
+        assert!(r.written.iter().any(|f| f == ".gitignore"));
+        let r = apply(&d.cfg(), &v).unwrap();
+        assert!(!r.written.iter().any(|f| f == ".gitignore"));
         assert_eq!(
             d.read(".gitignore").as_deref(),
             Some("result\n/.neo-template/\n")
