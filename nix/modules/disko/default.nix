@@ -14,6 +14,8 @@
     dataRestore = cfg.enabled && config.boot.initrd.systemd.enable;
     dataDataset = "${cfg.poolName}/neo";
     additionalMountpoints = lib.attrValues cfg.additionalDisks;
+    # The main pool's Neo data dataset is mounted in the initrd (see fileSystems).
+    mountDataInInitrd = cfg.enabled && !(builtins.elem volumesRoot additionalMountpoints);
     additionalPoolName = mp: "zpool-${sanitize mp}";
     additionalDataset = mp: "${additionalPoolName mp}/data";
     # systemd unit name for a path mount (e.g. /mnt/foo → mnt-foo.mount)
@@ -153,10 +155,15 @@
       # .env / config.yaml, secret copies such as SWAG snippets). Mounted later,
       # those files land under the mountpoint and the dataset hides them.
       # neo-zfs-restore still runs first (before sysroot.mount).
-      (lib.mkIf (cfg.enabled && !(builtins.elem volumesRoot additionalMountpoints)) {
+      (lib.mkIf mountDataInInitrd {
         ${volumesRoot}.neededForBoot = true;
       })
     ];
+
+    # The disko VM (just launch) builds fileSystems from virtualisation.fileSystems.
+    virtualisation.vmVariantWithDisko = lib.mkIf mountDataInInitrd {
+      virtualisation.fileSystems.${volumesRoot}.neededForBoot = true;
+    };
 
     # Disko applies dataset options at create/update time. Existing
     # additional-disk datasets may still have canmount=on until then. Set
