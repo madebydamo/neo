@@ -21,23 +21,25 @@
         git = ui.mkGroup {
           id = "git";
           label = "Git";
-          description = "Machine git identity for commits, private plugins and Hermes";
+          description = "How this server signs its changes and gets into your private plugin repositories";
           icon = ui.icons.git;
           rank = 20;
         };
         volumes = ui.mkGroup {
           id = "volumes";
           label = "Volumes";
-          description = "Where Neo stores service data, media and documents";
+          description = "Folders where apps keep their data, media and documents";
           icon = ui.icons.folder;
           rank = 30;
         };
-        nix = ui.mkGroup {
-          id = "nix";
-          label = "Nix";
-          description = "Local build limits and the remote builder";
-          icon = ui.icons.cpu;
-          rank = 40;
+        # Expert settings: user/group IDs, Nix build limits and the remote
+        # builder, git host key options.
+        advanced = ui.mkGroup {
+          id = "advanced";
+          label = "Advanced";
+          description = "Build limits, remote builder, user IDs and other expert settings";
+          icon = ui.icons.wrench;
+          rank = 90;
         };
       };
       inGroup = g: ui.mkUi {group = g;};
@@ -46,25 +48,32 @@
           group = g;
           summary = true;
         };
+      labelled = g: label:
+        ui.mkUi {
+          inherit label;
+          group = g;
+        };
     in {
+      # When non-empty, SSH disables password/keyboard-interactive auth and
+      # root login (keys only). The QEMU VM module adds the development key separately.
       options.neo.core.ssh.authorizedKeys = mkOption {
         type = types.listOf types.str;
         default = [];
         description = ''
-          SSH authorized keys for admin and homeserver (set in settings.toml; the QEMU VM module adds the development key separately).
-          When non-empty, SSH disables password/keyboard-interactive auth and root login (keys only).
-          When empty, password auth stays enabled so you are not locked out before adding a key.
+          Public SSH keys allowed to log in as admin and homeserver.
+          Once you add a key, password login over SSH is turned off; while this is empty it stays on so you are not locked out.
         '';
         rank = 0;
-        ui = inGroup group.ssh;
+        ui = labelled group.ssh "Authorized SSH keys";
       };
 
       # Machine git identity (modules/core/git.nix): homeserver builds/fetches
       # with it (private plugins), Hermes commits and clones with it.
+      # userName/userEmail = system gitconfig user.name/user.email.
       options.neo.core.git.userName = mkOption {
         type = types.str;
         default = "Neo";
-        description = "Git user.name for commits on this machine (config repo, Hermes)";
+        description = "Name shown on changes this server saves with git, such as your settings history and the assistant's work.";
         rank = 0;
         ui = summarized group.git;
       };
@@ -72,34 +81,41 @@
       options.neo.core.git.userEmail = mkOption {
         type = types.str;
         default = "neo@${config.neo.core.hostname}";
-        description = "Git user.email for commits on this machine (config repo, Hermes)";
+        description = "Email address shown on changes this server saves with git.";
         rank = 10;
         ui = summarized group.git;
       };
 
+      # Used for git over https (credential helper) and Nix github:/gitlab:
+      # inputs (access-tokens). SSH URLs (git+ssh://git@host/owner/repo) use the
+      # machine git SSH key instead.
       options.neo.core.git.tokens = lib.neo.mkSecretOption {
         type = types.attrsOf types.str;
         default = {};
         example = {"github.com" = "github_pat_…";};
-        description = "HTTPS access tokens per git host (e.g. github.com = a fine-grained PAT with read access to your private plugin repos). Used for git over https and for Nix github:/gitlab: inputs. GitLab tokens for Nix need the PAT: prefix. SSH URLs (git+ssh://git@host/owner/repo) use the machine git SSH key instead";
+        description = "Access tokens per git website (e.g. github.com and a read-only token) so the server can download your private plugins. GitLab tokens need the PAT: prefix.";
         rank = 20;
-        ui = inGroup group.git;
+        ui = labelled group.git "Access tokens";
       };
 
+      # Value = the host's ed25519 public key from `ssh-keyscan -t ed25519 <host>`
+      # without the leading host name. Builtins: github.com, gitlab.com.
       options.neo.core.git.knownHosts = mkOption {
         type = types.attrsOf types.str;
         default = {};
-        description = "Extra git hosts reached over SSH with the machine git key, with their pinned SSH host public key (from ssh-keyscan -t ed25519 <host>, without the leading host name). github.com and gitlab.com are always included. Use host:port as the name for a non-standard SSH port (e.g. a Gitea at git.example.com:2222). Apply a new host before adding a plugin that lives on it";
+        description = "Extra git servers the server may reach over SSH, each with its SSH host key so it can trust them. github.com and gitlab.com are already included. Use host:port for an unusual port (e.g. git.example.com:2222), and save a new server before adding a plugin stored on it.";
         rank = 30;
-        ui = inGroup group.git;
+        ui = labelled group.advanced "Extra git servers";
       };
 
+      # One identity for SSH, git and secret decryption (docs/design/secrets.md).
+      # Off keeps the separate git key at /var/lib/neo/git/id_ed25519.
       options.neo.core.git.useHostKey = mkOption {
         type = types.bool;
         default = false;
-        description = "Use the machine's SSH host key as the git SSH key too (one identity for SSH, git and secret decryption, docs/design/secrets.md). Forges and SSH remotes then need the host public key instead of the separate git key. Off keeps the separate key at /var/lib/neo/git/id_ed25519";
+        description = "Use the server's own SSH key for git instead of a separate git key. Git websites and servers then need the server's public key instead.";
         rank = 40;
-        ui = inGroup group.git;
+        ui = labelled group.advanced "Use the server key for git";
       };
 
       options.neo.core.git.users = mkOption {
@@ -109,10 +125,11 @@
         internal = true;
       };
 
+      # Plugin flake URLs, e.g. github:user/plugin or path:/path/to/plugin.
       options.neo.core.plugins = mkOption {
         type = types.listOf types.str;
         default = [];
-        description = "List of plugin flake URLs (e.g. github:user/plugin or path:/path/to/plugin)";
+        description = "Add-ons that bring extra apps or features, each given by its address (e.g. github:user/plugin).";
         rank = 5;
         ui = lib.neo.ui.mkUi {
           widget = "pluginList";
@@ -123,8 +140,9 @@
       options.neo.core.hostname = mkOption {
         type = types.str;
         default = "nixos";
-        description = "System hostname";
+        description = "Name of this server on your network, e.g. homeserver.";
         rank = 10;
+        ui = ui.mkUi {label = "Server name";};
       };
 
       options.neo.core.hashedLinuxPassword = mkOption {
@@ -139,142 +157,165 @@
       options.neo.core.timeZone = mkOption {
         type = types.str;
         default = "Europe/Zurich";
-        description = "System timezone";
+        description = "Your time zone, e.g. Europe/Zurich.";
         rank = 30;
       };
 
-      options.neo.core.zramSwap.enabled = mkEnableOption "Compressed RAM swap (zram). Recommended on hosts with ≤8 GiB RAM or not much RAM left" {
+      # zramSwap: compressed swap in RAM.
+      options.neo.core.zramSwap.enabled = mkEnableOption "compressed memory swap, which helps the server cope when memory runs low. Recommended with 8 GB of RAM or less" {
         rank = 35;
+        ui = ui.mkUi {label = "Compressed memory swap";};
       };
 
+      # Owner of the homeserver user and of all OCI appdata; admin gets uid + 1.
       options.neo.core.uid = mkOption {
         type = types.int;
         default = 1000;
-        description = "Global UID for services and containers";
+        description = "User number that apps run as and that owns their files. Do not change after setup: existing files keep the old owner.";
         rank = 40;
+        ui = labelled group.advanced "User ID";
       };
 
       options.neo.core.gid = mkOption {
         type = types.int;
         default = 1000;
-        description = "Global GID for services and containers";
+        description = "Group number that apps run as and that owns their files. Do not change after setup: existing files keep the old group.";
         rank = 50;
+        ui = labelled group.advanced "Group ID";
       };
 
+      # Sets nix.settings.max-jobs (parallel Nix derivations) when non-null.
       options.neo.core.nix.maxJobs = mkOption {
         type = types.nullOr types.int;
         default = null;
-        description = "If set, configures nix.settings.max-jobs (maximum parallel Nix derivations). Recommendations: ≤ 8 GB RAM → 1; 8–16 GB RAM → leave it on default (null)";
+        description = "How many builds may run at once when the server updates itself. Empty uses the default; set 1 with 8 GB of RAM or less.";
         rank = 60;
-        ui = inGroup group.nix;
+        ui = labelled group.advanced "Parallel builds";
       };
 
+      # Sets nix.settings.cores (cores per Nix build job) when non-null.
       options.neo.core.nix.cores = mkOption {
         type = types.nullOr types.int;
         default = null;
-        description = "If set, configures nix.settings.cores (cores per Nix build job). Pair with maxJobs using the same recommendations: ≤ 8 GB RAM → 1; 8–16 GB RAM → leave it on default (null)";
+        description = "How many processor cores each build may use. Empty uses the default; set 1 with 8 GB of RAM or less.";
         rank = 70;
-        ui = inGroup group.nix;
+        ui = labelled group.advanced "Cores per build";
       };
 
+      # Remote Nix builder: heavy builds (including nixosConfigurations) are
+      # delegated over SSH so a weak local machine only evaluates and fetches results.
       # Local ranks inside remoteBuild.* only (parent rank places the group under core.nix).
       options.neo.core.nix.remoteBuild = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Offload Nix builds to a remote machine over SSH (uses the homeserver key by default)" {
+              enabled = mkEnableOption "building updates on another computer over SSH, using the server's homeserver key by default" {
                 rank = 0;
-                ui = summarized group.nix;
+                ui = ui.mkUi {
+                  group = group.advanced;
+                  label = "Build on another computer";
+                  summary = true;
+                };
               };
 
               maxJobs = mkOption {
                 type = types.int;
                 default = 8;
-                description = "Maximum parallel build jobs on the remote machine (roughly its usable cores)";
+                description = "How many builds the other computer runs at once, roughly its number of processor cores.";
                 rank = 50;
               };
 
               speedFactor = mkOption {
                 type = types.int;
                 default = 1;
-                description = "Relative speed of the remote builder (higher = preferred when multiple builders exist)";
+                description = "How fast the other computer is; higher is preferred when there are several build computers.";
                 rank = 60;
               };
 
               system = mkOption {
                 type = types.str;
                 default = "x86_64-linux";
-                description = "Nix system type of the remote builder (e.g. x86_64-linux, aarch64-linux)";
+                description = "Processor type of the other computer, e.g. x86_64-linux or aarch64-linux.";
                 rank = 70;
               };
 
               supportedFeatures = mkOption {
                 type = types.listOf types.str;
                 default = ["nixos-test" "benchmark" "big-parallel" "kvm"];
-                description = "Nix features the remote builder supports";
+                description = "Special build features the other computer offers. Leave as is unless you know it differs.";
                 rank = 80;
               };
 
+              # Base64 of the key type and key fields of an ssh-keyscan line.
               publicHostKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Optional base64-encoded SSH host public key for the builder (avoids interactive host-key prompts). From ssh-keyscan output, base64-encode the key type and key fields only";
+                description = "Optional SSH host key of the other computer (base64), so the server can trust it without asking.";
                 rank = 90;
               };
             }
             // lib.neo.mkSshConnectionOptions {
               # After enabled (0): host/user/sshKey/extra = 10–40, then maxJobs…
               rankBase = 10;
-              hostDescription = "Remote build machine hostname or IP (or SSH Host alias)";
-              userDescription = "SSH user on the remote build machine (must be in nix.trusted-users there)";
-              sshKeyDescription = "SSH private key for remote builds. Defaults to the auto-generated homeserver key; override only if needed. The nix-daemon (root) uses this key.";
-              extraOptionsDescription = "Additional SSH options for the nix-daemon SSH client (passed via NIX_SSHOPTS), e.g. -o StrictHostKeyChecking=accept-new";
+              hostDescription = "Name or IP address of the other computer.";
+              # Must be in nix.trusted-users there.
+              userDescription = "User account on the other computer. It must be allowed to run builds there.";
+              # The nix-daemon (root) uses this key.
+              sshKeyDescription = "Key the server logs in with. Leave as is to use the server's own homeserver key.";
+              # Passed to the nix-daemon SSH client via NIX_SSHOPTS.
+              extraOptionsDescription = "Extra SSH settings, e.g. -o StrictHostKeyChecking=accept-new. Usually empty.";
             };
         };
         default = {};
-        description = "Remote Nix builder: when enabled, heavy builds (including nixosConfigurations) are delegated over SSH so a weak local machine only evaluates and fetches results";
+        description = "Let another computer do the heavy building for updates, so a small server only downloads the results.";
         rank = 81;
-        ui = inGroup group.nix;
+        ui = inGroup group.advanced;
       };
 
+      # Changing a volume path only changes where services look; activation
+      # creates the new directory but nothing is moved.
       options.neo.core.volumes.root = mkOption {
         type = types.str;
         default = "/var/neo";
-        description = "Root volume path";
+        description = "Main folder for all Neo data; the other folders sit inside it by default. Changing it does not move existing files.";
         rank = 89;
-        ui = summarized group.volumes;
+        ui = ui.mkUi {
+          group = group.volumes;
+          label = "Main folder";
+          summary = true;
+        };
       };
 
       options.neo.core.volumes.appdata = mkOption {
         type = types.str;
         default = "${config.neo.core.volumes.root}/DATA/AppData";
-        description = "AppData volume path";
+        description = "Folder where apps keep their settings and databases. Changing it does not move existing files.";
         rank = 90;
-        ui = inGroup group.volumes;
+        ui = labelled group.volumes "App data folder";
       };
 
       options.neo.core.volumes.data = mkOption {
         type = types.str;
         default = "${config.neo.core.volumes.root}/DATA";
-        description = "Data volume path";
+        description = "Folder for your own files; by default Media, Documents and app data sit inside it. Changing it does not move existing files.";
         rank = 100;
-        ui = inGroup group.volumes;
+        ui = labelled group.volumes "Data folder";
       };
 
       options.neo.core.volumes.media = mkOption {
         type = types.str;
         default = "${config.neo.core.volumes.root}/DATA/Media";
-        description = "Media volume path";
+        description = "Folder for photos, music, films and other media that apps share. Changing it does not move existing files.";
         rank = 110;
-        ui = inGroup group.volumes;
+        ui = labelled group.volumes "Media folder";
       };
 
       options.neo.core.volumes.documents = mkOption {
         type = types.str;
         default = "${config.neo.core.volumes.root}/DATA/Documents";
-        description = "Documents volume path";
+        description = "Folder for documents that apps share. Changing it does not move existing files.";
         rank = 120;
-        ui = inGroup group.volumes;
+        ui = labelled group.volumes "Documents folder";
       };
 
       options.neo.migrations.applied = mkOption {
