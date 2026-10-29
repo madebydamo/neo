@@ -17,7 +17,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Calino browser CalDAV calendar client" {rank = 0;};
+              enabled = mkEnableOption "Calendar, tasks and contacts in your browser, using the calendars on your own server" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 internal = true;
