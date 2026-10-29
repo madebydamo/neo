@@ -14,32 +14,30 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Docker registry service" {rank = 0;};
+              enabled = mkEnableOption "your own private store for Docker images" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 internal = true;
                 default = 5000;
                 description = "Internal port the registry listens on";
               };
+              # username:bcrypt_hash lines (htpasswd -nbB), rendered to the registry htpasswd file.
+              # When set, every push and pull needs `docker login` with one of these users.
               users = mkOption {
                 type = types.listOf types.str;
                 default = [];
                 rank = 10;
-                description = ''
-                  Registry users in username:bcrypt_hash format (htpasswd -nbB). Use the helper to add one.
-                  When set, every request (push and pull) needs docker login with one of these users.
-                  When empty, the registry is open: anyone who can reach it can pull and push.
-                '';
+                description = "Accounts allowed to upload and download images. Use the helper to add one. If empty, anyone who can reach the registry can use it.";
                 helper = lib.neo.helpers.bcryptUser;
+                ui = lib.neo.ui.mkUi {label = "Accounts";};
               };
+              # REGISTRY_STORAGE_DELETE_ENABLED: delete manifests/blobs by digest via the API.
+              # Deleting only unlinks data; registry garbage-collect frees the space.
               deleteEnabled = mkOption {
                 type = types.bool;
                 default = false;
                 rank = 20;
-                description = ''
-                  Allow deleting manifests and blobs by digest through the registry API.
-                  Deleting only unlinks data; disk space is freed by running garbage-collect.
-                '';
+                description = "Allow deleting images from the registry. Deleted images keep using disk space until the registry's cleanup is run by hand.";
                 ui = lib.neo.ui.mkUi {label = "Allow deletes";};
               };
             }
