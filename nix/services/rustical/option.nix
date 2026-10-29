@@ -13,23 +13,23 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "RustiCal CalDAV/CardDAV calendar and contacts server" {rank = 0;};
+              enabled = mkEnableOption "your own calendar and contacts server that syncs with your phone and computer" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 internal = true;
                 default = 4000;
                 description = "Internal port RustiCal listens on";
               };
+              # Shared secret SWAG uses to complete the RustiCal frontend login after tinyauth.
+              # When set (and tinyauth is on), Neo provisions a principal per tinyauth user.
+              # Not a CalDAV password: native clients still use app tokens. Keep it stable.
               ssoPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
-                description = ''
-                  Shared secret used to complete RustiCal frontend login after tinyauth.
-                  Not a CalDAV password: native clients still use app tokens. Generate once and keep stable.
-                  When set (and tinyauth is on), Neo provisions a principal per tinyauth user and skips the RustiCal login form.
-                '';
+                description = "Generate once to skip RustiCal's second login screen after you sign in to the homeserver. Calendar apps on phones still use their own app passwords.";
                 helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {label = "Single sign-on secret";};
               };
             }
             // lib.neo.mkReverseProxyOptions {
