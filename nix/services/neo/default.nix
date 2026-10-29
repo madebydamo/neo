@@ -126,6 +126,8 @@
             DOCKER_BINARY_PATH = "${config.virtualisation.docker.package}/bin/docker";
             ROCKET_ADDRESS = "127.0.0.1";
             ROCKET_PORT = toString cfg.port;
+            # Full links in assistant tool replies (proposal pages).
+            NEO_PUBLIC_URL = lib.optionalString (swagDomain != null && (cfg.subdomain or null) != null) "https://${cfg.subdomain}.${swagDomain}";
             NEO_HELPER_BASH = "${pkgs.bash}/bin/bash";
             ZFS_BINARY_PATH = lib.optionalString zfsEnabled "${config.boot.zfs.package}/bin/zfs";
             RSYNC_BINARY_PATH = lib.optionalString zfsEnabled "${pkgs.rsync}/bin/rsync";

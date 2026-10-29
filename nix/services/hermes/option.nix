@@ -59,6 +59,16 @@
                 ui = lib.neo.ui.mkUi {label = "Gateway token";};
               };
 
+              # Bearer token for neo web's /internal/mcp settings tools.
+              neoToolsToken = lib.neo.mkSecretOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = "Lets the assistant read your settings and suggest changes, which you then save or apply in the neo web UI. Press Generate to turn it on; leave empty to keep it off.";
+                rank = 25;
+                helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {label = "Settings tools token";};
+              };
+
               telegramBotToken = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;

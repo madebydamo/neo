@@ -81,6 +81,8 @@
         auth ? true,
         includeResolver ? (proxyPass == null),
         geo ? true,
+        # Extra nginx server-block text (e.g. location blocks), after `location /`.
+        extraLocations ? "",
       }: let
         ab =
           if auth
@@ -124,6 +126,7 @@
         + "\n"
         + "  }\n"
         + al
+        + extraLocations
         + "\n"
         + "}\n";
     };

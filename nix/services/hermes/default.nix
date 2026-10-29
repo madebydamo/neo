@@ -14,6 +14,9 @@
     ...
   }: let
     cfg = config.neo.services.hermes;
+    neoCfg = config.neo.services.neo;
+    # Settings tools (neo web /internal/mcp): only with a token and neo web on.
+    neoToolsOn = cfg.neoToolsToken != null && cfg.neoToolsToken != "" && (neoCfg.enabled or false);
     neoHermesAuth = lib.neo.mkNeoHermesAuth pkgs ./oauth.py;
 
     # Only pin model.* when the operator set them. Omitting keys leaves config.yaml
@@ -56,6 +59,13 @@
         };
         dashboard = {
           theme = "default";
+        };
+      }
+      // lib.optionalAttrs neoToolsOn {
+        # Hermes expands ''${VAR} in MCP headers from its env (hermes.env).
+        mcp_servers.neo = {
+          url = "http://127.0.0.1:${toString neoCfg.port}/internal/mcp";
+          headers.Authorization = "Bearer \${NEO_AGENT_TOKEN}";
         };
       }
       // lib.optionalAttrs (modelSection != {}) {
@@ -144,6 +154,10 @@
       lib.filterAttrs (_: v: v != null && v != "") {
         TELEGRAM_BOT_TOKEN = cfg.telegramBotToken;
         HERMES_GATEWAY_TOKEN = cfg.gatewayToken;
+        NEO_AGENT_TOKEN =
+          if neoToolsOn
+          then cfg.neoToolsToken
+          else null;
         # gh CLI; git itself gets the token from the machine git identity.
         GH_TOKEN = config.neo.core.git.tokens."github.com" or null;
       }
@@ -215,6 +229,18 @@
 
       # The gateway reads it via $HERMES_HOME/.env and, as before, is not
       # restarted on a change (it may be driving the very switch).
+      # The same token for neo web, which checks it on /internal/mcp.
+      neo.core.secrets.templates."neo-agent-token" = lib.mkIf neoToolsOn {
+        content = cfg.neoToolsToken;
+        owner = "homeserver";
+        group = "homeserver";
+        mode = "0400";
+        restartUnits = ["neo-web.service"];
+      };
+      systemd.services.neo-web.environment = lib.mkIf neoToolsOn {
+        NEO_AGENT_TOKEN_FILE = config.neo.core.secrets.templates."neo-agent-token".path;
+      };
+
       neo.core.secrets.templates."hermes.env" = {
         env = hermesSecretEnv;
         restartUnits = ["hermes-dashboard.service"];

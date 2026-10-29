@@ -10,6 +10,8 @@
     config.neo.services.neo.proxyConf = lib.mkDefault (lib.neo.mkSubdomainProxyConf {
       inherit config cfg;
       proxyPass = "http://host.docker.internal:${toString cfg.port}/";
+      # Assistant settings tools are for Hermes on the host only.
+      extraLocations = "\n  location /internal/ {\n    return 404;\n  }\n";
     });
   };
 }

@@ -66,6 +66,11 @@
           }
 
           ## How to change configuration safely
+          0. If the `neo` MCP tools are available (`neo_settings_*`), use them:
+             read with `neo_settings_schema` / `neo_settings_get`, change only with
+             `neo_settings_propose`, then ask the user to review the card (link in
+             the reply) and wait for `neo_settings_status` = saved / applied. Never
+             send secret values (use op `generate`). Do not edit settings.toml.
           1. Prefer Neo web UI (`neo` service / `https://neo.<domain>`).
           2. Or edit settings and run `neo activate` (server profile uses `/etc/neo/settings.toml` when present).
           3. Use `neo --dry-run activate` when unsure.
