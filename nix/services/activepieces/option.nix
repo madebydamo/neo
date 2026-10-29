@@ -13,45 +13,50 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Activepieces automation platform" {rank = 0;};
+              enabled = mkEnableOption "Automations that connect your apps, like a self-hosted Zapier" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 internal = true;
                 default = 80;
                 description = "Internal port Activepieces listens on (container port 80)";
               };
+              # AP_ENCRYPTION_KEY: exactly 32 hex characters (openssl rand -hex 16); encrypts piece connections.
               encryptionKey = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
-                description = ''
-                  AP_ENCRYPTION_KEY: exactly 32 hex characters (16 bytes) used to encrypt connections.
-                  Use Generate (or openssl rand -hex 16). Do not rotate after first start without re-saving all piece connections.
-                '';
+                description = "Secret key that protects the app logins you save in Activepieces. Click Generate once and never change it, or you will have to reconnect every app.";
+                ui = lib.neo.ui.mkUi {label = "Encryption key";};
                 helper = lib.neo.helpers.randomToken32Hex;
               };
+              # AP_JWT_SECRET: signs JWT session tokens.
               jwtSecret = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 20;
-                description = ''
-                  AP_JWT_SECRET: secret used to sign JWT session tokens.
-                  Generate once (openssl rand -hex 32) and keep stable.
-                '';
+                description = "Secret that keeps you signed in. Click Generate once; changing it signs everyone out.";
+                ui = lib.neo.ui.mkUi {label = "Session secret";};
                 helper = lib.neo.helpers.randomToken;
               };
+              # AP_POSTGRES_PASSWORD / POSTGRES_PASSWORD of the internal Postgres container.
               dbPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 30;
-                description = "Password for the internal Postgres container (AP_POSTGRES_PASSWORD / POSTGRES_PASSWORD)";
+                description = "Password for Activepieces' built-in database. Click Generate; you never type it anywhere.";
+                ui = lib.neo.ui.mkUi {
+                  label = "Database password";
+                  group = lib.neo.ui.groups.advanced;
+                };
                 helper = lib.neo.helpers.randomToken;
               };
+              # AP_TELEMETRY_ENABLED
               telemetryEnabled = mkOption {
                 type = types.bool;
                 default = false;
                 rank = 40;
-                description = "Send anonymous telemetry to Activepieces (AP_TELEMETRY_ENABLED)";
+                description = "Share anonymous usage statistics with the Activepieces developers.";
+                ui = lib.neo.ui.mkUi {label = "Share usage statistics";};
               };
             }
             // lib.neo.mkReverseProxyOptions {
