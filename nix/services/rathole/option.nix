@@ -11,49 +11,68 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "rathole client service" {rank = 0;};
+              enabled = mkEnableOption "a tunnel through your own public server, so your apps are reachable from the internet without opening ports at home" {rank = 0;};
+              # Same token for every [client.services.*] entry.
               token = lib.neo.mkSecretOption {
-                description = "Authentication token for rathole";
+                description = "Shared password between this homeserver and the tunnel server. Use the same value on both.";
                 rank = 10;
                 helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {label = "Tunnel password";};
               };
+              # rathole [client] remote_addr host part.
               remoteAddr = mkOption {
                 type = types.str;
-                description = "Remote server address for rathole";
+                description = "Address of your public tunnel server (VPS) that passes internet traffic to your homeserver.";
                 rank = 20;
+                ui = lib.neo.ui.mkUi {label = "Tunnel server address";};
               };
+              # The Neo streamproxy tunnel port is 2223.
               port = mkOption {
                 type = types.port;
                 default = 2223;
-                description = "Remote server port for rathole (the Neo streamproxy tunnel port is 2223)";
+                description = "Port of the tunnel server. Leave at 2223 unless your tunnel server uses another one.";
                 rank = 30;
+                ui = lib.neo.ui.mkUi {
+                  label = "Tunnel server port";
+                  group = lib.neo.ui.groups.advanced;
+                };
               };
+              # Prefix of the rathole service names (<name>_http, <name>_https, <name>_<extra>).
               name = mkOption {
                 type = types.str;
-                description = "Name prefix for rathole services";
+                description = "Name of this homeserver on the tunnel server. Must match the tunnel server's entry.";
                 rank = 40;
+                ui = lib.neo.ui.mkUi {label = "Homeserver name";};
               };
+              # Tunnels only HTTP (Let's Encrypt HTTP-01); the _https service is dropped.
+              # Asserted: needs Pi-hole with localIP or Tailscale split DNS, so hostnames
+              # still resolve privately.
               certificateOnly = mkOption {
                 type = types.bool;
                 default = false;
-                description = ''
-                  Tunnel HTTP only (Let's Encrypt HTTP-01). Public HTTPS is not exposed; services stay reachable on LAN or Tailscale.
-                  Requires Pi-hole with localIP, or Tailscale split DNS, so hostnames still resolve privately after public HTTPS is dropped.
-                '';
+                description = "Use the tunnel only to get HTTPS certificates; your apps stay reachable only at home or over Tailscale. Needs Pi-hole with Home network address set, or Tailscale split DNS.";
                 rank = 50;
+                ui = lib.neo.ui.mkUi {label = "Certificates only (keep apps private)";};
               };
+              # Extra [client.services.<name>_<key>] entries beyond _http/_https.
               extraServices = mkOption {
                 type = types.attrsOf (types.submodule {
                   options = {
+                    # rathole local_addr.
                     localAddr = mkOption {
                       type = types.str;
-                      description = "Client-side local_addr (e.g. 127.0.0.1:2222 for Gitea SSH)";
+                      description = "Address and port on this homeserver to pass through (e.g. 127.0.0.1:2222 for Gitea SSH).";
+                      ui = lib.neo.ui.mkUi {label = "Local address";};
                     };
                   };
                 });
                 default = {};
                 rank = 60;
-                description = "Additional rathole client TCP services beyond _http/_https (name → localAddr)";
+                description = "Extra connections to pass through the tunnel besides web traffic, by name. Each name needs a matching entry on the tunnel server.";
+                ui = lib.neo.ui.mkUi {
+                  label = "Extra tunnels";
+                  group = lib.neo.ui.groups.advanced;
+                };
               };
             }
             // lib.neo.mkSystemdUnits [
