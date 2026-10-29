@@ -11,19 +11,24 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "paperless document management service" {rank = 0;};
+              enabled = mkEnableOption "Paperless, a searchable archive for your scanned papers and documents" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 internal = true;
                 default = 8000;
                 description = "Internal port for paperless web UI";
               };
+              # POSTGRES_PASSWORD of paperless-db and PAPERLESS_DBPASS.
               dbPassword = lib.neo.mkSecretOption {
                 type = types.str;
                 default = "your_strong_password_here";
                 rank = 10;
-                description = "Password for internal docker connection";
+                description = "Internal database password; you never type it. Press Generate before the first start. Changing it after setup breaks Paperless.";
                 helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {
+                  label = "Database password";
+                  group = lib.neo.ui.groups.advanced;
+                };
               };
               # Required since paperless-ngx 3.0.0 — refuses to start with unset or default 'change-me'.
               # See https://docs.paperless-ngx.com/configuration/ (PAPERLESS_SECRET_KEY) and
@@ -32,12 +37,13 @@
                 type = types.nullOr types.str;
                 default = null;
                 rank = 20;
-                description = ''
-                  PAPERLESS_SECRET_KEY: Django secret used for sessions and signing.
-                  Required by paperless-ngx 3.0+ (startup fails if unset or the default "change-me").
-                  Generate once with the helper and keep stable; rotating invalidates sessions/tokens.
-                '';
+                # PAPERLESS_SECRET_KEY: Django secret for sessions and signing.
+                description = "Secret key Paperless needs to start. Press Generate once and never change it; changing it signs everyone out.";
                 helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {
+                  label = "Secret key";
+                  group = lib.neo.ui.groups.advanced;
+                };
               };
             }
             // lib.neo.mkReverseProxyOptions {
