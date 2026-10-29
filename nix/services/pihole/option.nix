@@ -11,25 +11,36 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "pihole ad-blocking DNS service" {rank = 0;};
+              enabled = mkEnableOption "Pi-hole, which blocks ads and trackers for every device on your home network" {rank = 0;};
+              # FTLCONF_dns_upstreams.
               upstream = mkOption {
                 type = types.str;
                 default = "9.9.9.9;1.1.1.1";
-                description = "Semicolon separated list of upstream dns servers";
+                description = "Internet DNS servers Pi-hole asks after filtering, separated by semicolons. Default: Quad9 (9.9.9.9) and Cloudflare (1.1.1.1).";
                 rank = 10;
+                ui = lib.neo.ui.mkUi {
+                  label = "Upstream DNS servers";
+                  group = lib.neo.ui.groups.advanced;
+                };
               };
+              # Answers every local DNS name (services.swag.domain and subdomains) with this
+              # address via FTLCONF_misc_dnsmasq_lines. Required with Tailscale split DNS, so
+              # Pi-hole binds only this address and leaves the Tailscale IP for dnsmasq.
               localIP = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Local IP address to forward services.swag.domain toward to. Required when Tailscale split DNS is enabled, so Pi-hole binds this address only and leaves the Tailscale IP for dnsmasq.";
+                description = "Your homeserver's address on your home network (e.g. 192.168.1.10), so your domain opens the server directly at home. Needed for Tailscale split DNS.";
                 rank = 20;
+                ui = lib.neo.ui.mkUi {label = "Home network address";};
               };
+              # FTLCONF_webserver_api_password.
               webPassword = lib.neo.mkSecretOption {
                 type = types.str;
                 default = "";
-                description = "Optional Password for Pi-hole web admin interface. Do not leave it blank and turn auth off.";
+                description = "Password for the Pi-hole admin page. Empty means no Pi-hole password. Always set one if you turn off the homeserver login for Pi-hole.";
                 rank = 30;
                 helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {label = "Admin password";};
               };
             }
             // lib.neo.mkReverseProxyOptions {
