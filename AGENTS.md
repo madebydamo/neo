@@ -42,7 +42,7 @@ Naming: options camelCase under `neo.services.*`; plain-string descriptions; vol
 
 - `description`: first sentence says what the setting does for you, in plain words (≤ ~20 words). Optional second sentence: the consequence or a technical detail ("Changing it signs everyone out."). Say what empty / the default means.
 - No env var names, file paths, unit names or `services.x.y` paths in descriptions; put them in a Nix comment. Refer to other settings by their label.
-- `enabled`: say what you get ("Private web search that doesn't track you"), not "X service".
+- `enabled`: say what you get ("Private web search that doesn't track you"), not "X service". `lib.neo.mkEnableOption` uses the text as the whole description (capitalised, full stop added), without the "Whether to enable" prefix.
 - Give every non-obvious key a `ui.label` ("Skip Beszel login", not `enableSingleUserSystem`).
 - Generated secrets nobody types (database passwords, signing keys), ports and plumbing go in `ui.group = lib.neo.ui.groups.advanced`.
 - Fields that only matter with another setting get `ui.visibleWhen` (a bool or a non-empty string hides the field while false/empty; `"opt=value"` for a choice).

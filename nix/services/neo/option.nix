@@ -13,7 +13,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Neo web UI service (config editor launched via `neo web`)" {
+              enabled = mkEnableOption "the neo web UI for changing your settings" {
                 default = true;
                 internal = true;
               };

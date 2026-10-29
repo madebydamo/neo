@@ -168,16 +168,18 @@
         RemainAfterExit = true;
       };
       path = [pkgs.zfs pkgs.coreutils];
-      script = lib.concatMapStringsSep "\n" (mp: let
-        ds = additionalDataset mp;
-      in ''
-        if zfs list -H -o name ${lib.escapeShellArg ds} >/dev/null 2>&1; then
-          cur=$(zfs get -H -o value canmount ${lib.escapeShellArg ds} || true)
-          if [ "$cur" != "noauto" ]; then
-            zfs set canmount=noauto ${lib.escapeShellArg ds} || true
+      script =
+        lib.concatMapStringsSep "\n" (mp: let
+          ds = additionalDataset mp;
+        in ''
+          if zfs list -H -o name ${lib.escapeShellArg ds} >/dev/null 2>&1; then
+            cur=$(zfs get -H -o value canmount ${lib.escapeShellArg ds} || true)
+            if [ "$cur" != "noauto" ]; then
+              zfs set canmount=noauto ${lib.escapeShellArg ds} || true
+            fi
           fi
-        fi
-      '') additionalMountpoints;
+        '')
+        additionalMountpoints;
     };
 
     boot.initrd.systemd.services = lib.mkIf dataRestore {

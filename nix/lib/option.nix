@@ -29,7 +29,7 @@
 # Usage in option.nix files:
 #   with lib;
 #   with { inherit (lib.neo) mkOption mkEnableOption; };
-#   enabled = mkEnableOption "my service" { rank = 0; };
+#   enabled = mkEnableOption "private web search that does not track you" { rank = 0; };
 #   foo = mkOption {
 #     type = types.str;
 #     default = "";
@@ -58,8 +58,25 @@
         then o
         else o // extra;
 
-      mkEnableOption = description: args:
-        lib.mkEnableOption description // args;
+      # Like lib.mkEnableOption, but the text is the whole description (no
+      # "Whether to enable …" prefix): say what the user gets. The first
+      # letter is capitalised and a final full stop added if missing.
+      mkEnableOption = text: args: let
+        t = lib.trim text;
+        first = builtins.substring 0 1 t;
+        sentence = lib.toUpper first + builtins.substring 1 (-1) t;
+        last = builtins.substring (builtins.stringLength t - 1) 1 t;
+      in
+        lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          example = true;
+          description =
+            if builtins.elem last ["." "!" "?" ")"]
+            then sentence
+            else "${sentence}.";
+        }
+        // args;
     };
   };
 }

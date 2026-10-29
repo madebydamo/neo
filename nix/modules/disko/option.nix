@@ -13,7 +13,7 @@
       options.neo.disko = mkOption {
         type = types.submodule {
           options = {
-            enabled = mkEnableOption "Disko declarative partitioning" {};
+            enabled = mkEnableOption "letting Neo partition and format the disks (used when installing)" {};
 
             mainDisk = mkOption {
               type = types.str;
