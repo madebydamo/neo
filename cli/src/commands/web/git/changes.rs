@@ -10,9 +10,10 @@ use super::super::diff::model::{ChangeSet, DiffLine, FileChange, FileStatus, Hun
 use super::super::diff::parse::{
     parse_name_status_z, parse_numstat_z, parse_patch, parse_status_z, NumstatEntry,
 };
+use super::super::diff::secrets_overlay::{secret_pair, SecretPair, SecretTexts};
 use super::super::diff::{diff_settings, SettingsDiff};
 use super::plumbing::{git_output, git_stdout};
-use crate::utils::secrets::{self, Node, Tree};
+use crate::utils::secrets;
 use crate::utils::secrets_store;
 
 /// Context lines requested from git; the renderer folds long unchanged runs.
@@ -344,111 +345,6 @@ fn file_pair(dir: &Path, range: DiffRange, file: &str) -> Result<(String, String
     }
 }
 
-fn merge_tree(dst: &mut Tree, src: Tree) {
-    for (k, n) in src {
-        match (dst.get_mut(&k), n) {
-            (Some(Node::Map(d)), Node::Map(s)) => merge_tree(d, s),
-            (_, n) => {
-                dst.insert(k, n);
-            }
-        }
-    }
-}
-
-/// Every leaf replaced by one token: keys compare, values do not.
-fn opaque(tree: Tree) -> Tree {
-    tree.into_iter()
-        .map(|(k, n)| match n {
-            Node::Leaf(_) => (k, Node::Leaf(String::new())),
-            Node::Map(m) => (k, Node::Map(opaque(m))),
-        })
-        .collect()
-}
-
-/// Decrypt a secrets.sops.yaml text through a private temp file (`""` = empty).
-fn decrypt_text(text: &str) -> Result<Tree> {
-    use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
-    if text.trim().is_empty() {
-        return Ok(Tree::new());
-    }
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let tmp = std::env::temp_dir().join(format!(
-        "neo-diff-{}-{nanos}.{}",
-        std::process::id(),
-        secrets::SOPS_FILE
-    ));
-    let written = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(&tmp)
-        .and_then(|mut f| f.write_all(text.as_bytes()));
-    let out = written
-        .with_context(|| format!("write {}", tmp.display()))
-        .and_then(|()| secrets_store::decrypt(&tmp));
-    let _ = std::fs::remove_file(&tmp);
-    out
-}
-
-/// Secret settings before and after `range` (secrets.yaml ∪ secrets.sops.yaml,
-/// leaves = comparison tokens), plus a caveat when they could not be compared.
-/// Encryption re-randomizes every ciphertext, so a changed sops file is
-/// decrypted (both sides); if that fails only added / removed keys show.
-fn secret_trees(dir: &Path, range: DiffRange) -> (Tree, Tree, Option<String>) {
-    let mut notes = Vec::new();
-    let parse = |text: &str, what: &str, notes: &mut Vec<String>| -> Tree {
-        secrets::parse(text).unwrap_or_else(|e| {
-            notes.push(format!("Could not read {what}: {e:#}"));
-            Tree::new()
-        })
-    };
-    let (mut old, mut new) = match file_pair(dir, range, secrets::PLAIN_FILE) {
-        Ok((o, n)) => (
-            parse(&o, secrets::PLAIN_FILE, &mut notes),
-            parse(&n, secrets::PLAIN_FILE, &mut notes),
-        ),
-        Err(e) => {
-            notes.push(format!("{e:#}"));
-            (Tree::new(), Tree::new())
-        }
-    };
-    match file_pair(dir, range, secrets::SOPS_FILE) {
-        Ok((o, n)) if o == n => {
-            // Unchanged ciphertext: equal tokens on both sides.
-            let t = parse(&o, secrets::SOPS_FILE, &mut notes);
-            merge_tree(&mut old, t.clone());
-            merge_tree(&mut new, t);
-        }
-        Ok((o, n)) => match decrypt_text(&o).and_then(|a| Ok((a, decrypt_text(&n)?))) {
-            Ok((a, b)) => {
-                merge_tree(&mut old, a);
-                merge_tree(&mut new, b);
-            }
-            Err(e) => {
-                notes.push(format!(
-                    "Encrypted secrets could not be decrypted to compare ({e:#}): only added and removed secrets are listed."
-                ));
-                let (a, b) = (
-                    parse(&o, secrets::SOPS_FILE, &mut notes),
-                    parse(&n, secrets::SOPS_FILE, &mut notes),
-                );
-                // Plain values must be opaque too, or a plain → encrypted move looks changed.
-                old = opaque(old);
-                new = opaque(new);
-                merge_tree(&mut old, opaque(a));
-                merge_tree(&mut new, opaque(b));
-            }
-        },
-        Err(e) => notes.push(format!("{e:#}")),
-    }
-    let note = (!notes.is_empty()).then(|| notes.join(" "));
-    (old, new, note)
-}
-
 /// Semantic settings summary when `settings.toml` or a secrets file is part of
 /// `set`; secrets show as masked option changes.
 pub fn settings_semantic(
@@ -460,16 +356,39 @@ pub fn settings_semantic(
     if !touches(set, SETTINGS_FILE) && !secrets_touched {
         return None;
     }
-    let (old_secrets, new_secrets, note) = if secrets_touched {
-        secret_trees(dir, range)
+    let (old, new) = match file_pair(dir, range, SETTINGS_FILE) {
+        Ok(p) => p,
+        Err(e) => return Some(Err(format!("{e:#}"))),
+    };
+    let pair = if secrets_touched {
+        match file_pair(dir, range, secrets::PLAIN_FILE)
+            .and_then(|p| Ok((p, file_pair(dir, range, secrets::SOPS_FILE)?)))
+        {
+            Ok(((po, pn), (so, sn))) => secret_pair(
+                SecretTexts {
+                    settings: &old,
+                    plain: &po,
+                    sops: &so,
+                },
+                SecretTexts {
+                    settings: &new,
+                    plain: &pn,
+                    sops: &sn,
+                },
+                &secrets_store::decrypt_text,
+            ),
+            Err(e) => SecretPair {
+                note: Some(format!("{e:#}")),
+                ..SecretPair::default()
+            },
+        }
     } else {
-        (Tree::new(), Tree::new(), None)
+        SecretPair::default()
     };
     Some(
-        file_pair(dir, range, SETTINGS_FILE)
-            .and_then(|(o, n)| diff_settings(&o, &n, &old_secrets, &new_secrets))
+        diff_settings(&old, &new, &pair.old, &pair.new)
             .map(|mut d| {
-                d.secrets_note = note;
+                d.secrets_note = pair.note;
                 d
             })
             .map_err(|e| format!("{e:#}")),

@@ -1,18 +1,26 @@
 //! One-line "what changed" per config commit: services enabled / disabled /
 //! reconfigured, other top-level sections touched and flake inputs updated,
-//! from `settings.toml` / `flake.lock` at the commit and at its first parent.
-//! Blobs are read with one `git cat-file --batch` call per file for the whole
-//! window.
+//! from `settings.toml`, the secrets files and `flake.lock` at the commit and at
+//! its first parent. Blobs are read with one `git cat-file --batch` call per
+//! file for the whole window.
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::{Mutex, OnceLock};
 
 use serde::Serialize;
 use toml_edit::{DocumentMut, Item};
 
 use crate::commands::web::diff::flake_lock::input_updates;
-use crate::commands::web::diff::settings_semantic::{diff_settings_toml, Transition};
+use crate::commands::web::diff::secrets_overlay::{secret_pair, SecretPair, SecretTexts};
+use crate::commands::web::diff::settings_semantic::{diff_settings, Transition};
+use crate::utils::{secrets, secrets_store};
+
+/// Cached secret comparisons (value-free tokens) — at most this many.
+const SECRET_CACHE_MAX: usize = 512;
 
 #[derive(Serialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -58,8 +66,9 @@ fn enabled_count(raw: &str) -> Option<usize> {
     }))
 }
 
-/// Compare settings at a commit (`new`) with its parent (`old`).
-pub fn summarize(old: Option<&str>, new: &str) -> Option<ChangeSummary> {
+/// Compare settings at a commit (`new`) with its parent (`old`); `secrets`
+/// overlays changed secrets (secrets.yaml / secrets.sops.yaml) on their options.
+pub fn summarize(old: Option<&str>, new: &str, secrets: &SecretPair) -> Option<ChangeSummary> {
     let enabled = enabled_count(new)?;
     let Some(old) = old else {
         return Some(ChangeSummary {
@@ -68,7 +77,7 @@ pub fn summarize(old: Option<&str>, new: &str) -> Option<ChangeSummary> {
             ..Default::default()
         });
     };
-    let diff = diff_settings_toml(old, new).ok()?;
+    let diff = diff_settings(old, new, &secrets.old, &secrets.new).ok()?;
     let mut s = ChangeSummary {
         enabled,
         ..Default::default()
@@ -141,6 +150,38 @@ fn read_blobs(dir: &Path, revs: &[String], file: &str) -> HashMap<String, String
     out
 }
 
+/// Secret comparison of two versions; decrypting results are cached, since
+/// commits never change and each decrypt goes through sudo + sops.
+fn secrets_between(old: SecretTexts, new: SecretTexts) -> SecretPair {
+    if old.plain == new.plain && old.sops == new.sops {
+        return SecretPair::default();
+    }
+    if old.sops == new.sops {
+        return secret_pair(old, new, &secrets_store::decrypt_text);
+    }
+    static CACHE: OnceLock<Mutex<HashMap<u64, SecretPair>>> = OnceLock::new();
+    let mut h = DefaultHasher::new();
+    for t in [old, new] {
+        (t.settings, t.plain, t.sops).hash(&mut h);
+    }
+    let key = h.finish();
+    let cache = CACHE.get_or_init(Default::default);
+    if let Some(hit) = cache.lock().ok().and_then(|c| c.get(&key).cloned()) {
+        return hit;
+    }
+    let pair = secret_pair(old, new, &secrets_store::decrypt_text);
+    // A failed decrypt (sudo / key) may work next time: not cached.
+    if pair.note.is_none() {
+        if let Ok(mut c) = cache.lock() {
+            if c.len() >= SECRET_CACHE_MAX {
+                c.clear();
+            }
+            c.insert(key, pair.clone());
+        }
+    }
+    pair
+}
+
 /// Summaries for `(commit, first parent)` pairs, keyed by commit.
 pub fn summarize_commits(
     dir: &Path,
@@ -156,7 +197,14 @@ pub fn summarize_commits(
     revs.sort();
     revs.dedup();
     let blobs = read_blobs(dir, &revs, "settings.toml");
+    let plains = read_blobs(dir, &revs, secrets::PLAIN_FILE);
+    let sopses = read_blobs(dir, &revs, secrets::SOPS_FILE);
     let locks = read_blobs(dir, &revs, "flake.lock");
+    let texts = |rev: &str| SecretTexts {
+        settings: blobs.get(rev).map_or("", String::as_str),
+        plain: plains.get(rev).map_or("", String::as_str),
+        sops: sopses.get(rev).map_or("", String::as_str),
+    };
     commits
         .iter()
         .filter_map(|(c, p)| {
@@ -165,7 +213,11 @@ pub fn summarize_commits(
                 Some(p) => Some(blobs.get(p).map(String::as_str).unwrap_or("")),
                 None => None,
             };
-            let mut s = summarize(old, new)?;
+            let secrets = match p {
+                Some(p) => secrets_between(texts(p), texts(c)),
+                None => SecretPair::default(),
+            };
+            let mut s = summarize(old, new, &secrets)?;
             if let (Some(p), Some(new_lock)) = (p, locks.get(c)) {
                 if let Some(old_lock) = locks.get(p) {
                     s.inputs = input_updates(old_lock, new_lock)
@@ -201,10 +253,10 @@ enabled = false
 
     #[test]
     fn initial_and_unchanged() {
-        let s = summarize(None, BASE).unwrap();
+        let s = summarize(None, BASE, &SecretPair::default()).unwrap();
         assert!(s.initial);
         assert_eq!(s.enabled, 2);
-        let s = summarize(Some(BASE), BASE).unwrap();
+        let s = summarize(Some(BASE), BASE, &SecretPair::default()).unwrap();
         assert!(s.unchanged);
     }
 
@@ -224,7 +276,7 @@ enabled = false
 [services.paperless]
 enabled = true
 "#;
-        let s = summarize(Some(BASE), new).unwrap();
+        let s = summarize(Some(BASE), new, &SecretPair::default()).unwrap();
         assert_eq!(s.added, vec!["paperless"]);
         assert_eq!(s.removed, vec!["immich"]);
         assert_eq!(s.changed, vec!["jellyfin"]);
@@ -236,20 +288,38 @@ enabled = true
     #[test]
     fn formatting_only_is_unchanged() {
         let new = "# comment\n[services.immich]\nenabled = true\n\n[services.jellyfin]\nsubdomain = \"tv\"\nenabled = true\n[core]\ntimezone = \"UTC\"\n[services.paperless]\nenabled = false\n";
-        let s = summarize(Some(BASE), new).unwrap();
+        let s = summarize(Some(BASE), new, &SecretPair::default()).unwrap();
         assert!(s.unchanged, "{s:?}");
     }
 
     #[test]
     fn new_service_table_disabled_is_not_added() {
         let new = format!("{BASE}\n[services.vaultwarden]\nenabled = false\n");
-        let s = summarize(Some(BASE), &new).unwrap();
+        let s = summarize(Some(BASE), &new, &SecretPair::default()).unwrap();
         assert!(s.added.is_empty());
         assert!(s.unchanged);
     }
 
     #[test]
+    fn secret_only_change_marks_service_and_section() {
+        let old = SecretTexts {
+            settings: BASE,
+            plain: "services:\n  jellyfin:\n    apiKey: \"a\"\ncore:\n  git:\n    tokens:\n      x: \"t\"\n",
+            sops: "",
+        };
+        let new = SecretTexts {
+            plain: "services:\n  jellyfin:\n    apiKey: \"b\"\ncore:\n  git:\n    tokens:\n      x: \"t\"\n",
+            ..old
+        };
+        let s = summarize(Some(BASE), BASE, &secrets_between(old, new)).unwrap();
+        assert_eq!(s.changed, vec!["jellyfin"]);
+        assert!(s.sections.is_empty());
+        assert!(!s.unchanged);
+        assert!(secrets_between(old, old) == SecretPair::default());
+    }
+
+    #[test]
     fn unparsable_settings_give_no_summary() {
-        assert!(summarize(Some(BASE), "not = [toml").is_none());
+        assert!(summarize(Some(BASE), "not = [toml", &SecretPair::default()).is_none());
     }
 }

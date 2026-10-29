@@ -207,6 +207,32 @@ pub fn decrypt(path: &Path) -> Result<Tree> {
     }
 }
 
+/// Decrypt secrets.sops.yaml content (e.g. an older version from git) through
+/// a private temp file, the same way as [`decrypt`].
+pub fn decrypt_text(text: &str) -> Result<Tree> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp = std::env::temp_dir().join(format!(
+        "neo-decrypt-{}-{nanos}.{}",
+        std::process::id(),
+        secrets::SOPS_FILE
+    ));
+    let written = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&tmp)
+        .and_then(|mut f| f.write_all(text.as_bytes()));
+    let out = written
+        .with_context(|| format!("write {}", tmp.display()))
+        .and_then(|()| decrypt(&tmp));
+    let _ = fs::remove_file(&tmp);
+    out
+}
+
 /// Decrypt with sops directly, using `key` (an ssh-ed25519 private key) or
 /// sops' default (~/.ssh/id_ed25519, prompting for its passphrase).
 pub fn decrypt_with_key(path: &Path, key: Option<&Path>) -> Result<Tree> {

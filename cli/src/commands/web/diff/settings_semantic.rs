@@ -297,6 +297,7 @@ fn parse_doc(raw: &str, which: &str) -> Result<DocumentMut> {
 }
 
 /// Semantic diff between two `settings.toml` texts (empty text = no file).
+#[cfg(test)]
 pub fn diff_settings_toml(old: &str, new: &str) -> Result<SettingsDiff> {
     diff_settings(old, new, &Tree::new(), &Tree::new())
 }
