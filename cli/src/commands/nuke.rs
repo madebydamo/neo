@@ -5,7 +5,7 @@ use std::path::Path;
 pub fn nuke(config_path: &str, dry_run: bool) -> Result<()> {
     if dry_run {
         println!(
-            "DRY-RUN: would remove all non-dot files/directories in {}",
+            "DRY-RUN: would remove all non-dot files/directories (and .neo-template) in {}",
             config_path
         );
         return Ok(());
@@ -19,7 +19,10 @@ pub fn nuke(config_path: &str, dry_run: bool) -> Result<()> {
         for entry_res in fs::read_dir(p).context("nuke failed (read dir)")? {
             let entry = entry_res.context("nuke failed (read entry)")?;
 
-            if entry.file_name().to_string_lossy().starts_with('.') {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            // Dotfiles (.git, …) stay, except the template record: it lists the
+            // files removed here, and init would treat them as deleted on purpose.
+            if name.starts_with('.') && name != crate::utils::template::PRISTINE_DIR {
                 continue;
             }
 

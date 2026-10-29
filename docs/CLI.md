@@ -50,7 +50,7 @@ SSH to a finished host as **`homeserver@…`** for `neo`. **`admin@…`** uses t
 | `neo generation boot N` | Make generation N the boot default (live after the next reboot) |
 | `neo generate-hardware` | Write `hardware-configuration.nix` (adds `--no-filesystems` by itself when Disko is on) |
 | `neo paste-settings` | Copy the loaded settings file into `configPath/settings.toml` |
-| `neo nuke` | Delete everything except dotfiles in `configPath` (destructive; try `--dry-run` first) |
+| `neo nuke` | Delete everything except dotfiles (`.git`, …) in `configPath`, plus the `.neo-template` record so the next `init` writes all template files again (destructive; try `--dry-run` first) |
 | `neo edit` | Open `configPath/settings.toml` in `vim` |
 | `neo git` / `neo lg` | Open `lazygit` in the config repo |
 | `neo migrate` | Apply settings migrations from older layouts (`update` runs it for you) |
