@@ -11,7 +11,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "NTP server (chrony)" {rank = 0;};
+              enabled = mkEnableOption "exact time for your homeserver and the devices on your home network" {rank = 0;};
               servers = mkOption {
                 type = types.listOf types.str;
                 default = [
@@ -20,8 +20,12 @@
                   "2.pool.ntp.org"
                   "3.pool.ntp.org"
                 ];
-                description = "Upstream NTP servers/pools to synchronize from.";
+                description = "Internet time servers your homeserver gets the exact time from. The defaults work worldwide.";
                 rank = 10;
+                ui = lib.neo.ui.mkUi {
+                  label = "Time servers";
+                  group = lib.neo.ui.groups.advanced;
+                };
               };
             }
             # NixOS services.chrony runs as chronyd.service.
