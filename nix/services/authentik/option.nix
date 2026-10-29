@@ -13,48 +13,50 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Authentik identity provider" {rank = 0;};
+              enabled = mkEnableOption "One login for all your apps (single sign-on)" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 internal = true;
                 default = 9000;
                 description = "Internal HTTP port the Authentik server listens on (container port 9000)";
               };
+              # AUTHENTIK_SECRET_KEY: signs cookies and tokens; at least 50 characters.
               secretKey = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
-                description = ''
-                  AUTHENTIK_SECRET_KEY: long random secret used to sign cookies and tokens.
-                  Generate once and keep it. Changing it signs everyone out and invalidates issued tokens.
-                '';
+                description = "Secret that keeps logins secure. Click Generate once and keep it; changing it signs everyone out of all connected apps.";
+                ui = lib.neo.ui.mkUi {label = "Secret key";};
                 helper = lib.neo.helpers.randomToken;
               };
+              # POSTGRES_PASSWORD / AUTHENTIK_POSTGRESQL__PASSWORD of the internal Postgres container.
               dbPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 20;
-                description = "Password for the internal Postgres container (POSTGRES_PASSWORD / AUTHENTIK_POSTGRESQL__PASSWORD)";
+                description = "Password for Authentik's built-in database. Click Generate; you never type it anywhere.";
+                ui = lib.neo.ui.mkUi {
+                  label = "Database password";
+                  group = lib.neo.ui.groups.advanced;
+                };
                 helper = lib.neo.helpers.randomToken;
               };
+              # AUTHENTIK_BOOTSTRAP_EMAIL: only read on an empty database.
               bootstrapEmail = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 30;
-                description = ''
-                  AUTHENTIK_BOOTSTRAP_EMAIL: email of the default admin user akadmin.
-                  Only read on the very first start (empty database).
-                '';
+                description = "Email address of the admin account (akadmin). Only used the first time Authentik starts.";
+                ui = lib.neo.ui.mkUi {label = "Admin email";};
               };
+              # AUTHENTIK_BOOTSTRAP_PASSWORD: only read on an empty database. Without it the
+              # password is set at /if/flow/initial-setup/ (do that before exposing it to the Internet).
               bootstrapPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 40;
-                description = ''
-                  AUTHENTIK_BOOTSTRAP_PASSWORD: initial password of the default admin user akadmin.
-                  Only read on the very first start (empty database). Leave empty to set the password
-                  yourself at /if/flow/initial-setup/ instead. Do that before you expose the service to the Internet.
-                '';
+                description = "Starting password for the admin account (akadmin), only used the first time Authentik starts. Leave empty to choose it on the setup page instead.";
+                ui = lib.neo.ui.mkUi {label = "Admin password";};
                 helper = lib.neo.helpers.randomToken;
               };
               # SMTP for email stages (magic links, recovery, verification). AUTHENTIK_EMAIL__*.
@@ -67,53 +69,76 @@
                       default = "";
                       description = "SMTP server, e.g. smtp.office365.com. Empty: Authentik sends no email.";
                       rank = 0;
+                      ui = lib.neo.ui.mkUi {label = "Mail server";};
                     };
                     port = mkOption {
                       type = types.port;
                       default = 587;
-                      description = "SMTP port (587 STARTTLS, 465 implicit TLS, 25 relay).";
+                      description = "Port of your mail server: usually 587, or 465 for SSL.";
                       rank = 10;
+                      ui = lib.neo.ui.mkUi {visibleWhen = "host";};
                     };
                     username = mkOption {
                       type = types.str;
                       default = "";
-                      description = "SMTP login. Empty for an unauthenticated relay (e.g. M365 connector by IP).";
+                      description = "Login for your mail server. Leave empty if it needs none.";
                       rank = 20;
+                      ui = lib.neo.ui.mkUi {visibleWhen = "host";};
                     };
                     password = lib.neo.mkSecretOption {
                       type = types.str;
                       default = "";
-                      description = "SMTP password.";
+                      description = "Password for your mail server login.";
                       rank = 30;
+                      ui = lib.neo.ui.mkUi {visibleWhen = "host";};
                     };
                     from = mkOption {
                       type = types.str;
                       default = "";
-                      description = "Sender, e.g. Authentik <noreply@example.com>. Must be allowed to send as this address.";
+                      description = "Sender shown on the emails, e.g. Authentik <noreply@example.com>. Your mail account must be allowed to send as this address.";
                       rank = 40;
+                      ui = lib.neo.ui.mkUi {
+                        label = "Sender";
+                        visibleWhen = "host";
+                      };
                     };
+                    # STARTTLS; mutually exclusive with useSsl (assertion in default.nix).
                     useTls = mkOption {
                       type = types.bool;
                       default = true;
-                      description = "STARTTLS (port 587). Mutually exclusive with useSsl.";
+                      description = "Encrypt with STARTTLS, usual for port 587. Turn off if you use SSL.";
                       rank = 50;
+                      ui = lib.neo.ui.mkUi {
+                        label = "Use STARTTLS";
+                        visibleWhen = "host";
+                      };
                     };
+                    # Implicit TLS; mutually exclusive with useTls.
                     useSsl = mkOption {
                       type = types.bool;
                       default = false;
-                      description = "Implicit TLS (port 465). Mutually exclusive with useTls.";
+                      description = "Encrypt with SSL, usual for port 465. Turn off Use STARTTLS when you turn this on.";
                       rank = 60;
+                      ui = lib.neo.ui.mkUi {
+                        label = "Use SSL";
+                        visibleWhen = "host";
+                      };
                     };
                     timeout = mkOption {
                       type = types.int;
                       default = 10;
-                      description = "SMTP connection timeout in seconds.";
+                      description = "Seconds to wait for the mail server before giving up.";
                       rank = 70;
+                      ui = lib.neo.ui.mkUi {
+                        label = "Timeout (seconds)";
+                        group = lib.neo.ui.groups.advanced;
+                        visibleWhen = "host";
+                      };
                     };
                   };
                 };
                 default = {};
-                description = "Outgoing email (SMTP) for magic links, recovery and verification emails.";
+                description = "Mail server Authentik uses to send login links, password resets and verification emails.";
                 rank = 50;
                 ui = lib.neo.ui.mkUi {
                   group = lib.neo.ui.mkGroup {
