@@ -242,6 +242,12 @@ pub fn apply(dir: &Path, new_dir: &Path) -> Result<Report> {
 /// list it: CLIs before the pristine copy run `flake init` in place and refuse
 /// to overwrite a `.gitignore` that differs from the template's. Returns
 /// whether the entry was added.
+///
+/// TODO(2026-11-12): until then keep `templates/homeserver/.gitignore`
+/// byte-identical (any change, even a comment, breaks those CLIs' update).
+/// Once master ships this CLI and machines have updated past it, move the
+/// entry to `.git/info/exclude` (init: `git init` before `install`) and drop
+/// the `.gitignore` rewrite and staging.
 fn ignore_pristine(dir: &Path) -> Result<bool> {
     let path = dir.join(GITIGNORE);
     let text = fs::read_to_string(&path).unwrap_or_default();
