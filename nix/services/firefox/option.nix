@@ -11,24 +11,29 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Firefox browser desktop (LinuxServer)" {rank = 0;};
+              enabled = mkEnableOption "A Firefox browser that runs on your server and opens in any browser tab" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 default = 3060;
                 internal = true;
                 description = "Internal HTTP port for the Selkies web UI (proxied by SWAG; CUSTOM_PORT)";
               };
+              # TITLE of the Selkies web UI.
               title = mkOption {
                 type = types.str;
                 default = "Firefox";
-                description = "Browser tab / Selkies UI title";
+                description = "Name shown in the browser tab.";
                 rank = 10;
               };
+              # FIREFOX_CLI; empty leaves the image default.
               firefoxCli = mkOption {
                 type = types.str;
                 default = "";
-                description = "Optional Firefox CLI args / start URL (FIREFOX_CLI); empty leaves image default";
+                description = "Page to open when Firefox starts (advanced: extra command-line options). Leave empty for the normal start page.";
                 rank = 20;
+                ui = lib.neo.ui.mkUi {
+                  label = "Start page";
+                };
               };
             }
             // lib.neo.mkReverseProxyOptions {
