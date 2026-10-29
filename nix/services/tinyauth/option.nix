@@ -19,15 +19,13 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "tinyauth forward authentication service" {rank = 0;};
+              enabled = mkEnableOption "the shared login page that protects your apps" {rank = 0;};
+              # Entries are username:bcrypt_hash. Generate one by hand with:
+              # docker run -i -t --rm ghcr.io/tinyauthapp/tinyauth:v5.2.0 user create --interactive
               users = mkOption {
                 type = types.listOf types.str;
                 default = [];
-                description = ''
-                  List of users in username:bcrypt_hash format.
-                  Use "Add user" in the web UI, or generate with:
-                  docker run -i -t --rm ghcr.io/tinyauthapp/tinyauth:v5.2.0 user create --interactive
-                '';
+                description = "People who can sign in to your apps. Click + Add, then Helper to enter a username and password.";
                 rank = 10;
                 helper = lib.neo.helpers.bcryptUser;
               };
@@ -40,34 +38,26 @@
                     allow = mkOption {
                       type = types.listOf types.str;
                       default = [];
-                      description = ''
-                        Whitelist of neo service names this user may access.
-                        If non-empty, the user may only use these apps (do not also set block).
-                      '';
+                      description = "Apps this user may open. When set, the user can open only these.";
                       rank = 0;
                       ui.choices = "authApps";
                     };
                     block = mkOption {
                       type = types.listOf types.str;
                       default = [];
-                      description = ''
-                        Blacklist of neo service names this user may not access.
-                        Only applied when allow is empty.
-                      '';
+                      description = "Apps this user may not open. Only used when no allowed apps are set.";
                       rank = 10;
                       ui.choices = "authApps";
                     };
                   };
                 });
                 default = {};
-                description = ''
-                  Per-user application access control. Attribute names are Tinyauth usernames
-                  (the part before ":" in users). Empty allow and block means full access.
-                  Orphan keys for deleted users are ignored at evaluation and dropped on save
-                  when the UI only shows active users.
-                '';
+                # Keys are usernames (before ":" in users). Orphan keys for deleted users are
+                # ignored at evaluation and dropped on save.
+                description = "Which apps each user may open. A user without a rule can open every app.";
                 rank = 15;
                 ui = lib.neo.ui.mkUi {
+                  label = "App access per user";
                   widget = "exclusiveListPair";
                   keysFrom = lib.neo.ui.mkKeysFrom {
                     option = "users";
@@ -124,110 +114,129 @@
                     type = mkOption {
                       type = types.enum ["generic" "entra"];
                       default = "generic";
-                      description = ''
-                        generic: any OAuth2 / OIDC server (Authentik, Keycloak, Google, …) with explicit URLs.
-                        entra: Microsoft Entra ID; URLs come from the tenant, groups from Microsoft Graph.
-                      '';
+                      # entra: URLs come from the tenant, groups from Microsoft Graph.
+                      description = "Generic works with any OAuth / OIDC login server (Authentik, Keycloak, Google, …). Microsoft Entra ID only needs your tenant ID.";
                       rank = 5;
-                      ui.choiceLabels = {
-                        generic = "Generic OAuth / OIDC";
-                        entra = "Microsoft Entra ID";
+                      ui = lib.neo.ui.mkUi {
+                        label = "Provider type";
+                        choiceLabels = {
+                          generic = "Generic OAuth / OIDC";
+                          entra = "Microsoft Entra ID";
+                        };
                       };
                     };
                     buttonName = mkOption {
                       type = types.str;
                       default = "";
-                      description = "Label of the sign-in button. Empty: \"Microsoft\" for Entra, else the provider ID.";
+                      description = "Text on the sign-in button. Empty shows \"Microsoft\" for Entra, otherwise the provider name.";
                       rank = 10;
+                      ui = lib.neo.ui.mkUi {label = "Button text";};
                     };
                     clientId = mkOption {
                       type = types.str;
                       default = "";
-                      description = "OAuth client ID.";
+                      description = "Client ID from the app you registered at the provider.";
                       rank = 20;
+                      ui = lib.neo.ui.mkUi {label = "Client ID";};
                     };
                     clientSecret = lib.neo.mkSecretOption {
                       type = types.str;
                       default = "";
-                      description = "OAuth client secret (for Entra: the secret value, not the secret ID).";
+                      description = "Client secret from the app you registered at the provider. For Entra, use the secret value, not the secret ID.";
                       rank = 30;
+                      ui = lib.neo.ui.mkUi {label = "Client secret";};
                     };
                     tenantId = mkOption {
                       type = types.str;
                       default = "";
                       description = "Directory (tenant) ID from the Entra app registration overview.";
                       rank = 40;
-                      ui.visibleWhen = "type=entra";
+                      ui = lib.neo.ui.mkUi {
+                        label = "Tenant ID";
+                        visibleWhen = "type=entra";
+                      };
                     };
                     groupNames = mkOption {
                       type = types.bool;
                       default = true;
-                      description = ''
-                        Match groups by display name. Requests the GroupMember.Read.All
-                        Graph permission (needs admin consent). Off: list groups by object ID.
-                      '';
+                      description = "Use group names instead of IDs. Needs the GroupMember.Read.All permission with admin consent in Entra.";
                       rank = 50;
-                      ui.visibleWhen = "type=entra";
+                      ui = lib.neo.ui.mkUi {
+                        label = "Use group names";
+                        visibleWhen = "type=entra";
+                      };
                     };
                     authUrl = mkOption {
                       type = types.str;
                       default = "";
-                      description = "Authorization endpoint, e.g. https://authentik.example.com/application/o/authorize/";
+                      description = "Sign-in address from your provider, e.g. https://authentik.example.com/application/o/authorize/";
                       rank = 40;
-                      ui.visibleWhen = "type=generic";
+                      ui = lib.neo.ui.mkUi {
+                        label = "Authorization URL";
+                        visibleWhen = "type=generic";
+                      };
                     };
                     tokenUrl = mkOption {
                       type = types.str;
                       default = "";
-                      description = "Token endpoint, e.g. https://authentik.example.com/application/o/token/";
+                      description = "Token address from your provider, e.g. https://authentik.example.com/application/o/token/";
                       rank = 41;
-                      ui.visibleWhen = "type=generic";
+                      ui = lib.neo.ui.mkUi {
+                        label = "Token URL";
+                        visibleWhen = "type=generic";
+                      };
                     };
                     userinfoUrl = mkOption {
                       type = types.str;
                       default = "";
-                      description = ''
-                        Userinfo endpoint, e.g. https://authentik.example.com/application/o/userinfo/.
-                        Must return email, and groups for app access rules.
-                      '';
+                      description = "User info address from your provider, e.g. https://authentik.example.com/application/o/userinfo/. It must return the email, and groups for app access.";
                       rank = 42;
-                      ui.visibleWhen = "type=generic";
+                      ui = lib.neo.ui.mkUi {
+                        label = "User info URL";
+                        visibleWhen = "type=generic";
+                      };
                     };
                     scopes = mkOption {
                       type = types.listOf types.str;
                       default = ["openid" "email" "profile"];
-                      description = "Requested scopes. Authentik puts groups in the profile scope.";
+                      description = "What the login asks the provider for. The default usually works; Authentik includes groups in profile.";
                       rank = 45;
-                      ui.visibleWhen = "type=generic";
+                      ui = lib.neo.ui.mkUi {
+                        label = "Scopes";
+                        visibleWhen = "type=generic";
+                      };
                     };
                   };
                 });
                 default = {};
-                description = ''
-                  OAuth sign-in providers, all offered in parallel next to local users.
-                  The name is the provider ID (lowercase letters and digits). Redirect URI to
-                  register at the provider: https://<tinyauth subdomain>.<domain>/api/oauth/callback/<name>
-                '';
+                description = "Let people sign in with an outside account (Microsoft, Authentik, Google, …). Name each provider in lowercase letters and digits, and register https://<login subdomain>.<your domain>/api/oauth/callback/<name> at the provider.";
                 rank = 50;
-                ui = lib.neo.ui.mkUi {group = oauthGroup;};
+                ui = lib.neo.ui.mkUi {
+                  label = "Sign-in providers";
+                  group = oauthGroup;
+                };
               };
               oauthAutoRedirect = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Provider ID to send users to directly, skipping the tinyauth login page.";
+                description = "Name of a sign-in provider to send people to straight away, skipping the login page. Empty shows the login page.";
                 rank = 52;
-                ui = lib.neo.ui.mkUi {group = oauthGroup;};
+                ui = lib.neo.ui.mkUi {
+                  label = "Skip login page";
+                  group = oauthGroup;
+                };
               };
               # Groups admitted to apps. Keys of groupAccess follow this list.
               oauthGroups = mkOption {
                 type = types.listOf types.str;
                 default = [];
-                description = ''
-                  Groups (from any OAuth provider's groups claim) whose members may use apps.
-                  Entra: display name or object ID. OAuth users in none of these groups are denied everywhere.
-                '';
+                # Matched against each provider's groups claim.
+                description = "Groups at your provider whose members may use apps (for Entra: name or ID). Provider users in none of them are turned away.";
                 rank = 55;
-                ui = lib.neo.ui.mkUi {group = oauthGroup;};
+                ui = lib.neo.ui.mkUi {
+                  label = "Allowed groups";
+                  group = oauthGroup;
+                };
               };
               groupAccess = mkOption {
                 type = types.attrsOf (types.submodule {
@@ -242,19 +251,17 @@
                     block = mkOption {
                       type = types.listOf types.str;
                       default = [];
-                      description = "Apps this group does not grant. Only applied when allow is empty.";
+                      description = "Apps this group does not grant. Only used when no allowed apps are set.";
                       rank = 10;
                       ui.choices = "authApps";
                     };
                   };
                 });
                 default = {};
-                description = ''
-                  Optional narrowing per OAuth group: the apps members of that group may open.
-                  A group without restrictions grants every app behind tinyauth.
-                '';
+                description = "Which apps the members of each allowed group may open. A group without a rule grants every app.";
                 rank = 60;
                 ui = lib.neo.ui.mkUi {
+                  label = "App access per group";
                   group = oauthGroup;
                   widget = "exclusiveListPair";
                   keysFrom = lib.neo.ui.mkKeysFrom {option = "oauthGroups";};
@@ -298,14 +305,16 @@
               sessionExpiry = mkOption {
                 type = types.int;
                 default = 86400;
-                description = "Session expiry time in seconds (default 24h)";
+                description = "How long people stay signed in, in seconds. The default 86400 is one day.";
                 rank = 20;
+                ui = lib.neo.ui.mkUi {label = "Stay signed in for (seconds)";};
               };
               backgroundImage = mkOption {
                 type = types.bool;
                 default = true;
                 rank = 30;
-                description = "Random login wallpaper.";
+                description = "Show a random photo behind the login page.";
+                ui = lib.neo.ui.mkUi {label = "Login wallpaper";};
               };
               port = mkOption {
                 type = types.port;
