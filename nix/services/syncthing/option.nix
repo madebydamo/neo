@@ -11,7 +11,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "syncthing service" {rank = 0;};
+              enabled = mkEnableOption "syncing folders between your devices" {rank = 0;};
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "syncthing";
