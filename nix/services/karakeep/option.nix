@@ -7,31 +7,43 @@
     ...
   }:
     with lib;
-    with {inherit (lib.neo) mkOption mkEnableOption;}; {
+    with {inherit (lib.neo) mkOption mkEnableOption;}; let
+      aiGroup = lib.neo.ui.mkGroup {
+        id = "ai";
+        label = "AI tagging";
+        description = "Let an AI service tag and summarize your bookmarks automatically";
+        icon = lib.neo.ui.icons.sparkles;
+        rank = 50;
+      };
+    in {
       options.neo.services.karakeep = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "karakeep bookmark and link archival service" {rank = 0;};
+              enabled = mkEnableOption "Save links, notes and images in one place, with copies of pages kept for later" {rank = 0;};
               nextauthSecret = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
-                description = ''
-                  Random secret used by Karakeep's built-in NextAuth to sign session JWTs (NEXTAUTH_SECRET).
-                  Not a login password and not a substitute for tinyauth — generate once and keep stable.
-                '';
+                # NEXTAUTH_SECRET: signs NextAuth session JWTs.
+                description = "Random secret Karakeep uses to protect sessions. Generate it once and keep it; changing it signs everyone out.";
                 helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {
+                  group = lib.neo.ui.groups.advanced;
+                  label = "Session secret";
+                };
               };
               meiliMasterKey = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 20;
-                description = ''
-                  Meilisearch master key shared by Karakeep and the search container (MEILI_MASTER_KEY).
-                  Generate once; rotating it without reindexing breaks search.
-                '';
+                # MEILI_MASTER_KEY, shared by Karakeep and the Meilisearch container.
+                description = "Secret for Karakeep's private search engine; generate once, you never type it. Changing it breaks search.";
                 helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {
+                  group = lib.neo.ui.groups.advanced;
+                  label = "Search key";
+                };
               };
               port = mkOption {
                 type = types.port;
@@ -43,37 +55,63 @@
                 type = types.bool;
                 default = false;
                 rank = 30;
-                description = "Disable public signups, should only be activated if a user is already created.";
+                description = "Stop new people from creating accounts. Turn this on after you have made yours.";
+                ui = lib.neo.ui.mkUi {
+                  label = "Disable sign-ups";
+                };
               };
               openaiApiKey = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 40;
+                # OPENAI_API_KEY for the OpenAI-compatible provider (default xAI).
                 description = ''
-                  API key for the OpenAI-compatible inference provider (OPENAI_API_KEY).
-                  Defaults target xAI; leave empty to skip automatic AI tagging.
+                  Key from your AI service's account page (xAI by default) to tag bookmarks automatically.
+                  Leave empty to turn AI tagging off.
                 '';
+                ui = lib.neo.ui.mkUi {
+                  group = aiGroup;
+                  label = "AI API key";
+                };
               };
               openaiBaseUrl = mkOption {
                 type = types.str;
                 default = "https://api.x.ai/v1";
                 rank = 50;
+                # OPENAI_BASE_URL (OpenAI-compatible API).
                 description = ''
-                  OpenAI-compatible API base URL (OPENAI_BASE_URL).
-                  Examples: https://api.x.ai/v1, https://api.openai.com/v1, http://ollama:11434/v1
+                  Address of the AI service. The default is xAI.
+                  Examples: https://api.openai.com/v1 for OpenAI, http://ollama:11434/v1 for your own Ollama.
                 '';
+                ui = lib.neo.ui.mkUi {
+                  group = aiGroup;
+                  label = "AI service address";
+                  visibleWhen = "openaiApiKey";
+                };
               };
               inferenceTextModel = mkOption {
                 type = types.str;
                 default = "grok-latest";
                 rank = 60;
-                description = "Model for text inference / auto-tagging (INFERENCE_TEXT_MODEL)";
+                # INFERENCE_TEXT_MODEL
+                description = "AI model that reads pages and text to suggest tags.";
+                ui = lib.neo.ui.mkUi {
+                  group = aiGroup;
+                  label = "Text model";
+                  visibleWhen = "openaiApiKey";
+                };
               };
               inferenceImageModel = mkOption {
                 type = types.str;
                 default = "grok-latest";
                 rank = 70;
-                description = "Model for image inference (INFERENCE_IMAGE_MODEL)";
+                # INFERENCE_IMAGE_MODEL
+                description = "AI model that looks at images to suggest tags.";
+                ui = lib.neo.ui.mkUi {
+                  group = aiGroup;
+                  label = "Image model";
+                  visibleWhen = "openaiApiKey";
+                };
               };
             }
             // lib.neo.mkReverseProxyOptions {
