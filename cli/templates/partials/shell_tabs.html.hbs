@@ -1,32 +1,32 @@
 {{!-- Config shell tabs (Alpine configShell). Rendered twice: inside the top bar on
      md+ and as a full-width row under it on phones; `extraClass` picks which. --}}
 <div role="tablist" class="tabs tabs-box tabs-sm flex-nowrap neo-scroll-x {{extraClass}}">
-  <button type="button" role="tab" class="tab gap-1.5 flex-1 md:flex-none"
+  <button type="button" role="tab" class="tab gap-1.5 flex-1 md:flex-none whitespace-nowrap px-2 sm:px-3"
           :class="{ 'tab-active': tab === 'services' }"
           :aria-selected="tab === 'services'"
           @click="loadTab('services')">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" class="w-4 h-4 shrink-0 max-[430px]:hidden" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>
     Services
   </button>
-  <button type="button" role="tab" class="tab gap-1.5 flex-1 md:flex-none"
-          :class="{ 'tab-active': tab === 'guides' }"
-          :aria-selected="tab === 'guides'"
-          @click="loadTab('guides')">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 015.5 4H11v16H5.5A1.5 1.5 0 014 18.5z"/><path d="M20 5.5A1.5 1.5 0 0018.5 4H13v16h5.5a1.5 1.5 0 001.5-1.5z"/></svg>
-    Guides
-  </button>
-  <button type="button" role="tab" class="tab gap-1.5 flex-1 md:flex-none"
+  <button type="button" role="tab" class="tab gap-1.5 flex-1 md:flex-none whitespace-nowrap px-2 sm:px-3"
           :class="{ 'tab-active': tab === 'settings' }"
           :aria-selected="tab === 'settings'"
           @click="loadTab('settings')">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="w-4 h-4" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="w-4 h-4 shrink-0 max-[430px]:hidden" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
     Settings
   </button>
-  <button type="button" role="tab" class="tab gap-1.5 flex-1 md:flex-none"
+  <button type="button" role="tab" class="tab gap-1.5 flex-1 md:flex-none whitespace-nowrap px-2 sm:px-3"
           :class="{ 'tab-active': tab === 'versioning' }"
           :aria-selected="tab === 'versioning'"
           @click="loadTab('versioning')">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="w-4 h-4" aria-hidden="true"><circle cx="6" cy="5.5" r="2"/><circle cx="6" cy="18.5" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7.5v9M18 10c0 4-6 3.5-11 7"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="w-4 h-4 shrink-0 max-[430px]:hidden" aria-hidden="true"><circle cx="6" cy="5.5" r="2"/><circle cx="6" cy="18.5" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7.5v9M18 10c0 4-6 3.5-11 7"/></svg>
     Versioning
+  </button>
+  <button type="button" role="tab" class="tab gap-1.5 flex-1 md:flex-none whitespace-nowrap px-2 sm:px-3"
+          :class="{ 'tab-active': tab === 'guides' }"
+          :aria-selected="tab === 'guides'"
+          @click="loadTab('guides')">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 shrink-0 max-[430px]:hidden" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 015.5 4H11v16H5.5A1.5 1.5 0 014 18.5z"/><path d="M20 5.5A1.5 1.5 0 0018.5 4H13v16h5.5a1.5 1.5 0 001.5-1.5z"/></svg>
+    Guides
   </button>
 </div>
