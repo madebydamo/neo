@@ -1,3 +1,4 @@
+pub mod edit;
 pub mod file;
 mod json_to_toml;
 pub mod restore;
