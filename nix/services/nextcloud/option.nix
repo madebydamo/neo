@@ -23,11 +23,10 @@
                 type = types.str;
                 default = "your_strong_password_here";
                 rank = 10;
-                description = "Internal database password; you never type it. Press Generate before the first start. Changing it after setup breaks Nextcloud.";
+                description = "Password for Nextcloud's own database. Press Generate before the first start and keep it: changing it later cuts Nextcloud off from its data.";
                 helper = lib.neo.helpers.randomToken;
                 ui = lib.neo.ui.mkUi {
                   label = "Database password";
-                  group = lib.neo.ui.groups.advanced;
                 };
               };
               # occ maintenance_window_start (Nextcloud reads it as UTC).

@@ -44,7 +44,8 @@ Naming: options camelCase under `neo.services.*`; plain-string descriptions; vol
 - No env var names, file paths, unit names or `services.x.y` paths in descriptions; put them in a Nix comment. Refer to other settings by their label.
 - `enabled`: say what you get ("Private web search that doesn't track you"), not "X service". `lib.neo.mkEnableOption` uses the text as the whole description (capitalised, full stop added), without the "Whether to enable" prefix.
 - Give every non-obvious key a `ui.label` ("Skip Beszel login", not `enableSingleUserSystem`).
-- Generated secrets nobody types (database passwords, signing keys), ports and plumbing go in `ui.group = lib.neo.ui.groups.advanced`.
+- Secrets (passwords, keys, tokens) always stay visible, never in Advanced: the operator sets each one (usually with Generate) and should know it exists. Say what it protects and what changing it later breaks.
+- Ports and other plumbing go in `ui.group = lib.neo.ui.groups.advanced`.
 - Fields that only matter with another setting get `ui.visibleWhen` (a bool or a non-empty string hides the field while false/empty; `"opt=value"` for a choice).
 
 **Service texts:** `mkServiceMeta` takes `tagline` (one line on the grid card, what you get: "Your own Google Photos"), `description` (2–3 plain sentences for non-technical users: what you can do, what it replaces), `notes` (operator facts shown collapsed as "Good to know": first login, paths that skip tinyauth, upgrade cautions), `replaces` (`[ "Google Photos" ]`) and `privacy` (privacy map category ids). No upstream marketing, env var names or internals in `tagline`/`description`. Without a `tagline` the card shows the first line of `description`. Rules and examples: `docs/design/descriptions-and-guides.md`.

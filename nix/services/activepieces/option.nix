@@ -43,10 +43,9 @@
                 type = types.nullOr types.str;
                 default = null;
                 rank = 30;
-                description = "Password for Activepieces' built-in database. Click Generate; you never type it anywhere.";
+                description = "Password for Activepieces's own database. Press Generate before the first start and keep it: changing it later cuts Activepieces off from its data.";
                 ui = lib.neo.ui.mkUi {
                   label = "Database password";
-                  group = lib.neo.ui.groups.advanced;
                 };
                 helper = lib.neo.helpers.randomToken;
               };

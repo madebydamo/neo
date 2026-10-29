@@ -26,24 +26,18 @@
                 default = null;
                 rank = 10;
                 # NEXTAUTH_SECRET: signs NextAuth session JWTs.
-                description = "Random secret Karakeep uses to protect sessions. Generate it once and keep it; changing it signs everyone out.";
+                description = "Secret Karakeep uses to keep you signed in. Press Generate once and keep it: changing it signs everyone out.";
                 helper = lib.neo.helpers.randomToken;
-                ui = lib.neo.ui.mkUi {
-                  group = lib.neo.ui.groups.advanced;
-                  label = "Session secret";
-                };
+                ui = lib.neo.ui.mkUi {label = "Session secret";};
               };
               meiliMasterKey = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 20;
                 # MEILI_MASTER_KEY, shared by Karakeep and the Meilisearch container.
-                description = "Secret for Karakeep's private search engine; generate once, you never type it. Changing it breaks search.";
+                description = "Secret for Karakeep's built-in search engine. Press Generate once and keep it: changing it breaks search.";
                 helper = lib.neo.helpers.randomToken;
-                ui = lib.neo.ui.mkUi {
-                  group = lib.neo.ui.groups.advanced;
-                  label = "Search key";
-                };
+                ui = lib.neo.ui.mkUi {label = "Search key";};
               };
               port = mkOption {
                 type = types.port;

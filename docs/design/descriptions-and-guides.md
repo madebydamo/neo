@@ -76,10 +76,9 @@ No option lacks a description. The issues are quality and structure:
    `PAPERLESS_SECRET_KEY: Django secret …`, `SECURITY_ENABLELOGIN`, `FIREFOX_CLI`.
 2. **Internals in user text**: `services.swag.domain`, dnsmasq, OnSuccess hooks,
    Selkies, localPath/containerPath, "edge auth".
-3. **Secrets nobody types are shown as normal fields**: `dbPassword`
-   (activepieces, authentik, dawarich, docmost, nextcloud, paperless),
-   karakeep `nextauthSecret`/`meiliMasterKey`, hermes `gatewayToken`,
-   nextcloud `instanceId`.
+3. **Secrets read like plumbing**: database passwords and signing keys did not say
+   what they protect or what changing them breaks. They stay visible (the
+   operator sets each one, usually with Generate) — never hidden in Advanced.
 4. **systemd calendar syntax** in backup, docker-updater, system-updater,
    ical-sync schedules.
 5. **Almost no `ui.label`** outside tinyauth/swag/helpers: users see
@@ -108,13 +107,10 @@ email"), `docmost.sso`.
 - Say what empty / the default means.
 - Env var names, file paths and unit names go in Nix comments, not descriptions.
 - Every non-obvious key gets `ui.label`.
-- Generated secrets and plumbing go in `lib.neo.ui.groups.advanced`.
+- Secrets stay visible; ports and plumbing go in `lib.neo.ui.groups.advanced`.
 
 ### Structural fixes
 
-- **Generated secrets**: a `mkSecretOption { generate = "hex32"; }` (or similar)
-  that fills the value on first save, plus `ui.group = advanced`. The user never
-  sees a "click Generate once and never change it" field.
 - **Schedule widget** (`ui.widget = "schedule"`): daily at / weekly on / every N
   hours, writes OnCalendar; raw expression stays available. Used by all four
   schedule options.
@@ -270,8 +266,8 @@ The browser never talks to Hermes directly. neo web adds a proxy route
 `/agent/*` → `http://127.0.0.1:<gatewayPort>/…`:
 
 - **Auth**: neo web is already behind tinyauth; the proxy only exists in that
-  process, so tinyauth applies automatically. The gateway key (`gatewayToken`,
-  becomes a generated secret, §2) is added server-side as `Authorization:
+  process, so tinyauth applies automatically. The gateway key (`gatewayToken`, set by
+  the operator) is added server-side as `Authorization:
   Bearer`; it never reaches the browser.
 - **Allowlist**: the proxy forwards only the run, session and skill endpoints
   above, not the whole gateway.

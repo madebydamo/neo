@@ -23,11 +23,10 @@
                 type = types.str;
                 default = "your_strong_password_here";
                 rank = 10;
-                description = "Internal database password; you never type it. Press Generate before the first start. Changing it after setup breaks Paperless.";
+                description = "Password for Paperless's own database. Press Generate before the first start and keep it: changing it later cuts Paperless off from its data.";
                 helper = lib.neo.helpers.randomToken;
                 ui = lib.neo.ui.mkUi {
                   label = "Database password";
-                  group = lib.neo.ui.groups.advanced;
                 };
               };
               # Required since paperless-ngx 3.0.0 — refuses to start with unset or default 'change-me'.
@@ -38,11 +37,10 @@
                 default = null;
                 rank = 20;
                 # PAPERLESS_SECRET_KEY: Django secret for sessions and signing.
-                description = "Secret key Paperless needs to start. Press Generate once and never change it; changing it signs everyone out.";
+                description = "Secret key Paperless needs to start. Press Generate once and keep it: changing it signs everyone out.";
                 helper = lib.neo.helpers.randomToken;
                 ui = lib.neo.ui.mkUi {
                   label = "Secret key";
-                  group = lib.neo.ui.groups.advanced;
                 };
               };
             }

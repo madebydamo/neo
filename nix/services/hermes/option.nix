@@ -43,24 +43,20 @@
               dashboardPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Password for Hermes' dashboard that Neo fills in for you; generate once, you never type it.";
+                description = "Password for the Hermes dashboard. Press Generate once; Neo signs you in with it, so you don't type it at login.";
                 rank = 10;
                 helper = lib.neo.helpers.randomToken // {label = "Generate dashboard password";};
-                ui = lib.neo.ui.mkUi {
-                  group = lib.neo.ui.groups.advanced;
-                };
+                ui = lib.neo.ui.mkUi {label = "Dashboard password";};
               };
 
               # Gateway/API authentication token.
               gatewayToken = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Secret that protects Hermes' internal connection. Generate once.";
+                description = "Secret that protects Hermes' internal connection. Press Generate once and keep it.";
                 rank = 20;
                 helper = lib.neo.helpers.randomToken;
-                ui = lib.neo.ui.mkUi {
-                  group = lib.neo.ui.groups.advanced;
-                };
+                ui = lib.neo.ui.mkUi {label = "Gateway token";};
               };
 
               telegramBotToken = lib.neo.mkSecretOption {

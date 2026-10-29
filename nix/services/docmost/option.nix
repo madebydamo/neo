@@ -40,24 +40,18 @@
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
-                description = "Random secret Docmost uses to protect sessions. Generate it once and never change it.";
+                description = "Secret Docmost uses to keep you signed in. Press Generate once and keep it: changing it signs everyone out.";
                 helper = lib.neo.helpers.randomToken;
-                ui = lib.neo.ui.mkUi {
-                  group = lib.neo.ui.groups.advanced;
-                  label = "App secret";
-                };
+                ui = lib.neo.ui.mkUi {label = "App secret";};
               };
               # POSTGRES_PASSWORD / DATABASE_URL of the internal Postgres container.
               dbPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 20;
-                description = "Password for Docmost's private database; generate once, you never type it.";
+                description = "Password for Docmost's own database. Press Generate before the first start and keep it: changing it later cuts Docmost off from its data.";
                 helper = lib.neo.helpers.randomToken;
-                ui = lib.neo.ui.mkUi {
-                  group = lib.neo.ui.groups.advanced;
-                  label = "Database password";
-                };
+                ui = lib.neo.ui.mkUi {label = "Database password";};
               };
               sso = mkOption {
                 type = types.bool;
