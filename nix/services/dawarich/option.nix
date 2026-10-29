@@ -14,29 +14,33 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Dawarich location history" {rank = 0;};
+              enabled = mkEnableOption "Your own location history: a map of where you have been, like Google Timeline" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 internal = true;
                 default = 3000;
                 description = "Internal port Dawarich listens on (container port 3000)";
               };
+              # SECRET_KEY_BASE: signs sessions and derives encryption keys. Changing it signs
+              # everyone out and can make encrypted data unreadable. The app refuses CHANGE_ME.
               secretKeyBase = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
-                description = ''
-                  SECRET_KEY_BASE: long random secret used to sign sessions and derive encryption keys.
-                  Generate once and keep it. Changing it signs everyone out and can make encrypted data unreadable.
-                  The app refuses to start with the placeholder CHANGE_ME.
-                '';
+                description = "Secret that secures logins and stored data. Click Generate once and never change it.";
                 helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {label = "Secret key";};
               };
+              # POSTGRES_PASSWORD / DATABASE_PASSWORD of the internal PostGIS container.
               dbPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 20;
-                description = "Password for the internal PostGIS container (POSTGRES_PASSWORD / DATABASE_PASSWORD)";
+                description = "Password for Dawarich's built-in database. Click Generate; you never type it anywhere.";
+                ui = lib.neo.ui.mkUi {
+                  label = "Database password";
+                  group = lib.neo.ui.groups.advanced;
+                };
                 helper = lib.neo.helpers.randomToken;
               };
             }
