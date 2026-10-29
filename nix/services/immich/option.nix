@@ -11,7 +11,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "immich service" {rank = 0;};
+              enabled = mkEnableOption "Your own Google Photos: back up, browse and share your photos and videos" {rank = 0;};
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "immich";
