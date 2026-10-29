@@ -49,7 +49,7 @@
               excludedDirs = mkOption {
                 type = types.listOf types.str;
                 default = [];
-                description = "Folders to leave out of the backup, e.g. appdata/jellyfin/cache (inside Folder to back up). A plain name such as cache skips every folder with that name.";
+                description = "Folders to leave out of the backup, as paths inside Folder to back up, e.g. DATA/AppData/jellyfin/cache or DATA/Media. A plain name such as cache skips every folder with that name.";
                 rank = 80;
                 ui = lib.neo.ui.mkUi {label = "Skip folders";};
               };
