@@ -21,6 +21,7 @@ mod nix_repair;
 mod ops;
 mod plugins;
 mod power;
+mod proposals;
 mod resources;
 mod routes;
 mod schema_cache;

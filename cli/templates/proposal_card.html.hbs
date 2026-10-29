@@ -1,0 +1,52 @@
+{{!-- A settings change the assistant suggests. Buttons save through the
+     settings form's write path and apply like the Apply button. --}}
+<div id="proposal-{{id}}" class="neo-proposal rounded-box border border-base-300 bg-base-100 p-3 sm:p-4 space-y-3" data-proposal="{{id}}" data-status="{{status}}">
+  {{#if found}}
+    <div class="flex items-start gap-2">
+      <span class="badge badge-sm {{#if done}}badge-success badge-soft{{else}}badge-primary badge-soft{{/if}} shrink-0 mt-0.5">Suggested change</span>
+      <p class="text-sm font-medium leading-snug min-w-0">{{summary}}</p>
+    </div>
+
+    <ul class="divide-y divide-base-300/70 text-sm">
+      {{#each changes}}
+        <li class="py-2 flex flex-col sm:flex-row sm:items-baseline gap-x-3 gap-y-0.5">
+          <span class="min-w-0 sm:w-2/5">
+            <a href="/configuration/option/{{service}}" hx-get="/configuration/option/{{service}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true"
+               class="font-mono text-xs text-base-content/60 link link-hover">{{service}}</a>
+            <span class="block font-medium">{{label}}</span>
+          </span>
+          <span class="min-w-0 flex-1 flex flex-wrap items-baseline gap-1.5 break-all">
+            <span class="text-base-content/55 line-through decoration-base-content/30">{{old}}</span>
+            <span aria-hidden="true" class="text-base-content/40">→</span>
+            <span class="font-medium {{#if secret}}italic{{/if}}">{{new}}</span>
+          </span>
+        </li>
+      {{/each}}
+    </ul>
+
+    {{#if message}}
+      <div role="status" class="text-xs rounded-box px-3 py-2 {{#if done}}bg-success/10 text-success-content/90{{else}}bg-warning/10{{/if}}">{{message}}</div>
+    {{/if}}
+
+    {{#if pending}}
+      {{#if other_pending}}
+        <p class="text-xs text-base-content/60">There are other saved changes that are not applied yet. Save &amp; apply applies them too.</p>
+      {{/if}}
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="btn btn-sm btn-primary"
+                hx-post="/proposals/{{id}}/apply" hx-target="#proposal-{{id}}" hx-swap="outerHTML"
+                data-neo-lock="system"
+                hx-on::after-request="if(!event.detail.successful)return;var c=document.getElementById('changes-body');if(!c||!c.innerHTML.trim())return;var m=document.getElementById('changes-modal');if(m){m.querySelector('h3').textContent='Activation';m.showModal();}">
+          Save &amp; apply
+        </button>
+        <button type="button" class="btn btn-sm"
+                hx-post="/proposals/{{id}}/save" hx-target="#proposal-{{id}}" hx-swap="outerHTML"
+                data-neo-lock="system:sh">Save</button>
+        <button type="button" class="btn btn-sm btn-ghost"
+                hx-post="/proposals/{{id}}/reject" hx-target="#proposal-{{id}}" hx-swap="outerHTML">Reject</button>
+      </div>
+    {{/if}}
+  {{else}}
+    <p class="text-sm text-base-content/60">This suggestion has expired. Ask the assistant again.</p>
+  {{/if}}
+</div>

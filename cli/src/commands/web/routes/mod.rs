@@ -10,6 +10,7 @@ mod nix_repair;
 mod oauth;
 mod pages;
 mod power;
+mod proposals;
 mod resources;
 mod save;
 mod secrets;
@@ -36,6 +37,12 @@ pub fn routes() -> Vec<rocket::Route> {
         pages::configuration_core,
         guides::configuration_guides,
         guides::configuration_guide,
+        proposals::proposals_create,
+        proposals::proposal_card,
+        proposals::proposal_save,
+        proposals::proposal_apply,
+        proposals::proposal_reject,
+        proposals::proposal_page,
         helpers::run_helper,
         oauth::run_oauth,
         save::save_service,
