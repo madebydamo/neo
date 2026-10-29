@@ -185,7 +185,8 @@
     setBusy(true);
 
     function toolLine(name, status) {
-      if (!tools) {
+      // New group when something (an approval card) came in between.
+      if (!tools || tools.nextElementSibling !== reply) {
         tools = document.createElement('div');
         tools.className = 'neo-agent-tools';
         reply.parentNode.insertBefore(tools, reply);
@@ -212,6 +213,10 @@
           break;
         case 'assistant.delta':
           raw += d.delta || '';
+          // Keep the reply below tool lines / approval cards that came first.
+          if (reply.parentNode && reply.parentNode.lastElementChild !== reply) {
+            reply.parentNode.appendChild(reply);
+          }
           reply.textContent = raw;
           scrollDown();
           break;
@@ -362,6 +367,27 @@
         hint: b.getAttribute('data-neo-agent-hint') || undefined,
       });
     });
+  });
+
+  // A saved proposal changes settings.toml under an open settings form: reload
+  // that pane so a later form Save does not write the old values back.
+  document.addEventListener('htmx:afterSwap', function () {
+    var pane = document.getElementById('options-pane');
+    if (!pane || pane.getAttribute('data-is-core') === 'true') return;
+    var svc = pane.getAttribute('data-service');
+    var cards = document.querySelectorAll(
+      '#neo-agent [data-proposal][data-status="saved"]:not([data-reloaded]), #neo-agent [data-proposal][data-status="applied"]:not([data-reloaded])'
+    );
+    var hit = false;
+    cards.forEach(function (c) {
+      c.setAttribute('data-reloaded', '1');
+      if ((c.getAttribute('data-services') || '').split(/\s+/).indexOf(svc) >= 0) hit = true;
+    });
+    if (!hit) return;
+    if (window.neoConfirmLeaveConfigForm && !window.neoConfirmLeaveConfigForm()) return;
+    if (typeof htmx !== 'undefined') {
+      htmx.ajax('GET', '/configuration/option/' + encodeURIComponent(svc), { target: '#config-content', swap: 'innerHTML' });
+    }
   });
 
   root.NeoAgent = {

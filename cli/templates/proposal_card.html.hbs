@@ -1,6 +1,6 @@
 {{!-- A settings change the assistant suggests. Buttons save through the
      settings form's write path and apply like the Apply button. --}}
-<div id="proposal-{{id}}" class="neo-proposal rounded-box border border-base-300 bg-base-100 p-3 sm:p-4 space-y-3" data-proposal="{{id}}" data-status="{{status}}">
+<div id="proposal-{{id}}" class="neo-proposal rounded-box border border-base-300 bg-base-100 p-3 sm:p-4 space-y-3" data-proposal="{{id}}" data-status="{{status}}" data-services="{{#each changes}}{{service}} {{/each}}">
   {{#if found}}
     <div class="flex items-start gap-2">
       <span class="badge badge-sm {{#if done}}badge-success badge-soft{{else}}badge-primary badge-soft{{/if}} shrink-0 mt-0.5">Suggested change</span>
