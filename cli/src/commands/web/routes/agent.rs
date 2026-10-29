@@ -106,7 +106,7 @@ async fn instructions(config: &AppConfig, kind: &str, name: &str) -> String {
                 .to_string(),
                 Err(_) => "[]".to_string(),
             };
-            format!("{STYLE}\n\nThe user opened the chat from the {name} settings page. Use the neo-{name} skill. Current settings (secrets redacted): {settings}")
+            format!("{STYLE}\n\nThe user opened the chat from the {name} settings page. If a neo-{name} skill exists, load it. Current settings (secrets redacted): {settings}")
         }
         "guide" => {
             let title = load_guides(config)
