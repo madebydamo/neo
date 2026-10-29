@@ -135,18 +135,28 @@
 
     environment.systemPackages = lib.mkIf cfg.enabled [pkgs.zfs];
 
-    # Secondary ZFS mounts are data disks: never block boot if absent/slow.
-    # Disko already emits nofail via mountOptions; pin neededForBoot as well.
-    fileSystems = lib.mkIf (cfg.enabled && cfg.additionalDisks != {}) (
-      lib.listToAttrs (map (mp: {
-          name = mp;
-          value = {
-            neededForBoot = lib.mkDefault false;
-            options = lib.mkAfter ["nofail"];
-          };
-        })
-        additionalMountpoints)
-    );
+    fileSystems = lib.mkMerge [
+      # Secondary ZFS mounts are data disks: never block boot if absent/slow.
+      # Disko already emits nofail via mountOptions; pin neededForBoot as well.
+      (lib.mkIf (cfg.enabled && cfg.additionalDisks != {}) (
+        lib.listToAttrs (map (mp: {
+            name = mp;
+            value = {
+              neededForBoot = lib.mkDefault false;
+              options = lib.mkAfter ["nofail"];
+            };
+          })
+          additionalMountpoints)
+      ))
+      # The Neo data dataset lives in the main pool (imported in the initrd for
+      # /): mount it before activation, which writes into appdata (Hermes
+      # .env / config.yaml, secret copies such as SWAG snippets). Mounted later,
+      # those files land under the mountpoint and the dataset hides them.
+      # neo-zfs-restore still runs first (before sysroot.mount).
+      (lib.mkIf (cfg.enabled && !(builtins.elem volumesRoot additionalMountpoints)) {
+        ${volumesRoot}.neededForBoot = true;
+      })
+    ];
 
     # Disko applies dataset options at create/update time. Existing
     # additional-disk datasets may still have canmount=on until then. Set
