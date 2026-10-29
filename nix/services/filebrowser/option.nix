@@ -11,13 +11,15 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "filebrowser service" {rank = 0;};
+              enabled = mkEnableOption "A file manager in your browser to upload, preview, rename and share your server's files" {rank = 0;};
             }
+            # Entries bind-mount localPath (host) at containerPath (inside the
+            # container); media, documents and appdata are under /srv by default.
             // lib.neo.mkAdditionalMountPoints {
               rank = 10;
               description = ''
-                Extra host directories to expose in Filebrowser (beyond the default media, documents, and appdata mounts under /srv).
-                Each entry pairs a localPath (absolute host path) with a containerPath (e.g. /srv/MyShare).
+                Extra folders on your server to show in Filebrowser, next to media, documents and app data.
+                For each, pick the folder on the server and where it appears in Filebrowser (for example /srv/MyShare).
               '';
             }
             // neo.mkReverseProxyOptions {
