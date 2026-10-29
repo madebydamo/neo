@@ -10,12 +10,19 @@
     with lib;
     with {inherit (lib.neo) mkOption mkEnableOption;}; let
       neoHermesAuth = lib.neo.mkNeoHermesAuth pkgs ./oauth.py;
+      telegramGroup = lib.neo.ui.mkGroup {
+        id = "telegram";
+        label = "Telegram";
+        description = "Chat with Hermes in Telegram and get its messages there";
+        icon = lib.neo.ui.icons.mail;
+        rank = 50;
+      };
     in {
       options.neo.services.hermes = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Hermes Agent service" {rank = 0;};
+              enabled = mkEnableOption "Hermes, an AI assistant that lives on your server, remembers what it learns and helps run Neo" {rank = 0;};
 
               gatewayPort = mkOption {
                 type = types.port;
@@ -31,46 +38,58 @@
                 description = "Port for the Hermes web dashboard UI (uses tinyauth via SWAG)";
               };
 
+              # Required for a non-loopback dashboard bind; SWAG logs in with it
+              # so tinyauth is the only login people see.
               dashboardPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = ''
-                  Internal Hermes dashboard password (required for non-loopback bind).
-                  SWAG auto-logs in with this so only tinyauth is user-facing.
-                '';
+                description = "Password for Hermes' dashboard that Neo fills in for you; generate once, you never type it.";
                 rank = 10;
                 helper = lib.neo.helpers.randomToken // {label = "Generate dashboard password";};
+                ui = lib.neo.ui.mkUi {
+                  group = lib.neo.ui.groups.advanced;
+                };
               };
 
+              # Gateway/API authentication token.
               gatewayToken = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Gateway authentication token";
+                description = "Secret that protects Hermes' internal connection. Generate once.";
                 rank = 20;
                 helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {
+                  group = lib.neo.ui.groups.advanced;
+                };
               };
 
               telegramBotToken = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 description = ''
-                  Telegram bot token string.
-                  Create a bot via @BotFather on Telegram.
+                  Token of the Telegram bot Hermes talks through.
+                  Create a bot with @BotFather in Telegram and paste the token it gives you.
                 '';
                 rank = 30;
+                ui = lib.neo.ui.mkUi {
+                  group = telegramGroup;
+                  label = "Bot token";
+                };
               };
 
+              # The first ID becomes TELEGRAM_HOME_CHANNEL (`hermes send --to
+              # telegram`, cron delivery, update reports).
               telegramAllowedUserId = mkOption {
                 type = types.listOf types.int;
                 default = [];
                 description = ''
-                  List of Telegram user/chat IDs allowed to interact with the bot.
-                  The first ID is the home channel (TELEGRAM_HOME_CHANNEL) used for
-                  `hermes send --to telegram` and cron delivery. Group chat IDs are negative.
-                  Get your ID from @userinfobot on Telegram.
+                  Telegram users or chats that may talk to Hermes. The first one is where Hermes sends its own messages.
+                  Get your ID from @userinfobot in Telegram; group chat IDs start with a minus.
                 '';
                 rank = 40;
                 ui = lib.neo.ui.mkUi {
+                  group = telegramGroup;
+                  label = "Allowed Telegram users";
                   widget = "primaryItemList";
                   entryLabel = "Home channel";
                   emptyHint = "Add a Telegram user or chat ID. The first entry is the home channel.";
@@ -85,7 +104,10 @@
                         type = types.bool;
                         default = true;
                         rank = 0;
-                        description = "Whether the bot requires an @mention in this group";
+                        description = "Hermes only answers in this group when someone @mentions it.";
+                        ui = lib.neo.ui.mkUi {
+                          label = "Only answer when mentioned";
+                        };
                       };
                     };
                   }
@@ -93,14 +115,23 @@
                 rank = 50;
                 default = {};
                 description = ''
-                  Per-group Telegram settings. Keys are chat IDs (as strings) or "*" for default.
+                  Settings per Telegram group chat.
+                  Add a group by its chat ID, or "*" for the default of all groups.
                 '';
+                ui = lib.neo.ui.mkUi {
+                  group = telegramGroup;
+                  label = "Telegram groups";
+                };
               };
 
               # One provider + key or OAuth + model. Catalog: hermes-agent plugins/model-providers.
               llm = mkOption {
                 type = types.submodule {
                   options = {
+                    # config.yaml model.provider. List = hermes-agent model-provider
+                    # plugins plus overlays without a plugin (SuperGrok is xai-oauth).
+                    # OAuth login writes auth.json as user hermes; Anthropic is
+                    # API-key only here. Ollama / vLLM: pick custom + baseUrl.
                     provider = mkOption {
                       type = types.nullOr (types.enum lib.neo.hermesProviderIds);
                       default = null;
@@ -109,63 +140,58 @@
                         then null
                         else v;
                       rank = 0;
-                      description = ''
-                        Inference provider written to config.yaml as model.provider.
-                        The list is hermes-agent model-provider plugins plus Hermes overlays
-                        that have no plugin (SuperGrok is xai-oauth). API-key vendors: paste
-                        llm.apiKey. OAuth vendors (openai-codex ChatGPT/Codex, xai-oauth
-                        SuperGrok, nous, …): Log in below (writes auth.json as user hermes).
-                        Anthropic is API-key only in this editor. Custom / Ollama / vLLM: pick
-                        custom, set baseUrl, and paste an API key if the endpoint needs one.
-                      '';
+                      description = "Which AI service Hermes uses. Paste an API key or log in below.";
+                      ui = lib.neo.ui.mkUi {
+                        label = "AI service";
+                      };
                     };
 
+                    # Named vendors: mapped to the plugin's env var (XAI_API_KEY,
+                    # ANTHROPIC_API_KEY, HF_TOKEN, …). custom: config.yaml model.api_key.
                     apiKey = lib.neo.mkSecretOption {
                       type = types.nullOr types.str;
                       default = null;
                       rank = 10;
                       example = "xai-...";
                       description = ''
-                        API key for the selected provider. For named vendors Neo maps it to
-                        that plugin's env var (XAI_API_KEY, ANTHROPIC_API_KEY, HF_TOKEN, …).
-                        For provider = custom it is written to config.yaml as model.api_key
-                        (Ollama often needs none; vLLM / OpenAI-compatible proxies often do).
-                        Leave empty when using OAuth, AWS, Vertex, or a keyless endpoint.
+                        The key from your AI service's account page.
+                        Leave empty when you log in instead, or when your own AI server needs no key.
                       '';
+                      ui = lib.neo.ui.mkUi {
+                        label = "API key";
+                      };
                     };
 
+                    # config.yaml model.default. Empty = not pinned by Nix; in Hermes'
+                    # NixOS managed mode the dashboard cannot save model changes.
                     model = mkOption {
                       type = types.nullOr types.str;
                       default = "grok-build-latest";
                       rank = 20;
                       example = "grok-4.6";
-                      description = ''
-                        Default LLM model id written to config.yaml as model.default.
-                        Use the suggested list for the selected provider, or paste any id
-                        the endpoint serves (e.g. grok-4.6, claude-sonnet-4,
-                        anthropic/claude-sonnet-4 on OpenRouter, llama3.2 on Ollama).
-                        Leave empty so Nix does not pin the model. Under Hermes NixOS managed
-                        mode the dashboard cannot save model changes — pin here.
-                      '';
+                      description = "The AI model Hermes uses. Pick one from the list or type a model name.";
                     };
 
+                    # config.yaml model.base_url; OpenAI-compatible /v1 endpoint
+                    # (Ollama, vLLM, llama.cpp, proxies).
                     baseUrl = mkOption {
                       type = types.nullOr types.str;
                       default = null;
                       rank = 30;
                       example = "http://127.0.0.1:11434/v1";
                       description = ''
-                        OpenAI-compatible API base URL for provider = custom (Ollama, vLLM,
-                        llama.cpp, or any /v1 proxy). Written to model.base_url. Leave empty
-                        for built-in provider endpoints. Example: Ollama
-                        http://127.0.0.1:11434/v1
+                        Address of your own AI server, for example Ollama at http://127.0.0.1:11434/v1.
+                        Leave empty for the built-in AI services.
                       '';
+                      ui = lib.neo.ui.mkUi {
+                        label = "AI server address";
+                      };
                     };
                   };
                 };
                 default = {};
                 rank = 60;
-                description = "LLM provider, API key or OAuth login, and default model";
+                description = "The AI service and model Hermes thinks with, and how it signs in.";
                 ui = lib.neo.ui.mkUi {
                   widget = "providerAuth";
                   catalog = lib.neo.hermesProviderCatalog;
@@ -179,35 +205,36 @@
                 };
               };
 
+              # true: overwrite $HERMES_HOME/SOUL.md with Neo's co-pilot identity on
+              # every activation. false: seed SOUL.md only if missing.
               forceSoul = mkOption {
                 type = types.bool;
                 default = false;
                 rank = 88;
-                description = ''
-                  When true, overwrite $HERMES_HOME/SOUL.md with Neo's default co-pilot identity
-                  on every activation. When false (default), seed SOUL.md only if missing so
-                  operator edits are preserved.
-                '';
+                description = "Reset Hermes' personality to the Neo default every time settings are applied (this discards your edits).";
+                ui = lib.neo.ui.mkUi {
+                  label = "Reset personality";
+                };
               };
 
+              # After a system-updater or docker-updater run that changed something
+              # (or failed), Hermes reads logs and systemd state (run history in the
+              # updaters' appdata, updater/docker and updater/system). Broken: notify
+              # (`hermes send --to all`, then telegram) and, for Docker, retag the
+              # previous image and restart. Warnings: notify only. Clean: no message.
+              # No-op runs skip Hermes. The first telegramAllowedUserId is the
+              # TELEGRAM_HOME_CHANNEL.
               superviseUpdates = mkOption {
                 type = types.bool;
                 default = false;
                 rank = 89;
                 description = ''
-                  After a system-updater or docker-updater run that actually changed something
-                  (or failed), launch Hermes to read logs and systemd state.
-                  Updater run history (JSON + logs, append-only) lives in those
-                  services' appdata (`updater/docker`, `updater/system`); last.json
-                  is retargeted at the start of each run.
-                  Broken: notify the Hermes home channel; for Docker, retag the previous image
-                  and restart the containers. Warnings or migration hints: notify only, keep
-                  the new image. Clean: no message. No-op updater runs skip Hermes entirely.
-                  System updates are never rolled back automatically.
-                  Notifications use `hermes send --to all` (every configured home channel),
-                  then `hermes send --to telegram` if needed. The first `telegramAllowedUserId`
-                  is set as TELEGRAM_HOME_CHANNEL.
+                  After each update, let Hermes check whether anything broke, message you, and roll back broken app updates.
+                  System updates are never rolled back; Hermes only reports what failed.
                 '';
+                ui = lib.neo.ui.mkUi {
+                  label = "Watch over updates";
+                };
               };
 
               stateDir = mkOption {
