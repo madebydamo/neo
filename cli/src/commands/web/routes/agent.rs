@@ -90,11 +90,17 @@ pub async fn agent_open(req: Json<OpenReq>) -> (Status, Json<Value>) {
         format!("{kind}:{name}")
     };
     let id = agent::session_id(&ctx, req.fresh);
-    let title = match kind {
+    let mut title = match kind {
         "service" => format!("Help with {name}"),
         "guide" => format!("Guide: {name}"),
         _ => "Neo assistant".to_string(),
     };
+    // Hermes needs unique session titles: a new chat carries its timestamp.
+    if req.fresh {
+        if let Some(ts) = id.rsplit('-').next() {
+            title = format!("{title} · {ts}");
+        }
+    }
     if let Err(e) = gw.ensure_session(&id, &title).await {
         return (Status::BadGateway, Json(json!({"error": e.to_string()})));
     }

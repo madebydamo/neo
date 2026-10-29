@@ -1526,7 +1526,8 @@ a.neo-sem-name:focus-visible {
   background: color-mix(in oklab, var(--color-warning) 8%, transparent);
 }
 .neo-agent-cmd { margin-top: 0.4rem; overflow-x: auto; font-size: 0.75rem; padding: 0.4rem 0.55rem; border-radius: 0.4rem; background: var(--color-base-200); }
-@media (min-width: 640px) {
+/* Make room for the drawer only where the page still fits beside it. */
+@media (min-width: 1600px) {
   body.neo-agent-open .max-w-7xl { margin-right: 27.5rem; }
 }
 

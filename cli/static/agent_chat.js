@@ -66,7 +66,7 @@
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof document === 'undefined') return;
 
-  var state = { context: 'general', session: null, run: null, busy: false, first: false };
+  var state = { context: 'general', session: null, run: null, busy: false, first: false, starter: null, hint: null };
 
   function el(id) {
     return document.getElementById(id);
@@ -377,6 +377,8 @@
       return;
     }
     state.context = context || 'general';
+    state.starter = opts.starter || null;
+    state.hint = opts.hint || null;
     state.session = null;
     el('neo-agent-title').textContent = opts.title || 'Assistant';
     var log = el('neo-agent-log');
@@ -404,6 +406,7 @@
             });
           }
         });
+        if (msgs.length) note('Continuing your earlier chat. Use New chat to start over.');
         if (!msgs.length && opts.starter) send(opts.starter);
         else if (!msgs.length) note(opts.hint || 'Ask anything about your homeserver.');
         focusInput();
@@ -484,7 +487,13 @@
     close: close,
     stop: stop,
     newChat: function () {
-      open(state.context, { title: el('neo-agent-title').textContent, fresh: true });
+      if (state.busy) return;
+      open(state.context, {
+        title: el('neo-agent-title').textContent,
+        fresh: true,
+        starter: state.starter || undefined,
+        hint: state.hint || undefined,
+      });
     },
   };
 })(typeof window !== 'undefined' ? window : globalThis);
