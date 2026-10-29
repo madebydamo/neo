@@ -14,7 +14,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Vikunja task manager (Todoist-compatible, self-hosted)" {rank = 0;};
+              enabled = mkEnableOption "to-do lists and projects, like Todoist" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 internal = true;
@@ -25,10 +25,8 @@
                 type = types.bool;
                 default = false;
                 rank = 20;
-                description = ''
-                  Allow anyone who can reach the site to create an account.
-                  The first user is the admin even when this is off, as long as no users exist yet.
-                '';
+                description = "Allow anyone who can reach the site to create an account. The first account becomes the admin and can always be created, even when this is off.";
+                ui = lib.neo.ui.mkUi {label = "Open sign-up";};
               };
             }
             // lib.neo.mkReverseProxyOptions {
