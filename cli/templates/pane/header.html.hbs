@@ -25,6 +25,14 @@
       {{#each plugins}}
         {{> partials/plugin_pill url=url display=display size="badge-sm" extraClass="plugin-pill--header"}}
       {{/each}}
+      {{#if assistant}}{{#unless is_core}}
+        <button type="button" class="btn btn-xs btn-soft btn-primary gap-1 ml-auto"
+                data-neo-agent="service:{{service}}" data-neo-agent-title="Help with {{service}}"
+                data-neo-agent-hint="Ask anything about {{service}}: what a setting does, why it does not work, or how to set it up.">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 015.5 4h13A1.5 1.5 0 0120 5.5v9a1.5 1.5 0 01-1.5 1.5H10l-4 4v-4H5.5A1.5 1.5 0 014 14.5z"/></svg>
+          Ask for help
+        </button>
+      {{/unless}}{{/if}}
     </div>
 
     {{#if meta.tagline}}

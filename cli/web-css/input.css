@@ -1494,3 +1494,38 @@ a.neo-sem-name:focus-visible {
   box-shadow: 0 0 0 2px var(--color-primary);
   transition: box-shadow 0.3s;
 }
+
+/* Assistant chat drawer (static/agent_chat.js). */
+.neo-agent-msg {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.neo-agent-msg--user {
+  margin-left: 2.5rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius-box);
+  background: color-mix(in oklab, var(--color-primary) 12%, transparent);
+  white-space: pre-wrap;
+}
+.neo-agent-msg--assistant > * + * { margin-top: 0.5rem; }
+.neo-agent-msg--assistant ul { list-style: disc; padding-left: 1.2rem; }
+.neo-agent-msg--assistant ol { list-style: decimal; padding-left: 1.2rem; }
+.neo-agent-msg--assistant code { font-size: 0.85em; padding: 0.05em 0.3em; border-radius: 0.3rem; background: var(--color-base-200); }
+.neo-agent-msg--assistant pre { overflow-x: auto; padding: 0.5rem 0.65rem; border-radius: var(--radius-box); background: var(--color-base-200); font-size: 0.78rem; }
+.neo-agent-typing { white-space: pre-wrap; }
+.neo-agent-typing:empty::after { content: "…"; opacity: 0.5; }
+.neo-agent-msg--note { font-size: 0.75rem; color: color-mix(in oklab, var(--color-base-content) 55%, transparent); }
+.neo-agent-error { color: var(--color-error); }
+.neo-agent-commentary { font-style: italic; }
+.neo-agent-tools { font-size: 0.72rem; color: color-mix(in oklab, var(--color-base-content) 55%, transparent); }
+.neo-agent-msg--approval {
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-box);
+  border: 1px solid color-mix(in oklab, var(--color-warning) 45%, transparent);
+  background: color-mix(in oklab, var(--color-warning) 8%, transparent);
+}
+.neo-agent-cmd { margin-top: 0.4rem; overflow-x: auto; font-size: 0.75rem; padding: 0.4rem 0.55rem; border-radius: 0.4rem; background: var(--color-base-200); }
+@media (min-width: 640px) {
+  body.neo-agent-open .max-w-7xl { margin-right: 27.5rem; }
+}

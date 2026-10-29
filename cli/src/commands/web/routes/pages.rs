@@ -68,6 +68,7 @@ pub(super) async fn configuration_shell(
             initial_tab: initial_tab.to_string(),
             initial_detail,
             initial_content_html,
+            assistant: crate::commands::web::agent::available(),
         }
     };
     Template::render("configuration", ctx)
@@ -161,6 +162,7 @@ pub async fn configuration_option(
 ) -> Template {
     let mut pane = pane_context(config, false, service).await;
     pane.guides = super::guides::guides_for_service(config, service).await;
+    pane.assistant = crate::commands::web::agent::available();
     if htmx.is_htmx() {
         Template::render("option_pane", pane)
     } else {

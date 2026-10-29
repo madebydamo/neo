@@ -53,7 +53,7 @@
               gatewayToken = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Secret that protects Hermes' internal connection. Press Generate once and keep it.";
+                description = "Turns on the assistant chat in the neo web UI (Ask for help, Do it with AI) and protects Hermes' connection. Press Generate once and keep it; leave empty to keep the chat off.";
                 rank = 20;
                 helper = lib.neo.helpers.randomToken;
                 ui = lib.neo.ui.mkUi {label = "Gateway token";};

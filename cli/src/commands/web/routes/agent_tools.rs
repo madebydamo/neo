@@ -126,7 +126,7 @@ fn redacted(o: &OptionSchema) -> Value {
     }
 }
 
-fn describe(prefix: &str, o: &OptionSchema) -> Value {
+pub(crate) fn describe(prefix: &str, o: &OptionSchema) -> Value {
     json!({
         "path": format!("{prefix}.{}", o.name),
         "label": o.label,

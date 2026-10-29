@@ -47,6 +47,17 @@
       </div>
     {{/if}}
 
+    {{#if assistant}}
+      <div class="mt-4">
+        <button type="button" class="btn btn-primary btn-sm gap-1.5"
+                data-neo-agent="guide:{{guide.id}}" data-neo-agent-title="{{guide.title}}"
+                data-neo-agent-starter="Help me set this up step by step: {{guide.title}}">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
+          Do it with AI
+        </button>
+        <span class="ml-2 text-xs text-base-content/55">The assistant walks you through it and prepares the settings for you.</span>
+      </div>
+    {{/if}}
     {{#unless assistant}}
       <p class="mt-3 text-xs text-base-content/55">
         Want step-by-step help? <a href="/configuration/option/hermes" hx-get="/configuration/option/hermes" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true" class="link">Enable the assistant</a>.

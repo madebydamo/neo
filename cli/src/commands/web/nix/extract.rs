@@ -192,6 +192,7 @@ impl NixEvaluator {
             plugins: vec![],
             plugin_inventory_json: "[]".to_string(),
             guides: vec![],
+            assistant: false,
         }
     }
 
@@ -267,6 +268,7 @@ impl NixEvaluator {
             plugins,
             plugin_inventory_json,
             guides: vec![],
+            assistant: false,
         }
     }
 

@@ -15,6 +15,9 @@
   }: let
     cfg = config.neo.services.hermes;
     neoCfg = config.neo.services.neo;
+    # Chat in the neo web UI: Hermes' API server (needs API_SERVER_KEY, ≥16
+    # chars, from the gateway token) on 127.0.0.1:gatewayPort, used by neo-web.
+    chatOn = cfg.gatewayToken != null && builtins.stringLength cfg.gatewayToken >= 16 && (neoCfg.enabled or false);
     # Settings tools (neo web /internal/mcp): only with a token and neo web on.
     neoToolsOn = cfg.neoToolsToken != null && cfg.neoToolsToken != "" && (neoCfg.enabled or false);
     neoHermesAuth = lib.neo.mkNeoHermesAuth pkgs ./oauth.py;
@@ -141,6 +144,8 @@
         TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," (map toString cfg.telegramAllowedUserId);
         TELEGRAM_HOME_CHANNEL = telegramHomeChannel;
         GATEWAY_HEALTH_URL = "http://127.0.0.1:${toString cfg.gatewayPort}";
+        API_SERVER_HOST = "127.0.0.1";
+        API_SERVER_PORT = toString cfg.gatewayPort;
       }
       // lib.optionalAttrs dashboardPasswordSet {
         # Hermes 0.17+ refuses non-loopback binds without an auth provider.
@@ -154,6 +159,8 @@
       lib.filterAttrs (_: v: v != null && v != "") {
         TELEGRAM_BOT_TOKEN = cfg.telegramBotToken;
         HERMES_GATEWAY_TOKEN = cfg.gatewayToken;
+        # Turns on the API server the neo web chat talks to.
+        API_SERVER_KEY = cfg.gatewayToken;
         NEO_AGENT_TOKEN =
           if neoToolsOn
           then cfg.neoToolsToken
@@ -237,8 +244,22 @@
         mode = "0400";
         restartUnits = ["neo-web.service"];
       };
-      systemd.services.neo-web.environment = lib.mkIf neoToolsOn {
-        NEO_AGENT_TOKEN_FILE = config.neo.core.secrets.templates."neo-agent-token".path;
+      systemd.services.neo-web.environment =
+        lib.optionalAttrs neoToolsOn {
+          NEO_AGENT_TOKEN_FILE = config.neo.core.secrets.templates."neo-agent-token".path;
+        }
+        // lib.optionalAttrs chatOn {
+          NEO_HERMES_URL = "http://127.0.0.1:${toString cfg.gatewayPort}";
+          NEO_HERMES_TOKEN_FILE = config.neo.core.secrets.templates."neo-hermes-key".path;
+        };
+
+      # The gateway key for neo-web's chat drawer (sent as Bearer to Hermes).
+      neo.core.secrets.templates."neo-hermes-key" = lib.mkIf chatOn {
+        content = cfg.gatewayToken;
+        owner = "homeserver";
+        group = "homeserver";
+        mode = "0400";
+        restartUnits = ["neo-web.service"];
       };
 
       neo.core.secrets.templates."hermes.env" = {

@@ -107,7 +107,7 @@ async fn page_context(config: &AppConfig, id: &str) -> GuidePageContext {
         html,
         toc,
         related,
-        assistant: x.hermes_enabled,
+        assistant: crate::commands::web::agent::available(),
         ..Default::default()
     }
 }

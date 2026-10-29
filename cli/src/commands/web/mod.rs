@@ -9,6 +9,7 @@ use rocket::fs::FileServer;
 use rocket_dyn_templates::Template;
 
 mod action_bar;
+mod agent;
 mod diff;
 mod git;
 mod guides;

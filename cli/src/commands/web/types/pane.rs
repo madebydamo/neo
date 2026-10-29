@@ -115,4 +115,7 @@ pub struct OptionPaneContext {
     /// Guides that use this service (strip under the pane header).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub guides: Vec<crate::commands::web::guides::Guide>,
+    /// Assistant chat available: shows "Ask for help".
+    #[serde(default)]
+    pub assistant: bool,
 }

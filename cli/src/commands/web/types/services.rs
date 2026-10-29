@@ -117,6 +117,9 @@ pub struct ConfigurationPageContext {
     /// fields are in the first response (no HTMX round-trip / works without JS).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub initial_content_html: Option<String>,
+    /// Assistant chat available (Hermes on with its chat key): drawer + buttons.
+    #[serde(default)]
+    pub assistant: bool,
 }
 
 impl Default for ConfigurationPageContext {
@@ -128,6 +131,7 @@ impl Default for ConfigurationPageContext {
             initial_tab: "services".to_string(),
             initial_detail: None,
             initial_content_html: None,
+            assistant: false,
         }
     }
 }

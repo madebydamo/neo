@@ -1,0 +1,22 @@
+{{!-- Assistant chat drawer (static/agent_chat.js). Opened by any element with
+     data-neo-agent="<context>"; hidden until then. --}}
+<aside id="neo-agent" class="hidden neo-agent fixed z-50 inset-0 sm:inset-auto sm:top-3 sm:bottom-3 sm:right-3 sm:w-[26rem] flex flex-col bg-base-100 sm:rounded-box border border-base-300 shadow-2xl"
+       role="dialog" aria-label="Assistant chat">
+  <div class="flex items-center gap-2 px-3 py-2.5 border-b border-base-300 shrink-0">
+    <span class="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M4 5.5A1.5 1.5 0 015.5 4h13A1.5 1.5 0 0120 5.5v9a1.5 1.5 0 01-1.5 1.5H10l-4 4v-4H5.5A1.5 1.5 0 014 14.5z"/></svg>
+    </span>
+    <h2 id="neo-agent-title" class="font-semibold text-sm min-w-0 flex-1 truncate">Assistant</h2>
+    <button type="button" class="btn btn-ghost btn-xs" onclick="NeoAgent.newChat()" title="Start a new chat">New chat</button>
+    <button type="button" class="btn btn-ghost btn-sm btn-square" onclick="NeoAgent.close()" aria-label="Close">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5" aria-hidden="true"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
+    </button>
+  </div>
+  <div id="neo-agent-log" class="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2.5" aria-live="polite"></div>
+  <form id="neo-agent-form" class="border-t border-base-300 p-2.5 flex items-end gap-2 shrink-0">
+    <textarea id="neo-agent-input" rows="2" class="textarea textarea-sm flex-1 resize-none min-h-0 leading-snug"
+              placeholder="Ask the assistant…" aria-label="Message"></textarea>
+    <button id="neo-agent-send" type="submit" class="btn btn-sm btn-primary">Send</button>
+    <button id="neo-agent-stop" type="button" class="btn btn-sm hidden" onclick="NeoAgent.stop()">Stop</button>
+  </form>
+</aside>
