@@ -11,7 +11,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "immich-drop service" {rank = 0;};
+              enabled = mkEnableOption "Upload links so family and friends can add photos to your Immich without an account" {rank = 0;};
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "drop";
