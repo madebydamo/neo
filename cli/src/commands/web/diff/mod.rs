@@ -7,4 +7,4 @@ mod render;
 pub mod settings_semantic;
 
 pub use render::{render_changes, RenderOptions};
-pub use settings_semantic::{diff_settings_toml, SettingsDiff};
+pub use settings_semantic::{diff_settings, SettingsDiff};

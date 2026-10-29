@@ -10,8 +10,10 @@ use super::super::diff::model::{ChangeSet, DiffLine, FileChange, FileStatus, Hun
 use super::super::diff::parse::{
     parse_name_status_z, parse_numstat_z, parse_patch, parse_status_z, NumstatEntry,
 };
-use super::super::diff::{diff_settings_toml, SettingsDiff};
+use super::super::diff::{diff_settings, SettingsDiff};
 use super::plumbing::{git_output, git_stdout};
+use crate::utils::secrets::{self, Node, Tree};
+use crate::utils::secrets_store;
 
 /// Context lines requested from git; the renderer folds long unchanged runs.
 const CONTEXT_ARG: &str = "-U20";
@@ -21,6 +23,15 @@ const MAX_UNTRACKED_BYTES: u64 = 512 * 1024;
 const MAX_UNTRACKED_FILES: usize = 200;
 const SETTINGS_FILE: &str = "settings.toml";
 const LOCK_FILE: &str = "flake.lock";
+/// Files whose content is never shown: secret values (plain) or ciphertext noise.
+/// Their changes appear masked in the settings summary instead.
+const HIDDEN_FILES: &[&str] = &[
+    secrets::PLAIN_FILE,
+    secrets::SOPS_FILE,
+    secrets_store::IDENTITY_FILE,
+];
+const HIDDEN_REASON: &str =
+    "Secret values are not shown — changed secrets are listed (masked) in the settings summary.";
 
 /// Which changes to collect.
 #[derive(Debug, Clone, Copy)]
@@ -275,13 +286,14 @@ pub fn collect_changes(dir: &Path, range: DiffRange) -> Result<ChangeSet> {
         }
     }
 
+    for f in &mut files {
+        if HIDDEN_FILES.contains(&f.path.as_str()) {
+            f.hunks.clear();
+            f.omitted = Some(HIDDEN_REASON.to_string());
+        }
+    }
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(ChangeSet { files })
-}
-
-/// `settings.toml` at a rev (`""` when absent there).
-fn settings_at(dir: &Path, rev: &str) -> String {
-    file_at(dir, rev, SETTINGS_FILE)
 }
 
 /// A file at a rev (`""` when absent there).
@@ -314,32 +326,152 @@ pub fn lock_updates(dir: &Path, set: &ChangeSet, range: DiffRange) -> Vec<InputU
     input_updates(&old, &new)
 }
 
-/// Semantic settings summary when `settings.toml` is part of `set`.
-pub fn settings_semantic(
-    dir: &Path,
-    set: &ChangeSet,
-    range: DiffRange,
-) -> Option<Result<SettingsDiff, String>> {
-    if !touches(set, SETTINGS_FILE) {
-        return None;
-    }
-    let texts: Result<(String, String)> = match range {
+/// `file` before and after `range` (`""` where absent).
+fn file_pair(dir: &Path, range: DiffRange, file: &str) -> Result<(String, String)> {
+    match range {
         DiffRange::Worktree => {
             let old = worktree_base(dir)
-                .map(|b| settings_at(dir, &b))
+                .map(|b| file_at(dir, &b, file))
                 .unwrap_or_default();
-            let path = toplevel(dir).join(SETTINGS_FILE);
+            let path = toplevel(dir).join(file);
             match std::fs::read_to_string(&path) {
                 Ok(new) => Ok((old, new)),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((old, String::new())),
                 Err(e) => Err(anyhow!(e)).with_context(|| format!("read {}", path.display())),
             }
         }
-        DiffRange::Revs { from, to } => Ok((settings_at(dir, from), settings_at(dir, to))),
+        DiffRange::Revs { from, to } => Ok((file_at(dir, from, file), file_at(dir, to, file))),
+    }
+}
+
+fn merge_tree(dst: &mut Tree, src: Tree) {
+    for (k, n) in src {
+        match (dst.get_mut(&k), n) {
+            (Some(Node::Map(d)), Node::Map(s)) => merge_tree(d, s),
+            (_, n) => {
+                dst.insert(k, n);
+            }
+        }
+    }
+}
+
+/// Every leaf replaced by one token: keys compare, values do not.
+fn opaque(tree: Tree) -> Tree {
+    tree.into_iter()
+        .map(|(k, n)| match n {
+            Node::Leaf(_) => (k, Node::Leaf(String::new())),
+            Node::Map(m) => (k, Node::Map(opaque(m))),
+        })
+        .collect()
+}
+
+/// Decrypt a secrets.sops.yaml text through a private temp file (`""` = empty).
+fn decrypt_text(text: &str) -> Result<Tree> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    if text.trim().is_empty() {
+        return Ok(Tree::new());
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp = std::env::temp_dir().join(format!(
+        "neo-diff-{}-{nanos}.{}",
+        std::process::id(),
+        secrets::SOPS_FILE
+    ));
+    let written = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&tmp)
+        .and_then(|mut f| f.write_all(text.as_bytes()));
+    let out = written
+        .with_context(|| format!("write {}", tmp.display()))
+        .and_then(|()| secrets_store::decrypt(&tmp));
+    let _ = std::fs::remove_file(&tmp);
+    out
+}
+
+/// Secret settings before and after `range` (secrets.yaml ∪ secrets.sops.yaml,
+/// leaves = comparison tokens), plus a caveat when they could not be compared.
+/// Encryption re-randomizes every ciphertext, so a changed sops file is
+/// decrypted (both sides); if that fails only added / removed keys show.
+fn secret_trees(dir: &Path, range: DiffRange) -> (Tree, Tree, Option<String>) {
+    let mut notes = Vec::new();
+    let parse = |text: &str, what: &str, notes: &mut Vec<String>| -> Tree {
+        secrets::parse(text).unwrap_or_else(|e| {
+            notes.push(format!("Could not read {what}: {e:#}"));
+            Tree::new()
+        })
+    };
+    let (mut old, mut new) = match file_pair(dir, range, secrets::PLAIN_FILE) {
+        Ok((o, n)) => (
+            parse(&o, secrets::PLAIN_FILE, &mut notes),
+            parse(&n, secrets::PLAIN_FILE, &mut notes),
+        ),
+        Err(e) => {
+            notes.push(format!("{e:#}"));
+            (Tree::new(), Tree::new())
+        }
+    };
+    match file_pair(dir, range, secrets::SOPS_FILE) {
+        Ok((o, n)) if o == n => {
+            // Unchanged ciphertext: equal tokens on both sides.
+            let t = parse(&o, secrets::SOPS_FILE, &mut notes);
+            merge_tree(&mut old, t.clone());
+            merge_tree(&mut new, t);
+        }
+        Ok((o, n)) => match decrypt_text(&o).and_then(|a| Ok((a, decrypt_text(&n)?))) {
+            Ok((a, b)) => {
+                merge_tree(&mut old, a);
+                merge_tree(&mut new, b);
+            }
+            Err(e) => {
+                notes.push(format!(
+                    "Encrypted secrets could not be decrypted to compare ({e:#}): only added and removed secrets are listed."
+                ));
+                let (a, b) = (
+                    parse(&o, secrets::SOPS_FILE, &mut notes),
+                    parse(&n, secrets::SOPS_FILE, &mut notes),
+                );
+                // Plain values must be opaque too, or a plain → encrypted move looks changed.
+                old = opaque(old);
+                new = opaque(new);
+                merge_tree(&mut old, opaque(a));
+                merge_tree(&mut new, opaque(b));
+            }
+        },
+        Err(e) => notes.push(format!("{e:#}")),
+    }
+    let note = (!notes.is_empty()).then(|| notes.join(" "));
+    (old, new, note)
+}
+
+/// Semantic settings summary when `settings.toml` or a secrets file is part of
+/// `set`; secrets show as masked option changes.
+pub fn settings_semantic(
+    dir: &Path,
+    set: &ChangeSet,
+    range: DiffRange,
+) -> Option<Result<SettingsDiff, String>> {
+    let secrets_touched = touches(set, secrets::PLAIN_FILE) || touches(set, secrets::SOPS_FILE);
+    if !touches(set, SETTINGS_FILE) && !secrets_touched {
+        return None;
+    }
+    let (old_secrets, new_secrets, note) = if secrets_touched {
+        secret_trees(dir, range)
+    } else {
+        (Tree::new(), Tree::new(), None)
     };
     Some(
-        texts
-            .and_then(|(o, n)| diff_settings_toml(&o, &n))
+        file_pair(dir, range, SETTINGS_FILE)
+            .and_then(|(o, n)| diff_settings(&o, &n, &old_secrets, &new_secrets))
+            .map(|mut d| {
+                d.secrets_note = note;
+                d
+            })
             .map_err(|e| format!("{e:#}")),
     )
 }
@@ -381,6 +513,11 @@ mod tests {
             .expect("write");
         std::fs::write(tmp.join("gone.txt"), "bye\n").expect("write");
         std::fs::write(
+            tmp.join("secrets.yaml"),
+            "services:\n  a:\n    token: \"old\"\n    gone: \"x\"\n",
+        )
+        .expect("write");
+        std::fs::write(
             tmp.join("old name.nix"),
             "{ a = 1; b = 2; c = 3; d = 4; }\n{ e = 5; }\n",
         )
@@ -401,6 +538,11 @@ mod tests {
 
         std::fs::write(tmp.join("settings.toml"), "[services.a]\nenabled = true\n").expect("write");
         std::fs::remove_file(tmp.join("gone.txt")).expect("rm");
+        std::fs::write(
+            tmp.join("secrets.yaml"),
+            "services:\n  a:\n    token: \"new\"\n    added: \"y\"\n",
+        )
+        .expect("write");
         run(&tmp, &["mv", "old name.nix", "new name.nix"]);
         std::fs::create_dir_all(tmp.join("plugins")).expect("mkdir");
         std::fs::write(tmp.join("plugins/new.txt"), "x\ny").expect("write");
@@ -425,6 +567,22 @@ mod tests {
             .expect("touched")
             .expect("parsed");
         assert_eq!(sem.services.len(), 1);
+        let rows: Vec<(&str, bool, bool, bool)> = sem.services[0]
+            .changes
+            .iter()
+            .map(|c| (c.path.as_str(), c.old.is_some(), c.new.is_some(), c.secret))
+            .collect();
+        assert_eq!(
+            rows,
+            vec![
+                ("added", false, true, true),
+                ("gone", true, false, true),
+                ("token", true, true, true),
+            ]
+        );
+        let sec = by("secrets.yaml");
+        assert!(sec.hunks.is_empty() && sec.omitted.is_some());
+        assert!(!format!("{set:?}{sem:?}").contains("\"new\""));
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

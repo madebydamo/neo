@@ -197,7 +197,16 @@ fn render_semantic(sem: &Result<SettingsDiff, String>) -> String {
             )
         }
         Ok(d) if d.is_empty() => {
-            return r#"<section class="neo-sem"><div class="neo-sem-title">Service changes</div><p class="neo-sem-empty">settings.toml changed only in formatting or comments.</p></section>"#.to_string();
+            let text = match &d.secrets_note {
+                Some(note) => escape_html(note),
+                None => {
+                    "No setting or secret value changed — only formatting, comments or encryption."
+                        .to_string()
+                }
+            };
+            return format!(
+                r#"<section class="neo-sem"><div class="neo-sem-title">Service changes</div><p class="neo-sem-empty">{text}</p></section>"#
+            );
         }
         Ok(d) => d,
     };
@@ -267,6 +276,12 @@ fn render_semantic(sem: &Result<SettingsDiff, String>) -> String {
             ));
         }
         s.push_str("</ul>");
+    }
+    if let Some(note) = &diff.secrets_note {
+        s.push_str(&format!(
+            r#"<p class="neo-sem-empty">{ICON_LOCK} {}</p>"#,
+            escape_html(note)
+        ));
     }
     s.push_str("</section>");
     s

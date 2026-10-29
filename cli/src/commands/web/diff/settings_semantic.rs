@@ -1,9 +1,14 @@
 //! Semantic diff of two `settings.toml` documents: services enabled/disabled and
 //! per-service option changes (old → new), with secret-looking values masked.
+//! Secrets kept in secrets.yaml / secrets.sops.yaml are overlaid on their
+//! settings paths, so they show as masked option changes too (and moving a
+//! secret between settings.toml and a secrets file is no change).
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context, Result};
 use toml_edit::{DocumentMut, Item, Table, TableLike, Value};
+
+use crate::utils::secrets::{Node, Tree};
 
 /// Placeholder shown instead of secret values.
 pub const MASK: &str = "••••••";
@@ -61,6 +66,8 @@ pub struct SectionDiff {
 pub struct SettingsDiff {
     pub services: Vec<ServiceDiff>,
     pub sections: Vec<SectionDiff>,
+    /// Caveat about the secret changes (e.g. encrypted values not comparable).
+    pub secrets_note: Option<String>,
 }
 
 impl SettingsDiff {
@@ -197,12 +204,47 @@ fn flat_of(item: Option<&Item>) -> BTreeMap<String, String> {
     m
 }
 
-/// Compare two flattened maps; `label_for_root` names a scalar top-level value.
+/// Secret tree leaves below `path` as `dotted.path → comparison token`.
+fn flat_secrets(tree: &Tree, path: &[&str]) -> BTreeMap<String, String> {
+    fn walk(prefix: &str, tree: &Tree, out: &mut BTreeMap<String, String>) {
+        for (k, n) in tree {
+            let p = join_key(prefix, k);
+            match n {
+                // Same rendering as a TOML string, so an inline value equals its moved copy.
+                Node::Leaf(v) => {
+                    out.insert(p, format!("{v:?}"));
+                }
+                Node::Map(m) => walk(&p, m, out),
+            }
+        }
+    }
+    let mut cur = tree;
+    for k in path {
+        match cur.get(*k) {
+            Some(Node::Map(m)) => cur = m,
+            _ => return BTreeMap::new(),
+        }
+    }
+    let mut out = BTreeMap::new();
+    walk("", cur, &mut out);
+    out
+}
+
+/// Settings of one scope with its secrets overlaid; returns the secret keys.
+fn overlay(flat: &mut BTreeMap<String, String>, secrets: &Tree, path: &[&str]) -> BTreeSet<String> {
+    let s = flat_secrets(secrets, path);
+    let keys = s.keys().cloned().collect();
+    flat.extend(s);
+    keys
+}
+
+/// Compare two flattened maps; `secret_keys` are masked whatever their name.
 fn diff_maps(
     old: &BTreeMap<String, String>,
     new: &BTreeMap<String, String>,
     scope: &str,
     skip: &[&str],
+    secret_keys: &BTreeSet<String>,
 ) -> Vec<ValueChange> {
     let keys: BTreeSet<&String> = old.keys().chain(new.keys()).collect();
     let mut out = Vec::new();
@@ -219,7 +261,7 @@ fn diff_maps(
         } else {
             k.clone()
         };
-        let secret = is_secret_path(&path);
+        let secret = secret_keys.contains(k) || is_secret_path(&path);
         let show = |v: Option<&String>| {
             v.map(|s| {
                 if secret {
@@ -256,6 +298,17 @@ fn parse_doc(raw: &str, which: &str) -> Result<DocumentMut> {
 
 /// Semantic diff between two `settings.toml` texts (empty text = no file).
 pub fn diff_settings_toml(old: &str, new: &str) -> Result<SettingsDiff> {
+    diff_settings(old, new, &Tree::new(), &Tree::new())
+}
+
+/// Like [`diff_settings_toml`], with the secrets of each side (settings paths →
+/// comparison tokens) overlaid; every secret change is masked.
+pub fn diff_settings(
+    old: &str,
+    new: &str,
+    old_secrets: &Tree,
+    new_secrets: &Tree,
+) -> Result<SettingsDiff> {
     let old_doc = parse_doc(old, "previous")?;
     let new_doc = parse_doc(new, "current")?;
     let old_root = old_doc.as_table();
@@ -263,16 +316,28 @@ pub fn diff_settings_toml(old: &str, new: &str) -> Result<SettingsDiff> {
 
     let old_svcs = old_root.get("services").and_then(|i| i.as_table_like());
     let new_svcs = new_root.get("services").and_then(|i| i.as_table_like());
+    let secret_svcs = |t: &Tree| -> Vec<String> {
+        match t.get("services") {
+            Some(Node::Map(m)) => m.keys().cloned().collect(),
+            _ => Vec::new(),
+        }
+    };
     let names: BTreeSet<String> = table_keys(old_svcs)
         .into_iter()
         .chain(table_keys(new_svcs))
+        .chain(secret_svcs(old_secrets))
+        .chain(secret_svcs(new_secrets))
         .collect();
 
     let mut services = Vec::new();
     for name in names {
         let o = old_svcs.and_then(|t| t.get(&name));
         let n = new_svcs.and_then(|t| t.get(&name));
-        let changes = diff_maps(&flat_of(o), &flat_of(n), &name, &["enabled"]);
+        let (mut fo, mut fn_) = (flat_of(o), flat_of(n));
+        let at = ["services", name.as_str()];
+        let mut secret_keys = overlay(&mut fo, old_secrets, &at);
+        secret_keys.extend(overlay(&mut fn_, new_secrets, &at));
+        let changes = diff_maps(&fo, &fn_, &name, &["enabled"], &secret_keys);
         let svc = ServiceDiff {
             before: enabled_of(o),
             after: enabled_of(n),
@@ -288,22 +353,27 @@ pub fn diff_settings_toml(old: &str, new: &str) -> Result<SettingsDiff> {
         .iter()
         .chain(new_root.iter())
         .map(|(k, _)| k.to_string())
+        .chain(old_secrets.keys().cloned())
+        .chain(new_secrets.keys().cloned())
         .filter(|k| k != "services")
         .collect();
     let mut sections = Vec::new();
     for name in sections_names {
-        let changes = diff_maps(
-            &flat_of(old_root.get(&name)),
-            &flat_of(new_root.get(&name)),
-            &name,
-            &[],
-        );
+        let (mut fo, mut fn_) = (flat_of(old_root.get(&name)), flat_of(new_root.get(&name)));
+        let at = [name.as_str()];
+        let mut secret_keys = overlay(&mut fo, old_secrets, &at);
+        secret_keys.extend(overlay(&mut fn_, new_secrets, &at));
+        let changes = diff_maps(&fo, &fn_, &name, &[], &secret_keys);
         if !changes.is_empty() {
             sections.push(SectionDiff { name, changes });
         }
     }
 
-    Ok(SettingsDiff { services, sections })
+    Ok(SettingsDiff {
+        services,
+        sections,
+        secrets_note: None,
+    })
 }
 
 #[cfg(test)]
@@ -428,6 +498,69 @@ enabled = true
         let d = diff_settings_toml("", "[services.x]\nenabled = true\n").expect("diff");
         assert_eq!(d.services[0].transition(), Transition::Enabled);
         assert!(diff_settings_toml("[broken", "").is_err());
+    }
+
+    fn tree(pairs: &[(&str, &str)]) -> Tree {
+        let mut t = Tree::new();
+        for (path, v) in pairs {
+            let parts: Vec<&str> = path.split('.').collect();
+            let (last, parents) = parts.split_last().expect("path");
+            let mut cur = &mut t;
+            for k in parents {
+                let e = cur
+                    .entry((*k).to_string())
+                    .or_insert_with(|| Node::Map(Tree::new()));
+                let Node::Map(m) = e else {
+                    panic!("leaf in path")
+                };
+                cur = m;
+            }
+            cur.insert((*last).to_string(), Node::Leaf((*v).to_string()));
+        }
+        t
+    }
+
+    #[test]
+    fn secrets_file_changes_are_masked_option_changes() {
+        let settings = "[services.dufs]\nenabled = true\n[core]\nhostname = \"box\"\n";
+        let old = tree(&[
+            ("services.dufs.users.admin", "pw-old"),
+            ("services.dufs.users.gone", "pw-gone"),
+            ("core.git.tokens.github.com", "same"),
+        ]);
+        let new = tree(&[
+            ("services.dufs.users.admin", "pw-new"),
+            ("services.paperless.adminPassword", "pw-added"),
+            ("core.git.tokens.github.com", "same"),
+        ]);
+        let d = diff_settings(settings, settings, &old, &new).expect("diff");
+        let dufs = svc(&d, "dufs");
+        let kinds: Vec<(&str, bool, bool)> = dufs
+            .changes
+            .iter()
+            .map(|c| (c.path.as_str(), c.old.is_some(), c.new.is_some()))
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![("users.admin", true, true), ("users.gone", true, false)]
+        );
+        assert!(dufs.changes.iter().all(|c| c.secret));
+        let paperless = svc(&d, "paperless");
+        assert_eq!(paperless.transition(), Transition::Unchanged);
+        assert_eq!(paperless.changes[0].path, "adminPassword");
+        assert_eq!(paperless.changes[0].old, None);
+        assert_eq!(paperless.changes[0].new.as_deref(), Some(MASK));
+        assert!(d.sections.is_empty(), "unchanged secret reported");
+        assert!(!format!("{d:?}").contains("pw-"));
+    }
+
+    #[test]
+    fn moving_a_secret_out_of_settings_is_no_change() {
+        let old = "[services.dufs]\nenabled = true\nusers = { admin = \"pw\" }\n";
+        let new = "[services.dufs]\nenabled = true\n";
+        let moved = tree(&[("services.dufs.users.admin", "pw")]);
+        let d = diff_settings(old, new, &Tree::new(), &moved).expect("diff");
+        assert!(d.is_empty(), "{d:?}");
     }
 
     #[test]
