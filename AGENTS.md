@@ -38,6 +38,15 @@ NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) + Rust *
 
 Naming: options camelCase under `neo.services.*`; plain-string descriptions; volumes via `config.neo.core.volumes.*`.
 
+**Option texts** (read by non-technical users in the web UI):
+
+- `description`: first sentence says what the setting does for you, in plain words (≤ ~20 words). Optional second sentence: the consequence or a technical detail ("Changing it signs everyone out."). Say what empty / the default means.
+- No env var names, file paths, unit names or `services.x.y` paths in descriptions; put them in a Nix comment. Refer to other settings by their label.
+- `enabled`: say what you get ("Private web search that doesn't track you"), not "X service".
+- Give every non-obvious key a `ui.label` ("Skip Beszel login", not `enableSingleUserSystem`).
+- Generated secrets nobody types (database passwords, signing keys), ports and plumbing go in `ui.group = lib.neo.ui.groups.advanced`.
+- Fields that only matter with another setting get `ui.visibleWhen` (a bool or a non-empty string hides the field while false/empty; `"opt=value"` for a choice).
+
 **Service texts:** `mkServiceMeta` takes `tagline` (one line on the grid card, what you get: "Your own Google Photos"), `description` (2–3 plain sentences for non-technical users: what you can do, what it replaces), `notes` (operator facts shown collapsed as "Good to know": first login, paths that skip tinyauth, upgrade cautions), `replaces` (`[ "Google Photos" ]`) and `privacy` (privacy map category ids). No upstream marketing, env var names or internals in `tagline`/`description`. Without a `tagline` the card shows the first line of `description`. Rules and examples: `docs/design/descriptions-and-guides.md`.
 
 **Service icons:** `mkServiceMeta.icon` is a URL string or a file path (`./icon.svg`, png, webp, ico, …). Paths are copied into the Nix store and served at `/service-icons/…` in the services grid, navigator, and option pane. `https://…` and site paths such as `/static/neo-icon.png` stay as written.
