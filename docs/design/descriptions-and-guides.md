@@ -124,9 +124,9 @@ email"), `docmost.sso`.
 
 ### Bug found during the audit
 
-`nix/services/collabora/option.nix` declares `flake.modules.nixos.nextcloud-option`
-(copied from nextcloud), so one of the two definitions silently replaces the
-other. Rename to `collabora-option`.
+`nix/services/collabora/option.nix` declared `flake.modules.nixos.nextcloud-option`
+(copied from nextcloud). Both definitions merge as deferred modules, so it
+worked by accident; renamed to `collabora-option`.
 
 ---
 

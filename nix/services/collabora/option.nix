@@ -1,6 +1,6 @@
-# Nextcloud service options. Web UI protected with tinyauth forward auth.
+# Collabora Online service options (office editing for Nextcloud).
 {...}: {
-  flake.modules.nixos.nextcloud-option = {
+  flake.modules.nixos.collabora-option = {
     config,
     lib,
     ...
