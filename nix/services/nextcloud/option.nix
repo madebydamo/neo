@@ -11,37 +11,51 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "nextcloud file sharing and collaboration platform" {rank = 0;};
+              enabled = mkEnableOption "Nextcloud, your own cloud for files, sharing and collaboration" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 internal = true;
                 default = 80;
                 description = "Internal port for nextcloud apache web server";
               };
+              # MYSQL_PASSWORD of the nextcloud user; also MYSQL_ROOT_PASSWORD of the db container.
               dbPassword = lib.neo.mkSecretOption {
                 type = types.str;
                 default = "your_strong_password_here";
                 rank = 10;
-                description = "Password for the nextcloud mysql user (also used for root in db container)";
+                description = "Internal database password; you never type it. Press Generate before the first start. Changing it after setup breaks Nextcloud.";
                 helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {
+                  label = "Database password";
+                  group = lib.neo.ui.groups.advanced;
+                };
               };
+              # occ maintenance_window_start (Nextcloud reads it as UTC).
               maintenanceWindowStart = mkOption {
                 type = types.ints.between 0 23;
                 default = 3;
                 rank = 20;
-                description = "Hour (0-23) when maintenance window starts (for background jobs)";
+                description = "Hour of the night (0–23, UTC) when Nextcloud runs heavy cleanup tasks. Default 3 = 3 AM UTC.";
+                ui = lib.neo.ui.mkUi {label = "Nightly maintenance hour";};
               };
+              # occ default_phone_region (ISO 3166-1 alpha-2).
               defaultPhoneRegion = mkOption {
                 type = types.str;
                 default = "CH";
                 rank = 30;
-                description = "ISO 3166-1 alpha-2 country code for default phone region (e.g. CH, US)";
+                description = "Your country as a two-letter code (e.g. CH, US, DE), so phone numbers without a + prefix are read correctly.";
+                ui = lib.neo.ui.mkUi {label = "Phone number country";};
               };
+              # occ instanceid. Nextcloud names its appdata_<id> folder after it.
               instanceId = mkOption {
                 type = types.str;
                 default = "neo-homeserver";
                 rank = 40;
-                description = "Unique server/instance identifier (used by Nextcloud for clustering/multi-server setups)";
+                description = "Internal name of this Nextcloud install. Leave as is.";
+                ui = lib.neo.ui.mkUi {
+                  label = "Instance name";
+                  group = lib.neo.ui.groups.advanced;
+                };
               };
             }
             // lib.neo.mkReverseProxyOptions {
