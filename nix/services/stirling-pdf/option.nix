@@ -13,49 +13,65 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Stirling PDF document toolkit service" {rank = 0;};
+              enabled = mkEnableOption "PDF tools in your browser: merge, split, convert, sign and more" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 internal = true;
                 default = 8080;
                 description = "Internal port Stirling PDF listens on";
               };
+              # SECURITY_ENABLELOGIN; tinyauth already protects the app at the edge.
               enableLogin = mkOption {
                 type = types.bool;
                 default = false;
                 rank = 10;
-                description = "Enable Stirling PDF built-in user authentication (SECURITY_ENABLELOGIN). Off by default; use tinyauth at the edge instead.";
+                description = "Ask for a separate Stirling PDF login on top of the homeserver login. Usually not needed.";
+                ui = lib.neo.ui.mkUi {label = "Separate Stirling PDF login";};
               };
               initialLoginUsername = mkOption {
                 type = types.str;
                 default = "admin";
                 rank = 11;
-                description = "Initial admin username (only applied on first startup before the DB exists)";
+                description = "Username of the first Stirling PDF admin. Only used the very first time the app starts.";
+                ui = lib.neo.ui.mkUi {
+                  label = "First admin username";
+                  visibleWhen = "enableLogin";
+                };
               };
               initialLoginPassword = lib.neo.mkSecretOption {
                 type = types.str;
                 default = "stirling";
                 rank = 12;
-                description = "Initial admin password (change after first login; only applied on first startup)";
+                description = "Password of the first Stirling PDF admin. Only used the very first time the app starts; change it after you sign in.";
+                ui = lib.neo.ui.mkUi {
+                  label = "First admin password";
+                  visibleWhen = "enableLogin";
+                };
                 helper = lib.neo.helpers.randomToken;
               };
               defaultLocale = mkOption {
                 type = types.str;
                 default = "en-US";
                 rank = 20;
-                description = "Default UI locale for new users (SYSTEM_DEFAULTLOCALE)";
+                # SYSTEM_DEFAULTLOCALE
+                description = "Language new users see first, e.g. en-US or de-DE.";
+                ui = lib.neo.ui.mkUi {label = "Default language";};
               };
               fileUploadLimit = mkOption {
                 type = types.str;
                 default = "2000MB";
                 rank = 21;
-                description = "Max upload size (SYSTEMFILEUPLOADLIMIT, e.g. 2000MB or 2GB)";
+                # SYSTEMFILEUPLOADLIMIT
+                description = "Largest file you can upload, e.g. 2000MB or 2GB.";
+                ui = lib.neo.ui.mkUi {label = "Upload size limit";};
               };
               googleVisibility = mkOption {
                 type = types.bool;
                 default = false;
                 rank = 22;
-                description = "Allow search engines to index the instance (SYSTEM_GOOGLEVISIBILITY)";
+                # SYSTEM_GOOGLEVISIBILITY
+                description = "Let search engines like Google list this app. Usually best left off.";
+                ui = lib.neo.ui.mkUi {label = "Show in search engines";};
               };
             }
             // lib.neo.mkReverseProxyOptions {
