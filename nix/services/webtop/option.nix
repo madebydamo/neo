@@ -12,7 +12,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "webtop browser desktop (LinuxServer)" {rank = 0;};
+              enabled = mkEnableOption "a full Linux desktop that runs in your browser" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 default = 3050;
@@ -22,16 +22,15 @@
               title = mkOption {
                 type = types.str;
                 default = "Webtop";
-                description = "Browser tab / Selkies UI title";
+                # TITLE (Selkies UI title)
+                description = "Name shown in the browser tab.";
                 rank = 10;
+                ui = lib.neo.ui.mkUi {label = "Tab title";};
               };
             }
             // lib.neo.mkAdditionalMountPoints {
               rank = 20;
-              description = ''
-                Extra host directories to mount into the desktop session.
-                Each entry pairs a localPath (absolute host path) with a containerPath (path inside the desktop).
-              '';
+              description = "Server folders to make available inside the desktop. Each entry pairs a folder on the server with where it appears in the desktop.";
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "webtop";
