@@ -1,7 +1,10 @@
 {{!-- Privacy map: kinds of personal data, split into "at home" (an installed
      service keeps it) and "in the cloud". A tile opens the detail panel. --}}
 <div id="privacy-map" class="space-y-5 sm:space-y-6"
-     x-data="{ sel: (location.hash || '').slice(1) || null,
+     x-data="{ sel: (location.hash || '').slice(1) || null, longId: null, _t: null, _long: false,
+               down(id) { clearTimeout(this._t); this._long = false; this._t = setTimeout(() => { this._long = true; this.longId = id; setTimeout(() => { if (this.longId === id) this.longId = null; }, 2500); }, 450); },
+               up() { clearTimeout(this._t); },
+               clickTile(id) { if (this._long) { this._long = false; return; } this.pick(id); },
                pick(id) { this.sel = this.sel === id ? null : id; history.replaceState(history.state, '', this.sel ? '#' + this.sel : location.pathname);
                           if (this.sel) this.$nextTick(() => { const d = document.getElementById('privacy-detail'); if (d && window.innerWidth < 1024) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); } }">
   {{#if error}}
@@ -13,7 +16,7 @@
   <div class="flex flex-col sm:flex-row sm:items-end gap-3">
     <div class="min-w-0 flex-1">
       <h2 class="text-xl sm:text-2xl font-semibold tracking-tight">Your privacy map</h2>
-      <p class="text-sm text-base-content/60 mt-0.5">The kinds of personal data people usually hand to cloud companies, and which of them your homeserver already keeps at home. Pick one to see how.</p>
+      <p class="text-sm text-base-content/60 mt-0.5">The kinds of personal data people usually hand to cloud companies, and which of them your homeserver already keeps at home. Each icon is a kind of data: inside the house it stays at home, in the sky it still lives with a cloud company. Pick one to see how to bring it home.</p>
     </div>
     {{#if total}}
       <div class="shrink-0 text-right">
@@ -24,38 +27,34 @@
   </div>
 
   <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem] items-start">
-    <div class="space-y-4">
-      {{!-- At home: drawn as a house (roof + walls). --}}
-      <section class="neo-privacy-home" aria-label="At home">
-        <div class="neo-privacy-roof" aria-hidden="true"></div>
-        <div class="neo-privacy-house rounded-b-box border border-t-0 border-success/40 bg-success/5 p-3 sm:p-4">
-          <div class="flex items-center gap-2 mb-3">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-success" aria-hidden="true"><path d="M4 11l8-6.5 8 6.5"/><path d="M6 9.5V19h12V9.5"/><path d="M10 19v-5h4v5"/></svg>
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-base-content/60">At home</h3>
-          </div>
-          {{#if at_home}}
-            <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
-              {{#each at_home}}{{> partials/privacy_tile home=true}}{{/each}}
-            </div>
-          {{else}}
-            <p class="text-sm text-base-content/60">Nothing yet. Pick a tile below to bring that data home.</p>
-          {{/if}}
-        </div>
-      </section>
+    {{!-- The scene: a house (data kept at home) under a sky of floating
+         icons (data still in the cloud). Hover or long-press shows a title;
+         a click opens the panel. --}}
+    <div class="neo-privacy-scene relative rounded-box border border-base-300 overflow-hidden select-none"
+         role="group" aria-label="Privacy map">
+      <svg class="neo-privacy-cloudart absolute" style="left:3%;top:4%;width:22%" viewBox="0 0 120 60" aria-hidden="true"><path d="M30 52h64a20 20 0 0 0 2-40 26 26 0 0 0-50-4A18 18 0 0 0 30 52z"/></svg>
+      <svg class="neo-privacy-cloudart absolute" style="right:5%;top:14%;width:18%" viewBox="0 0 120 60" aria-hidden="true"><path d="M30 52h64a20 20 0 0 0 2-40 26 26 0 0 0-50-4A18 18 0 0 0 30 52z"/></svg>
+      <svg class="neo-privacy-cloudart absolute" style="left:38%;top:2%;width:14%" viewBox="0 0 120 60" aria-hidden="true"><path d="M30 52h64a20 20 0 0 0 2-40 26 26 0 0 0-50-4A18 18 0 0 0 30 52z"/></svg>
+      <div class="neo-privacy-ground absolute inset-x-0 bottom-0" aria-hidden="true"></div>
+      <svg class="neo-privacy-houseart absolute" style="left:28%;top:34%;width:44%;height:66%" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <path class="neo-privacy-roof-art" d="M2 34 L50 2 L98 34 Z"/>
+        <rect class="neo-privacy-wall" x="10" y="33" width="80" height="67" rx="2"/>
+      </svg>
+      <div class="absolute text-[10px] font-semibold uppercase tracking-wider text-success/80" style="left:50%;top:47%;transform:translate(-50%,-50%)" aria-hidden="true">At home</div>
 
-      <section class="rounded-box border border-base-300 bg-base-100 p-3 sm:p-4" aria-label="In the cloud">
-        <div class="flex items-center gap-2 mb-3">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-base-content/60" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 00.6-8 5.5 5.5 0 00-10.6-1.6A4.5 4.5 0 007 18.5z"/></svg>
-          <h3 class="text-xs font-semibold uppercase tracking-wider text-base-content/60">Still in the cloud</h3>
-        </div>
-        {{#if in_cloud}}
-          <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
-            {{#each in_cloud}}{{> partials/privacy_tile home=false}}{{/each}}
-          </div>
-        {{else}}
-          <p class="text-sm text-base-content/60">Everything on this map is kept at home. 🎉</p>
-        {{/if}}
-      </section>
+      {{#each all}}
+        <button type="button"
+                class="neo-privacy-bubble absolute {{#if home_now}}neo-privacy-bubble--home{{/if}}"
+                style="left:{{x}}%;top:{{y}}%;--neo-float-delay:-{{delay}}s"
+                aria-label="{{label}}: {{#if home_now}}at home{{else}}in the cloud{{/if}}"
+                :aria-pressed="sel === '{{id}}'"
+                :class="{ 'is-selected': sel === '{{id}}', 'show-label': longId === '{{id}}' }"
+                @pointerdown="down('{{id}}')" @pointerup="up()" @pointerleave="up()" @contextmenu.prevent
+                @click="clickTile('{{id}}')">
+          <span class="neo-privacy-icon">{{> options/group_icon icon=icon tint=icon_tint}}</span>
+          <span class="neo-privacy-label">{{label}}</span>
+        </button>
+      {{/each}}
     </div>
 
     {{!-- Detail panel for the selected category. --}}

@@ -55,6 +55,61 @@ pub struct PrivacyCategory {
     pub guides: Vec<PrivacyGuide>,
     #[serde(default)]
     pub home_now: bool,
+    /// Position in the map scene (percent of width / height) and float delay.
+    #[serde(default)]
+    pub x: f32,
+    #[serde(default)]
+    pub y: f32,
+    #[serde(default)]
+    pub delay: f32,
+}
+
+/// Sky positions (x %, y %), clear of the house (x 30–70 %, y 34–100 %).
+const SKY: &[(f32, f32)] = &[
+    (8.0, 11.0),
+    (21.0, 23.0),
+    (34.0, 9.0),
+    (48.0, 21.0),
+    (62.0, 8.0),
+    (76.0, 21.0),
+    (91.0, 11.0),
+    (10.0, 38.0),
+    (90.0, 38.0),
+    (19.0, 55.0),
+    (81.0, 55.0),
+    (8.0, 72.0),
+    (92.0, 72.0),
+    (21.0, 88.0),
+    (79.0, 88.0),
+    (40.0, 30.0),
+    (60.0, 30.0),
+    (50.0, 5.0),
+];
+
+/// Spread `n` items over the sky slots and the house body (x 36–64 %, y 58–90 %).
+fn place(at_home: &mut [PrivacyCategory], in_cloud: &mut [PrivacyCategory]) {
+    for (i, c) in in_cloud.iter_mut().enumerate() {
+        let (x, y) = SKY[i % SKY.len()];
+        // A second lap shifts slightly so icons do not stack exactly.
+        let lap = (i / SKY.len()) as f32;
+        c.x = x + lap * 4.0;
+        c.y = y + lap * 5.0;
+        c.delay = (i as f32 * 0.7) % 5.0;
+    }
+    let n = at_home.len();
+    if n == 0 {
+        return;
+    }
+    let cols = n.clamp(1, 3);
+    let rows = n.div_ceil(cols);
+    for (i, c) in at_home.iter_mut().enumerate() {
+        let (r, col) = (i / cols, i % cols);
+        let in_row = if r == rows - 1 { n - r * cols } else { cols };
+        let step_x = 28.0 / in_row as f32;
+        c.x = 36.0 + step_x * (col as f32 + 0.5);
+        c.y = 58.0 + (32.0 / rows as f32) * (r as f32 + 0.5);
+        c.delay = (i as f32 * 0.9) % 4.0;
+    }
 }
 
 #[derive(Deserialize, Default)]
@@ -79,9 +134,20 @@ async fn context(config: &AppConfig) -> PrivacyContext {
     let mut ev = config.evaluator.lock().await;
     match ev.extract_privacy().await {
         Ok(x) => {
-            let all = x.categories;
-            let at_home: Vec<_> = all.iter().filter(|c| c.home_now).cloned().collect();
-            let in_cloud: Vec<_> = all.iter().filter(|c| !c.home_now).cloned().collect();
+            let mut at_home: Vec<_> = x
+                .categories
+                .iter()
+                .filter(|c| c.home_now)
+                .cloned()
+                .collect();
+            let mut in_cloud: Vec<_> = x
+                .categories
+                .iter()
+                .filter(|c| !c.home_now)
+                .cloned()
+                .collect();
+            place(&mut at_home, &mut in_cloud);
+            let all: Vec<_> = at_home.iter().chain(in_cloud.iter()).cloned().collect();
             PrivacyContext {
                 home_count: at_home.len(),
                 total: all.len(),
@@ -121,4 +187,39 @@ pub async fn configuration_privacy(
         html,
     )
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cats(n: usize) -> Vec<PrivacyCategory> {
+        (0..n)
+            .map(|i| PrivacyCategory {
+                id: format!("c{i}"),
+                ..Default::default()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn home_icons_stay_inside_the_house_and_sky_icons_outside() {
+        for n in 0..=16 {
+            let mut home = cats(n);
+            let mut cloud = cats(16 - n);
+            place(&mut home, &mut cloud);
+            for c in &home {
+                assert!(
+                    (36.0..=64.0).contains(&c.x) && (58.0..=90.0).contains(&c.y),
+                    "{n}: {} {}",
+                    c.x,
+                    c.y
+                );
+            }
+            for c in &cloud {
+                let in_house = (30.0..=70.0).contains(&c.x) && c.y >= 34.0;
+                assert!(!in_house, "{n}: sky icon in house at {} {}", c.x, c.y);
+            }
+        }
+    }
 }
