@@ -11,7 +11,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "iSponsorBlockTV - SponsorBlock client for YouTube TV" {rank = 0;};
+              enabled = mkEnableOption "Automatic skipping of sponsor segments and ads in YouTube on your TV" {rank = 0;};
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "isponsorblocktv";
