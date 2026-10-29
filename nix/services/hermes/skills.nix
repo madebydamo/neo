@@ -204,6 +204,7 @@
         ]
         ++ lib.attrValues serviceUrls)
       text;
+    toolsOn = cfg.neoToolsToken != null && cfg.neoToolsToken != "";
     guideSkills = lib.mapAttrsToList (id: g: let
       name = "neo-guide-${id}";
       description = "Guide: ${g.title}";
@@ -224,7 +225,11 @@
           ## How to run this guide
           1. Check what is already done (neo_settings_get, systemctl, docker ps) and skip those steps; say so.
           2. One step at a time, in plain words. Ask only what you cannot find out yourself (router model, phone type).
-          3. Settings: propose them with neo_settings_propose and wait until neo_settings_status is saved or applied. Never send secret values; use op "generate" where the setting has a Generate button.
+          3. ${
+            if toolsOn
+            then ''Settings: propose them with neo_settings_propose and wait until neo_settings_status is saved or applied. Never send secret values; use op "generate" where the setting has a Generate button.''
+            else ''Settings: the neo settings tools are not connected, so do not search for them. Tell the user which setting to change (as an option: link) and to save it and press Apply; never edit settings files yourself.''
+          }
           4. After each "Check" block, run its neo-check command (when there is one) and tell the user the result.
           5. Links in the guide: `service:<name>` is a service; `option:<service>.<setting>` is the setting `services.<service>.<setting>` in the neo tools (`option:core.<x>` is `core.<x>`); `guide:<id>` is another guide (skill neo-guide-<id>). Use the same links in your answers, they become clickable.
 

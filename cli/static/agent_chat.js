@@ -172,74 +172,164 @@
     if (stop) stop.classList.toggle('hidden', !on);
   }
 
+  /**
+   * One turn as a timeline: text segments, tool groups and approval cards are
+   * appended in the order their events arrive. Consecutive tool calls share a
+   * collapsible group; a finished call marks the earliest running call with the
+   * same name (calls can run in parallel and finish in any order).
+   */
+  function Turn(log) {
+    this.log = log;
+    this.seg = null; // last appended element of this turn
+    this.texts = []; // { el, raw }
+    this.lines = []; // { name, el, done }
+    this.groups = [];
+    this.streamed = '';
+  }
+
+  Turn.prototype.append = function (el) {
+    this.log.appendChild(el);
+    this.seg = el;
+    scrollDown();
+    return el;
+  };
+
+  Turn.prototype.text = function (delta) {
+    var t = this.texts[this.texts.length - 1];
+    if (!t || this.seg !== t.el) {
+      var el = document.createElement('div');
+      el.className = 'neo-agent-msg neo-agent-msg--assistant neo-agent-typing';
+      t = { el: el, raw: '' };
+      this.texts.push(t);
+      this.append(el);
+    }
+    t.raw += delta;
+    t.el.textContent = t.raw;
+    scrollDown();
+  };
+
+  Turn.prototype.group = function () {
+    var g = this.groups[this.groups.length - 1];
+    if (g && this.seg === g.el) return g;
+    var el = document.createElement('details');
+    el.className = 'neo-agent-tools';
+    var sum = document.createElement('summary');
+    var body = document.createElement('div');
+    body.className = 'neo-agent-tools-body';
+    el.appendChild(sum);
+    el.appendChild(body);
+    g = { el: el, sum: sum, body: body, lines: [] };
+    this.groups.push(g);
+    this.append(el);
+    return g;
+  };
+
+  Turn.prototype.summarize = function (g, running) {
+    var failed = g.lines.filter(function (l) { return l.failed; }).length;
+    var open = g.lines.filter(function (l) { return !l.done; });
+    if (running && open.length) {
+      g.sum.innerHTML = '<span class="loading loading-dots loading-xs"></span> ';
+      g.sum.appendChild(document.createTextNode(toolLabel(open[open.length - 1].name)));
+    } else {
+      g.sum.textContent =
+        (failed ? '⚠ ' : '✓ ') + 'Used ' + g.lines.length + (g.lines.length === 1 ? ' tool' : ' tools') +
+        (failed ? ' (' + failed + ' failed)' : '');
+    }
+  };
+
+  Turn.prototype.toolStarted = function (name) {
+    var g = this.group();
+    var el = document.createElement('div');
+    el.textContent = '… ' + toolLabel(name);
+    g.body.appendChild(el);
+    var line = { name: name, el: el, done: false, failed: false, group: g };
+    g.lines.push(line);
+    this.lines.push(line);
+    this.summarize(g, true);
+    scrollDown();
+  };
+
+  Turn.prototype.toolDone = function (name, failed) {
+    var line = null;
+    for (var i = 0; i < this.lines.length; i++) {
+      if (!this.lines[i].done && this.lines[i].name === name) { line = this.lines[i]; break; }
+    }
+    if (!line) return;
+    line.done = true;
+    line.failed = failed;
+    line.el.textContent = (failed ? '✗ ' : '✓ ') + toolLabel(name);
+    this.summarize(line.group, true);
+  };
+
+  Turn.prototype.finish = function (finalText) {
+    var self = this;
+    this.lines.forEach(function (l) {
+      if (!l.done) { l.done = true; l.el.textContent = '– ' + toolLabel(l.name); }
+    });
+    this.groups.forEach(function (g) { self.summarize(g, false); });
+    // The final answer arrives in full with assistant.completed; it is the
+    // streamed text when there was any.
+    if (!this.texts.length && finalText && finalText.trim()) this.text(finalText);
+    var chain = Promise.resolve();
+    this.texts.forEach(function (t) {
+      t.el.classList.remove('neo-agent-typing');
+      if (t.raw.trim()) chain = chain.then(function () { return renderInto(t.el, t.raw); });
+      else t.el.remove();
+    });
+    return chain;
+  };
+
   function send(text) {
     text = (text || '').trim();
     if (!text || state.busy || !state.session) return;
     bubble('user', null, text);
-    var reply = bubble('assistant', null, '');
-    reply.classList.add('neo-agent-typing');
-    var tools = null;
-    var raw = '';
+    var turn = new Turn(el('neo-agent-log'));
+    var waiting = turn.append(document.createElement('div'));
+    waiting.className = 'neo-agent-msg neo-agent-msg--note';
+    waiting.innerHTML = '<span class="loading loading-dots loading-xs"></span>';
+    var finalText = '';
     var first = state.first;
     state.first = false;
     setBusy(true);
 
-    function toolLine(name, status) {
-      // New group when something (an approval card) came in between.
-      if (!tools || tools.nextElementSibling !== reply) {
-        tools = document.createElement('div');
-        tools.className = 'neo-agent-tools';
-        reply.parentNode.insertBefore(tools, reply);
-      }
-      var label = toolLabel(name);
-      var last = tools.lastElementChild;
-      if (status !== 'started' && last && last.dataset.tool === name && !last.dataset.done) {
-        last.dataset.done = '1';
-        last.textContent = (status === 'failed' ? '✗ ' : '✓ ') + label;
-        return;
-      }
-      var line = document.createElement('div');
-      line.dataset.tool = name;
-      line.textContent = '… ' + label;
-      tools.appendChild(line);
-      scrollDown();
-    }
-
     function handle(ev) {
       var d = ev.data || {};
+      if (waiting && ev.event !== 'run.started' && ev.event !== 'message.started') {
+        waiting.remove();
+        waiting = null;
+      }
       switch (ev.event) {
         case 'run.started':
           if (d.run_id) state.run = d.run_id;
           break;
         case 'assistant.delta':
-          raw += d.delta || '';
-          // Keep the reply below tool lines / approval cards that came first.
-          if (reply.parentNode && reply.parentNode.lastElementChild !== reply) {
-            reply.parentNode.appendChild(reply);
-          }
-          reply.textContent = raw;
-          scrollDown();
+          if (d.delta) turn.text(d.delta);
           break;
         case 'assistant.commentary':
-          if (!d.already_streamed) note(d.text || '', 'neo-agent-commentary');
+          if (!d.already_streamed && d.text) {
+            turn.text(d.text);
+            turn.seg = null; // the next text starts a new paragraph
+          }
           break;
         case 'tool.started':
-          toolLine(d.tool_name, 'started');
+          turn.toolStarted(d.tool_name);
           break;
         case 'tool.completed':
-          toolLine(d.tool_name, 'completed');
+          turn.toolDone(d.tool_name, false);
           break;
         case 'tool.failed':
-          toolLine(d.tool_name, 'failed');
+          turn.toolDone(d.tool_name, true);
           break;
         case 'approval.request':
+          turn.seg = null;
           approvalCard(d);
           break;
         case 'assistant.completed':
-          raw = d.content || raw;
+          finalText = d.content || '';
           break;
         case 'error':
           note(d.message || 'Something went wrong.', 'neo-agent-error');
+          turn.seg = null;
           break;
         default:
           break;
@@ -268,11 +358,10 @@
         note(e.message || String(e), 'neo-agent-error');
       })
       .then(function () {
-        reply.classList.remove('neo-agent-typing');
+        if (waiting) waiting.remove();
         state.run = null;
         setBusy(false);
-        if (raw.trim()) return renderInto(reply, raw);
-        reply.remove();
+        return turn.finish(finalText);
       });
   }
 

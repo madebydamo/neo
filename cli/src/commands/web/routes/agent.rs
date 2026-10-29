@@ -38,7 +38,19 @@ fn frame(event: &str, data: Value) -> Vec<u8> {
     format!("event: {event}\ndata: {data}\n\n").into_bytes()
 }
 
-const STYLE: &str = "You are answering in the chat panel of the neo web UI. The person may not be technical: use plain words and short numbered steps, one step at a time. Refer to settings by their label. To point at a setting, write a Markdown link like [Home network address](option:pihole.localIP); for an app [Pi-hole](service:pihole); for a guide [title](guide:<id>). Change settings only with the neo_settings_propose tool, never by editing files; after proposing, say that a card with Save / Save & apply appears here in the chat, include the proposal link from the tool result, and wait for the user. Never ask the user to paste passwords or keys into the chat.";
+const STYLE: &str = "You are answering in the chat panel of the neo web UI. The person may not be technical: use plain words and short numbered steps, one step at a time, and keep tool use to what the question needs. Refer to settings by their label. To point at a setting, write a Markdown link like [Home network address](option:pihole.localIP); for an app [Pi-hole](service:pihole); for a guide [title](guide:<id>). Never ask the user to paste passwords or keys into the chat.";
+
+/// How settings changes work, depending on whether the neo tools are connected.
+fn settings_rules() -> &'static str {
+    let tools = std::env::var("NEO_AGENT_TOKEN_FILE")
+        .ok()
+        .is_some_and(|p| std::path::Path::new(&p).exists());
+    if tools {
+        "Read settings with neo_settings_schema / neo_settings_get and change them only with neo_settings_propose, never by editing files. After proposing, say that a card with Save / Save & apply appears here in the chat, include the proposal link from the tool result, and wait for the user."
+    } else {
+        "The neo settings tools are not connected here, so do not look for them (no tool_search or connection setup for them). Read the current settings from the context below or with read-only commands, and never edit settings files yourself: tell the user which setting to change, as an option: link they can click, and that they save it and press Apply at the top. To let you prepare changes yourself, the user can generate the Settings tools token on the Hermes page."
+    }
+}
 
 #[derive(Deserialize)]
 pub struct OpenReq {
@@ -106,7 +118,7 @@ async fn instructions(config: &AppConfig, kind: &str, name: &str) -> String {
                 .to_string(),
                 Err(_) => "[]".to_string(),
             };
-            format!("{STYLE}\n\nThe user opened the chat from the {name} settings page. If a neo-{name} skill exists, load it. Current settings (secrets redacted): {settings}")
+            format!("{STYLE} {}\n\nThe user opened the chat from the {name} settings page. If a neo-{name} skill exists, load it. Current settings (secrets redacted): {settings}", settings_rules())
         }
         "guide" => {
             let title = load_guides(config)
@@ -115,9 +127,9 @@ async fn instructions(config: &AppConfig, kind: &str, name: &str) -> String {
                 .and_then(|x| x.guides.into_iter().find(|g| g.id == name))
                 .map(|g| g.title)
                 .unwrap_or_else(|| name.to_string());
-            format!("{STYLE}\n\nThe user wants to follow the guide \"{title}\". Load the neo-guide-{name} skill and walk them through it step by step: first check what is already done, ask only what you cannot find out yourself, propose settings changes with neo_settings_propose, and run each check before moving on.")
+            format!("{STYLE} {}\n\nThe user wants to follow the guide \"{title}\". Load the neo-guide-{name} skill and walk them through it step by step: first check what is already done, ask only what you cannot find out yourself, and run each check before moving on.", settings_rules())
         }
-        _ => STYLE.to_string(),
+        _ => format!("{STYLE} {}", settings_rules()),
     }
 }
 
