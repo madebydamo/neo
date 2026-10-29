@@ -11,15 +11,21 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Docker auto-updater (scheduled image pulls + restarts for declared containers)" {
+              # Scheduled image pulls + restarts of the declared containers.
+              enabled = mkEnableOption "Automatically update apps: download new versions and restart the apps that changed" {
                 rank = 0;
                 default = true;
               };
+              # systemd OnCalendar expression.
               schedule = mkOption {
                 type = types.str;
                 default = "Sun *-*-* 04:00:00";
-                description = "systemd OnCalendar schedule for image checks (e.g. daily, weekly, Sun *-*-* 04:00:00)";
+                description = "When to check for and install app updates (default: Sundays at 4 AM). Accepts daily, weekly or a systemd calendar time such as Sun 04:00.";
                 rank = 10;
+                ui = lib.neo.ui.mkUi {
+                  label = "Update time";
+                  visibleWhen = "enabled";
+                };
               };
             }
             // lib.neo.mkSystemdUnits ["neo-docker-updater"]
