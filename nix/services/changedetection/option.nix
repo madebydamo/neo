@@ -12,7 +12,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "changedetection.io website change detection service" {rank = 0;};
+              enabled = mkEnableOption "Alerts when a web page changes, e.g. a price drop or a product back in stock" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 internal = true;
