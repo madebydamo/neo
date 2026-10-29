@@ -11,12 +11,14 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "beszel hub service" {rank = 0;};
+              enabled = mkEnableOption "Beszel monitoring dashboard: CPU, memory, disk and app usage of your servers" {rank = 0;};
+              # Disables Beszel password auth (single user, behind tinyauth).
               enableSingleUserSystem = mkOption {
                 type = types.bool;
                 default = true;
-                description = "Disable password auth for single-user + tinyauth setup (recommended)";
+                description = "Skip Beszel's own login screen because you already sign in to the homeserver (recommended).";
                 rank = 10;
+                ui = lib.neo.ui.mkUi {label = "Skip Beszel login";};
               };
             }
             // lib.neo.mkReverseProxyOptions {
