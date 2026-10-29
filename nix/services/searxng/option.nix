@@ -11,7 +11,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "searxng service" {rank = 0;};
+              enabled = mkEnableOption "private web search that doesn't track you" {rank = 0;};
             }
             // neo.mkReverseProxyOptions {
               subdomain = "search";
