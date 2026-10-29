@@ -112,4 +112,7 @@ pub struct OptionPaneContext {
     /// Configured plugins + owned service names (for the pluginList widget).
     #[serde(default)]
     pub plugin_inventory_json: String,
+    /// Guides that use this service (strip under the pane header).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub guides: Vec<crate::commands::web::guides::Guide>,
 }

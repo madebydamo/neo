@@ -16,3 +16,4 @@ rocket = { version = "0.5", features = ["json"] }
 rocket_dyn_templates = { version = "0.1.0-rc.4", features = ["handlebars"] }
 rocket_ws = "0.1"
 tokio = { version = "1", features = ["full"] }
+pulldown-cmark = { version = "0.13.5", default-features = false, features = ["html"] }

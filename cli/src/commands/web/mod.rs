@@ -11,6 +11,7 @@ use rocket_dyn_templates::Template;
 mod action_bar;
 mod diff;
 mod git;
+mod guides;
 mod helper_exec;
 mod icons;
 mod locks;

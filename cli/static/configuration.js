@@ -174,12 +174,13 @@ window.configShell = function configShell() {
   var initialDetail = el && el.getAttribute('data-initial-detail');
   if (initialDetail === '') initialDetail = null;
   return {
-    tab: initialTab, // 'services' | 'settings' | 'versioning'
+    tab: initialTab, // 'services' | 'guides' | 'settings' | 'versioning'
     detail: initialDetail || null, // null | service/core section name when option pane is open
 
     sectionLabel() {
       if (this.tab === 'settings') return 'Settings';
       if (this.tab === 'versioning') return 'Versioning';
+      if (this.tab === 'guides') return 'Guides';
       return 'Services';
     },
 
@@ -195,6 +196,7 @@ window.configShell = function configShell() {
     tabUrl(tab) {
       if (tab === 'settings') return '/configuration/settings';
       if (tab === 'versioning') return '/configuration/versioning';
+      if (tab === 'guides') return '/configuration/guides';
       // Prefer /configuration (not /configuration/services) as the services home URL.
       return '/configuration';
     },
@@ -586,6 +588,42 @@ window.servicesGrid = function servicesGrid() {
   });
 
   /** Sync shell.detail / shell.tab after HTMX swaps into #config-content. */
+  /**
+   * `?focus=<option>` (guide option: links): open the option's section, scroll
+   * to the field and flash it once.
+   */
+  function focusOptionFromUrl(pane) {
+    var name = null;
+    try {
+      name = new URLSearchParams(location.search).get('focus');
+    } catch (e) {}
+    if (!name) return;
+    var field = null;
+    pane.querySelectorAll('[data-option]').forEach(function (el) {
+      if (!field && el.getAttribute('data-option') === name) field = el;
+    });
+    if (!field) return;
+    var section = field.closest('section[data-section]');
+    try {
+      if (section && typeof Alpine !== 'undefined' && Alpine.$data) {
+        var d = Alpine.$data(field);
+        if (d && d.openSections) {
+          var next = Object.assign({}, d.openSections);
+          next[section.getAttribute('data-section')] = true;
+          d.openSections = next;
+        }
+        if (d && d.setPaneTab) d.setPaneTab('settings');
+      }
+    } catch (e) {}
+    setTimeout(function () {
+      field.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      field.classList.add('neo-guide-focus');
+      setTimeout(function () {
+        field.classList.remove('neo-guide-focus');
+      }, 2400);
+    }, 150);
+  }
+
   function syncConfigShellFromContent() {
     try {
       var shell = document.getElementById('config-shell');
@@ -594,9 +632,14 @@ window.servicesGrid = function servicesGrid() {
       if (!data) return;
       var content = document.getElementById('config-content');
       var pane = content && content.querySelector('#options-pane');
+      var guide = content && content.querySelector('#guide-page');
       if (pane) {
         data.setDetail(pane.getAttribute('data-service'));
         data.tab = pane.getAttribute('data-is-core') === 'true' ? 'settings' : 'services';
+        focusOptionFromUrl(pane);
+      } else if (guide) {
+        data.setDetail(guide.getAttribute('data-guide-title') || 'Guide');
+        data.tab = 'guides';
       } else {
         data.clearDetail();
         // Infer active tab from grid/branches partials (Back/Forward history restore).
@@ -607,6 +650,7 @@ window.servicesGrid = function servicesGrid() {
             content.querySelector('#branches-section'))
         )
           data.tab = 'versioning';
+        else if (content && content.querySelector('#guides-grid')) data.tab = 'guides';
         else if (content && content.querySelector('#services-grid')) data.tab = 'services';
       }
     } catch (e) {}

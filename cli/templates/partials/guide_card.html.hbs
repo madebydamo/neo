@@ -1,0 +1,32 @@
+{{!-- One guide card (guides grid, related guides, service pane strip). --}}
+<a href="/configuration/guides/{{id}}"
+   hx-get="/configuration/guides/{{id}}"
+   hx-target="#config-content"
+   hx-swap="innerHTML"
+   hx-push-url="true"
+   data-guide-card
+   data-tags="{{#each tags}}{{this}} {{/each}}"
+   data-search="{{title}} {{summary}}{{#each tags}} {{this}}{{/each}}{{#each mentions}} {{this}}{{/each}}"
+   class="group flex items-start gap-3 rounded-box border border-base-300 bg-base-100 p-3 sm:p-4 text-left no-underline transition-[border-color,box-shadow] hover:border-primary/50 hover:shadow-md focus-visible:outline-2 focus-visible:outline-primary"
+   {{#if xshow}}x-show="cardVisible($el)"{{/if}}>
+  <span class="w-10 h-10 shrink-0 rounded-xl bg-base-200 p-2 flex items-center justify-center">
+    {{#if icon}}
+      <img src="{{icon}}" class="max-w-full max-h-full object-contain" alt="" loading="lazy">
+    {{else}}
+      <span class="text-lg leading-none opacity-50">✦</span>
+    {{/if}}
+  </span>
+  <span class="min-w-0 flex-1">
+    <span class="block font-semibold text-sm leading-snug">{{title}}</span>
+    {{#if summary}}
+      <span class="block mt-0.5 text-xs leading-snug text-base-content/60 line-clamp-2">{{summary}}</span>
+    {{/if}}
+    <span class="flex flex-wrap items-center gap-1 mt-1.5 text-[11px] text-base-content/55">
+      {{#if minutes}}<span class="badge badge-ghost badge-xs">{{minutes}} min</span>{{/if}}
+      {{#if difficulty}}<span class="badge badge-ghost badge-xs capitalize">{{difficulty}}</span>{{/if}}
+      {{#each services}}
+        <span class="badge badge-xs gap-1 {{#if enabled}}badge-success badge-soft{{else}}badge-ghost{{/if}}">{{name}}</span>
+      {{/each}}
+    </span>
+  </span>
+</a>

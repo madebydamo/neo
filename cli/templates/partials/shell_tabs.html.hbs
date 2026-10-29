@@ -9,6 +9,13 @@
     Services
   </button>
   <button type="button" role="tab" class="tab gap-1.5 flex-1 md:flex-none"
+          :class="{ 'tab-active': tab === 'guides' }"
+          :aria-selected="tab === 'guides'"
+          @click="loadTab('guides')">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 015.5 4H11v16H5.5A1.5 1.5 0 014 18.5z"/><path d="M20 5.5A1.5 1.5 0 0018.5 4H13v16h5.5a1.5 1.5 0 001.5-1.5z"/></svg>
+    Guides
+  </button>
+  <button type="button" role="tab" class="tab gap-1.5 flex-1 md:flex-none"
           :class="{ 'tab-active': tab === 'settings' }"
           :aria-selected="tab === 'settings'"
           @click="loadTab('settings')">

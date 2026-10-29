@@ -1,4 +1,4 @@
-mod errors;
+pub(crate) mod errors;
 mod extract;
 pub(crate) mod registry;
 mod repl;

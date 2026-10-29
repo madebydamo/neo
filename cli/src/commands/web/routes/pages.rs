@@ -50,7 +50,7 @@ pub async fn nav_services(config: &State<Arc<AppConfig>>, icons: &State<Arc<Icon
     Template::render("nav_services", data)
 }
 
-async fn configuration_shell(
+pub(super) async fn configuration_shell(
     config: &State<Arc<AppConfig>>,
     initial_content_url: &str,
     initial_tab: &str,
@@ -159,10 +159,11 @@ pub async fn configuration_option(
     htmx: Htmx,
     meta: Metadata<'_>,
 ) -> Template {
+    let mut pane = pane_context(config, false, service).await;
+    pane.guides = super::guides::guides_for_service(config, service).await;
     if htmx.is_htmx() {
-        pane_template(config, false, service).await
+        Template::render("option_pane", pane)
     } else {
-        let pane = pane_context(config, false, service).await;
         let html = render_pane_html(&meta, &pane);
         configuration_shell(
             config,

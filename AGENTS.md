@@ -69,6 +69,23 @@ Naming: options camelCase under `neo.services.*`; plain-string descriptions; vol
 
 **Rust:** clap, `anyhow::Result`, `?` + `.context`, `toml_edit::DocumentMut`; no `unwrap` in lib paths.
 
+## Guides
+
+Outcome-focused how-tos ("Block ads for the whole home") on the web UI's **Guides** tab, linked from every service they use. Declare one per directory, `nix/guides/<id>/default.nix` (core) or in a plugin:
+
+```nix
+flake.modules.nixos.guide-<id> = {
+  neo.guides.<id> = {
+    title = "…"; summary = "…";
+    services = [ "pihole" ]; optional = [ "tailscale" ];
+    difficulty = "easy"; minutes = 15; tags = [ "network" ]; rank = 10;
+    body = ./guide.md;
+  };
+};
+```
+
+The body is GitHub-style Markdown (options in `nix/modules/core/guides.nix`, renderer `cli/src/commands/web/guides.rs`). Links: `[Pi-hole](service:pihole)`, `[home address](option:pihole.localIP)` (opens the field), `[…](guide:<id>)`, `[…](privacy:<category>)`; targets missing on this machine render as plain text. Placeholders `{{domain}}` and `{{service.<name>.url}}`. Callouts `> [!tip]` / `> [!warning]` / `> [!check] Title`; a fenced `neo-check` block inside a check is the command the assistant runs (shown only when Hermes is on). Raw HTML is shown as text. Write for non-technical readers, one outcome per guide, steps that point at real settings.
+
 ## Web UI option metadata (`rank` / `helper` / `ui`)
 
 Declare presentation next to the option in Nix. Extract serializes it; the form interprets it generically — **do not** hardcode service/option names in `option_form.js` or `extract_service_options.nix`.

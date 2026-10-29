@@ -27,13 +27,16 @@ pub static EXTRACT_PLUGIN_INVENTORY: NixExtractor =
 pub static EXTRACT_SECRET_PATHS: NixExtractor =
     extractor!("extract_secret_paths.nix", "extractSecretPaths");
 
-pub static NIX_EXTRACTORS: [&NixExtractor; 6] = [
+pub static EXTRACT_GUIDES: NixExtractor = extractor!("extract_guides.nix", "extractGuides");
+
+pub static NIX_EXTRACTORS: [&NixExtractor; 7] = [
     &EXTRACT_SERVICES,
     &EXTRACT_SERVICE_OPTIONS,
     &EXTRACT_PROXIED_SERVICES,
     &EXTRACT_NEO_THEME,
     &EXTRACT_PLUGIN_INVENTORY,
     &EXTRACT_SECRET_PATHS,
+    &EXTRACT_GUIDES,
 ];
 
 /// Helpers the extractors `import ./extract_lib.nix` (written, not bound).

@@ -1398,3 +1398,99 @@ a.neo-sem-name:focus-visible {
   background-color: var(--color-base-100);
   padding-top: 0.25rem;
 }
+
+/* Guides (cli/src/commands/web/guides.rs renders the body). */
+.neo-guide-body {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: color-mix(in oklab, var(--color-base-content) 88%, transparent);
+}
+.neo-guide-body > * + * { margin-top: 0.85rem; }
+.neo-guide-body h2 {
+  margin-top: 1.9rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-base-content);
+  scroll-margin-top: 6rem;
+}
+.neo-guide-body h3 {
+  margin-top: 1.4rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-base-content);
+  scroll-margin-top: 6rem;
+}
+.neo-guide-body ul { list-style: disc; padding-left: 1.25rem; }
+.neo-guide-body ol { list-style: decimal; padding-left: 1.25rem; }
+.neo-guide-body li + li { margin-top: 0.25rem; }
+.neo-guide-body code {
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  border-radius: 0.35rem;
+  background: var(--color-base-200);
+}
+.neo-guide-body pre {
+  overflow-x: auto;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius-box);
+  background: var(--color-base-200);
+  font-size: 0.8125rem;
+}
+.neo-guide-body pre code { padding: 0; background: none; }
+.neo-guide-body table { width: 100%; font-size: 0.875rem; border-collapse: collapse; }
+.neo-guide-body th, .neo-guide-body td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--color-base-300);
+}
+.neo-guide-body a.link { text-underline-offset: 2px; }
+.neo-guide-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.45rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-base-300);
+  background: var(--color-base-100);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.neo-guide-chip:hover { border-color: color-mix(in oklab, var(--color-primary) 50%, transparent); }
+.neo-guide-option {
+  font-weight: 500;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  color: var(--color-primary);
+}
+.neo-guide-broken { text-decoration: line-through dotted; opacity: 0.7; }
+.neo-callout {
+  border-left: 3px solid var(--neo-callout, var(--color-info));
+  background: color-mix(in oklab, var(--neo-callout, var(--color-info)) 9%, transparent);
+  border-radius: 0 var(--radius-box) var(--radius-box) 0;
+  padding: 0.65rem 0.9rem;
+}
+.neo-callout > * + * { margin-top: 0.5rem; }
+.neo-callout-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--neo-callout, var(--color-info));
+}
+.neo-callout--tip { --neo-callout: var(--color-success); }
+.neo-callout--check { --neo-callout: var(--color-primary); }
+.neo-callout--warning { --neo-callout: var(--color-warning); }
+.neo-callout--caution { --neo-callout: var(--color-error); }
+.neo-guide-check-cmd summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
+}
+.neo-guide-check-cmd pre { margin-top: 0.4rem; }
+.neo-guide-focus {
+  border-radius: var(--radius-box);
+  box-shadow: 0 0 0 2px var(--color-primary);
+  transition: box-shadow 0.3s;
+}

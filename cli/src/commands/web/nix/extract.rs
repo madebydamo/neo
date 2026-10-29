@@ -1,7 +1,7 @@
 use super::errors::eval_error_ui;
 use super::registry::{
-    NixExtractor, EXTRACT_NEO_THEME, EXTRACT_PLUGIN_INVENTORY, EXTRACT_PROXIED_SERVICES,
-    EXTRACT_SECRET_PATHS, EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
+    NixExtractor, EXTRACT_GUIDES, EXTRACT_NEO_THEME, EXTRACT_PLUGIN_INVENTORY,
+    EXTRACT_PROXIED_SERVICES, EXTRACT_SECRET_PATHS, EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
 };
 use super::repl::NixEvaluator;
 use crate::commands::web::plugins::{attach_service_plugin_badges, plugin_badges, plugin_filters};
@@ -191,6 +191,7 @@ impl NixEvaluator {
             appdata_root: None,
             plugins: vec![],
             plugin_inventory_json: "[]".to_string(),
+            guides: vec![],
         }
     }
 
@@ -265,6 +266,7 @@ impl NixEvaluator {
             appdata_root: raw.appdata_root.filter(|p| !p.is_empty()),
             plugins,
             plugin_inventory_json,
+            guides: vec![],
         }
     }
 
@@ -333,5 +335,20 @@ impl NixEvaluator {
         }
         let raw: RawPaths = self.query_extractor(&EXTRACT_SECRET_PATHS).await?;
         Ok(raw.paths)
+    }
+
+    /// Guides (`neo.guides`) with links checked and icons published.
+    pub async fn extract_guides(
+        &mut self,
+    ) -> anyhow::Result<crate::commands::web::guides::GuidesExtract> {
+        let mut raw: crate::commands::web::guides::GuidesExtract =
+            self.query_extractor(&EXTRACT_GUIDES).await?;
+        for g in &mut raw.guides {
+            self.icons.link(&mut g.icon);
+            for s in g.services.iter_mut().chain(g.optional.iter_mut()) {
+                self.icons.link(&mut s.icon);
+            }
+        }
+        Ok(raw)
     }
 }

@@ -1,0 +1,53 @@
+{{!-- Guides tab: search + tag filter over guide cards. --}}
+<div id="guides-grid" class="space-y-5 sm:space-y-6"
+     x-data="{ q: '', tag: 'all',
+               cardVisible(el) {
+                 const s = (el.dataset.search || '').toLowerCase();
+                 const okQ = !this.q || this.q.toLowerCase().split(/\s+/).every(w => s.includes(w));
+                 const okT = this.tag === 'all' || (' ' + (el.dataset.tags || '')).includes(' ' + this.tag + ' ');
+                 return okQ && okT;
+               } }">
+  {{#if error}}
+    <div role="alert" class="alert alert-error alert-soft text-sm">
+      <div class="text-xs whitespace-pre-wrap break-words font-mono">{{error}}</div>
+    </div>
+  {{/if}}
+
+  <div class="flex flex-col sm:flex-row sm:items-end gap-3">
+    <div class="min-w-0 flex-1">
+      <h2 class="text-xl sm:text-2xl font-semibold tracking-tight">Guides</h2>
+      <p class="text-sm text-base-content/60 mt-0.5">Step-by-step setups for things you can do with your homeserver.</p>
+    </div>
+    <label class="input input-sm sm:input-md w-full sm:w-80 neo-search">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 opacity-50 shrink-0" aria-hidden="true"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.45 4.39l3.08 3.08a.75.75 0 11-1.06 1.06l-3.08-3.08A7 7 0 012 9z" clip-rule="evenodd"/></svg>
+      <input type="search" x-model="q" @keydown.escape.prevent="q = ''; $el.blur()"
+             class="grow" placeholder="Search guides" aria-label="Search guides" autocomplete="off">
+    </label>
+  </div>
+
+  {{#if tags}}
+    <div class="flex gap-1.5 neo-scroll-x -mx-1 px-1 pb-0.5" aria-label="Filter by topic">
+      <button type="button" class="btn btn-xs sm:btn-sm rounded-full shrink-0 font-normal"
+              :class="tag === 'all' ? 'btn-neutral' : 'btn-ghost bg-base-100 border-base-300'"
+              @click="tag = 'all'">All topics</button>
+      {{#each tags}}
+        <button type="button" class="btn btn-xs sm:btn-sm rounded-full shrink-0 font-normal capitalize"
+                data-tag="{{this}}"
+                :class="tag === $el.dataset.tag ? 'btn-neutral' : 'btn-ghost bg-base-100 border-base-300'"
+                @click="tag = tag === $el.dataset.tag ? 'all' : $el.dataset.tag">{{this}}</button>
+      {{/each}}
+    </div>
+  {{/if}}
+
+  {{#if guides}}
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
+      {{#each guides}}
+        {{> partials/guide_card xshow=true}}
+      {{/each}}
+    </div>
+  {{else}}
+    {{#unless error}}
+      <p class="text-sm text-base-content/60">No guides yet.</p>
+    {{/unless}}
+  {{/if}}
+</div>

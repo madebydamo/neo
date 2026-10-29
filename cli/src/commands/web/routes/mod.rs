@@ -2,6 +2,7 @@ mod actions;
 mod activation;
 mod branches;
 mod changes;
+mod guides;
 mod helpers;
 mod icons;
 mod locks;
@@ -33,6 +34,8 @@ pub fn routes() -> Vec<rocket::Route> {
         pages::configuration_versioning,
         pages::configuration_option,
         pages::configuration_core,
+        guides::configuration_guides,
+        guides::configuration_guide,
         helpers::run_helper,
         oauth::run_oauth,
         save::save_service,
