@@ -21,14 +21,14 @@
                 default = 9000;
                 description = "Internal port Mealie listens on (API_PORT; upstream says leave this at 9000 in Docker)";
               };
+              # ALLOW_SIGNUP. Does not create the first user: Mealie seeds
+              # changeme@example.com on an empty database.
               allowSignup = mkOption {
                 type = types.bool;
                 default = false;
                 rank = 20;
-                description = ''
-                  ALLOW_SIGNUP: let anyone who can reach the site create an account without an invite.
-                  Off by default. This does not create the first user. Mealie seeds changeme@example.com on an empty database.
-                '';
+                description = "Let anyone who can open Mealie create an account without an invite. Leave off unless you want public sign-ups.";
+                ui = lib.neo.ui.mkUi {label = "Allow public sign-up";};
               };
             }
             // lib.neo.mkReverseProxyOptions {
