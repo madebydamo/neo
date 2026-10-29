@@ -25,33 +25,34 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "iCal subscription sync into a CalDAV server (vdirsyncer)" {rank = 0;};
+              enabled = mkEnableOption "Copy online calendars you subscribe to (school, sports, holidays) into your own calendar" {rank = 0;};
 
+              # CalDAV base URL; default is this host's RustiCal
+              # (https://rustical.<domain>/caldav).
               caldavUrl = mkOption {
                 type = types.str;
                 default = defaultCaldavUrl;
-                description = ''
-                  CalDAV base URL to write subscribed calendars into.
-                  Defaults to this host's RustiCal (`https://rustical.<domain>/caldav`).
-                '';
+                description = "Address of the calendar server the calendars are copied into. The default is your RustiCal.";
                 rank = 10;
+                ui = lib.neo.ui.mkUi {
+                  group = lib.neo.ui.groups.advanced;
+                  label = "Calendar server address";
+                };
               };
 
               user = mkOption {
                 type = types.str;
                 default = "";
-                description = ''
-                  CalDAV username (RustiCal principal id, usually the same as the tinyauth username).
-                '';
+                # CalDAV username = RustiCal principal id.
+                description = "Your calendar username (usually your login name).";
                 rank = 20;
               };
 
               password = lib.neo.mkSecretOption {
                 type = types.str;
                 default = "";
-                description = ''
-                  CalDAV password. For RustiCal this is an app token from the RustiCal web UI (Frontend → app tokens), not ssoPassword and not the tinyauth password.
-                '';
+                # CalDAV password; for RustiCal an app token (not ssoPassword).
+                description = "An app password created in RustiCal (Frontend › App tokens), not your normal login password.";
                 rank = 30;
               };
 
@@ -60,22 +61,27 @@
                   options = {
                     calendar = mkOption {
                       type = types.str;
+                      # RustiCal collection name on the CalDAV server.
                       description = ''
-                        Destination calendar id on the CalDAV server (RustiCal collection name). Letters, digits, hyphen, and underscore only. Created automatically if missing.
+                        Name of the calendar to copy into, for example school-holidays. Letters, digits, - and _ only.
+                        It is created if it does not exist yet.
                       '';
                       rank = 0;
                     };
                     url = mkOption {
                       type = types.str;
-                      description = "Remote iCal URL to subscribe to (https://…/calendar.ics or webcal://…)";
+                      description = "Link to the online calendar, usually ending in .ics or starting with webcal://.";
+                      ui = lib.neo.ui.mkUi {
+                        label = "Calendar link";
+                      };
                       rank = 10;
                     };
                   };
                 });
                 default = [];
                 description = ''
-                  iCal feeds to mirror into CalDAV. Each entry names a calendar on the server and the remote .ics URL.
-                  The feed is the source of truth: new events are added, and events that disappear from the feed are removed from the calendar.
+                  Online calendars to copy into your own calendars.
+                  The online calendar wins: new events are added, and events removed there are removed from your copy too.
                 '';
                 rank = 40;
               };
@@ -83,7 +89,14 @@
               schedule = mkOption {
                 type = types.str;
                 default = "*-*-* 00/6:00:00";
-                description = "systemd OnCalendar schedule for subscription sync (default every 6 hours)";
+                # systemd OnCalendar expression.
+                description = ''
+                  How often calendars refresh (default every 6 hours).
+                  For example "hourly", "daily" or "*-*-* 00/6:00:00" for every 6 hours.
+                '';
+                ui = lib.neo.ui.mkUi {
+                  label = "Refresh schedule";
+                };
                 rank = 50;
               };
             }
