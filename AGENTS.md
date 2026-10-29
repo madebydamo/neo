@@ -87,6 +87,15 @@ flake.modules.nixos.guide-<id> = {
 
 The body is GitHub-style Markdown (options in `nix/modules/core/guides.nix`, renderer `cli/src/commands/web/guides.rs`). Links: `[Pi-hole](service:pihole)`, `[home address](option:pihole.localIP)` (opens the field), `[…](guide:<id>)`, `[…](privacy:<category>)`; targets missing on this machine render as plain text. Placeholders `{{domain}}` and `{{service.<name>.url}}`. Callouts `> [!tip]` / `> [!warning]` / `> [!check] Title`; a fenced `neo-check` block inside a check is the command the assistant runs (shown only when Hermes is on). Raw HTML is shown as text. Write for non-technical readers, one outcome per guide, steps that point at real settings.
 
+## Assistant chat and settings tools
+
+With Hermes on, two visible secrets turn on the AI parts of the web UI (`nix/services/hermes/default.nix`):
+
+- **Gateway token** (≥16 chars) → Hermes' API server (`API_SERVER_KEY`, 127.0.0.1:`gatewayPort`) and the **chat drawer** (`static/agent_chat.js`, `partials/agent_drawer.html.hbs`, routes `routes/agent.rs` → `agent.rs`). neo-web proxies `/agent/open|chat|approve|stop|render` to the session chat SSE API; the key stays server-side. Open it from any element with `data-neo-agent="general|service:<name>|guide:<id>"` (+ `data-neo-agent-title`, `-starter`, `-hint`); render such buttons only when the context has `assistant` (`agent::available()`).
+- **Settings tools token** → MCP server `neo` for Hermes at `/internal/mcp` (`routes/agent_tools.rs`; SWAG 404s `/internal/`): read settings (secrets redacted) and **propose** changes. A proposal (`proposals.rs`, card `proposal_card.html.hbs`, `/proposals/<id>`) writes nothing until the user clicks Save (`settings::edit::apply_edit`, the form's write path) or Save & apply (then `apply_or_activate`). New settings writes go through `apply_edit` too, never a second path.
+
+Every guide is also a Hermes skill `neo-guide-<id>` (`nix/services/hermes/skills.nix`), which "Do it with AI" loads.
+
 ## Web UI option metadata (`rank` / `helper` / `ui`)
 
 Declare presentation next to the option in Nix. Extract serializes it; the form interprets it generically — **do not** hardcode service/option names in `option_form.js` or `extract_service_options.nix`.
