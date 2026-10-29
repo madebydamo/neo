@@ -22,7 +22,8 @@
                 type = types.enum ["lofi" "halloween" "dark" "light"];
                 default = "lofi";
                 rank = 10;
-                description = "Color theme for the neo web UI (navigator dashboard and configuration editor).";
+                description = "Look of the neo dashboard and settings pages. lofi is a calm black-and-white style, halloween is dark with orange, dark and light are plain dark or light.";
+                ui = lib.neo.ui.mkUi {label = "Color theme";};
               };
 
               port = mkOption {
@@ -32,20 +33,21 @@
                 description = "Internal port for the Neo web UI (binds 127.0.0.1 on host; SWAG via host.docker.internal + DNAT)";
               };
 
+              # Lets neo.* embed sub.domain pages in iframes:
+              # - writes a SWAG conf.d snippet with relaxed cookies so auth works across
+              #   subdomains (requires the include added to nginx.conf)
+              # - ensures (one script in swag preStart) that proxy.conf has proxy_hide_header
+              #   for X-Frame-Options and Content-Security-Policy.
+              # This fixes cross-origin frame blocking centrally, without per-service swag.nix edits.
               iframeCookieSupport = mkOption {
                 type = types.bool;
                 default = true;
                 rank = 20;
-                description = ''
-                  When enabled (default), configures support for loading other services inside
-                  the neo web UI iframes (neo.* embeds sub.domain pages):
-                  - writes conf.d snippet (relaxed cookies for auth across subdomains; requires
-                    include added to nginx.conf)
-                  - ensures (via a single script in swag preStart) that proxy.conf has
-                    proxy_hide_header for X-Frame-Options and Content-Security-Policy.
-                  This resolves cross-origin frame blocking centrally without edits to per-service
-                  swag.nix (e.g. pastebin). Set to false to opt out.
-                '';
+                description = "Lets your apps open inside the neo dashboard; without it many apps refuse to load there. Turn off only if an app breaks when embedded.";
+                ui = lib.neo.ui.mkUi {
+                  label = "Show apps inside the dashboard";
+                  group = lib.neo.ui.groups.advanced;
+                };
               };
             }
             // lib.neo.mkReverseProxyOptions {
