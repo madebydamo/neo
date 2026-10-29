@@ -624,6 +624,32 @@ window.servicesGrid = function servicesGrid() {
     }, 150);
   }
 
+  /** Reload the open settings pane (after discarding changes it would hold stale values). */
+  function reloadOpenPane() {
+    var pane = document.getElementById('options-pane');
+    if (!pane || typeof htmx === 'undefined') return;
+    var name = pane.getAttribute('data-service');
+    var core = pane.getAttribute('data-is-core') === 'true';
+    htmx.ajax('GET', (core ? '/configuration/core/' : '/configuration/option/') + encodeURIComponent(name), {
+      target: '#config-content',
+      swap: 'innerHTML',
+    });
+  }
+
+  document.body.addEventListener('htmx:afterRequest', function (evt) {
+    var d = evt.detail || {};
+    var path = (d.pathInfo && d.pathInfo.requestPath) || '';
+    if (d.successful && (path === '/actions/reset' || path === '/changes/revert')) reloadOpenPane();
+  });
+
+  // Deep links with ?focus= (guide option: links) on a full page load.
+  document.addEventListener('DOMContentLoaded', function () {
+    setTimeout(function () {
+      var pane = document.getElementById('options-pane');
+      if (pane) focusOptionFromUrl(pane);
+    }, 400);
+  });
+
   function syncConfigShellFromContent() {
     try {
       var shell = document.getElementById('config-shell');
