@@ -31,6 +31,18 @@
         then meta.category
         else "Other";
       description = meta.description or "";
+      # Grid card line. Plugins without a tagline fall back to the first
+      # line of their description.
+      tagline = let
+        t = meta.tagline or "";
+        first = builtins.match "[[:space:]]*([^\n]*).*" (meta.description or "");
+      in
+        if t != ""
+        then t
+        else if first == null
+        then ""
+        else builtins.head first;
+      replaces = safeList (meta.replaces or []);
       pluginUrls = inventory.owners.${n} or [];
     })
     names;

@@ -27,18 +27,38 @@
       {{/each}}
     </div>
 
+    {{#if meta.tagline}}
+      <p class="mt-0.5 text-sm sm:text-base font-medium text-base-content/85">{{meta.tagline}}</p>
+    {{/if}}
+
     {{#if meta.description}}
       <div x-data="{ open: false, long: false }"
            x-init="$nextTick(() => { long = $refs.desc.scrollHeight > $refs.desc.clientHeight + 2 })"
            class="mt-1">
         <p x-ref="desc"
            class="text-sm leading-relaxed text-base-content/70 whitespace-pre-line"
-           :class="open ? '' : 'line-clamp-2'">{{meta.description}}</p>
+           :class="open ? '' : 'line-clamp-3'">{{meta.description}}</p>
         <button type="button" x-cloak x-show="long || open"
                 class="link link-hover text-xs text-base-content/60 mt-0.5"
                 @click="open = !open"
                 x-text="open ? 'Show less' : 'Show more'"></button>
       </div>
+    {{/if}}
+
+    {{#if meta.replaces}}
+      <div class="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-base-content/60">
+        <span>Instead of</span>
+        {{#each meta.replaces}}
+          <span class="badge badge-sm badge-ghost">{{this}}</span>
+        {{/each}}
+      </div>
+    {{/if}}
+
+    {{#if meta.notes}}
+      <details class="mt-2 group/notes">
+        <summary class="cursor-pointer select-none text-xs text-base-content/60 link link-hover w-fit">Good to know</summary>
+        <p class="mt-1 text-xs leading-relaxed text-base-content/70 whitespace-pre-line">{{meta.notes}}</p>
+      </details>
     {{/if}}
 
     {{#if (or meta.projectUrl meta.githubUrl meta.releaseUrl)}}

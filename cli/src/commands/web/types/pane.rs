@@ -9,7 +9,15 @@ pub struct ServiceMeta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
     #[serde(default)]
+    pub tagline: String,
+    #[serde(default)]
     pub description: String,
+    #[serde(default)]
+    pub notes: String,
+    #[serde(default)]
+    pub replaces: Vec<String>,
+    #[serde(default)]
+    pub privacy: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub projectUrl: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

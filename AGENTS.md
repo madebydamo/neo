@@ -38,6 +38,8 @@ NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) + Rust *
 
 Naming: options camelCase under `neo.services.*`; plain-string descriptions; volumes via `config.neo.core.volumes.*`.
 
+**Service texts:** `mkServiceMeta` takes `tagline` (one line on the grid card, what you get: "Your own Google Photos"), `description` (2–3 plain sentences for non-technical users: what you can do, what it replaces), `notes` (operator facts shown collapsed as "Good to know": first login, paths that skip tinyauth, upgrade cautions), `replaces` (`[ "Google Photos" ]`) and `privacy` (privacy map category ids). No upstream marketing, env var names or internals in `tagline`/`description`. Without a `tagline` the card shows the first line of `description`. Rules and examples: `docs/design/descriptions-and-guides.md`.
+
 **Service icons:** `mkServiceMeta.icon` is a URL string or a file path (`./icon.svg`, png, webp, ico, …). Paths are copied into the Nix store and served at `/service-icons/…` in the services grid, navigator, and option pane. `https://…` and site paths such as `/static/neo-icon.png` stay as written.
 
 **Units / status:** every unit a service runs goes in `systemdUnits` (`mkContainerDefinitions` + `extraUnits`, or `mkSystemdUnits`); the web UI status and `neo-<service>.target` read it. Post-start configuration (occ, config patches, provisioning) uses **`lib.neo.mkSetupService`** (`nix/lib/setup-service.nix`): retry loop, RemainAfterExit so success shows as "done", Type=simple unless dependents need `blocking = true`. Status health comes from systemd properties (`units/status.rs` `UnitHealth`), never unit names.

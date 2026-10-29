@@ -5,7 +5,17 @@
     neo = {
       mkServiceMeta = {
         icon ? null,
+        # One short line for the services grid card (≤ ~80 chars, what you get).
+        # Empty: the card shows the first line of `description`.
+        tagline ? "",
         description ? "",
+        # Operator facts (first login, paths that skip the login page, upgrade
+        # cautions); shown collapsed as "Good to know" in the pane.
+        notes ? "",
+        # Familiar products this replaces ("Google Photos"); search + privacy map.
+        replaces ? [],
+        # Privacy map categories (docs/design/descriptions-and-guides.md §4).
+        privacy ? [],
         projectUrl ? null,
         githubUrl ? null,
         releaseUrl ? null,
@@ -27,10 +37,30 @@
                   default = icon;
                   description = "Icon shown in the web UI. A URL string, or a file path (for example ./icon.svg) that neo serves itself.";
                 };
+                tagline = mkOption {
+                  type = types.str;
+                  default = tagline;
+                  description = "One short line for the services grid card. Empty: the first line of description.";
+                };
                 description = mkOption {
                   type = types.str;
                   default = description;
-                  description = "Longer human-friendly introduction shown above the settings form.";
+                  description = "Plain-language introduction (what you can do with it) shown above the settings form.";
+                };
+                notes = mkOption {
+                  type = types.str;
+                  default = notes;
+                  description = "Technical notes for the operator, shown collapsed under Good to know.";
+                };
+                replaces = mkOption {
+                  type = types.listOf types.str;
+                  default = replaces;
+                  description = "Familiar products this service replaces, e.g. Google Photos.";
+                };
+                privacy = mkOption {
+                  type = types.listOf types.str;
+                  default = privacy;
+                  description = "Privacy map categories this service keeps at home, e.g. calendar.";
                 };
                 projectUrl = mkOption {
                   type = types.nullOr types.str;

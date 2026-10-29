@@ -57,9 +57,16 @@
               category = "Utilities";
               # A file next to this module (svg, png, …) or a URL.
               icon = ./icon.svg;
+              # One line for the services grid card: what the user gets.
+              tagline = "An example web page";
+              # Plain sentences for non-technical users: what they can do with it.
               description = ''
                 Example plugin service: a static page served by linuxserver/nginx.
-                Replace this with what your service does and how Neo runs it.
+                Replace this with what your service does for the people using it.
+              '';
+              # Operator facts, shown collapsed under "Good to know".
+              notes = ''
+                Serves the files under appdata/example/www. Replace this with how Neo runs it.
               '';
               projectUrl = "https://docs.linuxserver.io/images/docker-nginx/";
               githubUrl = "https://github.com/linuxserver/docker-nginx";

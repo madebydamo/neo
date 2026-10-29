@@ -17,9 +17,16 @@ pub struct Service {
     /// Category from service meta (e.g. Core, Network, Media).
     #[serde(default)]
     pub category: String,
-    /// Long-form intro from service meta (info popover on the grid card).
+    /// Long-form intro from service meta (grid search text).
     #[serde(default)]
     pub description: String,
+    /// One-line summary on the grid card (meta tagline, else the first line of
+    /// the description).
+    #[serde(default)]
+    pub tagline: String,
+    /// Familiar products this service replaces (grid search text).
+    #[serde(default)]
+    pub replaces: Vec<String>,
     /// Plugin flake URLs that declare this service (empty = core).
     #[serde(default, rename = "pluginUrls")]
     pub plugin_urls: Vec<String>,

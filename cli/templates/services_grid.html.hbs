@@ -119,7 +119,7 @@
               data-enabled="{{#if enabled}}true{{else}}false{{/if}}"
               data-cat="{{category}}"
               data-plugin-urls="{{#each plugins}}{{url}}{{#unless @last}}|{{/unless}}{{/each}}"
-              data-search="{{name}} {{category}}{{#each plugins}} {{display}}{{/each}} {{description}}"
+              data-search="{{name}} {{category}}{{#each plugins}} {{display}}{{/each}} {{tagline}}{{#each replaces}} {{this}}{{/each}} {{description}}"
               x-show="cardVisible($el)"
               hx-get="/configuration/option/{{name}}"
               hx-target="#config-content"
@@ -153,8 +153,8 @@
               <span class="badge badge-soft badge-success badge-xs shrink-0 ml-auto">Installed</span>
             {{/if}}
           </span>
-          {{#if description}}
-            <span class="mt-0.5 text-xs leading-snug text-base-content/60 line-clamp-2">{{description}}</span>
+          {{#if tagline}}
+            <span class="mt-0.5 text-xs leading-snug text-base-content/60 line-clamp-2">{{tagline}}</span>
           {{else}}
             <span class="block mt-0.5 text-xs text-base-content/40 italic">No description</span>
           {{/if}}
