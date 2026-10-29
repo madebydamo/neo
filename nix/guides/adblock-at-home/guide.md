@@ -12,8 +12,9 @@ apps get no ads, and you install nothing on them.
 
 Open [Pi-hole](service:pihole), switch it on and set an
 [admin password](option:pihole.webPassword). Leave the
-[home network address](option:pihole.localIP) empty for now unless you also use
-Tailscale (see [Use your apps from anywhere](guide:tailscale-everywhere)).
+[home network address](option:pihole.localIP) empty unless you also use
+Tailscale split DNS (see
+[Keep your app traffic private with Tailscale](guide:private-traffic-tailscale)).
 
 Apply the change. After a minute the dashboard opens at
 {{service.pihole.url}}.

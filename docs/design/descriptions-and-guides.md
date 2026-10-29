@@ -174,7 +174,7 @@ Cross-links use a small URI scheme, so the author never writes a UI route:
 |---|---|
 | `[Pi-hole](service:pihole)` | service chip with icon and status dot → service pane |
 | `[local IP](option:pihole.localIP)` | opens the pane scrolled to that field, highlighted; shows the current value |
-| `[Tailscale guide](guide:tailscale-everywhere)` | guide card link |
+| `[Tailscale guide](guide:private-traffic-tailscale)` | guide card link |
 | `[Calendar](privacy:calendar)` | privacy map tile |
 | `[apply](action:apply)` | the existing Apply button (with its lock attr) |
 
@@ -432,7 +432,7 @@ file access.
 
 | id | Guide | Services / options |
 |---|---|---|
-| `tailscale-everywhere` | Use your apps from anywhere, same address at home and away | tailscale `splitDns`, pihole `localIP`, rathole `certificateOnly`, `ingress` |
+| `private-traffic-tailscale` | Keep your app traffic private with Tailscale (devices talk to the server directly; certificates still need port 80 or Rathole) | tailscale `splitDns`, `ingress`, rathole `certificateOnly` |
 | `adblock-at-home` | Block ads for the whole home | pihole; router DNS setting |
 | `leave-google-photos` | Leave Google Photos | immich (+ phone app backup) |
 | `party-photo-drop` | Collect photos from guests after a party | immich-drop |
@@ -505,7 +505,7 @@ eval checks that the ids exist.
    separate changes.
 3. **Guides**: `mkGuide`, `neo.guides`, extract, link validation check,
    pulldown-cmark renderer, Guides page, service-pane strip; first 3 guides
-   (`adblock-at-home`, `tailscale-everywhere`, `family-calendar`).
+   (`adblock-at-home`, `private-traffic-tailscale`, `family-calendar`).
 4. **Settings tool**: `settings/edit.rs` (`apply_edit`, form routes moved onto
    it), proposals + card route, MCP endpoint, Hermes `mcp_servers` wiring.
 5. **Agent chat**: `/agent/*` proxy, chat drawer with proposal and approval
