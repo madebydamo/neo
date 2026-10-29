@@ -252,10 +252,12 @@ in {
         includeDerived ? true,
         body,
       }: let
+        # JSON strings are valid YAML: a ':' in a tag or the description must
+        # not break the frontmatter (Hermes then drops the skill).
         tagsYaml =
           if tags == []
           then "[neo]"
-          else "[${lib.concatStringsSep ", " tags}]";
+          else "[${lib.concatMapStringsSep ", " builtins.toJSON tags}]";
         platformsYaml = "[${lib.concatStringsSep ", " platforms}]";
         toolsetsYaml = "[${lib.concatStringsSep ", " requiresToolsets}]";
         heading =
@@ -278,7 +280,7 @@ in {
       in ''
         ---
         name: ${name}
-        description: ${description}
+        description: ${builtins.toJSON description}
         version: ${version}
         platforms: ${platformsYaml}
         metadata:
