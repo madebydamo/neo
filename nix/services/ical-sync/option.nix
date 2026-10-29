@@ -93,11 +93,17 @@
               category = "Utilities";
               iframeCompatible = false;
               icon = ./icon.svg;
+              tagline = "Adds public calendars like school holidays to your calendar";
               description = ''
-                ical-sync subscribes to public iCal feeds and mirrors them into a CalDAV calendar with vdirsyncer.
-                Point it at a CalDAV server (RustiCal on this host by default), a principal, and an app token copied from the RustiCal UI — not the tinyauth password and not ssoPassword.
-                Each subscription is a calendar name plus an https or webcal .ics URL. Missing calendars are created. The iCal feed wins: events removed upstream are deleted on the CalDAV side too.
+                Copies public calendar feeds, such as school holidays, waste collection, sports fixtures or public holidays, into your own calendar so they show up on every phone.
+                The feeds are refreshed regularly.
               '';
+              notes = ''
+                Uses vdirsyncer to mirror .ics/webcal feeds into a CalDAV calendar (RustiCal on this host by default). Missing calendars are created.
+                Log in with your RustiCal user and an app token from the RustiCal UI, not the tinyauth password and not ssoPassword.
+                The feed wins: events removed upstream are deleted in your calendar too.
+              '';
+              privacy = ["calendar"];
               projectUrl = "https://vdirsyncer.pimutils.org/";
               githubUrl = "https://github.com/pimutils/vdirsyncer";
               releaseUrl = "https://github.com/pimutils/vdirsyncer/releases";

@@ -36,13 +36,16 @@
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = ./icon.svg;
+              tagline = "Get a message when a website changes";
               description = ''
-                Changedetection.io is the best and simplest open-source tool for website change detection, web page monitoring, and website change alerts.
-                Monitor any URL for content, price, or structural changes and get notified instantly via Discord, Email, Slack, Telegram, Webhooks, and over 85 other services.
-                Powerful features include AI/LLM-powered smart filtering and plain-language change summaries, Visual Selector for targeting specific elements, browser automation steps (login, click, search), JSONPath/jq/XPath/CSS filters, PDF monitoring, proxies, schedules, and a full REST API.
-                Ideal for restock alerts, price drop tracking, release monitoring, defacement detection, data journalism, and keeping tabs on any dynamic web content.
-                Self-hosted via Docker with easy setup and a Chrome extension for quick adding of watches.
+                Watches web pages for you and tells you when something changes: a price drops, a product is back in stock, a new version is released or an announcement goes up.
+                Messages can go to email, Telegram, Discord and many other services.
               '';
+              notes = ''
+                Changedetection.io. Supports a visual selector for parts of a page, browser steps (log in, click, search), JSONPath/XPath/CSS filters, PDF monitoring, proxies, schedules, optional AI summaries of changes and a REST API.
+                A browser extension adds pages quickly.
+              '';
+              replaces = ["Visualping" "Distill"];
               projectUrl = "https://changedetection.io/";
               githubUrl = "https://github.com/dgtlmoon/changedetection.io";
               releaseUrl = "https://github.com/dgtlmoon/changedetection.io/releases";

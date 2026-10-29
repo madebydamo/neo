@@ -56,22 +56,17 @@
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = ./icon.png;
+              tagline = "A full Linux desktop in your browser";
               description = ''
-                Webtop (linuxserver/webtop) is a full Linux desktop environment streamed to any modern browser via Selkies.
-                Neo defaults to Ubuntu XFCE (tag ubuntu-xfce) as a lightweight, familiar desktop; the home directory persists under appdata.
-
-                Switch distro or desktop by changing only the container image tag under services.webtop.containers.webtop
-                (web UI container field, or settings.toml). Same image name, different tag — for example:
-                ubuntu-i3, ubuntu-mate, ubuntu-kde, debian-xfce, fedora-kde, arch-xfce, alpine-i3, or latest (Alpine XFCE).
-                Full tag list: https://docs.linuxserver.io/images/docker-webtop/
-
-                After changing the tag, re-apply (neo activate / system rebuild) so docker-updater or the next
-                container recreate pulls the new image. Desktop packages installed with apt/dnf do not survive
-                container recreation; use proot-apps inside the desktop for persistent apps, or reinstall after upgrades.
-
-                Treat this as a powerful shell: passwordless sudo inside the desktop, so keep tinyauth (or another gate) enabled.
-
-                Optional VPN: set services.webtop.vpn.enabled = true to route the desktop container through the shared gluetun VPN (services.vpn). Off by default.
+                A complete desktop computer that runs on your server and opens in a browser tab, from any device.
+                Your files and settings stay there between sessions.
+              '';
+              notes = ''
+                linuxserver/webtop streamed with Selkies; Neo defaults to Ubuntu XFCE (tag ubuntu-xfce). The home directory persists under appdata.
+                Switch distro or desktop by changing only the image tag under containers.webtop, e.g. ubuntu-i3, ubuntu-mate, ubuntu-kde, debian-xfce, fedora-kde, arch-xfce, alpine-i3 or latest (Alpine XFCE). Full list: https://docs.linuxserver.io/images/docker-webtop/
+                After changing the tag, apply again. Packages installed with apt/dnf do not survive a container recreate; use proot-apps inside the desktop for persistent apps.
+                Treat it as a powerful shell: there is passwordless sudo inside the desktop, so keep tinyauth (or another login) enabled.
+                Optional VPN: turn on vpn.enabled to route the desktop through the shared VPN service. Off by default.
               '';
               projectUrl = "https://docs.linuxserver.io/images/docker-webtop/";
               githubUrl = "https://github.com/linuxserver/docker-webtop";

@@ -226,11 +226,18 @@
             // lib.neo.mkServiceMeta {
               category = "AI";
               icon = ./icon.png;
+              tagline = "A personal AI assistant that lives on your server";
               description = ''
-                Hermes Agent is the self-improving AI agent built by Nous Research. The only agent with a built-in learning loop — it creates skills from experience, improves them during use, nudges itself to persist knowledge, and builds a deepening model of who you are across sessions.
-                It is not a coding copilot tethered to an IDE or a chatbot wrapper around a single API. An autonomous agent that lives on your server, remembers what it learns, and gets more capable the longer it runs. Deploy it on a $5 VPS, a GPU cluster, or serverless infrastructure that costs nearly nothing when idle.
-                Interact with it from Telegram, Discord, Slack, WhatsApp, Signal, Email, CLI, and its web dashboard. Features include persistent memory, autonomous skill creation and refinement, scheduled automations, parallel subagents, real sandboxing with multiple backends, full web and browser control, vision, and support for virtually any LLM provider.
+                Chat with an AI assistant on Telegram or in the browser that knows your homeserver: it answers questions about your apps, finds out why something does not work and runs tasks on a schedule.
+                It remembers what it learns about you and your setup.
               '';
+              notes = ''
+                Hermes Agent by Nous Research. It needs an AI provider: an API key or a login under llm.
+                Talks over Telegram, Discord, Slack, WhatsApp, Signal, email, the CLI and its web dashboard. Has persistent memory, writes and improves its own skills, runs scheduled automations and subagents in a sandbox.
+                Every enabled service publishes a skill, so Hermes knows how this server is set up.
+              '';
+              replaces = ["ChatGPT" "Google Assistant"];
+              privacy = ["assistant"];
               projectUrl = "https://hermes-agent.nousresearch.com/";
               githubUrl = "https://github.com/NousResearch/hermes-agent";
               releaseUrl = "https://github.com/NousResearch/hermes-agent/releases";

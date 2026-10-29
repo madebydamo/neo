@@ -83,13 +83,18 @@
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = ./icon.svg;
+              tagline = "Your own GitHub for code and configuration";
               description = ''
-                Gitea is a lightweight, self-hosted Git service with issues, PRs, and package registries.
-                Neo runs the official Docker image with SQLite storage under appdata — suitable for private
-                credential and config repos without a separate Postgres. Point ROOT_URL / customDomains at
-                your public hostname (e.g. git.heimcloud.site) when published via streamproxy.
-                Registration is disabled by default; create users via the admin account after first boot.
+                Keep code, scripts and configuration in your own Git repositories, with issues, pull requests and a package registry.
+                Good for private projects and for keeping your homeserver configuration safe.
               '';
+              notes = ''
+                Runs the official image with SQLite under appdata, so no separate database is needed.
+                Point rootUrl / customDomains at your public hostname when it is published through streamproxy.
+                Registration is off by default; create users from the admin account after first boot.
+              '';
+              replaces = ["GitHub" "GitLab"];
+              privacy = ["code"];
               projectUrl = "https://about.gitea.com/";
               githubUrl = "https://github.com/go-gitea/gitea";
               releaseUrl = "https://github.com/go-gitea/gitea/releases";

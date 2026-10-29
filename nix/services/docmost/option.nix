@@ -138,12 +138,17 @@
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = ./icon.png;
+              tagline = "A shared wiki for notes and how-tos, like Notion";
               description = ''
-                Docmost is an open-source collaborative wiki and knowledge base (Notion-style) with real-time page editing over WebSockets.
-                Neo runs the official Docker stack: the Docmost app, Postgres for workspace data, and Redis for queues/sessions, all on the internal network behind SWAG and tinyauth.
-                Set APP_URL to the public HTTPS URL so links and editor clients work; the health endpoint bypasses tinyauth while the UI stays protected.
-                Ideal for self-hosted team docs without sending content to a SaaS wiki host.
+                Write and organise pages together: how-tos, family recipes, travel plans or team documentation.
+                Several people can edit the same page at the same time, and everything is searchable.
               '';
+              notes = ''
+                Runs the official stack: the Docmost app, Postgres for workspace data and Redis for queues and sessions.
+                Neo sets APP_URL to the public HTTPS address. The health endpoint skips tinyauth; the UI stays behind it.
+              '';
+              replaces = ["Notion" "Confluence"];
+              privacy = ["notes"];
               projectUrl = "https://docmost.com/docs";
               githubUrl = "https://github.com/docmost/docmost";
               releaseUrl = "https://github.com/docmost/docmost/releases";

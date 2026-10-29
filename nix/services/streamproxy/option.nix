@@ -112,10 +112,15 @@
               // lib.neo.mkServiceMeta {
                 category = "Core";
                 icon = ./icon.svg;
+                tagline = "Lets several homeservers share one public address";
                 description = ''
-                  Streamproxy is a custom Neo homeserver component that runs Nginx (HTTP routing + SNI stream proxy for HTTPS) together with a Rathole server inside a NixOS container.
-                  It enables multiple independent homeserver instances to share a single public IP by accepting secure rathole tunnels from remote clients (on port 2223) and routing traffic for configured domains (with support for wildcards, top-level, and extra custom domains) either to the local SWAG or to the per-entry tunnel ports via socat forwarding.
-                  The computed dynamic ports (starting at 10000) and nginx config blocks are generated automatically from the entries; this provides centralized ingress without each homeserver needing dedicated public IPs, open ports, or complex DNS/HAProxy setups.
+                  Runs on a rented server with a public address and passes internet traffic on to one or more homeservers through secure tunnels.
+                  Only needed if you run the public side of rathole yourself.
+                '';
+                notes = ''
+                  Runs nginx (HTTP routing and SNI stream proxy for HTTPS) and a rathole server inside a NixOS container.
+                  Accepts rathole tunnels from remote homeservers (port 2223) and routes each configured domain (wildcards, top-level and extra domains) to the local SWAG or to that entry's tunnel port.
+                  Tunnel ports (from 10000) and nginx blocks are generated from the entries.
                 '';
                 githubUrl = "https://github.com/madebydamo/neo";
               }

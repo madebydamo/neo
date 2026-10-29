@@ -142,13 +142,19 @@
             // lib.neo.mkServiceMeta {
               category = "Security";
               icon = ./icon.svg;
+              tagline = "One account for all your apps, with advanced login rules";
               description = ''
-                Authentik is an open-source identity provider for single sign-on across your self-hosted apps, with OAuth2 / OpenID Connect, SAML, LDAP, SCIM and proxy (forward auth) providers.
-                Neo runs the upstream Docker stack: the Authentik server (web UI and API), a background worker, and Postgres, all on the internal network behind SWAG.
+                Gives you and your family a single account that works across your apps, with two-factor login, user groups and invitations.
+                Apps that offer a "Sign in with…" button (OpenID Connect, SAML or LDAP) can use it.
+                Most homes are fine with tinyauth; Authentik is for when you need more control.
+              '';
+              notes = ''
+                Runs the upstream stack: the Authentik server (web UI and API), a background worker and Postgres.
                 Authentik is the login itself, so tinyauth does not sit in front of it. Apps reach its OIDC and SAML endpoints directly over HTTPS.
                 The image tag is pinned. Read the release notes before upgrading, and change the server and worker image together.
                 The admin user is akadmin. Set a bootstrap password here, or finish /if/flow/initial-setup/ on first boot.
               '';
+              replaces = ["Okta" "Microsoft Entra ID"];
               projectUrl = "https://docs.goauthentik.io";
               githubUrl = "https://github.com/goauthentik/authentik";
               releaseUrl = "https://github.com/goauthentik/authentik/releases";

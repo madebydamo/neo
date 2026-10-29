@@ -62,11 +62,14 @@
             // lib.neo.mkServiceMeta {
               category = "Network";
               icon = ./icon.png;
+              tagline = "Makes your apps reachable from the internet without opening your router";
               description = ''
-                Rathole is a lightweight, high-performance reverse proxy for NAT traversal, written in Rust as a fast and low-resource alternative to frp and ngrok.
-                In this homeserver, it runs as a client that securely tunnels local HTTP (port 80) and HTTPS (SWAG PROXY-protocol port) through a remote server with a public IP, using per-service tokens for auth.
-                This allows exposing internal services to the internet without requiring inbound firewall rules or port forwards on the client network.
-                Features include TCP/UDP support, optional encryption via TLS or Noise protocol, hot configuration reload, and minimal memory footprint (binary can be ~500KiB).
+                Connects your homeserver to a small rented server with a public address (a VPS), so your apps can be reached from anywhere.
+                Works even when your internet provider does not allow incoming connections.
+              '';
+              notes = ''
+                Rathole client: tunnels HTTP (port 80) and HTTPS (SWAG's PROXY-protocol port) to a rathole server, authenticated with per-service tokens. No port forwards or inbound firewall rules needed.
+                Pair it with a streamproxy server. Supports TCP/UDP and optional TLS or Noise encryption.
               '';
               githubUrl = "https://github.com/rathole-org/rathole";
               releaseUrl = "https://github.com/rathole-org/rathole/releases";

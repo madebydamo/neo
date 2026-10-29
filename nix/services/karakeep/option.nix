@@ -100,12 +100,17 @@
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = ./icon.svg;
+              tagline = "Save links, notes and pictures to read later";
               description = ''
-                Karakeep is a self-hosted bookmark manager (formerly Hoarder) for hoarding links, notes, and images with full-text search and AI-assisted tagging.
-                It crawls pages with a headless browser for screenshots and readable archives, indexes content with Meilisearch, and supports browser extensions and mobile apps for quick capture.
-                Optional OpenAI-compatible inference (default: xAI Grok) enables automatic tagging and summarization of saved content.
-                Ideal for building a private, searchable knowledge base of everything you want to keep from the web.
+                Save anything from the web with one click in your browser or on your phone: articles, links, notes and images.
+                Pages are archived so they stay readable even if they disappear, everything is searchable, and AI can tag it for you.
               '';
+              notes = ''
+                Formerly Hoarder. Crawls pages with a headless browser for screenshots and readable archives, and indexes them with Meilisearch.
+                Automatic tagging and summaries need an OpenAI-compatible API key (default provider: xAI).
+              '';
+              replaces = ["Pocket" "Raindrop.io"];
+              privacy = ["bookmarks"];
               projectUrl = "https://docs.karakeep.app/";
               githubUrl = "https://github.com/karakeep-app/karakeep";
               releaseUrl = "https://github.com/karakeep-app/karakeep/releases";

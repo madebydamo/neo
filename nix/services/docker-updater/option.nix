@@ -28,8 +28,15 @@
             // lib.neo.mkServiceMeta {
               category = "Core";
               icon = ./icon.svg;
+              tagline = "Keeps your apps up to date";
               description = ''
-                Periodically pulls newer images for every enabled service's declared Docker containers (from the central containers registry) and restarts the corresponding docker-* units when a newer image is downloaded. Shared images (e.g. the same redis:tag used by several services) are pulled once; every consumer container is restarted when that image ID changes. Provides a declarative, UI-integrated alternative to watchtower without extra runtime containers. Image tags are configurable per-container under each service's "containers" setting (applied on activate).
+                Checks on a schedule whether new versions of your apps are available, downloads them and restarts the app.
+                You do not have to update apps by hand.
+              '';
+              notes = ''
+                Pulls newer images for every enabled service's containers (from the central containers registry) and restarts the matching docker-* units when an image changed.
+                Shared images (e.g. one redis tag used by several services) are pulled once; every container using it is restarted.
+                A declarative alternative to watchtower without an extra container. Image tags are set per container under each service's containers setting.
               '';
             }
             // lib.neo.mkSkillOptions {};

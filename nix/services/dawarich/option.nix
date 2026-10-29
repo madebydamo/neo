@@ -60,13 +60,19 @@
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = ./icon.svg;
+              tagline = "Your own location history, like Google Timeline";
               description = ''
-                Dawarich is a self-hosted location history (Google Timeline alternative): a map of where you have been, trips, visits, and stats.
-                Neo runs the upstream Docker stack: the Rails app, a Sidekiq worker, PostGIS for the points, and Redis for jobs and live updates, on the internal network behind SWAG and tinyauth.
-                Phone apps and trackers (OwnTracks, Overland, Traccar, the Dawarich apps) post to /api/ with a Dawarich API key, so that path bypasses tinyauth. The web UI stays behind tinyauth, then Dawarich's own login.
-                The image tag is pinned. Dawarich asks you to read the release notes before upgrading. Change the app and Sidekiq image together.
-                The first boot creates an admin user demo@dawarich.app with password safepassword. Change that password after you sign in.
+                A private map of where you have been: trips, places you visited and statistics per month and year.
+                Your phone sends its location to your own server instead of to Google.
               '';
+              notes = ''
+                Runs the upstream stack: the Rails app, a Sidekiq worker, PostGIS for the points and Redis for jobs and live updates.
+                Phone apps and trackers (OwnTracks, Overland, Traccar, the Dawarich apps) post to /api/ with a Dawarich API key, so that path skips tinyauth. The web UI stays behind tinyauth, then Dawarich's own login.
+                The image tag is pinned. Read the release notes before upgrading, and change the app and Sidekiq image together.
+                The first boot creates the admin user demo@dawarich.app with password safepassword. Change that password after you sign in.
+              '';
+              replaces = ["Google Maps Timeline"];
+              privacy = ["location"];
               projectUrl = "https://dawarich.app/docs";
               githubUrl = "https://github.com/Freika/dawarich";
               releaseUrl = "https://github.com/Freika/dawarich/releases";

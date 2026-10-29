@@ -68,11 +68,16 @@
             // lib.neo.mkServiceMeta {
               category = "Network";
               icon = ./icon.svg;
+              tagline = "Send app traffic through your VPN provider";
               description = ''
-                Gluetun is a lightweight Swiss-army-knife VPN client in a thin Docker container supporting dozens of providers via OpenVPN or WireGuard, with built-in DNS-over-TLS, kill switch firewall, and HTTP/SOCKS/Shadowsocks proxies.
-                In the Neo homeserver, this VPN service runs the gluetun container to provide a shared outbound WireGuard tunnel; other services can opt their containers into routing through it (using the `vpn` submodule options and `mkVpnOptions` helper) for privacy, unblocking, or compliance without impacting the host network or non-VPN services.
-                It automatically handles network aliasing, dependsOn, and container patching for opted-in services via the docker-networks and vpn modules; requires your provider's WireGuard credentials (private key, preshared key, addresses).
+                Connects to your VPN provider, such as Mullvad or Proton VPN, so that the apps you choose go online through the VPN instead of your home connection.
+                Your other apps and devices are not affected.
               '';
+              notes = ''
+                Runs gluetun with your provider's WireGuard credentials (private key, preshared key, addresses); includes DNS-over-TLS and a kill switch.
+                Services opt in with their vpn options; network aliases, dependencies and container patching are handled automatically.
+              '';
+              privacy = ["browsing"];
               projectUrl = "https://github.com/qdm12/gluetun-wiki";
               githubUrl = "https://github.com/passteque/gluetun";
               releaseUrl = "https://github.com/passteque/gluetun/releases";

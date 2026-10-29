@@ -29,10 +29,12 @@
             // lib.neo.mkServiceMeta {
               category = "Network";
               icon = ./icon.svg;
+              tagline = "Keeps the clocks in your home exact";
               description = ''
-                Chrony is a versatile implementation of the Network Time Protocol (NTP) used for accurate system clock synchronization.
-                In this homeserver it syncs from public NTP pools and serves time to other devices on the local network via UDP port 123.
-                This provides low-latency time for the LAN, reduces reliance on external services for clients, and maintains precise time even on intermittent connections.
+                Gives your server, and any device at home that asks for it, the exact time. Usually there is nothing to configure.
+              '';
+              notes = ''
+                Chrony syncs from public NTP pools and serves time to the local network on UDP port 123. Keeps time steady even on flaky connections.
               '';
               projectUrl = "https://chrony-project.org/";
               githubUrl = "https://github.com/mlichvar/chrony";

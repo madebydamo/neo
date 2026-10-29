@@ -47,12 +47,17 @@
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = ./icon.svg;
+              tagline = "Recipes, meal plans and shopping lists";
               description = ''
-                Mealie is a self-hosted recipe manager and meal planner. Import a recipe from a URL, keep a family cookbook, plan meals, and build shopping lists.
-                Neo runs the official image on the internal network with SQLite under appdata, behind SWAG and tinyauth. The web UI stays behind tinyauth. /api/ bypasses it so API tokens and phone apps use Mealie's own login.
-                The image tag is pinned to v3.29.0. Mealie asks you to read the release notes before upgrading.
+                Import recipes from any website with one click, keep a family cookbook, plan the week's meals and turn them into a shopping list.
+              '';
+              notes = ''
+                Runs the official image with SQLite under appdata. The web UI stays behind tinyauth; /api/ skips it so API tokens and phone apps use Mealie's own login.
+                The image tag is pinned. Read the release notes before upgrading.
                 The first boot creates changeme@example.com with password MyPassword. Change that password. Public signup stays off unless allowSignup is enabled.
               '';
+              replaces = ["Paprika"];
+              privacy = ["recipes"];
               projectUrl = "https://docs.mealie.io/";
               githubUrl = "https://github.com/mealie-recipes/mealie";
               releaseUrl = "https://github.com/mealie-recipes/mealie/releases";

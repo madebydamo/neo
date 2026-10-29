@@ -24,12 +24,15 @@
             // lib.neo.mkServiceMeta {
               category = "Media";
               icon = ./icon.png;
+              tagline = "Skips sponsor segments in YouTube on your TV";
               description = ''
-                iSponsorBlockTV is a self-hosted SponsorBlock client for YouTube TV apps on smart TVs, streaming devices, and game consoles.
-                It pairs with devices over YouTube's Lounge API (the same used for casting and mobile remote control) to monitor playback and automatically issue skip and mute commands for sponsor segments, intros, outros, and interaction reminders using the crowdsourced SponsorBlock database.
-                It additionally auto-mutes and activates the "Skip Ad" button for traditional YouTube advertisements the moment it appears.
-                It supports Apple TV, Roku, Chromecast, Google TV, Fire TV, Android TV, Samsung Tizen, LG WebOS, Xbox, PlayStation, Nintendo Switch and more without requiring any apps, modifications, or Premium subscription on the TV.
-                Device pairing and configuration uses an interactive setup UI (served via the reverse proxy); once configured the main container runs headless and automatically.
+                Automatically skips sponsored segments, intros and subscribe reminders when you watch YouTube on a smart TV, streaming stick or game console, and skips ads as soon as that is possible.
+                Nothing needs to be installed on the TV.
+              '';
+              notes = ''
+                Pairs with devices over YouTube's Lounge API (the protocol used for casting) and uses the crowdsourced SponsorBlock database.
+                Works with Apple TV, Roku, Chromecast, Google TV, Fire TV, Android TV, Samsung, LG, Xbox, PlayStation, Nintendo Switch and more.
+                Pair devices in the setup UI (served through the reverse proxy); after that it runs on its own.
               '';
               projectUrl = "https://github.com/dmunozv04/iSponsorBlockTV";
               githubUrl = "https://github.com/dmunozv04/iSponsorBlockTV";

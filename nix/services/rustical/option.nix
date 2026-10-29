@@ -59,13 +59,18 @@
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = ./icon.svg;
+              tagline = "Calendars and contacts that stay at home";
               description = ''
-                RustiCal is a lightweight CalDAV and CardDAV server written in Rust, storing everything in a single SQLite database that is easy to back up.
-                It serves calendars and contacts to DAVx5, Apple Calendar, Thunderbird, Evolution, GNOME, Home Assistant, and similar clients, with WebDAV Push for near-instant sync, a Nextcloud-compatible login flow, and Apple configuration profiles.
-                Neo exposes the web frontend behind tinyauth and, when ssoPassword is set, signs you into RustiCal as the tinyauth user so there is no second login form.
-                CalDAV/CardDAV, well-known discovery, and the /ping health endpoint bypass edge auth so native clients can use RustiCal app tokens.
-                PROPFIND (and OPTIONS/REPORT) on the site root also skip tinyauth and redirect to well-known CalDAV so DAVx5 can use the base URL; GET / remains behind tinyauth.
+                Keeps your calendars and contacts on your own server.
+                Phones and computers sync with it like with Google or iCloud, using the apps you already have: iPhone, Android (with DAVx5), Mac, Thunderbird and more.
               '';
+              notes = ''
+                CalDAV and CardDAV server storing everything in one SQLite database. Supports WebDAV Push, a Nextcloud-compatible login flow and Apple configuration profiles.
+                The web frontend is behind tinyauth; when ssoPassword is set, you are signed into RustiCal as the tinyauth user, so there is no second login.
+                CalDAV/CardDAV, well-known discovery and /ping skip tinyauth so calendar apps can use RustiCal app tokens. PROPFIND, OPTIONS and REPORT on the site root also skip it and redirect to well-known CalDAV, so DAVx5 works with the base URL.
+              '';
+              replaces = ["Google Calendar" "iCloud Calendar" "Google Contacts"];
+              privacy = ["calendar" "contacts"];
               projectUrl = "https://lennart-k.github.io/rustical/";
               githubUrl = "https://github.com/lennart-k/rustical";
               releaseUrl = "https://github.com/lennart-k/rustical/releases";

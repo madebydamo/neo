@@ -24,12 +24,16 @@
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = ./icon.svg;
+              tagline = "Edit office documents together in Nextcloud";
               description = ''
-                Collabora Online is a collaborative online office suite based on LibreOffice technology.
-                It provides real-time document, spreadsheet, and presentation editing in any modern browser with no plugins required.
-                Self-hosted via the official CODE Docker image, it delivers frequent updates with cutting-edge features perfect for home users and small teams.
-                Seamlessly integrates with Nextcloud (and other WOPI clients) for secure, private collaborative editing under your full control.
+                Open and edit Word, Excel and PowerPoint files directly in Nextcloud, together with others at the same time.
+                Works in any browser, no Office installation needed.
               '';
+              notes = ''
+                Runs the official CODE image (based on LibreOffice). Needs Nextcloud, which talks to it over WOPI.
+              '';
+              replaces = ["Google Docs" "Microsoft 365"];
+              privacy = ["documents"];
               projectUrl = "https://www.collaboraonline.com/code/";
               githubUrl = "https://github.com/CollaboraOnline/online";
               releaseUrl = "https://github.com/CollaboraOnline/online/releases";

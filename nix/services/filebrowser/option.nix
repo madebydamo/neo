@@ -35,11 +35,14 @@
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = ./icon.png;
+              tagline = "Manage the files on your server from the browser";
               description = ''
-                Filebrowser provides a file management interface.
-                It lets you upload, delete, preview, rename and edit your files in the browser.
-                Neo mounts media, documents, and appdata under /srv by default; add more paths via additionalMountPoints.
+                Browse, upload, rename, preview and edit the files on your server, such as photos, documents and app data, from any browser.
               '';
+              notes = ''
+                Neo mounts media, documents and appdata under /srv by default; add more folders with additionalMountPoints.
+              '';
+              privacy = ["files"];
               projectUrl = "https://filebrowser.org/";
               githubUrl = "https://github.com/filebrowser/filebrowser";
             }

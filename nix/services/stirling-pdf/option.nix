@@ -73,11 +73,15 @@
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = ./icon.svg;
+              tagline = "All-in-one PDF tools on your server";
               description = ''
-                Stirling PDF is a locally hosted web application for performing PDF operations with no tracking or data sharing.
-                Merge, split, convert, OCR, compress, sign, rotate, watermark, and dozens more tools run entirely on your server.
-                Neo protects the UI with tinyauth by default; optional built-in login can be enabled. Configs, OCR data, and logs persist under appdata behind HTTPS with large upload limits.
+                Merge, split, convert, compress, sign, rotate and watermark PDFs, and make scanned pages searchable, all on your own server without tracking.
               '';
+              notes = ''
+                tinyauth protects the UI by default; Stirling's own login can be enabled as well. Settings, OCR data and logs persist under appdata; large uploads are allowed.
+              '';
+              replaces = ["Adobe Acrobat" "iLovePDF"];
+              privacy = ["documents"];
               projectUrl = "https://docs.stirlingpdf.com/";
               githubUrl = "https://github.com/Stirling-Tools/Stirling-PDF";
               releaseUrl = "https://github.com/Stirling-Tools/Stirling-PDF/releases";

@@ -24,13 +24,16 @@
             // lib.neo.mkServiceMeta {
               category = "Media";
               icon = ./icon.svg;
+              tagline = "Let guests add photos to Immich with a link";
               description = ''
-                Immich Drop is a tiny, zero-login web app for collecting photos/videos from anyone into your Immich server.
-                Admin users log in with Immich credentials to create public invite links (always public-by-URL) supporting optional passwords, expiry, one-time use, and target albums (auto-created if needed).
-                Guests upload via simple drag-and-drop or file chooser (mobile-friendly) with real-time WebSocket progress, duplicate detection via local SHA-1 cache plus optional Immich bulk-check, chunked uploads for large files, retries, and EXIF timestamp preservation.
-                A public uploader page is optional and disabled by default. Privacy-first design: never lists server media; only ephemeral per-session state is shown. Lightweight FastAPI backend + static frontend, containerized.
-                Ideal for securely sharing easy upload access with family, friends or guests without needing Immich accounts.
+                Create an upload link for a wedding, party or holiday and share it.
+                Guests drop their photos and videos into your album without an account, and never see anything else on your server.
               '';
+              notes = ''
+                Admins log in with their Immich account to create invite links (public by URL) with optional password, expiry, one-time use and a target album (created if needed).
+                Uploads are chunked with retries and keep EXIF timestamps; duplicates are detected. A public uploader page without invite is optional and off by default.
+              '';
+              privacy = ["photos"];
               projectUrl = "https://github.com/Nasogaa/immich-drop";
               githubUrl = "https://github.com/Nasogaa/immich-drop";
               releaseUrl = "https://github.com/Nasogaa/immich-drop/releases";

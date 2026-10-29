@@ -343,11 +343,14 @@
             // lib.neo.mkServiceMeta {
               category = "Security";
               icon = ./icon.svg;
+              tagline = "The login page in front of your apps";
               description = ''
-                Tinyauth is the tiniest OpenID Connect (OIDC) authentication and authorization server for your self-hosted applications.
-                It functions as lightweight middleware adding secure username/password (bcrypt + optional TOTP), OAuth (GitHub, Google, generic), and LDAP login flows, working seamlessly with reverse proxies such as SWAG/Nginx, Traefik, and Caddy.
-                Configuration happens exclusively through environment variables — no dashboards, databases, or complex setup files needed — keeping the statically linked binary tiny and extremely low on resources.
-                In the Neo homeserver it acts as the central forward-auth provider, protecting the web UIs of other services while providing its own clean login page.
+                Makes sure only you and the people you add can open your apps.
+                Sign in once to reach all of them, optionally with Google, GitHub or Microsoft, and add a second factor for extra safety.
+              '';
+              notes = ''
+                Forward-auth for SWAG: username and password (bcrypt, optional TOTP), OAuth (GitHub, Google, generic, Entra) and LDAP. Configured through environment variables, no database.
+                Services list the paths that skip the login (health checks, phone app APIs) in auth.publicPaths.
               '';
               projectUrl = "https://tinyauth.app/";
               githubUrl = "https://github.com/tinyauthapp/tinyauth";

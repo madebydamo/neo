@@ -38,10 +38,14 @@
             // lib.neo.mkServiceMeta {
               category = "Monitoring";
               icon = ./icon.svg;
+              tagline = "Reports this server's health to Beszel";
               description = ''
-                Beszel agent is the lightweight companion to the Beszel monitoring hub.
-                It runs on target hosts and reports detailed system and container metrics (CPU, RAM, disk, network, temps, SMART, GPUs, Docker/Podman) back to the hub over secure websocket.
-                Extremely low resource usage; designed for always-on background operation with no requirement for inbound network access or public ports.
+                A small helper that sends this machine's numbers (processor, memory, disks, temperatures and apps) to your Beszel dashboard.
+                Turn it on together with Beszel.
+              '';
+              notes = ''
+                Reports CPU, RAM, disk, network, temperatures, S.M.A.R.T., GPUs and Docker containers to the hub over a websocket; needs no inbound ports.
+                Copy the key and token from the hub's Add System dialog.
               '';
               projectUrl = "https://beszel.dev/";
               githubUrl = "https://github.com/henrygd/beszel";

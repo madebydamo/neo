@@ -61,10 +61,14 @@
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = ./icon.svg;
+              tagline = "Copies your data to another server every night";
               description = ''
-                The backup service performs automated rsync-over-SSH snapshots of your critical Neo homeserver data (AppData, configs, etc.) to a remote server of your choice.
-                It supports custom exclude lists, scheduled execution via systemd OnCalendar timers, detailed per-run logging, and extra SSH options for bastions or restricted keys.
-                A simple, reliable off-site backup solution that stays entirely under your control without third-party SaaS or cloud storage.
+                Keeps a copy of your app data and settings on another computer you control, for example a friend's server or a second box at your parents' place.
+                If this server breaks, your photos, documents and settings are safe elsewhere.
+              '';
+              notes = ''
+                Runs rsync over SSH on a schedule (systemd timer, midnight by default) to a remote server.
+                Supports exclude lists, a log per run and extra SSH options for jump hosts or restricted keys.
               '';
             }
             // lib.neo.mkSkillOptions {};

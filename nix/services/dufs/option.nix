@@ -62,12 +62,18 @@
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = ./icon.png;
+              tagline = "Share folders and use them as a network drive";
               description = ''
-                Dufs is a distinctive utility file server written in Rust: static serving, drag-and-drop uploads, search, resumable transfers, and first-class WebDAV.
-                Neo mounts media and documents under /data by default and adds a writable share at /data; extra host paths go in additionalMountPoints.
-                The web UI is behind tinyauth. Set username/password so rclone, davfs2, Windows Explorer, and macOS Finder can use HTTPS WebDAV with HTTP Basic; SWAG injects those credentials after tinyauth so the browser does not see a second login.
-                GET /__dufs__/health bypasses edge auth for probes.
+                A simple file server in the browser: browse, upload by drag and drop, search and download whole folders.
+                Your computer can also connect to it as a network drive in Windows Explorer or Mac Finder.
               '';
+              notes = ''
+                Neo mounts media and documents under /data and adds a writable share; extra folders go in additionalMountPoints.
+                The web UI is behind tinyauth. Set username and password so rclone, davfs2, Windows Explorer and macOS Finder can use WebDAV over HTTPS with Basic auth; SWAG adds those credentials after tinyauth, so the browser does not ask twice.
+                GET /__dufs__/health skips the login for health checks.
+              '';
+              replaces = ["Dropbox"];
+              privacy = ["files"];
               projectUrl = "https://github.com/sigoden/dufs";
               githubUrl = "https://github.com/sigoden/dufs";
               releaseUrl = "https://github.com/sigoden/dufs/releases";

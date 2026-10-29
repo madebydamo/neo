@@ -32,12 +32,17 @@
             // lib.neo.mkServiceMeta {
               category = "Media";
               icon = ./icon.svg;
+              tagline = "Your own Google Photos";
               description = ''
-                Immich is a high-performance self-hosted photo and video management solution and a powerful open-source alternative to Google Photos.
-                It enables you to back up, organize, search, and manage your photos and videos on your own server with ease, featuring automatic mobile backups via official apps for Android and iOS.
-                Advanced capabilities include machine learning for facial recognition, object detection, semantic search, a map view, memories, sharing, and support for raw files and Live Photos.
-                Immich delivers a polished web UI and companion mobile apps, giving you complete privacy and control over your media library without any third-party cloud services.
+                Your phones back up photos and videos automatically. Find pictures by face, place or anything you type, look back with memories and a map, and share albums with family.
+                There are apps for Android and iPhone.
               '';
+              notes = ''
+                Face recognition and smart search run on this server with machine learning; nothing goes to a cloud service.
+                Supports raw files and Live Photos.
+              '';
+              replaces = ["Google Photos" "iCloud Photos"];
+              privacy = ["photos"];
               projectUrl = "https://immich.app/";
               githubUrl = "https://github.com/immich-app/immich";
               releaseUrl = "https://github.com/immich-app/immich/releases";

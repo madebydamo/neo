@@ -43,11 +43,17 @@
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = ./icon.svg;
+              tagline = "Edit, merge and sign PDFs right in your browser";
               description = ''
-                BentoPDF is a privacy-first PDF toolkit that runs entirely in the browser: files are processed client-side and never uploaded.
-                Merge, split, compress, convert, edit, sign, OCR, redact and 50+ more tools, including Office conversion via LibreOffice WASM.
-                Neo serves the self-hosted "simple" build behind tinyauth; individual tools can be hidden without rebuilding.
+                More than 50 PDF tools: merge, split, compress, sign, fill in forms, redact and convert to and from Office files.
+                Your files are processed in your own browser and are never uploaded anywhere, not even to this server.
               '';
+              notes = ''
+                Neo serves the self-hosted "simple" build behind tinyauth. Office conversion runs LibreOffice compiled to WebAssembly in the browser.
+                Individual tools can be hidden without rebuilding (disabledTools).
+              '';
+              replaces = ["Adobe Acrobat" "iLovePDF" "Smallpdf"];
+              privacy = ["documents"];
               projectUrl = "https://www.bentopdf.com/";
               githubUrl = "https://github.com/alam00000/bentopdf";
               releaseUrl = "https://github.com/alam00000/bentopdf/releases";

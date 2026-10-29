@@ -67,12 +67,14 @@
             // lib.neo.mkServiceMeta {
               category = "Core";
               icon = ./icon.svg;
+              tagline = "Keeps your homeserver up to date";
               description = ''
-                Periodically runs neo update + activate so system packages and Neo modules stay current.
-                When enabled, a systemd timer runs scheduled upgrades (with optional nix garbage collection).
-                activationMode=boot builds and sets the next boot default without a live switch (safer on boxes where unattended switch freezes networking); rebootAfterBoot (default true) then schedules a delayed host restart so the new generation actually runs.
-                The configuration repository is created by neo-bootstrap on the neo web service, which stays enabled when this timer is off.
-                CLI path and neo input settings live under neo-cli. Updates use the server profile (configPath and neoInput). This option only controls whether automatic system updates run.
+                Installs system and Neo updates automatically on a schedule, and can clean up old versions to free disk space.
+              '';
+              notes = ''
+                A systemd timer runs neo update and activate, with optional nix garbage collection.
+                activationMode=boot builds and sets the next boot default without a live switch (safer on boxes where an unattended switch freezes networking); rebootAfterBoot (default on) then restarts the host so the new version runs.
+                The config repo is created by neo-bootstrap, which stays enabled when this timer is off. CLI path and neo input settings live under neo-cli.
               '';
             }
             // lib.neo.mkSkillOptions {};

@@ -221,12 +221,15 @@
             // lib.neo.mkServiceMeta {
               category = "Core";
               icon = ./icon.svg;
+              tagline = "Secure web addresses (HTTPS) for all your apps";
               description = ''
-                SWAG (Secure Web Application Gateway) is the foundational reverse proxy and SSL termination layer for the Neo homeserver.
-                Built on Nginx with integrated Certbot, it automatically provisions and renews trusted SSL certificates from Let's Encrypt or ZeroSSL for the primary domain, all configured subdomains, and domains listed in proxyPass.
-                Every other service's public web interface is routed exclusively through SWAG using its extensive library of reverse proxy configurations, enabling centralized HTTPS, optional auth, fail2ban protection, and keeping backends isolated on the internal Docker network.
-                When enabled, SWAG also loads the linuxserver swag-dashboard and swag-dbip docker-mods (GoAccess analytics + DB-IP GeoIP for the geographic overview). Optional country/continent and IP/CIDR allow and deny lists live under services.swag.geo (empty = unrestricted; IP rules take precedence over country rules); fail2ban jails and never-ban IPs under services.swag.autoBan (no jails = fail2ban off).
-                As the entry point for all external traffic, SWAG must be configured with your domain and email before other proxied services can be reached securely from the internet. It uses the container image lscr.io/linuxserver/swag:latest.
+                The front door of your homeserver: every app gets its own address like photos.example.com, with free HTTPS certificates that renew automatically, and visitors who misbehave are blocked.
+                Set your domain and email here first.
+              '';
+              notes = ''
+                SWAG (nginx with Certbot) terminates TLS and proxies to the apps on the internal Docker network. Certificates come from Let's Encrypt or ZeroSSL for the domain, all subdomains and the proxyPass domains.
+                Loads the swag-dashboard and swag-dbip mods (GoAccess analytics and GeoIP). Country and IP allow/deny lists live under geo (empty = unrestricted; IP rules win over country rules); fail2ban jails and never-ban IPs under autoBan (no jails = fail2ban off).
+                Image: lscr.io/linuxserver/swag:latest.
               '';
               projectUrl = "https://docs.linuxserver.io/general/swag/";
               githubUrl = "https://github.com/linuxserver/docker-swag";

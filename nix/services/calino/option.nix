@@ -35,13 +35,19 @@
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = ./icon.svg;
+              tagline = "Your calendars and contacts in the browser";
               description = ''
-                Calino is a lightweight browser CalDAV client: month/week/day views, tasks, journals, and CardDAV contacts, with no Calino-side account or database.
-                The Docker image is a static SPA; calendars stay on your CalDAV server (RustiCal on this host, or any RFC 4791 server you configure in the UI).
-                Neo protects the UI with tinyauth. When RustiCal is enabled, SWAG adds CORS on RustiCal DAV paths for the Calino origin so the browser can talk to CalDAV without a proxy.
-                Public ICS/webcal feeds are fetched in the browser and almost never send CORS headers. SWAG proxies them at https://calino.<domain>/webcal-proxy (tinyauth). In Calino, Subscribe to calendar → Proxy URL: that address, then paste the original .ics URL.
-                CalDAV credentials (RustiCal app tokens) are entered in Calino and stored in the browser. Upstream X-Frame-Options is stripped at SWAG so the neo navigator can embed the UI.
+                A calendar app in your browser with month, week and day views, to-dos and contacts.
+                It shows the calendars you keep in RustiCal (or another calendar server), and can also show public calendars such as school holidays.
               '';
+              notes = ''
+                Calino is a static web app; calendars stay on your CalDAV server and there is no Calino account or database.
+                When RustiCal is enabled, SWAG adds CORS headers on RustiCal's calendar paths so the browser can talk to it directly.
+                Public .ics feeds almost never send CORS headers, so SWAG proxies them at https://calino.<domain>/webcal-proxy (behind tinyauth). In Calino choose Subscribe to calendar, set Proxy URL to that address and paste the original .ics URL.
+                Calendar passwords (RustiCal app tokens) are entered in Calino and stored in the browser.
+              '';
+              replaces = ["Google Calendar" "Outlook Calendar"];
+              privacy = ["calendar" "contacts"];
               projectUrl = "https://calino.io";
               githubUrl = "https://github.com/Ivan-Malinovski/calino";
               releaseUrl = "https://github.com/Ivan-Malinovski/calino/releases";

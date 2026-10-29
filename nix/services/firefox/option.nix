@@ -47,14 +47,16 @@
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = ./icon.png;
+              tagline = "A Firefox browser that runs on your server";
               description = ''
-                Firefox (linuxserver/firefox) streams a full Firefox browser session to any modern browser via Selkies.
-                Profile and downloads persist under appdata (/config). Neo remaps ports off the image defaults so the
-                container can share the gluetun VPN namespace with webtop/karakeep without port collisions.
-
-                Treat this as a powerful shell: passwordless sudo inside the session, so keep tinyauth (or another gate) enabled.
-
-                Optional VPN: set services.firefox.vpn.enabled = true to route the browser container through the shared gluetun VPN (services.vpn). Off by default.
+                A complete Firefox that you open inside a browser tab.
+                Useful to browse through your home connection or VPN while you are away, or to keep a browser session running after you close the tab.
+              '';
+              notes = ''
+                linuxserver/firefox, streamed with Selkies. Profile and downloads persist under appdata (/config).
+                Neo moves the ports off the image defaults so the container can share the VPN network with webtop and karakeep.
+                Treat it as a powerful shell: there is passwordless sudo inside the session, so keep tinyauth (or another login) enabled.
+                Optional VPN: turn on vpn.enabled to route the browser through the shared VPN service. Off by default.
               '';
               projectUrl = "https://docs.linuxserver.io/images/docker-firefox/";
               githubUrl = "https://github.com/linuxserver/docker-firefox";

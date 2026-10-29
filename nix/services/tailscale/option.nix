@@ -98,10 +98,14 @@
             // lib.neo.mkServiceMeta {
               category = "Network";
               icon = ./icon.svg;
+              tagline = "Reach your apps from anywhere, privately";
               description = ''
-                Tailscale is the easiest, most secure way to use WireGuard for creating a mesh VPN (tailnet) that connects devices and services across networks with zero-config NAT traversal and identity-based access controls.
-                In this homeserver, it provides simple remote access to the server and resources from anywhere, with support for exit nodes, advertised routes, MagicDNS, and SSH gated by tailnet policy — all without manual port forwarding or complex firewall rules.
-                Built on fully open source client code (tailscaled daemon + CLI), it offers SSO, ACLs, stable 100.x IPs, and works seamlessly for homelab, multi-cloud, and IoT scenarios.
+                Connects your phone and laptop to your homeserver through a private network, so you can use your apps while away without making them public on the internet.
+                Install the Tailscale app on your devices and sign in.
+              '';
+              notes = ''
+                WireGuard-based mesh VPN with NAT traversal and identity-based access rules. Supports exit nodes, advertised routes, MagicDNS and SSH gated by tailnet policy.
+                With splitDns your domain resolves to this server on Tailscale devices (set Pi-hole's localIP as well).
               '';
               projectUrl = "https://tailscale.com/";
               githubUrl = "https://github.com/tailscale/tailscale";

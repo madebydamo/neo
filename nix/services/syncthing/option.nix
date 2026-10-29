@@ -25,13 +25,16 @@
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = ./icon.svg;
+              tagline = "Keep folders in sync between your devices";
               description = ''
-                Syncthing is a continuous file synchronization program that keeps files in sync across two or more computers in real time.
-                It is fully peer-to-peer with no central server or third-party storage, giving you complete control over your data and where it lives.
-                All communication is encrypted with TLS (including perfect forward secrecy) and devices are authenticated using strong cryptographic certificates, ensuring only allowed peers can connect.
-                A powerful responsive web UI lets you configure, monitor, and manage sync folders from any browser; it supports LAN and internet syncing with automatic discovery, works on virtually every platform, and requires minimal setup.
-                Syncthing is open source under MPLv2 with a fully documented open protocol and transparent development on GitHub.
+                Keeps folders identical on your computers, phone and server, in real time.
+                Files go straight between your devices, encrypted, without a cloud in between.
               '';
+              notes = ''
+                Peer-to-peer with TLS (perfect forward secrecy); devices authenticate with certificates. Syncs over the LAN and the internet with automatic discovery. Open source (MPLv2).
+              '';
+              replaces = ["Dropbox" "OneDrive"];
+              privacy = ["files"];
               projectUrl = "https://syncthing.net/";
               githubUrl = "https://github.com/syncthing/syncthing";
               releaseUrl = "https://github.com/syncthing/syncthing/releases";

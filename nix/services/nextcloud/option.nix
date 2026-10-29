@@ -77,11 +77,16 @@
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = ./icon.svg;
+              tagline = "Your own cloud for files, calendars and contacts";
               description = ''
-                Nextcloud is an open source, self-hosted content collaboration platform that gives you a safe home for all your data.
-                Access, sync, and share your files, calendars, contacts, mail, and more from web, desktop, and mobile clients on your own terms.
-                It features Nextcloud Office for collaborative document editing, Talk for private video calls and chat, Groupware tools, and an integrated AI assistant — all without relying on third-party clouds.
+                Sync your files across computers and phones, share them with a link, and keep calendars and contacts in one place, like Google Drive or iCloud.
+                Turn on Collabora to edit documents together in the browser.
               '';
+              notes = ''
+                Also offers Talk (video calls and chat), groupware and an AI assistant as Nextcloud apps.
+              '';
+              replaces = ["Google Drive" "Dropbox" "iCloud Drive"];
+              privacy = ["files" "calendar" "contacts"];
               projectUrl = "https://nextcloud.com/";
               githubUrl = "https://github.com/nextcloud/server";
               releaseUrl = "https://nextcloud.com/changelog/";

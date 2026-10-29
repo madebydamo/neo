@@ -70,12 +70,19 @@
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = ./icon.svg;
+              tagline = "Automate tasks between your apps, like Zapier";
               description = ''
-                Activepieces is an open-source no-code automation platform (Zapier/Make alternative) for building flows that connect apps via pieces, webhooks, and schedules.
-                Neo runs the official production stack: the app container (API + worker), Postgres with pgvector, and Redis for the job queue, all on the internal Docker network behind SWAG and tinyauth.
-                Set AP_FRONTEND_URL to your public HTTPS URL so webhook triggers and OAuth redirects work; inbound webhook paths bypass tinyauth while the UI stays protected.
-                Ideal for self-hosted home automations without sending credentials to a SaaS workflow host.
+                Build automations without writing code: when something happens in one app, do something in another.
+                For example, save email attachments to your files, or get a message when someone fills in a form.
+                Automations can run on a schedule or when another app calls them.
               '';
+              notes = ''
+                Runs the official stack: the app (API and worker), Postgres with pgvector and Redis for the job queue.
+                Neo sets AP_FRONTEND_URL to https://<subdomain>.<domain>, so webhook triggers and app logins (OAuth) work.
+                Webhook paths skip the tinyauth login so other services can trigger flows; the editor stays behind it.
+              '';
+              replaces = ["Zapier" "Make"];
+              privacy = ["automation"];
               projectUrl = "https://www.activepieces.com/docs";
               githubUrl = "https://github.com/activepieces/activepieces";
               releaseUrl = "https://github.com/activepieces/activepieces/releases";

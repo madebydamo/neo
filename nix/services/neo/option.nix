@@ -67,11 +67,14 @@
             // lib.neo.mkServiceMeta {
               category = "Core";
               icon = ../../../cli/static/neo-icon.png;
+              tagline = "Set up and manage your homeserver";
               description = ''
-                The neo web UI gives you a live, in-browser editor for all your homeserver services.
-                Changes are written to settings.toml and can be reviewed/applied with a single click.
-                Use the sidebar on the left (in the main navigator) to quickly jump between your self-hosted apps.
-                neo-bootstrap creates the server config repo at boot and neo-web requires that unit, including when system-updater is disabled.
+                The control panel you are using right now: turn apps on, change their settings and apply the changes with one click.
+                The sidebar takes you to all your apps.
+              '';
+              notes = ''
+                Changes are written to settings.toml in the config repo and applied by activating.
+                neo-bootstrap creates the server config repo at boot; neo-web requires that unit, also when system-updater is off.
               '';
               githubUrl = "https://github.com/madebydamo/neo";
               rank = 0;

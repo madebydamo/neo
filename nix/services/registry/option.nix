@@ -54,12 +54,17 @@
             // lib.neo.mkServiceMeta {
               category = "Files";
               icon = ./icon.svg;
+              tagline = "Store your own app images";
               description = ''
-                A private Docker/OCI image registry based on CNCF Distribution, the reference implementation behind Docker Hub.
-                Push your own images with docker push <subdomain>.<domain>/name:tag and pull them from any machine or from neo services.
+                A private place for Docker images you build yourself, so your servers download them from home instead of a public registry. Mostly useful for developers.
+              '';
+              notes = ''
+                Based on CNCF Distribution. Push with docker push <subdomain>.<domain>/name:tag and pull from any machine or from neo services.
                 Add users to require docker login (htpasswd with bcrypt). With no users the registry is open, so restrict ingress or add a user before exposing it to the internet.
                 Image data lives in appdata; enable deletes and run garbage-collect to reclaim space.
               '';
+              replaces = ["Docker Hub"];
+              privacy = ["code"];
               projectUrl = "https://distribution.github.io/distribution/";
               githubUrl = "https://github.com/distribution/distribution";
               releaseUrl = "https://github.com/distribution/distribution/releases";
