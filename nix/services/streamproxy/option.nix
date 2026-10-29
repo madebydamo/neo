@@ -24,38 +24,44 @@
           in {
             options =
               {
-                enabled = mkEnableOption "streamproxy nginx + rathole server for public IP sharing" {rank = 0;};
+                enabled = mkEnableOption "sharing this server's public IP address with other homeservers through tunnels" {rank = 0;};
                 entries = mkOption {
                   type = types.attrsOf (
                     types.submodule {
                       options = {
                         url = mkOption {
                           type = types.str;
-                          description = "The domain name for this ingress entry";
+                          description = "Domain whose traffic goes to this tunnel, e.g. home.example.com.";
+                          ui = lib.neo.ui.mkUi {label = "Domain";};
                           rank = 0;
                         };
                         token = lib.neo.mkSecretOption {
                           type = types.str;
-                          description = "The authentication token for rathole";
+                          # rathole server token for this entry
+                          description = "Shared password the remote homeserver uses for its tunnel. Use the same value on both sides.";
+                          ui = lib.neo.ui.mkUi {label = "Tunnel password";};
                           helper = lib.neo.helpers.randomToken;
                           rank = 10;
                         };
                         wildcard = mkOption {
                           type = types.bool;
                           default = false;
-                          description = "Whether to route subdomains (*.url) to this ingress";
+                          description = "Also send every subdomain of the domain (e.g. photos.home.example.com) through this tunnel.";
+                          ui = lib.neo.ui.mkUi {label = "Include subdomains";};
                           rank = 20;
                         };
                         includeTopLevel = mkOption {
                           type = types.bool;
                           default = true;
-                          description = "Whether to route the top-level domain (url) to this ingress";
+                          description = "Send the domain itself (without a subdomain) through this tunnel.";
+                          ui = lib.neo.ui.mkUi {label = "Include the domain itself";};
                           rank = 30;
                         };
                         customDomains = mkOption {
                           type = types.listOf types.str;
                           default = [];
-                          description = "Additional custom domains that should be routed to this entry (certificates + forwarding)";
+                          description = "More domains whose traffic goes to this tunnel, one per line.";
+                          ui = lib.neo.ui.mkUi {label = "Extra domains";};
                           rank = 40;
                         };
                       };
@@ -63,7 +69,8 @@
                   );
                   default = {};
                   rank = 10;
-                  description = "Streamproxy entries mapping names to URLs, tokens, and routing rules";
+                  description = "One tunnel per remote homeserver. Each tunnel gets the traffic for its domains.";
+                  ui = lib.neo.ui.mkUi {label = "Tunnels";};
                 };
                 tcpForwards = mkOption {
                   type = types.attrsOf (
@@ -71,18 +78,22 @@
                       options = {
                         entry = mkOption {
                           type = types.str;
-                          description = "Name of services.streamproxy.entries.<entry> to attach this TCP tunnel to";
+                          description = "Name of the tunnel (from Tunnels) that receives this port.";
+                          ui = lib.neo.ui.mkUi {label = "Tunnel";};
                           rank = 0;
                         };
                         serviceSuffix = mkOption {
                           type = types.str;
-                          description = "Rathole service suffix (client must use the same: <entryName>_<suffix>)";
+                          # rathole service name is <entry>_<serviceSuffix>; the client must match.
+                          description = "Short name for this port, e.g. gitea_ssh. The remote homeserver must use the same name.";
+                          ui = lib.neo.ui.mkUi {label = "Port name";};
                           example = "gitea_ssh";
                           rank = 10;
                         };
                         listenPort = mkOption {
                           type = types.port;
-                          description = "Public TCP port on the edge (e.g. 2222 for Gitea SSH)";
+                          description = "Public port number to open, e.g. 2222 for Git over SSH.";
+                          ui = lib.neo.ui.mkUi {label = "Public port";};
                           rank = 20;
                         };
                       };
@@ -90,11 +101,13 @@
                   );
                   default = {};
                   rank = 20;
-                  description = ''
-                    Extra public TCP forwards via rathole (not SNI/HTTPS). Used for Gitea
-                    SSH (deploy keys) on a dedicated port. Each forward adds a rathole server
-                    service bound on listenPort and opens the firewall.
-                  '';
+                  # Raw TCP via rathole (not SNI/HTTPS); each forward adds a rathole server
+                  # service bound on listenPort and opens the firewall.
+                  description = "Open extra public ports (e.g. Git over SSH) and send them through a tunnel.";
+                  ui = lib.neo.ui.mkUi {
+                    label = "Extra public ports";
+                    group = lib.neo.ui.groups.advanced;
+                  };
                 };
                 ports = mkOption {
                   type = types.attrsOf (types.attrsOf types.int);
