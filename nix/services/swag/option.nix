@@ -37,23 +37,27 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "swag service" {rank = 0;};
+              enabled = mkEnableOption "the web gateway that gives every app a secure HTTPS address" {rank = 0;};
               domain = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Primary domain for swag";
+                description = "Your domain name (e.g. example.com). Every app gets an address under it.";
                 rank = 10;
+                ui = lib.neo.ui.mkUi {label = "Your domain";};
               };
               email = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "LetsEncrypt email for swag";
+                # Let's Encrypt account email (EMAIL)
+                description = "Email address for warnings about your HTTPS certificates.";
                 rank = 20;
+                ui = lib.neo.ui.mkUi {label = "Certificate email";};
               };
               proxyPass = mkOption {
                 type = types.attrsOf types.str;
                 default = {};
-                description = "Map of extra domains to http upstream URLs (plain http backends) to create direct proxy server blocks for (e.g. { \"octo.example.com\" = \"http://192.168.178.42:8123\"; }). SWAG handles TLS termination; no need if the target already speaks HTTPS.";
+                # Direct proxy server blocks; SWAG terminates TLS for plain-http backends.
+                description = "Give other devices or apps a secure HTTPS address, e.g. octo.example.com for http://192.168.178.42:8123. Not needed if they already use HTTPS.";
                 rank = 30;
                 ui = lib.neo.ui.mkUi {
                   label = "Extra domain routes";
@@ -64,8 +68,10 @@
               onlySubdomains = mkOption {
                 type = types.bool;
                 default = true;
-                description = "Only use subdomains";
+                # ONLY_SUBDOMAINS
+                description = "Get certificates only for app subdomains, not for the bare domain itself.";
                 rank = 40;
+                ui = lib.neo.ui.mkUi {label = "Subdomains only";};
               };
               localHttpPort = mkOption {
                 type = types.port;
@@ -91,58 +97,51 @@
                     countryWhitelist = mkOption {
                       type = types.listOf types.str;
                       default = [];
-                      description = ''
-                        ISO 3166-1 alpha-2 country codes allowed to reach proxied services (e.g. ["CH" "DE"]).
-                        Empty (default): all countries allowed. When non-empty, only listed countries (plus LAN) are allowed.
-                      '';
+                      # ISO 3166-1 alpha-2 codes
+                      description = "Two-letter country codes allowed to reach your apps, e.g. CH, DE. Empty allows all countries; otherwise only these (plus your home network).";
+                      ui = lib.neo.ui.mkUi {label = "Allowed countries";};
                       rank = 0;
                       example = ["CH" "DE" "AT"];
                     };
                     countryBlacklist = mkOption {
                       type = types.listOf types.str;
                       default = [];
-                      description = ''
-                        ISO 3166-1 alpha-2 country codes blocked at the edge (e.g. ["RU" "CN"]).
-                        Empty (default): no countries blocked. Combined with whitelist: a request must pass both.
-                      '';
+                      # ISO 3166-1 alpha-2 codes
+                      description = "Two-letter country codes that are blocked, e.g. RU, CN. Empty blocks none. A visitor must pass both this and Allowed countries.";
+                      ui = lib.neo.ui.mkUi {label = "Blocked countries";};
                       rank = 10;
                       example = ["RU" "CN" "KP"];
                     };
                     continentBlacklist = mkOption {
                       type = types.listOf types.str;
                       default = [];
-                      description = ''
-                        Continent codes to block: AF, AS, EU, NA, OC, SA, AN.
-                        Empty (default): no continents blocked.
-                      '';
+                      description = "Continents that are blocked: AF, AS, EU, NA, OC, SA or AN. Empty blocks none.";
+                      ui = lib.neo.ui.mkUi {label = "Blocked continents";};
                       rank = 20;
                       example = ["AS" "AF"];
                     };
                     ipWhitelist = mkOption {
                       type = types.listOf ipRange;
                       default = [];
-                      description = ''
-                        IP addresses or CIDR ranges (IPv4/IPv6) always allowed, even from a blocked country or continent
-                        or outside the country whitelist (e.g. a WARP / mobile egress range).
-                        IP rules take precedence over country rules.
-                      '';
+                      description = "IP addresses or ranges (e.g. 203.0.113.0/24) that always get through, even from a blocked country. Useful for your phone's mobile network.";
+                      ui = lib.neo.ui.mkUi {label = "Always allow IPs";};
                       rank = 30;
                       example = ["104.28.253.0/24" "203.0.113.7"];
                     };
                     ipBlacklist = mkOption {
                       type = types.listOf ipRange;
                       default = [];
-                      description = ''
-                        IP addresses or CIDR ranges (IPv4/IPv6) always blocked, even from a whitelisted country or the LAN.
-                        IP rules take precedence over country rules; when whitelist and blacklist overlap, the more specific range wins.
-                      '';
+                      # Overlap with ipWhitelist: the more specific range wins.
+                      description = "IP addresses or ranges that are always blocked, even from an allowed country or your home network.";
+                      ui = lib.neo.ui.mkUi {label = "Always block IPs";};
                       rank = 40;
                       example = ["198.51.100.0/24"];
                     };
                   };
                 };
                 default = {};
-                description = "GeoIP and IP allow/deny lists (DB-IP). Empty lists leave access unrestricted. IP rules beat country/continent rules; LAN bypasses country rules but not the IP blacklist.";
+                # GeoIP data from DB-IP. LAN bypasses country rules but not ipBlacklist.
+                description = "Allow or block visitors by country, continent or IP address. Empty lists let everyone in; IP rules win over country rules.";
                 rank = 50;
                 ui = lib.neo.ui.mkUi {group = geoGroup;};
               };
@@ -152,11 +151,8 @@
                     jails = mkOption {
                       type = types.listOf (types.enum jailNames);
                       default = jailNames;
-                      description = ''
-                        Fail2ban jails to run. nginx-http-auth bans failed basic-auth logins, nginx-unauthorized repeated 401s,
-                        nginx-badbots known bad user agents, nginx-botsearch scans for common exploit paths and nginx-deny
-                        requests nginx denied. Empty list: fail2ban does not run at all.
-                      '';
+                      # Stock SWAG fail2ban jails; an empty list stops fail2ban entirely.
+                      description = "Kinds of misbehaviour that get a visitor banned. Select none to turn auto ban off.";
                       rank = 0;
                       ui = lib.neo.ui.mkUi {
                         label = "Active jails";
@@ -168,11 +164,8 @@
                     ignoreIps = mkOption {
                       type = types.listOf ipRange;
                       default = [];
-                      description = ''
-                        IP addresses or CIDR ranges (IPv4/IPv6) fail2ban never bans, e.g. your own public IPs.
-                        LAN ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) are always ignored.
-                        Not the same as geo.ipWhitelist, which only bypasses the geo filter.
-                      '';
+                      # LAN ranges 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 are always ignored.
+                      description = "IP addresses or ranges that are never banned, e.g. your own public IP. Your home network is never banned. Always allow IPs only skips the country filter, not this.";
                       rank = 10;
                       example = ["203.0.113.7" "198.51.100.0/24"];
                       ui = lib.neo.ui.mkUi {label = "Never ban";};
@@ -180,28 +173,30 @@
                     banTime = mkOption {
                       type = types.ints.positive;
                       default = 600;
-                      description = "Seconds a banned IP stays banned.";
+                      description = "How many seconds a banned visitor stays blocked.";
                       rank = 20;
                       ui = lib.neo.ui.mkUi {label = "Ban time (s)";};
                     };
                     findTime = mkOption {
                       type = types.ints.positive;
                       default = 600;
-                      description = "Window in seconds in which maxRetry failures trigger a ban.";
+                      description = "Time window in seconds: reaching Max retries failures within it gets a visitor banned.";
                       rank = 30;
                       ui = lib.neo.ui.mkUi {label = "Find window (s)";};
                     };
                     maxRetry = mkOption {
                       type = types.ints.positive;
                       default = 5;
-                      description = "Failures within findTime before an IP is banned (nginx-badbots always bans after 2).";
+                      # nginx-badbots always bans after 2.
+                      description = "How many failures within the Find window lead to a ban.";
                       rank = 40;
                       ui = lib.neo.ui.mkUi {label = "Max retries";};
                     };
                   };
                 };
                 default = {};
-                description = "Fail2ban inside SWAG: bans IPs that trip the selected jails. Disabling every jail stops fail2ban entirely.";
+                # fail2ban inside the SWAG container
+                description = "Temporarily ban visitors who fail to log in repeatedly or scan for weaknesses.";
                 rank = 60;
                 ui = lib.neo.ui.mkUi {group = autoBanGroup;};
               };
