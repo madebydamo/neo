@@ -8,41 +8,59 @@
     ...
   }:
     with lib;
-    with {inherit (lib.neo) mkOption mkEnableOption;}; {
+    with {inherit (lib.neo) mkOption mkEnableOption;}; let
+      networkDriveGroup = lib.neo.ui.mkGroup {
+        id = "drive";
+        label = "Network drive";
+        description = "Open your files as a drive in Finder, Windows Explorer or rclone";
+        icon = lib.neo.ui.icons.folder;
+        rank = 50;
+      };
+    in {
       options.neo.services.dufs = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "dufs file server and WebDAV service" {rank = 0;};
+              enabled = mkEnableOption "A simple file server: browse, upload and share your files in the browser or as a network drive" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 internal = true;
                 default = 5000;
                 description = "Internal port dufs listens on";
               };
+              # HTTP Basic username (DUFS_AUTH); only used when password is set.
               username = mkOption {
                 type = types.str;
                 default = "dufs";
                 rank = 10;
-                description = "HTTP Basic username for dufs and WebDAV clients. Used when password is set.";
+                description = "Username for network-drive apps (used with the password).";
+                ui = lib.neo.ui.mkUi {
+                  group = networkDriveGroup;
+                };
               };
+              # HTTP Basic password (DUFS_AUTH). When set, WebDAV clients skip
+              # tinyauth and authenticate to dufs; the browser UI stays behind
+              # tinyauth and SWAG injects these credentials (no second login).
+              # When unset, only tinyauth protects dufs and WebDAV clients that
+              # cannot keep cookies fail.
               password = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 11;
-                description = ''
-                  HTTP Basic password for dufs and WebDAV clients. Generate once and keep stable.
-                  When set, native WebDAV clients skip tinyauth and authenticate to dufs; the browser UI stays behind tinyauth and SWAG injects these credentials so there is no second login form.
-                  When unset, only tinyauth protects the service and public WebDAV clients that cannot store cookies will fail.
-                '';
+                description = "Password for apps that connect as a network drive (Finder, Windows Explorer, rclone). Leave empty if you only use the browser.";
                 helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {
+                  group = networkDriveGroup;
+                };
               };
             }
+            # Entries bind-mount localPath (host) at containerPath (inside dufs);
+            # media and documents are mounted under /data by default.
             // lib.neo.mkAdditionalMountPoints {
               rank = 20;
               description = ''
-                Extra host directories to expose in dufs (beyond the default media and documents mounts under /data).
-                Each entry pairs a localPath (absolute host path) with a containerPath (e.g. /data/MyShare).
+                Extra folders on your server to show in Dufs, next to media and documents.
+                For each, pick the folder on the server and where it appears in Dufs (for example /data/MyShare).
               '';
             }
             // lib.neo.mkReverseProxyOptions {
