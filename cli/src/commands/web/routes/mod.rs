@@ -1,5 +1,6 @@
 mod actions;
 mod activation;
+mod agent_tools;
 mod branches;
 mod changes;
 mod guides;
@@ -43,6 +44,8 @@ pub fn routes() -> Vec<rocket::Route> {
         proposals::proposal_apply,
         proposals::proposal_reject,
         proposals::proposal_page,
+        agent_tools::mcp,
+        agent_tools::mcp_get,
         helpers::run_helper,
         oauth::run_oauth,
         save::save_service,
