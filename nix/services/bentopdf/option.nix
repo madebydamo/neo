@@ -13,24 +13,28 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "BentoPDF privacy-first PDF toolkit" {rank = 0;};
+              enabled = mkEnableOption "PDF tools in your browser: merge, split, sign and more, without uploading your files" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 internal = true;
                 default = 8080;
                 description = "Internal port BentoPDF's nginx listens on";
               };
+              # config.json disabledTools. A tool's ID is its page URL without .html.
               disabledTools = mkOption {
                 type = types.listOf types.str;
                 default = [];
                 rank = 10;
-                description = "Tool IDs to hide (config.json disabledTools). A tool's ID is its page URL without .html, e.g. edit-pdf, sign-pdf, encrypt-pdf.";
+                description = "Tools to hide from the menu, e.g. sign-pdf or encrypt-pdf (the tool's web address without .html). Empty: all tools are shown.";
+                ui = lib.neo.ui.mkUi {label = "Hidden tools";};
               };
+              # config.json editorDisabledCategories.
               editorDisabledCategories = mkOption {
                 type = types.listOf types.str;
                 default = [];
                 rank = 11;
-                description = "PDF editor feature categories to hide (config.json editorDisabledCategories), e.g. redaction.";
+                description = "Feature groups to hide in the PDF editor, e.g. redaction. Empty: the editor shows everything.";
+                ui = lib.neo.ui.mkUi {label = "Hidden editor features";};
               };
             }
             // lib.neo.mkReverseProxyOptions {
