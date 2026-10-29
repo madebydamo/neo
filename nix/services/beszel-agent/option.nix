@@ -11,24 +11,30 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "beszel agent service" {rank = 0;};
+              enabled = mkEnableOption "Monitoring agent that reports this homeserver's CPU, memory, disk and app usage to your Beszel dashboard" {rank = 0;};
+              # HUB_URL: websocket connection to the hub.
               hubUrl = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Hub URL for websocket connection (e.g. http://beszel:8090)";
+                description = "Address of your Beszel dashboard. Use http://beszel:8090 when it runs on this homeserver.";
                 rank = 10;
+                ui = lib.neo.ui.mkUi {label = "Dashboard address";};
               };
+              # KEY: hub public key.
               key = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Public key from hub (shown when adding system)";
+                description = "Key shown in the Beszel dashboard when you click Add System.";
                 rank = 20;
+                ui = lib.neo.ui.mkUi {label = "Dashboard key";};
               };
+              # TOKEN: universal or per-system token (hub /settings/tokens).
               token = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Universal or system token for websocket auth (from hub /settings/tokens)";
+                description = "Token from the Beszel dashboard under Settings › Tokens.";
                 rank = 30;
+                ui = lib.neo.ui.mkUi {label = "Token";};
               };
             }
             // lib.neo.mkContainerDefinitions {
