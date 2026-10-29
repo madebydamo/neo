@@ -13,59 +13,81 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Gitea self-hosted Git service" {rank = 0;};
+              enabled = mkEnableOption "Your own place to keep code and config in Git, like a private GitHub" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 default = 3000;
                 internal = true;
                 description = "Internal HTTP port Gitea listens on (HTTP_PORT)";
               };
+              # ROOT_URL. Empty: first customDomains entry as https://…, else
+              # https://<subdomain>.<swag.domain>.
               rootUrl = mkOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
-                description = ''
-                  Public ROOT_URL for Gitea (e.g. https://git.heimcloud.site).
-                  When null: first customDomains entry as https://…, else https://<subdomain>.<swag.domain>.
-                '';
+                description = "The web address people use to reach Gitea, for example https://git.example.com. Leave empty to set it automatically.";
+                ui = lib.neo.ui.mkUi {
+                  label = "Web address";
+                };
               };
               disableRegistration = mkOption {
                 type = types.bool;
                 default = true;
                 rank = 20;
-                description = "Disable open registration (invite/admin-created users only)";
+                description = "Stop strangers from creating accounts; only the admin can add users.";
+                ui = lib.neo.ui.mkUi {
+                  label = "Disable sign-ups";
+                };
               };
               ssh = mkOption {
                 type = types.submodule {
                   options = {
-                    enable = mkEnableOption "Gitea SSH via the image's bundled OpenSSH (deploy-key clones)" {rank = 0;};
+                    # Served by the image's bundled OpenSSH (deploy-key clones).
+                    enable = mkEnableOption "copying repositories over SSH. Only turn it on once SSH traffic reaches this server" {rank = 0;};
                     port = mkOption {
                       type = types.port;
                       default = 2222;
                       rank = 10;
-                      description = "Public SSH_PORT advertised in clone URLs / UI (edge port; not the host sshd)";
+                      # SSH_PORT advertised in clone URLs (edge port, not the host sshd).
+                      description = "Port shown in SSH clone links; the port people connect to from outside.";
+                      ui = lib.neo.ui.mkUi {
+                        visibleWhen = "enable";
+                      };
                     };
                     listenPort = mkOption {
                       type = types.port;
                       default = 2222;
                       rank = 20;
-                      description = "Host loopback publish port: 127.0.0.1:listenPort → container OpenSSH :22";
+                      # Host loopback publish: 127.0.0.1:listenPort -> container OpenSSH :22.
+                      description = "Port on the server where Gitea's SSH listens locally, for forwarding SSH traffic to it.";
+                      ui = lib.neo.ui.mkUi {
+                        group = lib.neo.ui.groups.advanced;
+                        label = "Local SSH port";
+                        visibleWhen = "enable";
+                      };
                     };
                     domain = mkOption {
                       type = types.nullOr types.str;
                       default = null;
                       rank = 30;
-                      description = "SSH_DOMAIN; null = hostname derived from rootUrl / customDomains";
+                      # SSH_DOMAIN; empty = hostname of rootUrl.
+                      description = "Address shown in SSH clone links; leave empty to use your Gitea address.";
+                      ui = lib.neo.ui.mkUi {
+                        label = "SSH address";
+                        visibleWhen = "enable";
+                      };
                     };
                   };
                 };
                 default = {};
                 rank = 30;
-                description = ''
-                  Gitea SSH for deploy-key clones, served by the image's bundled OpenSSH on container :22
-                  (built-in Go SSH server stays off; host keys persist in appdata/data/ssh).
-                  Keep disabled until the edge TCP forward exists.
-                '';
+                # Bundled OpenSSH on container :22 (built-in Go SSH server stays off;
+                # host keys persist in appdata/data/ssh). Needs an edge TCP forward.
+                description = "Copy and update repositories over SSH with keys instead of a password.";
+                ui = lib.neo.ui.mkUi {
+                  label = "SSH access";
+                };
               };
             }
             // lib.neo.mkReverseProxyOptions {
