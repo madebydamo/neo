@@ -94,6 +94,8 @@ With Hermes on, two visible secrets turn on the AI parts of the web UI (`nix/ser
 - **Gateway token** (≥16 chars) → Hermes' API server (`API_SERVER_KEY`, 127.0.0.1:`gatewayPort`) and the **chat drawer** (`static/agent_chat.js`, `partials/agent_drawer.html.hbs`, routes `routes/agent.rs` → `agent.rs`). neo-web proxies `/agent/open|chat|approve|stop|render` to the session chat SSE API; the key stays server-side. Open it from any element with `data-neo-agent="general|service:<name>|guide:<id>"` (+ `data-neo-agent-title`, `-starter`, `-hint`); render such buttons only when the context has `assistant` (`agent::available()`).
 - **Settings tools token** → MCP server `neo` for Hermes at `/internal/mcp` (`routes/agent_tools.rs`; SWAG 404s `/internal/`): read settings (secrets redacted) and **propose** changes. A proposal (`proposals.rs`, card `proposal_card.html.hbs`, `/proposals/<id>`) writes nothing until the user clicks Save (`settings::edit::apply_edit`, the form's write path) or Save & apply (then `apply_or_activate`). New settings writes go through `apply_edit` too, never a second path.
 
+**Privacy map** (`/configuration/privacy`): categories in `nix/modules/core/privacy.nix` (`neo.privacy.categories.<id>`, plugins may add some), services tag themselves with `mkServiceMeta { privacy = [ "calendar" ]; }` (unknown ids are a build warning), guides with `privacy = [ … ]`. A category counts as "at home" once a tagged service is enabled.
+
 Every guide is also a Hermes skill `neo-guide-<id>` (`nix/services/hermes/skills.nix`), which "Do it with AI" loads.
 
 ## Web UI option metadata (`rank` / `helper` / `ui`)

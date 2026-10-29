@@ -465,9 +465,13 @@ gives a "how much of my data is at home" overview without any scoring.
 
 ### Categories
 
-Declared centrally (`nix/lib/privacy.nix`, extendable by plugins via
+Declared in `nix/modules/core/privacy.nix` (extendable by plugins via
 `neo.privacy.categories.<id>`), each with `label`, `icon`, `cloud` (what the big
-providers keep), `examples` (Google Calendar, iCloud…), `body` (optional `.md`).
+providers keep), `home` (what changes at home), `examples` (Google Calendar,
+iCloud…) and `rank`. The page (`/configuration/privacy`, Guides tab) draws the
+"at home" categories inside a house and the rest under "Still in the cloud";
+`#<id>` opens a category's panel (used by `privacy:` links). A teaser links to it
+from the Services and Guides tabs.
 
 | id | Label | Services today |
 |---|---|---|
@@ -489,7 +493,7 @@ providers keep), `examples` (Google Calendar, iCloud…), `body` (optional `.md`
 | `assistant` | AI assistant | hermes |
 
 Services opt in with `mkServiceMeta { privacy = [ "calendar" "contacts" ]; }`;
-eval checks that the ids exist.
+unknown ids are a build warning (not an error, so plugins never break a build).
 
 ---
 

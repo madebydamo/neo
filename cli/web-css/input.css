@@ -1529,3 +1529,15 @@ a.neo-sem-name:focus-visible {
 @media (min-width: 640px) {
   body.neo-agent-open .max-w-7xl { margin-right: 27.5rem; }
 }
+
+/* Privacy map (templates/privacy.html.hbs): the "at home" zone is a house. */
+.neo-privacy-roof {
+  height: 2.25rem;
+  margin: 0 -0.25rem;
+  background: color-mix(in oklab, var(--color-success) 22%, transparent);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+@media (min-width: 640px) {
+  .neo-privacy-roof { height: 3rem; }
+}
+.neo-privacy-tile { min-height: 6.25rem; }

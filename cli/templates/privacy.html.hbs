@@ -1,0 +1,136 @@
+{{!-- Privacy map: kinds of personal data, split into "at home" (an installed
+     service keeps it) and "in the cloud". A tile opens the detail panel. --}}
+<div id="privacy-map" class="space-y-5 sm:space-y-6"
+     x-data="{ sel: (location.hash || '').slice(1) || null,
+               pick(id) { this.sel = this.sel === id ? null : id; history.replaceState(history.state, '', this.sel ? '#' + this.sel : location.pathname);
+                          if (this.sel) this.$nextTick(() => { const d = document.getElementById('privacy-detail'); if (d && window.innerWidth < 1024) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); } }">
+  {{#if error}}
+    <div role="alert" class="alert alert-error alert-soft text-sm">
+      <div class="text-xs whitespace-pre-wrap break-words font-mono">{{error}}</div>
+    </div>
+  {{/if}}
+
+  <div class="flex flex-col sm:flex-row sm:items-end gap-3">
+    <div class="min-w-0 flex-1">
+      <h2 class="text-xl sm:text-2xl font-semibold tracking-tight">Your privacy map</h2>
+      <p class="text-sm text-base-content/60 mt-0.5">The kinds of personal data people usually hand to cloud companies, and which of them your homeserver already keeps at home. Pick one to see how.</p>
+    </div>
+    {{#if total}}
+      <div class="shrink-0 text-right">
+        <div class="text-2xl font-semibold tabular-nums">{{home_count}}<span class="text-base-content/40 text-lg"> / {{total}}</span></div>
+        <div class="text-xs text-base-content/60">kept at home</div>
+      </div>
+    {{/if}}
+  </div>
+
+  <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem] items-start">
+    <div class="space-y-4">
+      {{!-- At home: drawn as a house (roof + walls). --}}
+      <section class="neo-privacy-home" aria-label="At home">
+        <div class="neo-privacy-roof" aria-hidden="true"></div>
+        <div class="neo-privacy-house rounded-b-box border border-t-0 border-success/40 bg-success/5 p-3 sm:p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-success" aria-hidden="true"><path d="M4 11l8-6.5 8 6.5"/><path d="M6 9.5V19h12V9.5"/><path d="M10 19v-5h4v5"/></svg>
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-base-content/60">At home</h3>
+          </div>
+          {{#if at_home}}
+            <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
+              {{#each at_home}}{{> partials/privacy_tile home=true}}{{/each}}
+            </div>
+          {{else}}
+            <p class="text-sm text-base-content/60">Nothing yet. Pick a tile below to bring that data home.</p>
+          {{/if}}
+        </div>
+      </section>
+
+      <section class="rounded-box border border-base-300 bg-base-100 p-3 sm:p-4" aria-label="In the cloud">
+        <div class="flex items-center gap-2 mb-3">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-base-content/60" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 00.6-8 5.5 5.5 0 00-10.6-1.6A4.5 4.5 0 007 18.5z"/></svg>
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-base-content/60">Still in the cloud</h3>
+        </div>
+        {{#if in_cloud}}
+          <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
+            {{#each in_cloud}}{{> partials/privacy_tile home=false}}{{/each}}
+          </div>
+        {{else}}
+          <p class="text-sm text-base-content/60">Everything on this map is kept at home. 🎉</p>
+        {{/if}}
+      </section>
+    </div>
+
+    {{!-- Detail panel for the selected category. --}}
+    <aside id="privacy-detail" class="lg:sticky lg:top-24 scroll-mt-24">
+      <div x-show="!sel" class="rounded-box border border-dashed border-base-300 p-4 text-sm text-base-content/60">
+        Pick a kind of data to see what the cloud keeps, which app keeps it at home instead, and how to set it up.
+      </div>
+      {{#each all}}
+        <div x-show="sel === '{{id}}'" x-cloak class="rounded-box border border-base-300 bg-base-100 p-4 space-y-4" id="privacy-{{id}}">
+          <div class="flex items-start gap-3">
+            <span class="w-10 h-10 shrink-0 rounded-xl {{#if home_now}}bg-success/15 text-success{{else}}bg-base-200 text-base-content/70{{/if}} flex items-center justify-center">
+              {{> options/group_icon icon=icon tint=icon_tint}}
+            </span>
+            <div class="min-w-0">
+              <h3 class="font-semibold">{{label}}</h3>
+              <span class="badge badge-sm {{#if home_now}}badge-success badge-soft{{else}}badge-ghost{{/if}}">{{#if home_now}}At home{{else}}In the cloud{{/if}}</span>
+            </div>
+          </div>
+
+          <div class="space-y-1">
+            <div class="text-xs font-semibold uppercase tracking-wider text-base-content/55">What the cloud keeps</div>
+            <p class="text-sm leading-relaxed">{{cloud}}</p>
+            {{#if examples}}
+              <div class="flex flex-wrap gap-1 pt-1">
+                {{#each examples}}<span class="badge badge-sm badge-ghost">{{this}}</span>{{/each}}
+              </div>
+            {{/if}}
+          </div>
+
+          {{#if home}}
+            <div class="space-y-1">
+              <div class="text-xs font-semibold uppercase tracking-wider text-base-content/55">At home</div>
+              <p class="text-sm leading-relaxed">{{home}}</p>
+            </div>
+          {{/if}}
+
+          {{#if services}}
+            <div class="space-y-1.5">
+              <div class="text-xs font-semibold uppercase tracking-wider text-base-content/55">Apps that keep it at home</div>
+              {{#each services}}
+                <a href="/configuration/option/{{name}}" hx-get="/configuration/option/{{name}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true"
+                   class="flex items-center gap-2.5 rounded-box border border-base-300 px-2.5 py-2 no-underline hover:border-primary/50 transition-colors">
+                  <span class="w-8 h-8 shrink-0 rounded-lg bg-base-200 p-1.5 flex items-center justify-center">
+                    {{#if icon}}<img src="{{icon}}" alt="" class="max-w-full max-h-full object-contain" loading="lazy">{{else}}<span class="opacity-50">⚙</span>{{/if}}
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="flex items-center gap-1.5"><span class="font-mono text-sm font-semibold truncate">{{name}}</span>
+                      {{#if enabled}}<span class="badge badge-soft badge-success badge-xs">Installed</span>{{/if}}</span>
+                    {{#if tagline}}<span class="block text-xs text-base-content/60 truncate">{{tagline}}</span>{{/if}}
+                  </span>
+                  {{#unless enabled}}<span class="text-xs text-primary shrink-0">Set up →</span>{{/unless}}
+                </a>
+              {{/each}}
+            </div>
+          {{/if}}
+
+          {{#if guides}}
+            <div class="space-y-1.5">
+              <div class="text-xs font-semibold uppercase tracking-wider text-base-content/55">Guides</div>
+              {{#each guides}}
+                <div class="rounded-box border border-base-300 px-2.5 py-2">
+                  <a href="/configuration/guides/{{id}}" hx-get="/configuration/guides/{{id}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true"
+                     class="block font-medium text-sm link link-hover">{{title}}</a>
+                  {{#if minutes}}<span class="text-xs text-base-content/55">{{minutes}} min · <span class="capitalize">{{difficulty}}</span></span>{{/if}}
+                  {{#if ../../assistant}}
+                    <button type="button" class="btn btn-xs btn-primary btn-soft mt-1.5 gap-1"
+                            data-neo-agent="guide:{{id}}" data-neo-agent-title="{{title}}"
+                            data-neo-agent-starter="Help me set this up step by step: {{title}}">Do it with AI</button>
+                  {{/if}}
+                </div>
+              {{/each}}
+            </div>
+          {{/if}}
+        </div>
+      {{/each}}
+    </aside>
+  </div>
+</div>

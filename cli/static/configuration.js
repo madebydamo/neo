@@ -633,12 +633,16 @@ window.servicesGrid = function servicesGrid() {
       var content = document.getElementById('config-content');
       var pane = content && content.querySelector('#options-pane');
       var guide = content && content.querySelector('#guide-page');
+      var privacy = content && content.querySelector('#privacy-map');
       if (pane) {
         data.setDetail(pane.getAttribute('data-service'));
         data.tab = pane.getAttribute('data-is-core') === 'true' ? 'settings' : 'services';
         focusOptionFromUrl(pane);
       } else if (guide) {
         data.setDetail(guide.getAttribute('data-guide-title') || 'Guide');
+        data.tab = 'guides';
+      } else if (privacy) {
+        data.setDetail('Privacy map');
         data.tab = 'guides';
       } else {
         data.clearDetail();

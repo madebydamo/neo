@@ -1,6 +1,6 @@
 use super::errors::eval_error_ui;
 use super::registry::{
-    NixExtractor, EXTRACT_GUIDES, EXTRACT_NEO_THEME, EXTRACT_PLUGIN_INVENTORY,
+    NixExtractor, EXTRACT_GUIDES, EXTRACT_NEO_THEME, EXTRACT_PLUGIN_INVENTORY, EXTRACT_PRIVACY,
     EXTRACT_PROXIED_SERVICES, EXTRACT_SECRET_PATHS, EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
 };
 use super::repl::NixEvaluator;
@@ -337,6 +337,22 @@ impl NixEvaluator {
         }
         let raw: RawPaths = self.query_extractor(&EXTRACT_SECRET_PATHS).await?;
         Ok(raw.paths)
+    }
+
+    /// Privacy map categories with their services and guides, icons published.
+    pub async fn extract_privacy(
+        &mut self,
+    ) -> anyhow::Result<crate::commands::web::routes::privacy::PrivacyExtract> {
+        let mut raw: crate::commands::web::routes::privacy::PrivacyExtract =
+            self.query_extractor(&EXTRACT_PRIVACY).await?;
+        for c in &mut raw.categories {
+            self.icons.link(&mut c.icon);
+            c.icon_tint = c.icon.as_deref().is_some_and(super::sections::is_svg);
+            for s in &mut c.services {
+                self.icons.link(&mut s.icon);
+            }
+        }
+        Ok(raw)
     }
 
     /// Guides (`neo.guides`) with links checked and icons published.
