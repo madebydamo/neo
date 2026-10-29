@@ -26,29 +26,38 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Docmost collaborative documentation platform" {rank = 0;};
+              enabled = mkEnableOption "A shared wiki where you write and organize pages together, like Notion" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 internal = true;
                 default = 3000;
                 description = "Internal port Docmost listens on (container port 3000)";
               };
+              # APP_SECRET (32+ chars) for signing and encryption; Docmost refuses to
+              # start with the image's placeholder. Changing it invalidates sessions
+              # and re-keys the SSO passwords.
               appSecret = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 10;
-                description = ''
-                  APP_SECRET: long random secret (32+ characters) used by Docmost for signing and encryption.
-                  Generate once with the helper (openssl rand -hex 32) and keep stable; the app refuses to start with the default placeholder.
-                '';
+                description = "Random secret Docmost uses to protect sessions. Generate it once and never change it.";
                 helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {
+                  group = lib.neo.ui.groups.advanced;
+                  label = "App secret";
+                };
               };
+              # POSTGRES_PASSWORD / DATABASE_URL of the internal Postgres container.
               dbPassword = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
                 rank = 20;
-                description = "Password for the internal Postgres container (POSTGRES_PASSWORD / DATABASE_URL)";
+                description = "Password for Docmost's private database; generate once, you never type it.";
                 helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {
+                  group = lib.neo.ui.groups.advanced;
+                  label = "Database password";
+                };
               };
               sso = mkOption {
                 type = types.bool;
@@ -69,9 +78,8 @@
                 default = [];
                 rank = 31;
                 description = ''
-                  Tinyauth usernames or emails that get the Docmost admin role at sign-in.
-                  With admins and adminGroups both empty, the first user to sign in becomes admin
-                  and roles are left to the Docmost UI; otherwise everyone else is set to member.
+                  Usernames or emails that become Docmost admins when they sign in.
+                  With this and Admin groups both empty, the first person to sign in becomes admin and you manage roles in Docmost; otherwise everyone else is a regular member.
                 '';
                 ui = lib.neo.ui.mkUi {
                   group = ssoGroup;
@@ -82,23 +90,25 @@
                 type = types.listOf types.str;
                 default = [];
                 rank = 32;
+                # Matched against the OAuth groups tinyauth passes on (oauthGroups).
                 description = ''
-                  OAuth groups (as in tinyauth oauthGroups; for Entra the display name or object ID)
-                  whose members get the Docmost admin role at sign-in.
+                  Sign-in groups whose members become Docmost admins.
+                  For Microsoft Entra, use the group's display name or object ID.
                 '';
                 ui = lib.neo.ui.mkUi {
                   group = ssoGroup;
                   visibleWhen = "sso";
+                  label = "Admin groups";
                 };
               };
               mcp = mkOption {
                 type = types.bool;
                 default = true;
                 rank = 40;
+                # Served at https://<subdomain>.<domain>/mcp; OAuth sign-in goes through tinyauth.
                 description = ''
-                  MCP server at https://<subdomain>.<domain>/mcp so AI clients (Claude, Cursor, …) can search,
-                  read and edit pages as the signed-in user. Clients connect with only the URL: OAuth sign-in
-                  opens tinyauth in the browser, then asks to approve the client. Needs sso.
+                  Lets AI apps (Claude, Cursor, …) search, read and edit your pages as you.
+                  Add the Docmost address followed by /mcp in the app, then sign in and approve it in the browser. Needs single sign-on.
                 '';
                 ui = lib.neo.ui.mkUi {
                   group = lib.neo.ui.groups.assistant;
