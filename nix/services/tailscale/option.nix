@@ -22,76 +22,100 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Tailscale service" {rank = 0;};
+              enabled = mkEnableOption "Tailscale, a private network that lets your own devices reach this server from anywhere" {rank = 0;};
               authKey = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Node authorization key; if provided and device not logged in, will be used for authentication";
+                # Used by tailscale up --auth-key only while the node is not logged in.
+                description = "Key from the Tailscale admin console that signs this server in automatically.";
                 rank = 10;
+                ui = lib.neo.ui.mkUi {label = "Auth key";};
               };
               acceptDns = mkOption {
                 type = types.bool;
                 default = true;
-                description = "Accept DNS configuration from the admin panel";
+                description = "Use the DNS settings (such as MagicDNS names) from your Tailscale admin console.";
                 rank = 20;
+                ui = lib.neo.ui.mkUi {label = "Use Tailscale DNS";};
               };
               splitDns = mkOption {
                 type = types.bool;
                 default = false;
-                description = ''
-                  Mini dnsmasq on the Tailscale interface that answers Neo service hostnames with this node's Tailscale IP.
-                  Does not change public DNS. Add this node's Tailscale IPv4 as a nameserver restricted to services.swag.domain in the Tailscale admin console (do not enable Override DNS servers).
-                  When Pi-hole is also enabled, Pi-hole is bound to localIP only so both can listen on port 53.
-                '';
+                # Mini dnsmasq on the Tailscale interface answering Neo hostnames with this node's
+                # Tailscale IP. Admin console: add this node's Tailscale IPv4 as a nameserver
+                # restricted to services.swag.domain (do not enable Override DNS servers).
+                # With Pi-hole enabled, Pi-hole binds to localIP only so both can use port 53.
+                description = "Let devices on Tailscale reach your apps by name. Needs one DNS setting in the Tailscale admin console: this server as nameserver for your domain.";
                 rank = 25;
+                ui = lib.neo.ui.mkUi {label = "App names over Tailscale";};
               };
               acceptRoutes = mkOption {
                 type = types.bool;
                 default = false;
-                description = "Accept routes advertised by other Tailscale nodes";
+                description = "Let this server reach networks that other Tailscale devices share.";
                 rank = 30;
+                ui = lib.neo.ui.mkUi {
+                  label = "Use shared networks";
+                  group = lib.neo.ui.groups.advanced;
+                };
               };
               advertiseExitNode = mkOption {
                 type = types.bool;
                 default = false;
-                description = "Offer to be an exit node for internet traffic for the tailnet";
+                description = "Let your Tailscale devices send their internet traffic through this server, e.g. on public Wi-Fi.";
                 rank = 40;
+                ui = lib.neo.ui.mkUi {label = "Offer as exit node";};
               };
               advertiseRoutes = mkOption {
                 type = types.listOf types.str;
                 default = [];
-                description = "Routes to advertise to other nodes (list of CIDR strings, e.g. [\"10.0.0.0/8\", \"192.168.0.0/24\"])";
+                description = "Networks this server shares with your Tailscale devices, e.g. 192.168.0.0/24 for your home network.";
                 rank = 50;
+                ui = lib.neo.ui.mkUi {
+                  label = "Share networks";
+                  group = lib.neo.ui.groups.advanced;
+                };
               };
               exitNode = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Tailscale exit node (IP or base name) for internet traffic";
+                description = "Send this server's internet traffic through another Tailscale device (its name or IP). Empty uses the normal connection.";
                 rank = 60;
+                ui = lib.neo.ui.mkUi {label = "Use exit node";};
               };
               exitNodeAllowLanAccess = mkOption {
                 type = types.bool;
                 default = false;
-                description = "Allow direct access to the local network when routing traffic via an exit node";
+                description = "Keep reaching your home network directly while using an exit node.";
                 rank = 70;
+                ui = lib.neo.ui.mkUi {
+                  label = "Allow home network access";
+                  visibleWhen = "exitNode";
+                };
               };
               hostname = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Hostname to use instead of the one provided by the OS";
+                description = "Name of this server in Tailscale. Empty uses the server's own name.";
                 rank = 80;
+                ui = lib.neo.ui.mkUi {label = "Device name";};
               };
               loginServer = mkOption {
                 type = types.str;
                 default = "https://controlplane.tailscale.com";
-                description = "Base URL of control server";
+                description = "Only change this if you run your own Headscale server.";
                 rank = 90;
+                ui = lib.neo.ui.mkUi {
+                  label = "Login server";
+                  group = lib.neo.ui.groups.advanced;
+                };
               };
               ssh = mkOption {
                 type = types.bool;
                 default = false;
-                description = "Run an SSH server, permitting access per tailnet admin's declared policy";
+                description = "Allow SSH logins over Tailscale, controlled by your Tailscale access rules.";
                 rank = 100;
+                ui = lib.neo.ui.mkUi {label = "Tailscale SSH";};
               };
             }
             // lib.neo.mkSystemdUnits tailscaleUnits
