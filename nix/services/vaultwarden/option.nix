@@ -11,7 +11,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "vaultwarden password manager service" {rank = 0;};
+              enabled = mkEnableOption "your own password manager that works with the Bitwarden apps" {rank = 0;};
               port = mkOption {
                 type = types.port;
                 default = 8888;
@@ -21,8 +21,10 @@
               adminToken = lib.neo.mkSecretOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Random auth token to authenticate in admin page";
+                # ADMIN_TOKEN; without it Vaultwarden disables /admin.
+                description = "Password for the Vaultwarden admin page (/admin). Leave empty to turn that page off.";
                 rank = 10;
+                ui = lib.neo.ui.mkUi {label = "Admin page password";};
                 helper = lib.neo.helpers.randomToken;
               };
             }
