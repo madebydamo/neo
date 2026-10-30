@@ -69,6 +69,7 @@ pub(super) async fn configuration_shell(
             initial_detail,
             initial_content_html,
             assistant: crate::commands::web::agent::available(),
+            guides: services.guides,
         }
     };
     Template::render("configuration", ctx)

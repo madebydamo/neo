@@ -50,6 +50,12 @@
     builtins.sort (a: b: a.rank < b.rank) ranked
     ++ builtins.sort (a: b: a.name < b.name) unranked;
 
+  # Guides tab + privacy map (neo.services.neo.guides, on by default).
+  guidesEnabled = let
+    g = (neoConfig.services or {}).neo.guides or true;
+  in
+    !(builtins.isBool g) || g;
+
   # DaisyUI theme from neo.services.neo.theme.
   theme = let
     t = (neoConfig.services or {}).neo.theme or "lofi";

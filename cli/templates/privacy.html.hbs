@@ -13,6 +13,9 @@
     </div>
   {{/if}}
 
+  {{#if disabled}}
+    <p class="text-sm text-base-content/60">The privacy map is part of the guides, which are turned off. Switch on <a class="link" href="/configuration/option/neo?focus=guides" hx-get="/configuration/option/neo?focus=guides" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true">Show guides</a> in the neo settings to see it.</p>
+  {{else}}
   <div class="flex flex-col sm:flex-row sm:items-end gap-3">
     <div class="min-w-0 flex-1">
       <h2 class="text-xl sm:text-2xl font-semibold tracking-tight">Your privacy map</h2>
@@ -132,4 +135,5 @@
       {{/each}}
     </aside>
   </div>
+  {{/if}}
 </div>

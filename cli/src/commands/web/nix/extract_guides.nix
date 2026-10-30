@@ -6,7 +6,7 @@
   neoFlake,
   configName ? null,
 }: let
-  inherit (import ./extract_lib.nix {inherit neoFlake configName;}) f cfg neoConfig tryOr;
+  inherit (import ./extract_lib.nix {inherit neoFlake configName;}) f cfg neoConfig tryOr guidesEnabled;
 
   nixos =
     if cfg != null
@@ -140,7 +140,11 @@
   ranked = builtins.sort (a: b: a.rank < b.rank) (builtins.filter (g: g.rank != null) all);
   unranked = builtins.sort (a: b: a.title < b.title) (builtins.filter (g: g.rank == null) all);
 in {
-  guides = ranked ++ unranked;
+  guides =
+    if guidesEnabled
+    then ranked ++ unranked
+    else [];
+  enabled = guidesEnabled;
   hermesEnabled = tryOr false (services.hermes.enabled or false);
   inherit domain;
 }

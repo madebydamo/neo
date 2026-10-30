@@ -80,6 +80,13 @@ pub struct ExtractedServiceGroups {
     pub categories: Vec<String>,
     #[serde(default, rename = "pluginInventory")]
     pub plugin_inventory: Vec<PluginInventoryEntry>,
+    /// Guides tab and privacy map shown (neo.services.neo.guides).
+    #[serde(default = "yes", rename = "guidesEnabled")]
+    pub guides_enabled: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Serialize, Default)]
@@ -95,6 +102,9 @@ pub struct IndexContext {
     pub plugin_filters: Vec<ServicePlugin>,
     #[serde(default)]
     pub theme: String,
+    /// Guides tab and privacy map shown.
+    #[serde(default)]
+    pub guides: bool,
     #[serde(flatten)]
     pub eval_error: EvalErrorUi,
 }
@@ -120,6 +130,9 @@ pub struct ConfigurationPageContext {
     /// Assistant chat available (Hermes on with its chat key): drawer + buttons.
     #[serde(default)]
     pub assistant: bool,
+    /// Guides tab shown (neo.services.neo.guides).
+    #[serde(default)]
+    pub guides: bool,
 }
 
 impl Default for ConfigurationPageContext {
@@ -132,6 +145,7 @@ impl Default for ConfigurationPageContext {
             initial_detail: None,
             initial_content_html: None,
             assistant: false,
+            guides: true,
         }
     }
 }

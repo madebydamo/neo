@@ -26,6 +26,14 @@
                 ui = lib.neo.ui.mkUi {label = "Color theme";};
               };
 
+              guides = mkOption {
+                type = types.bool;
+                default = true;
+                rank = 15;
+                description = "Show the Guides tab with step-by-step guides and the privacy map. Turning it off also removes the guides from the assistant.";
+                ui = lib.neo.ui.mkUi {label = "Show guides";};
+              };
+
               port = mkOption {
                 type = types.port;
                 internal = true;

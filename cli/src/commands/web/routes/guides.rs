@@ -16,6 +16,7 @@ use crate::commands::web::util::{service_name_ok, Htmx};
 struct GuidesGridContext {
     guides: Vec<Guide>,
     tags: Vec<String>,
+    disabled: bool,
     #[serde(flatten)]
     eval_error: EvalErrorUi,
 }
@@ -58,6 +59,7 @@ async fn grid_context(config: &AppConfig) -> GuidesGridContext {
             tags.sort();
             tags.dedup();
             GuidesGridContext {
+                disabled: !x.enabled,
                 guides: x.guides,
                 tags,
                 ..Default::default()

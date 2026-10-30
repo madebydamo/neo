@@ -1,5 +1,5 @@
 {neoFlake}: let
-  inherit (import ./extract_lib.nix {inherit neoFlake;}) neoConfig safeList sortByRank;
+  inherit (import ./extract_lib.nix {inherit neoFlake;}) neoConfig safeList sortByRank guidesEnabled;
   inventory = import ./extract_plugin_inventory.nix {inherit neoFlake;};
 
   configServices = neoConfig.services or {};
@@ -98,4 +98,5 @@ in {
   groups = groupByCategory raw;
   categories = orderedCategories raw;
   pluginInventory = inventory.plugins;
+  inherit guidesEnabled;
 }

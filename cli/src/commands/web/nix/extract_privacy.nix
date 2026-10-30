@@ -5,7 +5,7 @@
   neoFlake,
   configName ? null,
 }: let
-  inherit (import ./extract_lib.nix {inherit neoFlake configName;}) neoConfig tryOr;
+  inherit (import ./extract_lib.nix {inherit neoFlake configName;}) neoConfig tryOr guidesEnabled;
 
   services = neoConfig.services or {};
   cats = tryOr {} (neoConfig.privacy.categories or {});
@@ -49,9 +49,15 @@
 
   all = builtins.filter (c: c != null) (map (id: tryOr null (builtins.deepSeq (category id) (category id))) (builtins.attrNames cats));
 in {
-  categories = builtins.sort (a: b:
-    if a.rank == b.rank
-    then a.label < b.label
-    else a.rank < b.rank)
-  all;
+  enabled = guidesEnabled;
+  categories =
+    builtins.sort (a: b:
+      if a.rank == b.rank
+      then a.label < b.label
+      else a.rank < b.rank)
+    (
+      if guidesEnabled
+      then all
+      else []
+    );
 }

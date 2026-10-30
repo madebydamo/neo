@@ -116,6 +116,13 @@ fn place(at_home: &mut [PrivacyCategory], in_cloud: &mut [PrivacyCategory]) {
 pub struct PrivacyExtract {
     #[serde(default)]
     pub categories: Vec<PrivacyCategory>,
+    /// False when the operator turned guides off (neo.services.neo.guides).
+    #[serde(default = "yes")]
+    pub enabled: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Serialize, Default)]
@@ -126,6 +133,7 @@ struct PrivacyContext {
     home_count: usize,
     total: usize,
     assistant: bool,
+    disabled: bool,
     #[serde(flatten)]
     eval_error: EvalErrorUi,
 }
@@ -155,6 +163,7 @@ async fn context(config: &AppConfig) -> PrivacyContext {
                 in_cloud,
                 all,
                 assistant: crate::commands::web::agent::available(),
+                disabled: !x.enabled,
                 ..Default::default()
             }
         }

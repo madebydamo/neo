@@ -96,7 +96,7 @@ With Hermes on, two visible secrets turn on the AI parts of the web UI (`nix/ser
 
 **Privacy map** (`/configuration/privacy`): categories in `nix/modules/core/privacy.nix` (`neo.privacy.categories.<id>`, plugins may add some), services tag themselves with `mkServiceMeta { privacy = [ "calendar" ]; }` (unknown ids are a build warning), guides with `privacy = [ … ]`. A category counts as "at home" once a tagged service is enabled.
 
-Every guide is also a Hermes skill `neo-guide-<id>` (`nix/services/hermes/skills.nix`), which "Do it with AI" loads.
+Every guide is also a Hermes skill `neo-guide-<id>` (`nix/services/hermes/skills.nix`), which "Do it with AI" loads. **Show guides** (`neo.services.neo.guides`, default on) hides the Guides tab, the privacy map, the guides on service pages and the guide skills (extracts read `guidesEnabled` from `extract_lib.nix`).
 
 ## Web UI option metadata (`rank` / `helper` / `ui`)
 

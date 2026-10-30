@@ -76,6 +76,13 @@ pub struct GuidesExtract {
     pub guides: Vec<Guide>,
     #[serde(default, rename = "hermesEnabled")]
     pub hermes_enabled: bool,
+    /// False when the operator turned guides off (neo.services.neo.guides).
+    #[serde(default = "yes")]
+    pub enabled: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 /// One H2 of a rendered guide (table of contents).
@@ -169,12 +176,7 @@ fn link_open(dest: &str, ctx: &RenderCtx) -> Option<String> {
             let icon = ctx
                 .service_icons
                 .get(target)
-                .map(|i| {
-                    format!(
-                        r#"<img src="{}" alt="" class="w-4 h-4 object-contain inline-block" loading="lazy">"#,
-                        escape(i)
-                    )
-                })
+                .map(|i| format!(r#"<img src="{}" alt="" loading="lazy">"#, escape(i)))
                 .unwrap_or_default();
             format!(
                 r#"<a {} class="neo-guide-chip" data-guide-service="{}">{icon}"#,

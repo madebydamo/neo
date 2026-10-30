@@ -239,7 +239,7 @@
       };
       references = {};
       scripts = {};
-    }) (config.neo.guides or {});
+    }) (lib.optionalAttrs config.neo.services.neo.guides (config.neo.guides or {}));
 
     allSkillConfs =
       skillConfs

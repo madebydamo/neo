@@ -104,7 +104,7 @@
     {{/if}}
   </div>
 
-  {{> partials/privacy_teaser}}
+  {{#if guides}}{{> partials/privacy_teaser}}{{/if}}
 
   {{#each groups}}
   <section class="space-y-2.5" data-cat="{{name}}" x-show="sectionVisible($el)">

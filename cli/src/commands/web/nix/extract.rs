@@ -160,6 +160,7 @@ impl NixEvaluator {
                     groups: extracted.groups,
                     categories: extracted.categories,
                     plugin_filters: plugin_filters(&inventory),
+                    guides: extracted.guides_enabled,
                     ..Default::default()
                 }
             }
