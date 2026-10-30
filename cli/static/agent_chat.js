@@ -204,7 +204,8 @@
       this.append(el);
     }
     t.raw += delta;
-    t.el.textContent = t.raw;
+    // Segments after a tool call start with blank lines; pre-wrap would show them.
+    t.el.textContent = t.raw.replace(/^\s+/, '');
     scrollDown();
   };
 

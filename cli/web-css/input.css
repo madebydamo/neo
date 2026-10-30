@@ -1445,17 +1445,25 @@ a.neo-sem-name:focus-visible {
   border-bottom: 1px solid var(--color-base-300);
 }
 .neo-guide-body a.link { text-underline-offset: 2px; }
+/* Inline box (not inline-flex): the label sits on the text baseline and the
+   padding/border do not grow the line box. */
 .neo-guide-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0 0.45rem;
+  display: inline;
+  padding: 0.1em 0.45rem;
   border-radius: 9999px;
   border: 1px solid var(--color-base-300);
   background: var(--color-base-100);
   font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
+}
+.neo-guide-chip img {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.3rem;
+  vertical-align: -0.15em;
+  object-fit: contain;
 }
 .neo-guide-chip:hover { border-color: color-mix(in oklab, var(--color-primary) 50%, transparent); }
 .neo-guide-option {
