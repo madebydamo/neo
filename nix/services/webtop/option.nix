@@ -69,6 +69,7 @@
                 Treat it as a powerful shell: there is passwordless sudo inside the desktop, so keep tinyauth (or another login) enabled.
                 Optional VPN: turn on vpn.enabled to route the desktop through the shared VPN service. Off by default.
               '';
+              privacy = ["browsing"];
               projectUrl = "https://docs.linuxserver.io/images/docker-webtop/";
               githubUrl = "https://github.com/linuxserver/docker-webtop";
               releaseUrl = "https://github.com/linuxserver/docker-webtop/releases";

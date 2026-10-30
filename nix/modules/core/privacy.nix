@@ -154,7 +154,7 @@
           icon = icons.shield;
           rank = 120;
           cloud = "Ads and trackers follow you from site to site and app to app, also on your TV.";
-          home = "Ads and trackers are blocked for every device in your home.";
+          home = "Ads and trackers are blocked for every device in your home, and a browser on your server can go online through a VPN.";
           examples = ["Ad networks" "Trackers in apps and smart TVs"];
         };
         recipes = {

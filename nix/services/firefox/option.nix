@@ -63,6 +63,7 @@
                 Treat it as a powerful shell: there is passwordless sudo inside the session, so keep tinyauth (or another login) enabled.
                 Optional VPN: turn on vpn.enabled to route the browser through the shared VPN service. Off by default.
               '';
+              privacy = ["browsing"];
               projectUrl = "https://docs.linuxserver.io/images/docker-firefox/";
               githubUrl = "https://github.com/linuxserver/docker-firefox";
               releaseUrl = "https://github.com/linuxserver/docker-firefox/releases";

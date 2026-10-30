@@ -59,9 +59,9 @@
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = ./icon.svg;
-              tagline = "Calendars and contacts that stay at home";
+              tagline = "Calendars, to-dos and contacts that stay at home";
               description = ''
-                Keeps your calendars and contacts on your own server.
+                Keeps your calendars, to-do lists and contacts on your own server.
                 Phones and computers sync with it like with Google or iCloud, using the apps you already have: iPhone, Android (with DAVx5), Mac, Thunderbird and more.
               '';
               notes = ''
@@ -70,7 +70,7 @@
                 CalDAV/CardDAV, well-known discovery and /ping skip tinyauth so calendar apps can use RustiCal app tokens. PROPFIND, OPTIONS and REPORT on the site root also skip it and redirect to well-known CalDAV, so DAVx5 works with the base URL.
               '';
               replaces = ["Google Calendar" "iCloud Calendar" "Google Contacts"];
-              privacy = ["calendar" "contacts"];
+              privacy = ["calendar" "contacts" "tasks"];
               projectUrl = "https://lennart-k.github.io/rustical/";
               githubUrl = "https://github.com/lennart-k/rustical";
               releaseUrl = "https://github.com/lennart-k/rustical/releases";
