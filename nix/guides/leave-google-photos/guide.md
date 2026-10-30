@@ -73,5 +73,5 @@ you are sure Immich has them all.
 
 ## Next
 
-Want guests to add their photos from a wedding or party? See
-[Collect photos from guests after a party](guide:party-photo-drop).
+Want to share albums with friends, or let wedding guests add their photos? See
+[Share photo albums with friends and family](guide:share-photo-albums).

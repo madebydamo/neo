@@ -8,22 +8,7 @@ apps get no ads, and you install nothing on them.
 - Access to your router's settings page (usually printed on the router).
 - About 15 minutes.
 
-## 1. Turn on Pi-hole
-
-Open [Pi-hole](service:pihole), switch it on and set an
-[admin password](option:pihole.webPassword). Leave the
-[home network address](option:pihole.localIP) empty unless you also use
-Tailscale split DNS (see
-[Keep your app traffic private with Tailscale](guide:private-traffic-tailscale)).
-
-Apply the change. After a minute the dashboard opens at
-{{service.pihole.url}}.
-
-> [!tip]
-> Pi-hole comes with a good blocklist. You can add more lists in its dashboard
-> under **Lists** later.
-
-## 2. Find your server's address
+## 1. Find your server's address
 
 Your router shows a list of connected devices. Find your homeserver and note its
 address, something like `192.168.1.10`.
@@ -33,11 +18,39 @@ address, something like `192.168.1.10`.
 > usually called **fixed IP**, **static lease** or **address reservation**.
 > Otherwise ad blocking stops when the address changes.
 
+## 2. Turn on Pi-hole
+
+Open [Pi-hole](service:pihole), switch it on, set an
+[admin password](option:pihole.webPassword) and fill in the
+[home network address](option:pihole.localIP) with the address from step 1.
+Pi-hole then answers your own domain with the server's home address, so devices
+at home reach your apps directly instead of taking a detour over your public
+internet address.
+
+Apply the change. After a minute the dashboard opens at
+{{service.pihole.url}}.
+
+> [!tip]
+> Using [Tailscale split DNS](guide:private-traffic-tailscale) as well? Nothing
+> else to do on the server: add the server as a nameserver for your domain in
+> the Tailscale admin console, as that guide describes.
+
+> [!tip]
+> Pi-hole comes with a good blocklist. You can add more lists in its dashboard
+> under **Lists** later.
+
 ## 3. Tell your router to use Pi-hole
 
 In the router's network (DHCP or LAN) settings, set the **DNS server** to your
 server's address from step 2. Leave a second DNS server empty: if it is set,
 devices sometimes skip Pi-hole.
+
+> [!warning]
+> From now on your home's internet depends on the server. When the server is
+> off, broken or restarting, websites stop opening on every device, although the
+> internet itself still works. If that happens and the server cannot come back
+> soon, change the router's DNS server to a public one such as `9.9.9.9`
+> (Quad9), and back to the server once it runs again.
 
 Devices pick up the new setting the next time they connect. Turn Wi-Fi off and on
 on your phone to make it happen right away.

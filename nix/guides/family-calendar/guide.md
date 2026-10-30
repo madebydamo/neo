@@ -41,7 +41,18 @@ and a token.
 
 ## 4. Optional: add school holidays and other public calendars
 
-Many schools, towns and sports clubs publish calendars as `.ics` links.
+Many schools, towns and sports clubs publish calendars as `.ics` links. To
+find one, search the web for what you want plus **ical**, for example:
+
+- `ical school holidays canton St. Gallen`
+- `ical public holidays Bavaria`
+- `FC St. Gallen fixtures ical`
+- `waste collection calendar <your town> ics`
+
+Copy the address of the **iCal**, **ICS** or **subscribe** link (it often
+ends in `.ics` or starts with `webcal://`; replace `webcal://` with
+`https://`).
+
 [ical-sync](service:ical-sync) copies them into your RustiCal calendars, so they
 appear on every phone without anyone subscribing on their own.
 

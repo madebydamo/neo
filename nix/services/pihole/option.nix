@@ -29,7 +29,7 @@
               localIP = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Your homeserver's address on your home network (e.g. 192.168.1.10), so your domain opens the server directly at home. Needed for Tailscale split DNS.";
+                description = "Your homeserver's address on your home network, e.g. 192.168.1.10. Recommended: devices at home then reach your apps directly instead of going out over the internet.";
                 rank = 20;
                 ui = lib.neo.ui.mkUi {label = "Home network address";};
               };
@@ -63,7 +63,7 @@
               notes = ''
                 Works as the DNS server of your network: set this server's address as DNS in your router. Blocking happens at DNS level, so ads are never downloaded.
                 Supports regex blocklists and can act as DHCP server.
-                With Tailscale split DNS, set localIP so Pi-hole answers only on the home network address.
+                When the server is off, devices that use it as DNS cannot open websites: switch the router's DNS to a public server such as 9.9.9.9 until it is back.
               '';
               privacy = ["browsing"];
               projectUrl = "https://pi-hole.net/";

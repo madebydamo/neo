@@ -32,7 +32,7 @@
 
         ## Credentials
         - Neo: `services.dawarich.secretKeyBase` (SECRET_KEY_BASE, 32+ characters), `dbPassword` (internal database only)
-        - First boot seeds admin `demo@dawarich.app` / `safepassword` when no user exists. Change that password. Later boots do not reset it
+        - First user signs up on the Dawarich login page (normal onboarding)
         - API key: Dawarich → Settings → Account. Not stored by Neo
         - Edge: tinyauth
 

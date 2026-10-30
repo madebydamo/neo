@@ -4,7 +4,7 @@
       title = "Leave Google Photos";
       summary = "Back up every phone's photos and videos to your own server, with search, faces and shared albums like before.";
       services = ["immich"];
-      optional = ["immich-drop"];
+      optional = [];
       privacy = ["photos"];
       difficulty = "easy";
       minutes = 30;

@@ -433,18 +433,18 @@ file access.
 | `private-traffic-tailscale` | Keep your app traffic private with Tailscale (devices talk to the server directly; certificates still need port 80 or Rathole) | tailscale `splitDns`, `ingress`, rathole `certificateOnly` |
 | `adblock-at-home` | Block ads for the whole home | pihole; router DNS setting |
 | `leave-google-photos` | Leave Google Photos | immich (+ phone app backup) |
-| `party-photo-drop` | Collect photos from guests after a party | immich-drop |
+| `share-photo-albums` | Share photo albums with friends and family | immich shared albums / links (upload links for parties) |
 | `family-calendar` | A shared family calendar on every phone | rustical, calino, ical-sync (school/holiday feeds), DAVx5 / iOS |
 | `family-passwords` | A password manager for the whole family | vaultwarden |
 | `go-paperless` | Scan letters and find them again | paperless |
 | `location-timeline` | Your private location history | dawarich + OwnTracks |
 | `offsite-backup` | Back up to a friend's server | backup |
 | `reach-from-internet` | Make your apps reachable without opening the router | rathole / streamproxy, `ingress` |
-| `sign-in-with-google` | Sign in with Google or Microsoft | tinyauth oauth, authentik |
+| `sign-up-with-approval` | Let family sign up, with your approval | authentik enrollment + tinyauth oauth, allowed group = approval |
 | `private-search` | Private search as your browser default | searxng |
 | `tv-without-sponsors` | YouTube on the TV without sponsor segments | isponsorblocktv |
 | `office-together` | Edit office documents together | nextcloud + collabora |
-| `private-vpn-browser` | Browse through a VPN without a VPN app | vpn + firefox/webtop `vpn.enabled` |
+| `apps-through-vpn` | Send your apps through a VPN | vpn (AirVPN) + `vpn.enabled` on firefox, webtop, searxng, karakeep, changedetection |
 
 ---
 
@@ -477,16 +477,16 @@ from the Services and Guides tabs.
 |---|---|---|
 | `calendar` | Calendar | rustical, calino, ical-sync, nextcloud |
 | `contacts` | Contacts | rustical, nextcloud |
-| `photos` | Photos & videos | immich, immich-drop |
+| `photos` | Photos & videos | immich |
 | `passwords` | Passwords | vaultwarden |
 | `location` | Location history | dawarich |
-| `documents` | Letters & documents | paperless, stirling-pdf, bentopdf |
+| `documents` | Letters & documents | paperless, stirling-pdf, bentopdf, nextcloud |
 | `files` | Files | nextcloud, syncthing, filebrowser, dufs |
-| `notes` | Notes & wiki | docmost |
-| `tasks` | To-dos | vikunja |
+| `notes` | Notes & wiki | docmost, nextcloud |
+| `tasks` | To-dos | vikunja, rustical |
 | `bookmarks` | Bookmarks & read-later | karakeep |
 | `search` | Web search | searxng |
-| `browsing` | Browsing & ads | pihole, vpn |
+| `browsing` | Browsing & ads | pihole, vpn, firefox, webtop |
 | `recipes` | Recipes & meal plans | mealie |
 | `code` | Code & config | gitea |
 | `automation` | Automations | activepieces |

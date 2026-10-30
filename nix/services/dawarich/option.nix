@@ -72,7 +72,7 @@
                 Runs the upstream stack: the Rails app, a Sidekiq worker, PostGIS for the points and Redis for jobs and live updates.
                 Phone apps and trackers (OwnTracks, Overland, Traccar, the Dawarich apps) post to /api/ with a Dawarich API key, so that path skips tinyauth. The web UI stays behind tinyauth, then Dawarich's own login.
                 The image tag is pinned. Read the release notes before upgrading, and change the app and Sidekiq image together.
-                The first boot creates the admin user demo@dawarich.app with password safepassword. Change that password after you sign in.
+                Create your account with Sign up on the Dawarich login page.
               '';
               replaces = ["Google Maps Timeline"];
               privacy = ["location"];

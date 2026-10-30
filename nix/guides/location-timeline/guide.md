@@ -33,22 +33,12 @@ Apply the change. The first start prepares the database and takes a few minutes.
 > docker exec swag curl -sS -m 10 -H 'X-Forwarded-Proto: https' http://dawarich:3000/api/v1/health   # {"status":"ok"}
 > ```
 
-## 2. Sign in and change the password
+## 2. Create your account
 
 Open {{service.dawarich.url}}. First you pass the shared login page
-([Tinyauth](service:tinyauth)), then Dawarich asks for its own login.
-
-Dawarich creates one user on its first start:
-
-- **Email:** `demo@dawarich.app`
-- **Password:** `safepassword`
-
-Sign in with it and change the password right away in Dawarich's account
-settings.
-
-> [!warning]
-> Everyone who knows the demo password can read your location history until you
-> change it.
+([Tinyauth](service:tinyauth)), then Dawarich shows its own login. Click
+**Sign up** and create your account with your email address and a password.
+Family members who want their own timeline sign up the same way.
 
 ## 3. Copy your API key
 

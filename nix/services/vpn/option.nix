@@ -28,7 +28,7 @@
                 type = types.str;
                 default = "airvpn";
                 # VPN_SERVICE_PROVIDER (gluetun provider id)
-                description = "Your VPN company, e.g. mullvad, protonvpn, airvpn.";
+                description = "Your VPN company in lowercase, e.g. airvpn (recommended) or protonvpn.";
                 rank = 20;
                 ui = lib.neo.ui.mkUi {label = "VPN provider";};
               };
@@ -82,8 +82,8 @@
               icon = ./icon.svg;
               tagline = "Send app traffic through your VPN provider";
               description = ''
-                Connects to your VPN provider, such as Mullvad or Proton VPN, so that the apps you choose go online through the VPN instead of your home connection.
-                Your other apps and devices are not affected.
+                Connects to your VPN provider so that the apps you choose (a browser, search, website checks, …) go online through the VPN instead of your home connection.
+                Your other apps and devices are not affected. Works great with AirVPN (airvpn.org), the default provider.
               '';
               notes = ''
                 Runs gluetun with your provider's WireGuard credentials (private key, preshared key, addresses); includes DNS-over-TLS and a kill switch.
