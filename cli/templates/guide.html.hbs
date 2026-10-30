@@ -21,23 +21,14 @@
         {{#if guide.summary}}
           <p class="mt-1 text-sm leading-relaxed text-base-content/70">{{guide.summary}}</p>
         {{/if}}
-        <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-          {{#if guide.minutes}}<span class="badge badge-sm badge-ghost">About {{guide.minutes}} min</span>{{/if}}
-          {{#if guide.difficulty}}<span class="badge badge-sm badge-ghost capitalize">{{guide.difficulty}}</span>{{/if}}
-          {{#each guide.services}}
-            <a href="/configuration/option/{{name}}" hx-get="/configuration/option/{{name}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true"
-               class="badge badge-sm gap-1 no-underline {{#if enabled}}badge-success badge-soft{{else}}badge-outline{{/if}}"
-               title="{{#if enabled}}Installed{{else}}Not installed yet{{/if}}">
-              {{#if icon}}<img src="{{icon}}" alt="" class="w-3.5 h-3.5 object-contain">{{/if}}{{name}}{{#if enabled}} ✓{{/if}}
-            </a>
-          {{/each}}
-          {{#each guide.optional}}
-            <a href="/configuration/option/{{name}}" hx-get="/configuration/option/{{name}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true"
-               class="badge badge-sm badge-ghost gap-1 no-underline opacity-80" title="Optional">
-              {{#if icon}}<img src="{{icon}}" alt="" class="w-3.5 h-3.5 object-contain">{{/if}}{{name}} (optional)
-            </a>
-          {{/each}}
-        </div>
+        <p class="mt-2 text-xs leading-relaxed text-base-content/60">
+          {{#if guide.minutes}}About {{guide.minutes}} min{{/if}}{{#if guide.difficulty}}{{#if guide.minutes}} · {{/if}}<span class="capitalize">{{guide.difficulty}}</span>{{/if}}{{#if guide.services}}{{#if (or guide.minutes guide.difficulty)}} · {{/if}}Uses
+          {{#each guide.services}}<a href="/configuration/option/{{name}}" hx-get="/configuration/option/{{name}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true"
+             class="link link-hover {{#if enabled}}text-success{{else}}text-base-content/80{{/if}}"
+             title="{{#if enabled}}Installed{{else}}Not installed yet{{/if}}">{{name}}{{#if enabled}} ✓{{/if}}</a>{{#unless @last}}, {{/unless}}{{/each}}{{/if}}{{#if guide.optional}} · optional
+          {{#each guide.optional}}<a href="/configuration/option/{{name}}" hx-get="/configuration/option/{{name}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true"
+             class="link link-hover text-base-content/70">{{name}}</a>{{#unless @last}}, {{/unless}}{{/each}}{{/if}}
+        </p>
       </div>
     </header>
 

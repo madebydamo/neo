@@ -52,12 +52,26 @@ pub async fn guides_for_service(config: &AppConfig, service: &str) -> Vec<Guide>
     }
 }
 
+/// Topic pills shown above the guides grid.
+const MAX_FILTER_TAGS: usize = 8;
+
 async fn grid_context(config: &AppConfig) -> GuidesGridContext {
     match load_guides(config).await {
         Ok(x) => {
-            let mut tags: Vec<String> = x.guides.iter().flat_map(|g| g.tags.clone()).collect();
-            tags.sort();
-            tags.dedup();
+            // Filter row: only topics shared by several guides, most used
+            // first; one-off tags stay searchable but get no pill.
+            let mut counts: std::collections::BTreeMap<&str, usize> = Default::default();
+            for t in x.guides.iter().flat_map(|g| &g.tags) {
+                *counts.entry(t.as_str()).or_default() += 1;
+            }
+            let mut ranked: Vec<(&str, usize)> =
+                counts.into_iter().filter(|(_, n)| *n >= 2).collect();
+            ranked.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+            let tags: Vec<String> = ranked
+                .into_iter()
+                .take(MAX_FILTER_TAGS)
+                .map(|(t, _)| t.to_string())
+                .collect();
             GuidesGridContext {
                 disabled: !x.enabled,
                 guides: x.guides,
