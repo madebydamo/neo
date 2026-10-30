@@ -72,10 +72,15 @@
                 "^/apps/richdocuments/wopi/"
 
                 # === Other essential public paths ===
+                # Desktop / mobile sync apps: login flow v1 + v2 (/login/v2, /login/v2/poll,
+                # /login/flow) are requested both with and without /index.php.
                 "^/login"
                 "^/logout"
+                "^/index.php/login"
+                "^/index.php/logout"
                 "^/status.php"
                 "^/cron.php"
+                "^/ocs/v1.php/"
                 "^/ocs/v2.php/"
               ];
             }
@@ -99,7 +104,7 @@
                 Also offers Talk (video calls and chat), groupware and an AI assistant as Nextcloud apps.
               '';
               replaces = ["Google Drive" "Dropbox" "iCloud Drive"];
-              privacy = ["files" "calendar" "contacts"];
+              privacy = ["files" "calendar" "contacts" "notes" "documents"];
               projectUrl = "https://nextcloud.com/";
               githubUrl = "https://github.com/nextcloud/server";
               releaseUrl = "https://nextcloud.com/changelog/";
