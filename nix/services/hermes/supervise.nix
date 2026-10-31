@@ -118,10 +118,41 @@
         exit 0
       fi
 
+      # OnSuccess often fires while hermes-agent is still coming back from switch.
+      # Wait here (after noop) so clean timer ticks stay fast.
+      echo "Waiting for hermes-agent before supervise ($kind)"
+      waited=0
+      while ! ${pkgs.systemd}/bin/systemctl is-active --quiet hermes-agent.service 2>/dev/null; do
+        if [ "$waited" -ge 120 ]; then
+          echo "hermes-agent still not active after ''${waited}s; continuing" >&2
+          break
+        fi
+        sleep 2
+        waited=$((waited + 2))
+      done
+      # Settle so the model/provider path can come up after the unit is active.
+      sleep 5
+
       echo "Launching Hermes supervisor for $kind"
       ${hermesPkg}/bin/hermes --yolo chat -Q --source tool --max-turns 40 \
         -s neo-update-supervisor --query-file "$prompt_file"
     '';
+
+    # Restart covers transient gateway/model failures after switch (and ExecStart
+    # overlays that only replace the supervise binary). StartLimitBurst bounds it.
+    superviseServiceConfig = execStart: {
+      Type = "oneshot";
+      User = "hermes";
+      Group = "hermes";
+      WorkingDirectory = "${cfg.stateDir}/workspace";
+      TimeoutStartSec = "15min";
+      Restart = "on-failure";
+      RestartSec = "20";
+      StartLimitBurst = 8;
+      StartLimitIntervalSec = 600;
+      ExecStart = execStart;
+      EnvironmentFile = superviseEnvFile;
+    };
   in {
     config = lib.mkIf supervise {
       environment.systemPackages = [superviseScript];
@@ -151,46 +182,32 @@
 
       systemd.services.neo-hermes-supervise-system-update = {
         description = "Hermes supervision of neo-auto-update";
-        after = ["network-online.target" "neo-auto-update.service"];
-        wants = ["network-online.target"];
+        # hermes-agent: switch often restarts it; order + Wants so we do not race a dead gateway.
+        after = ["network-online.target" "neo-auto-update.service" "hermes-agent.service"];
+        wants = ["network-online.target" "hermes-agent.service"];
         path = [pkgs.jq pkgs.systemd pkgs.sudo hermesPkg];
         environment = superviseEnv;
-        serviceConfig = {
-          Type = "oneshot";
-          User = "hermes";
-          Group = "hermes";
-          WorkingDirectory = "${cfg.stateDir}/workspace";
-          TimeoutStartSec = "15min";
-          ExecStart = "${superviseScript}/bin/neo-hermes-supervise system";
-          EnvironmentFile = superviseEnvFile;
-        };
+        serviceConfig = superviseServiceConfig "${superviseScript}/bin/neo-hermes-supervise system";
       };
 
       systemd.services.neo-hermes-supervise-docker-update = {
         description = "Hermes supervision of neo-docker-updater";
-        after = ["network-online.target" "neo-docker-updater.service"];
-        wants = ["network-online.target"];
+        after = ["network-online.target" "neo-docker-updater.service" "hermes-agent.service"];
+        wants = ["network-online.target" "hermes-agent.service"];
         path = [pkgs.jq pkgs.systemd pkgs.sudo pkgs.docker hermesPkg];
         environment = superviseEnv;
-        serviceConfig = {
-          Type = "oneshot";
-          User = "hermes";
-          Group = "hermes";
-          WorkingDirectory = "${cfg.stateDir}/workspace";
-          TimeoutStartSec = "15min";
-          ExecStart = "${superviseScript}/bin/neo-hermes-supervise docker";
-          EnvironmentFile = superviseEnvFile;
-        };
+        serviceConfig = superviseServiceConfig "${superviseScript}/bin/neo-hermes-supervise docker";
       };
 
+      # Same unit on success and failure is intentional (classify either outcome).
       systemd.services.neo-auto-update = lib.mkIf (config.neo.services.system-updater.enabled or false) {
-        onSuccess = ["neo-hermes-supervise-system-update.service"];
-        onFailure = ["neo-hermes-supervise-system-update.service"];
+        onSuccess = lib.mkAfter ["neo-hermes-supervise-system-update.service"];
+        onFailure = lib.mkAfter ["neo-hermes-supervise-system-update.service"];
       };
 
       systemd.services.neo-docker-updater = lib.mkIf (config.neo.services.docker-updater.enabled or false) {
-        onSuccess = ["neo-hermes-supervise-docker-update.service"];
-        onFailure = ["neo-hermes-supervise-docker-update.service"];
+        onSuccess = lib.mkAfter ["neo-hermes-supervise-docker-update.service"];
+        onFailure = lib.mkAfter ["neo-hermes-supervise-docker-update.service"];
       };
     };
   };
