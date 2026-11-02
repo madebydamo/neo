@@ -138,12 +138,15 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         .parse()
         .context("parse settings.toml")?;
 
-    let mounted = is_mountpoint(&args.target);
     let disko_on = doc
         .get("disko")
         .and_then(|d| d.get("enabled"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    // With Disko the target is always made fresh (a rerun after a failure
+    // finds the last attempt still mounted). Without it, what is mounted is
+    // the target.
+    let mounted = !disko_on && is_mountpoint(&args.target);
     if !mounted && !disko_on {
         bail!(
             "Disko is off in this config: partition the disk by hand, mount it at {}, and run neo restore again",
@@ -323,6 +326,11 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     // 5. Disko.
     cap_arc();
     if let Some(script) = disko_script {
+        if is_mountpoint(&args.target) {
+            let _ = Command::new("umount").arg("-R").arg(&args.target).status();
+        }
+        // The last attempt's pool (not a backup pool on an attached disk).
+        let _ = Command::new("zpool").args(["export", &pool]).status();
         execute_command(Command::new(format!("{script}")).arg("--yes-wipe-all-disks"))?;
         cap_arc();
     }
@@ -386,13 +394,16 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         );
         return finish(args);
     }
+    // From the staging clone: the same commit, but owned by root. Nix refuses
+    // the installed repo (owned by the neo user) as root ("not owned by
+    // current user").
     execute_command(
         Command::new("nixos-install")
             .arg("--root")
             .arg(&args.target)
             .arg("--no-root-passwd")
             .arg("--flake")
-            .arg(format!("{}#{}", repo.display(), args.config))
+            .arg(format!("{}#{}", staging.display(), args.config))
             .env("NIX_CONFIG", &nix_config),
     )?;
 

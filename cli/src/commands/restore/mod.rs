@@ -7,8 +7,8 @@
 //! - remote (`--host root@IP`): from a client. nixos-anywhere kexecs the target
 //!   into an installer when needed, then the local mode runs there.
 //!
-//! A target that is already mounted (the old `neo restore --target /mnt`) skips
-//! Disko and installs into what is mounted.
+//! Without Disko in the config, the target must be partitioned and mounted by
+//! hand (the old `neo restore --target /mnt`); restore installs into it.
 
 use anyhow::{bail, Context, Result};
 use std::fs;
