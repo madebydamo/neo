@@ -114,6 +114,8 @@ in {
 
         # boot NAME BASE_IMAGE FIRMWARE(uefi|bios) VARS EXPECT...
         # Boots a fresh overlay $work/NAME.qcow2 on BASE_IMAGE.
+        # The serial gives the disk a /dev/disk/by-id name, where the initrd
+        # looks for ZFS pools (as on real hardware).
         boot() {
           local name=$1 base=$2 fw=$3 vars=$4
           shift 4
@@ -127,7 +129,7 @@ in {
           echo "== $name: booting ($fw)"
           timeout 900 qemu-system-x86_64 -enable-kvm -cpu host -m 3072 -smp 2 \
             -display none -monitor none -serial "file:$log" -nic none \
-            "''${fwopts[@]}" -drive "file=$disk,if=virtio,format=qcow2" || true
+            "''${fwopts[@]}" -drive "file=$disk,if=virtio,format=qcow2,serial=neo-boot-test" || true
           grep -a 'NEO-BOOT-TEST\|neo-boot:' "$log" || true
           local want
           for want in "NEO-BOOT-TEST result=ok" "$@"; do
