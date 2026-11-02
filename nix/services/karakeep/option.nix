@@ -125,8 +125,8 @@
             }
             // lib.neo.mkContainerDefinitions {
               karakeep = "ghcr.io/karakeep-app/karakeep:release";
-              "karakeep-chrome" = "zenika/alpine-chrome:124";
-              "karakeep-meilisearch" = "getmeili/meilisearch:v1.41.0";
+              "karakeep-chrome" = "ghcr.io/karakeep-app/karakeep-chrome:release";
+              "karakeep-meilisearch" = "getmeili/meilisearch:v1.55.0";
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/karakeep"
             // lib.neo.mkServiceMeta {

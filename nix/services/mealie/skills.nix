@@ -20,7 +20,7 @@
 
         ## Architecture notes
         - One container: `mealie` (ghcr.io/mealie-recipes/mealie, port ${toString cfg.port})
-        - Image `containers.mealie` is pinned to v3.29.0. Upstream says to read the release notes before upgrading. Do not flip it to `latest` on its own
+        - Image `containers.mealie` is pinned to v3.30.0. Upstream says to read the release notes before upgrading. Do not flip it to `latest` on its own
         - SQLite. Appdata is mounted at `/app/data` (database and uploads). Neo sets `PUID`/`PGID` from `neo.core.uid`/`gid` and `TZ` from `neo.core.timeZone`
         - `BASE_URL` is `https://<subdomain>.<domain>` (default subdomain `mealie`). Used for links and OIDC callbacks
         - `/api/` is on publicPaths (tinyauth bypass). Mealie still requires its session or an API token. `GET /api/app/about` is unauthenticated and is the image healthcheck

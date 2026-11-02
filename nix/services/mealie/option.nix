@@ -1,5 +1,5 @@
 # Mealie (self-hosted recipe manager and meal planner) service options.
-# SQLite layout from the upstream install docs (v3.29.0): one container, data at /app/data.
+# SQLite layout from the upstream install docs (v3.30.0): one container, data at /app/data.
 # UI behind tinyauth. /api/ bypasses it so API tokens and phone apps use Mealie's own auth.
 # The first boot seeds changeme@example.com / MyPassword. Change that password.
 {...}: {
@@ -41,7 +41,7 @@
             }
             // lib.neo.mkContainerDefinitions {
               # Pinned: upstream says to read the release notes before upgrading.
-              mealie = "ghcr.io/mealie-recipes/mealie:v3.29.0";
+              mealie = "ghcr.io/mealie-recipes/mealie:v3.30.0";
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/mealie"
             // lib.neo.mkServiceMeta {

@@ -121,7 +121,7 @@
             // lib.neo.mkContainerDefinitions {
               docmost = "docmost/docmost:latest";
               "docmost-db" = "postgres:18";
-              "docmost-redis" = "redis:8";
+              "docmost-redis" = "redis:8-alpine";
               # Tinyauth sign-in bridge (sso.py); only run while sso is active.
               "docmost-sso" = "python:3.13-alpine";
               # MCP server with tinyauth OAuth (mcp.py); only run while mcp is active.

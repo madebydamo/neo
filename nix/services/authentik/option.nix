@@ -158,8 +158,8 @@
             // lib.neo.mkContainerDefinitions {
               # Pinned: Authentik upgrades run DB migrations and may only skip no major versions.
               # Read the release notes before upgrading. Keep server and worker on the same tag.
-              authentik = "ghcr.io/goauthentik/server:2026.8.4";
-              "authentik-worker" = "ghcr.io/goauthentik/server:2026.8.4";
+              authentik = "ghcr.io/goauthentik/server:2026.8.5";
+              "authentik-worker" = "ghcr.io/goauthentik/server:2026.8.5";
               "authentik-db" = "postgres:16-alpine";
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/authentik"

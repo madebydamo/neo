@@ -52,6 +52,8 @@
             autoStart = true;
             environment = {
               MEILI_NO_ANALYTICS = "true";
+              # Migrates the index in place when the image is a newer v1.x than the data.
+              MEILI_UPGRADE_DB = "true";
             };
             volumes = [
               "${appdata}/meilisearch:/meili_data"
@@ -62,16 +64,16 @@
           karakeep-chrome = {
             image = cfg.containers."karakeep-chrome";
             autoStart = true;
+            # The image's entrypoint adds headless/no-sandbox and forwards :9222 to Chrome's
+            # localhost DevTools port; remote-debugging flags here would clash with it.
             cmd = [
-              "--no-sandbox"
               "--disable-gpu"
               "--disable-dev-shm-usage"
-              "--remote-debugging-address=0.0.0.0"
-              "--remote-debugging-port=9222"
               "--hide-scrollbars"
               "--disable-blink-features=AutomationControlled"
               "--window-size=1440,900"
             ];
+            extraOptions = ["--init"];
             networks = ["internal"];
           };
 
