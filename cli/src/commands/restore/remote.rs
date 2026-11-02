@@ -304,6 +304,27 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
         bail!("copying the key to {host} failed");
     }
     let neo = neo_on_target(host, args, &local)?;
+    // Every locked input (nixpkgs, neo, plugins) into the installer's store:
+    // fetched here with this computer's credentials, so private plugins need
+    // no tokens there and the target does not download them again.
+    println!("Copying the config's inputs to {host} …");
+    let archived = Command::new("nix")
+        .args([
+            "--extra-experimental-features",
+            "nix-command flakes",
+            "flake",
+            "archive",
+            "--no-check-sigs",
+            "--to",
+        ])
+        .arg(format!("ssh-ng://{host}"))
+        .arg(&local)
+        .env("NIX_SSHOPTS", ssh_opts(true).join(" "))
+        .status()
+        .context("nix flake archive")?;
+    if !archived.success() {
+        println!("! Copying the inputs failed; the target fetches them itself");
+    }
     let _ = fs::remove_dir_all(&tmp);
 
     let mut cmd = vec![

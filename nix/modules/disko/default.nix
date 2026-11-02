@@ -168,7 +168,6 @@
         };
       in ''
         NEO_ESP=${lib.escapeShellArg config.boot.loader.efi.efiSysMountPoint} \
-        NEO_BIOS=${flag cfg.biosBoot} \
         NEO_BOOT_ENTRY=${flag cfg.bootEntry} \
         NEO_GRUB=${pkgs.grub2} \
         NEO_EFI_LOADER=${lib.escapeShellArg loader} \

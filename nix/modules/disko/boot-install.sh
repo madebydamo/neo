@@ -13,7 +13,7 @@
 #    firmware boot entry, created first in the boot order when missing, plus
 #    a startup.nsh so the EFI Shell boots the disk as well.
 #
-# Env (set by default.nix): NEO_ESP, NEO_BIOS, NEO_BOOT_ENTRY, NEO_GRUB,
+# Env (set by default.nix): NEO_ESP, NEO_BOOT_ENTRY, NEO_GRUB,
 # NEO_EFI_LOADER, NEO_STARTUP_NSH.
 
 log() { echo "neo-boot: $*" >&2; }
@@ -40,21 +40,19 @@ for p in "/sys/class/block/$dname/$dname"*; do
   fi
 done
 
-if [ "$NEO_BIOS" = 1 ]; then
-  if [ -n "$bios_part" ]; then
-    stamp="$NEO_ESP/grub/neo-bios-install"
-    want="$NEO_GRUB $disk"
-    if [ "$(cat "$stamp" 2>/dev/null)" != "$want" ]; then
-      log "installing GRUB for BIOS boot on $disk"
-      if "$NEO_GRUB/bin/grub-install" --target=i386-pc --boot-directory="$NEO_ESP" "$disk"; then
-        echo "$want" >"$stamp"
-      else
-        log "WARNING: GRUB BIOS install on $disk failed; this disk boots via UEFI only"
-      fi
+if [ -n "$bios_part" ]; then
+  stamp="$NEO_ESP/grub/neo-bios-install"
+  want="$NEO_GRUB $disk"
+  if [ "$(cat "$stamp" 2>/dev/null)" != "$want" ]; then
+    log "installing GRUB for BIOS boot on $disk"
+    if "$NEO_GRUB/bin/grub-install" --target=i386-pc --boot-directory="$NEO_ESP" "$disk"; then
+      echo "$want" >"$stamp"
+    else
+      log "WARNING: GRUB BIOS install on $disk failed; this disk boots via UEFI only"
     fi
-  else
-    log "no BIOS boot partition on $disk: UEFI boot only"
   fi
+else
+  log "no BIOS boot partition on $disk: UEFI boot only"
 fi
 
 if [ -n "$NEO_STARTUP_NSH" ] && ! cmp -s "$NEO_STARTUP_NSH" "$NEO_ESP/startup.nsh"; then

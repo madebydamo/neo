@@ -56,8 +56,10 @@ in {
 
             systemd.services.neo-boot-test = {
               description = "Neo boot test report";
+              # Not after multi-user: with no network in the test VM, units that
+              # wait for it keep multi-user from being reached.
               wantedBy = ["multi-user.target"];
-              after = ["multi-user.target"];
+              after = ["basic.target" "systemd-logind.service"];
               path = with pkgs; [efibootmgr gnugrep gnused coreutils systemd];
               serviceConfig = {
                 Type = "oneshot";

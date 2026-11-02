@@ -28,10 +28,10 @@
               description = "Additional disks mapped to mountpoints (e.g. { \"/dev/sdb\" = \"/var/neo/DATA/Media\"; } or { \"/dev/mmcblk0\" = \"/var/neo\"; } to back volumes.root with its own pool for easy swap/backup). Each gets an independent ZFS pool (snapshots disabled). Datasets use canmount=noauto and fstab nofail so only systemd mounts them (no zfs-mount race) and a missing/slow disk does not enter emergency mode.";
             };
 
-            # Hybrid boot: a 1M BIOS boot partition before the ESP and GRUB in
-            # the MBR, next to the UEFI install. Only takes effect when the
-            # disk is partitioned; existing disks without the partition stay
-            # UEFI-only (boot-install.sh skips the BIOS install).
+            # Hybrid boot: a 1M BIOS boot partition before the ESP. Only takes
+            # effect when the disk is partitioned. boot-install.sh puts GRUB in
+            # the MBR whenever the disk has that partition; existing disks
+            # without it stay UEFI-only.
             biosBoot = lib.mkOption {
               type = types.bool;
               default = true;
