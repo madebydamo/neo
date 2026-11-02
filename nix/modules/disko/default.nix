@@ -30,25 +30,33 @@
             device = cfg.mainDisk;
             content = {
               type = "gpt";
-              partitions = {
-                ESP = {
-                  size = "1G";
-                  type = "EF00";
-                  content = {
-                    type = "filesystem";
-                    format = "vfat";
-                    mountpoint = "/boot";
-                    mountOptions = ["umask=0077"];
+              partitions =
+                lib.optionalAttrs cfg.biosBoot {
+                  # GRUB's core image for BIOS firmware (boot-install.sh).
+                  bios = {
+                    size = "1M";
+                    type = "EF02";
+                  };
+                }
+                // {
+                  ESP = {
+                    size = "1G";
+                    type = "EF00";
+                    content = {
+                      type = "filesystem";
+                      format = "vfat";
+                      mountpoint = "/boot";
+                      mountOptions = ["umask=0077"];
+                    };
+                  };
+                  zfs = {
+                    size = "100%";
+                    content = {
+                      type = "zfs";
+                      pool = cfg.poolName;
+                    };
                   };
                 };
-                zfs = {
-                  size = "100%";
-                  content = {
-                    type = "zfs";
-                    pool = cfg.poolName;
-                  };
-                };
-              };
             };
           };
         }
@@ -128,6 +136,46 @@
     };
 
     networking.hostId = "4d681778";
+
+    # disko adds the EF02 disk to grub.devices; NixOS would then run a BIOS
+    # grub-install that fails on disks partitioned before the BIOS boot
+    # partition existed. boot-install.sh does it instead, only when present.
+    boot.loader.grub = lib.mkIf cfg.enabled {
+      devices = lib.mkForce ["nodev"];
+      extraInstallCommands = let
+        flag = b:
+          if b
+          then "1"
+          else "0";
+        efiArch = pkgs.stdenv.hostPlatform.efiArch;
+        loader = "\\EFI\\BOOT\\BOOT${lib.toUpper efiArch}.EFI";
+        # The EFI Shell runs startup.nsh from the first filesystem it maps:
+        # boot the disk from there too.
+        startupNsh = pkgs.writeText "startup.nsh" (lib.replaceStrings ["\n"] ["\r\n"] ''
+          @echo -off
+          for %d in fs0 fs1 fs2 fs3 fs4 fs5 fs6 fs7
+            if exist %d:${loader} then
+              %d:${loader}
+            endif
+          endfor
+        '');
+        install = pkgs.writeShellApplication {
+          name = "neo-boot-install";
+          # Every step logs and goes on; see boot-install.sh.
+          bashOptions = ["nounset"];
+          runtimeInputs = with pkgs; [coreutils gnugrep gnused util-linux diffutils efibootmgr];
+          text = builtins.readFile ./boot-install.sh;
+        };
+      in ''
+        NEO_ESP=${lib.escapeShellArg config.boot.loader.efi.efiSysMountPoint} \
+        NEO_BIOS=${flag cfg.biosBoot} \
+        NEO_BOOT_ENTRY=${flag cfg.bootEntry} \
+        NEO_GRUB=${pkgs.grub2} \
+        NEO_EFI_LOADER=${lib.escapeShellArg loader} \
+        NEO_STARTUP_NSH=${startupNsh} \
+          ${lib.getExe install} || true
+      '';
+    };
 
     boot.supportedFilesystems = lib.mkIf cfg.enabled ["zfs"];
     boot.zfs = lib.mkIf cfg.enabled {

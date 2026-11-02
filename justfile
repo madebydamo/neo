@@ -232,3 +232,8 @@ check:
     nix develop --command cargo fmt --all --manifest-path cli/Cargo.toml -- --check
   fi
 
+
+# Install the disko layout into disk images and boot them from the disk
+# under UEFI and BIOS firmware (GRUB, firmware boot entry). Needs KVM; minutes.
+test-disko-boot:
+  nix run .#disko-boot-test
