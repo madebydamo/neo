@@ -55,7 +55,7 @@ pub struct PrivacyCategory {
     pub guides: Vec<PrivacyGuide>,
     #[serde(default)]
     pub home_now: bool,
-    /// Position in the map scene (percent of width / height) and float delay.
+    /// Position on the orbit look (percent of the square scene) and float delay.
     #[serde(default)]
     pub x: f32,
     #[serde(default)]
@@ -64,52 +64,63 @@ pub struct PrivacyCategory {
     pub delay: f32,
 }
 
-/// Sky positions (x %, y %), clear of the house (x 30–70 %, y 34–100 %).
-const SKY: &[(f32, f32)] = &[
-    (8.0, 11.0),
-    (21.0, 23.0),
-    (34.0, 9.0),
-    (48.0, 21.0),
-    (62.0, 8.0),
-    (76.0, 21.0),
-    (91.0, 11.0),
-    (10.0, 38.0),
-    (90.0, 38.0),
-    (19.0, 55.0),
-    (81.0, 55.0),
-    (8.0, 72.0),
-    (92.0, 72.0),
-    (21.0, 88.0),
-    (79.0, 88.0),
-    (40.0, 30.0),
-    (60.0, 30.0),
-    (50.0, 5.0),
-];
+/// Orbit radii (percent of the scene): data at home circles close to the
+/// server core, data still in the cloud drifts on the outer ring.
+const HOME_RING: f32 = 23.0;
+const CLOUD_RING: f32 = 41.0;
 
-/// Spread `n` items over the sky slots and the house body (x 36–64 %, y 58–90 %).
+/// Spread each group evenly around its ring, starting at the top.
 fn place(at_home: &mut [PrivacyCategory], in_cloud: &mut [PrivacyCategory]) {
-    for (i, c) in in_cloud.iter_mut().enumerate() {
-        let (x, y) = SKY[i % SKY.len()];
-        // A second lap shifts slightly so icons do not stack exactly.
-        let lap = (i / SKY.len()) as f32;
-        c.x = x + lap * 4.0;
-        c.y = y + lap * 5.0;
-        c.delay = (i as f32 * 0.7) % 5.0;
+    fn ring(items: &mut [PrivacyCategory], r: f32, offset: f32) {
+        let n = items.len().max(1) as f32;
+        for (i, c) in items.iter_mut().enumerate() {
+            let a = (i as f32 + offset) / n * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
+            c.x = 50.0 + r * a.cos();
+            c.y = 50.0 + r * a.sin();
+            c.delay = (i as f32 * 0.7) % 5.0;
+        }
     }
-    let n = at_home.len();
-    if n == 0 {
-        return;
-    }
-    let cols = n.clamp(1, 3);
-    let rows = n.div_ceil(cols);
-    for (i, c) in at_home.iter_mut().enumerate() {
-        let (r, col) = (i / cols, i % cols);
-        let in_row = if r == rows - 1 { n - r * cols } else { cols };
-        let step_x = 28.0 / in_row as f32;
-        c.x = 36.0 + step_x * (col as f32 + 0.5);
-        c.y = 58.0 + (32.0 / rows as f32) * (r as f32 + 0.5);
-        c.delay = (i as f32 * 0.9) % 4.0;
-    }
+    ring(at_home, HOME_RING, 0.0);
+    ring(in_cloud, CLOUD_RING, 0.5);
+}
+
+/// The easiest kind of data to bring home next: a cloud category with the
+/// shortest guide, else the first one with an app for it.
+#[derive(Serialize, Default)]
+struct NextStep {
+    id: String,
+    label: String,
+    icon: Option<String>,
+    icon_tint: bool,
+    guide: Option<String>,
+    minutes: Option<u32>,
+    app: Option<String>,
+}
+
+fn next_step(in_cloud: &[PrivacyCategory]) -> Option<NextStep> {
+    let quickest = in_cloud
+        .iter()
+        .filter_map(|c| {
+            let g = c
+                .guides
+                .iter()
+                .min_by_key(|g| g.minutes.unwrap_or(u32::MAX))?;
+            Some((c, g))
+        })
+        .min_by_key(|(_, g)| g.minutes.unwrap_or(u32::MAX));
+    let (c, guide) = match quickest {
+        Some((c, g)) => (c, Some(g)),
+        None => (in_cloud.iter().find(|c| !c.services.is_empty())?, None),
+    };
+    Some(NextStep {
+        id: c.id.clone(),
+        label: c.label.clone(),
+        icon: c.icon.clone(),
+        icon_tint: c.icon_tint,
+        guide: guide.map(|g| g.title.clone()),
+        minutes: guide.and_then(|g| g.minutes),
+        app: c.services.first().map(|s| s.name.clone()),
+    })
 }
 
 #[derive(Deserialize, Default)]
@@ -131,7 +142,11 @@ struct PrivacyContext {
     in_cloud: Vec<PrivacyCategory>,
     all: Vec<PrivacyCategory>,
     home_count: usize,
+    cloud_count: usize,
     total: usize,
+    /// Share kept at home, 0–100 (progress ring and meter).
+    percent: u32,
+    next: Option<NextStep>,
     assistant: bool,
     disabled: bool,
     #[serde(flatten)]
@@ -156,9 +171,13 @@ async fn context(config: &AppConfig) -> PrivacyContext {
                 .collect();
             place(&mut at_home, &mut in_cloud);
             let all: Vec<_> = at_home.iter().chain(in_cloud.iter()).cloned().collect();
+            let total = all.len();
             PrivacyContext {
                 home_count: at_home.len(),
-                total: all.len(),
+                cloud_count: in_cloud.len(),
+                total,
+                percent: (at_home.len() * 100).checked_div(total).unwrap_or(0) as u32,
+                next: next_step(&in_cloud),
                 at_home,
                 in_cloud,
                 all,
@@ -212,23 +231,45 @@ mod tests {
     }
 
     #[test]
-    fn home_icons_stay_inside_the_house_and_sky_icons_outside() {
+    fn rings_keep_home_inside_and_cloud_outside() {
         for n in 0..=16 {
             let mut home = cats(n);
             let mut cloud = cats(16 - n);
             place(&mut home, &mut cloud);
+            let dist = |c: &PrivacyCategory| ((c.x - 50.0).powi(2) + (c.y - 50.0).powi(2)).sqrt();
             for c in &home {
-                assert!(
-                    (36.0..=64.0).contains(&c.x) && (58.0..=90.0).contains(&c.y),
-                    "{n}: {} {}",
-                    c.x,
-                    c.y
-                );
+                assert!((dist(c) - HOME_RING).abs() < 0.01, "{n}: {} {}", c.x, c.y);
             }
             for c in &cloud {
-                let in_house = (30.0..=70.0).contains(&c.x) && c.y >= 34.0;
-                assert!(!in_house, "{n}: sky icon in house at {} {}", c.x, c.y);
+                assert!((dist(c) - CLOUD_RING).abs() < 0.01, "{n}: {} {}", c.x, c.y);
+                assert!((0.0..=100.0).contains(&c.x) && (0.0..=100.0).contains(&c.y));
             }
         }
+    }
+
+    #[test]
+    fn next_step_prefers_the_shortest_guide() {
+        let mut c = cats(3);
+        c[0].services = vec![PrivacyService {
+            name: "a".into(),
+            ..Default::default()
+        }];
+        c[1].guides = vec![PrivacyGuide {
+            id: "slow".into(),
+            minutes: Some(40),
+            ..Default::default()
+        }];
+        c[2].guides = vec![PrivacyGuide {
+            id: "quick".into(),
+            title: "Quick".into(),
+            minutes: Some(10),
+            ..Default::default()
+        }];
+        let n = next_step(&c).expect("next");
+        assert_eq!(n.id, "c2");
+        assert_eq!(n.guide.as_deref(), Some("Quick"));
+        let n = next_step(&c[..1]).expect("app only");
+        assert_eq!(n.app.as_deref(), Some("a"));
+        assert!(next_step(&cats(2)).is_none());
     }
 }

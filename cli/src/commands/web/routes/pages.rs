@@ -30,7 +30,7 @@ pub fn index() -> Template {
     Template::render(
         "index",
         NavigatorContext {
-            theme: "lofi".to_string(),
+            theme: "light".to_string(),
             ..Default::default()
         },
     )

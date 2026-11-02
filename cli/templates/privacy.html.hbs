@@ -1,10 +1,10 @@
 {{!-- Privacy map: kinds of personal data, split into "at home" (an installed
-     service keeps it) and "in the cloud". A tile opens the detail panel. --}}
+     service keeps it) and "in the cloud". A tile opens the detail panel.
+     Three looks (lights / orbit / lanes) share the hero and the panel. --}}
 <div id="privacy-map" class="space-y-5 sm:space-y-6"
-     x-data="{ sel: (location.hash || '').slice(1) || null, longId: null, _t: null, _long: false,
-               down(id) { clearTimeout(this._t); this._long = false; this._t = setTimeout(() => { this._long = true; this.longId = id; setTimeout(() => { if (this.longId === id) this.longId = null; }, 2500); }, 450); },
-               up() { clearTimeout(this._t); },
-               clickTile(id) { if (this._long) { this._long = false; return; } this.pick(id); },
+     x-data="{ sel: (location.hash || '').slice(1) || null,
+               look: (() => { try { return new URLSearchParams(location.search).get('look') || localStorage.getItem('neo-privacy-look') || 'lights'; } catch (e) { return 'lights'; } })(),
+               setLook(v) { this.look = v; try { localStorage.setItem('neo-privacy-look', v); } catch (e) {} },
                pick(id) { this.sel = this.sel === id ? null : id; history.replaceState(history.state, '', this.sel ? '#' + this.sel : location.pathname);
                           if (this.sel) this.$nextTick(() => { const d = document.getElementById('privacy-detail'); if (d && window.innerWidth < 1024) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); } }">
   {{#if error}}
@@ -16,48 +16,162 @@
   {{#if disabled}}
     <p class="text-sm text-base-content/60">The privacy map is part of the guides, which are turned off. Switch on <a class="link" href="/configuration/option/neo?focus=guides" hx-get="/configuration/option/neo?focus=guides" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true">Show guides</a> in the neo settings to see it.</p>
   {{else}}
-  <div class="flex flex-col sm:flex-row sm:items-end gap-3">
-    <div class="min-w-0 flex-1">
-      <h2 class="text-xl sm:text-2xl font-semibold tracking-tight">Your privacy map</h2>
-      <p class="text-sm text-base-content/60 mt-0.5">The kinds of personal data people usually hand to cloud companies, and which of them your homeserver already keeps at home. Each icon is a kind of data: inside the house it stays at home, in the sky it still lives with a cloud company. Pick one to see how to bring it home.</p>
+  {{!-- Hero: how much already lives at home and the easiest next step. --}}
+  <div class="neo-pm-hero rounded-box border border-base-300 bg-base-100 p-4 sm:p-6">
+    <div class="flex flex-col lg:flex-row lg:items-end gap-4 lg:gap-8">
+      <div class="min-w-0 flex-1 space-y-2">
+        <div class="text-xs font-semibold uppercase tracking-wider text-success">Your privacy map</div>
+        {{#if total}}
+          <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight">
+            {{#if cloud_count}}<span class="text-success tabular-nums">{{home_count}} of {{total}}</span> kinds of your data live at home.
+            {{else}}Everything is home. <span class="text-success">All {{total}}</span> kinds of your data live with you.{{/if}}
+          </h2>
+        {{else}}
+          <h2 class="text-2xl sm:text-3xl font-semibold tracking-tight">Your privacy map</h2>
+        {{/if}}
+        <p class="text-sm text-base-content/65 max-w-2xl">Calendars, photos, passwords, where you have been: most people hand all of it to cloud companies. Each kind of data you bring home is one less thing they know about you. Pick one to see how.</p>
+      </div>
+      {{#if next}}
+        <button type="button" class="neo-pm-next group flex items-center gap-3 rounded-box border border-success/40 bg-success/8 px-3.5 py-3 text-left lg:w-80 shrink-0"
+                @click="pick('{{next.id}}')">
+          <span class="w-10 h-10 shrink-0 rounded-xl bg-success text-success-content flex items-center justify-center">{{> options/group_icon icon=next.icon tint=next.icon_tint}}</span>
+          <span class="min-w-0 flex-1">
+            <span class="block text-xs font-semibold uppercase tracking-wider text-success">Bring home next</span>
+            <span class="block font-semibold truncate">{{next.label}}</span>
+            <span class="block text-xs text-base-content/60 truncate">{{#if next.guide}}{{next.guide}}{{#if next.minutes}} · {{next.minutes}} min{{/if}}{{else}}With {{next.app}}{{/if}}</span>
+          </span>
+          <span class="text-success transition-transform group-hover:translate-x-0.5" aria-hidden="true">→</span>
+        </button>
+      {{/if}}
     </div>
     {{#if total}}
-      <div class="shrink-0 text-right">
-        <div class="text-2xl font-semibold tabular-nums">{{home_count}}<span class="text-base-content/40 text-lg"> / {{total}}</span></div>
-        <div class="text-xs text-base-content/60">kept at home</div>
+      <div class="neo-pm-meter mt-4" role="img" aria-label="{{home_count}} of {{total}} kinds of data kept at home">
+        {{#each at_home}}<span class="is-home"></span>{{/each}}{{#each in_cloud}}<span></span>{{/each}}
       </div>
     {{/if}}
   </div>
 
-  <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem] items-start">
-    {{!-- The scene: a house (data kept at home) under a sky of floating
-         icons (data still in the cloud). Hover or long-press shows a title;
-         a click opens the panel. --}}
-    <div class="neo-privacy-scene relative rounded-box border border-base-300 overflow-hidden select-none"
-         role="group" aria-label="Privacy map">
-      <svg class="neo-privacy-cloudart absolute" style="left:3%;top:4%;width:22%" viewBox="0 0 120 60" aria-hidden="true"><path d="M30 52h64a20 20 0 0 0 2-40 26 26 0 0 0-50-4A18 18 0 0 0 30 52z"/></svg>
-      <svg class="neo-privacy-cloudart absolute" style="right:5%;top:14%;width:18%" viewBox="0 0 120 60" aria-hidden="true"><path d="M30 52h64a20 20 0 0 0 2-40 26 26 0 0 0-50-4A18 18 0 0 0 30 52z"/></svg>
-      <svg class="neo-privacy-cloudart absolute" style="left:38%;top:2%;width:14%" viewBox="0 0 120 60" aria-hidden="true"><path d="M30 52h64a20 20 0 0 0 2-40 26 26 0 0 0-50-4A18 18 0 0 0 30 52z"/></svg>
-      <div class="neo-privacy-ground absolute inset-x-0 bottom-0" aria-hidden="true"></div>
-      <svg class="neo-privacy-houseart absolute" style="left:28%;top:34%;width:44%;height:66%" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        <path class="neo-privacy-roof-art" d="M2 34 L50 2 L98 34 Z"/>
-        <rect class="neo-privacy-wall" x="10" y="33" width="80" height="67" rx="2"/>
-      </svg>
-      <div class="absolute text-[10px] font-semibold uppercase tracking-wider text-success/80" style="left:50%;top:47%;transform:translate(-50%,-50%)" aria-hidden="true">At home</div>
+  {{!-- Look preview: three takes on the same map. Pick one, the others go. --}}
+  <div class="flex items-center gap-2 text-xs text-base-content/60">
+    <span>Look</span>
+    <div class="join">
+      <button type="button" class="btn btn-xs join-item" :class="look === 'lights' ? 'btn-neutral' : 'btn-ghost border-base-300'" @click="setLook('lights')">Lights on</button>
+      <button type="button" class="btn btn-xs join-item" :class="look === 'orbit' ? 'btn-neutral' : 'btn-ghost border-base-300'" @click="setLook('orbit')">Orbit</button>
+      <button type="button" class="btn btn-xs join-item" :class="look === 'lanes' ? 'btn-neutral' : 'btn-ghost border-base-300'" @click="setLook('lanes')">Lanes</button>
+    </div>
+  </div>
 
-      {{#each all}}
-        <button type="button"
-                class="neo-privacy-bubble absolute {{#if home_now}}neo-privacy-bubble--home{{/if}}"
-                style="left:{{x}}%;top:{{y}}%;--neo-float-delay:-{{delay}}s"
-                aria-label="{{label}}: {{#if home_now}}at home{{else}}in the cloud{{/if}}"
-                :aria-pressed="sel === '{{id}}'"
-                :class="{ 'is-selected': sel === '{{id}}', 'show-label': longId === '{{id}}' }"
-                @pointerdown="down('{{id}}')" @pointerup="up()" @pointerleave="up()" @contextmenu.prevent
-                @click="clickTile('{{id}}')">
-          <span class="neo-privacy-icon">{{> options/group_icon icon=icon tint=icon_tint}}</span>
-          <span class="neo-privacy-label">{{label}}</span>
-        </button>
-      {{/each}}
+  <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem] items-start">
+    <div class="min-w-0">
+    {{!-- 1. Lights on: a house at night, one window per kind of data. A lit
+         window is data kept at home; a dark one still lives in the cloud. --}}
+    <div x-show="look === 'lights'" class="neo-pm-night relative rounded-box overflow-hidden select-none" role="group" aria-label="Privacy map: your house">
+      <div class="neo-pm-stars" aria-hidden="true"></div>
+      <div class="neo-pm-moon" aria-hidden="true"></div>
+      <svg class="neo-pm-nightcloud" style="left:4%;top:9%;width:24%" viewBox="0 0 120 60" aria-hidden="true"><path d="M30 52h64a20 20 0 0 0 2-40 26 26 0 0 0-50-4A18 18 0 0 0 30 52z"/></svg>
+      <svg class="neo-pm-nightcloud neo-pm-nightcloud--slow" style="right:16%;top:4%;width:17%" viewBox="0 0 120 60" aria-hidden="true"><path d="M30 52h64a20 20 0 0 0 2-40 26 26 0 0 0-50-4A18 18 0 0 0 30 52z"/></svg>
+      <div class="relative z-[1] px-3 sm:px-8 pt-16 sm:pt-20">
+        <div class="neo-pm-house mx-auto">
+          <div class="neo-pm-roof" aria-hidden="true"><span class="neo-pm-chimney"></span></div>
+          <div class="neo-pm-facade">
+            <div class="neo-pm-windows">
+              {{#each all}}
+                <button type="button" class="neo-pm-window {{#if home_now}}is-lit{{/if}}" style="--neo-float-delay:-{{delay}}s"
+                        aria-label="{{label}}: {{#if home_now}}at home{{else}}in the cloud{{/if}}"
+                        :aria-pressed="sel === '{{id}}'" :class="{ 'is-selected': sel === '{{id}}' }"
+                        @click="pick('{{id}}')">
+                  <span class="neo-pm-pane">{{> options/group_icon icon=icon tint=icon_tint}}</span>
+                  <span class="neo-pm-wlabel">{{label}}</span>
+                </button>
+              {{/each}}
+            </div>
+            <div class="neo-pm-door" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="neo-pm-lawn" aria-hidden="true"></div>
+      <div class="absolute left-3 right-3 bottom-2.5 z-[2] flex justify-between text-[11px] font-medium text-white/75">
+        <span class="flex items-center gap-1.5"><span class="neo-pm-dot is-lit"></span>Lit: kept at home</span>
+        <span class="flex items-center gap-1.5"><span class="neo-pm-dot"></span>Dark: still in the cloud</span>
+      </div>
+    </div>
+
+    {{!-- 2. Orbit: your server is the core. Data at home circles close and is
+         wired to it; data in the cloud drifts on the outer ring. --}}
+    <div x-show="look === 'orbit'" x-cloak class="neo-pm-orbit relative rounded-box border border-base-300 overflow-hidden select-none" role="group" aria-label="Privacy map: orbit">
+      <div class="neo-pm-orbit-square">
+        <svg class="absolute inset-0 w-full h-full" viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="neo-pm-ring neo-pm-ring--cloud" cx="50" cy="50" r="41"/>
+          <circle class="neo-pm-ring neo-pm-ring--home" cx="50" cy="50" r="23"/>
+          {{#each at_home}}<line class="neo-pm-link" x1="50" y1="50" x2="{{x}}" y2="{{y}}" style="animation-delay:-{{delay}}s"/>{{/each}}
+          {{#each in_cloud}}<line class="neo-pm-link neo-pm-link--ghost" :class="{ 'is-on': sel === '{{id}}' }" x1="50" y1="50" x2="{{x}}" y2="{{y}}"/>{{/each}}
+          <circle class="neo-pm-progress-track" cx="50" cy="50" r="11"/>
+          <circle class="neo-pm-progress" cx="50" cy="50" r="11" pathLength="100" style="stroke-dasharray:{{percent}} 100"/>
+        </svg>
+        <div class="neo-pm-core" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-6.5 8 6.5"/><path d="M6 9.5V19h12V9.5"/><path d="M10 19v-5h4v5"/></svg>
+          <span class="tabular-nums">{{percent}}%</span>
+        </div>
+        {{#each all}}
+          <button type="button" class="neo-pm-planet {{#if home_now}}is-home{{/if}}" style="left:{{x}}%;top:{{y}}%;--neo-float-delay:-{{delay}}s"
+                  aria-label="{{label}}: {{#if home_now}}at home{{else}}in the cloud{{/if}}"
+                  :aria-pressed="sel === '{{id}}'" :class="{ 'is-selected': sel === '{{id}}' }"
+                  @click="pick('{{id}}')">
+            <span class="neo-pm-planet-icon">{{> options/group_icon icon=icon tint=icon_tint}}</span>
+            <span class="neo-pm-planet-label">{{label}}</span>
+          </button>
+        {{/each}}
+      </div>
+    </div>
+
+    {{!-- 3. Lanes: what is still in the cloud, flowing into the house. --}}
+    <div x-show="look === 'lanes'" x-cloak class="space-y-2">
+      {{#if in_cloud}}
+        <section class="neo-pm-lane neo-pm-lane--cloud rounded-box p-3 sm:p-4">
+          <h3 class="flex items-center gap-2 text-sm font-semibold mb-3">
+            <svg viewBox="0 0 120 60" class="w-6 h-3 fill-current opacity-60" aria-hidden="true"><path d="M30 52h64a20 20 0 0 0 2-40 26 26 0 0 0-50-4A18 18 0 0 0 30 52z"/></svg>
+            Still in the cloud <span class="text-base-content/45 tabular-nums font-normal">{{cloud_count}}</span>
+          </h3>
+          <div class="grid gap-2 sm:grid-cols-2">
+            {{#each in_cloud}}
+              <button type="button" class="neo-pm-card group" :class="{ 'is-selected': sel === '{{id}}' }" @click="pick('{{id}}')">
+                <span class="w-9 h-9 shrink-0 rounded-lg bg-base-200 text-base-content/60 flex items-center justify-center">{{> options/group_icon icon=icon tint=icon_tint}}</span>
+                <span class="min-w-0 flex-1">
+                  <span class="block text-sm font-semibold truncate">{{label}}</span>
+                  {{#if examples}}<span class="block text-xs text-base-content/55 truncate">{{#each examples}}{{#unless @first}} · {{/unless}}{{this}}{{/each}}</span>{{/if}}
+                </span>
+                <span class="text-xs font-medium text-success opacity-70 group-hover:opacity-100 shrink-0">Bring home →</span>
+              </button>
+            {{/each}}
+          </div>
+        </section>
+        <div class="neo-pm-flow" aria-hidden="true"><span></span><span></span><span></span></div>
+      {{/if}}
+      <section class="neo-pm-lane neo-pm-lane--home rounded-box">
+        <div class="p-3 sm:p-4">
+          <h3 class="flex items-center gap-2 text-sm font-semibold mb-3 text-success">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M4 11l8-6.5 8 6.5"/><path d="M6 9.5V19h12V9.5"/></svg>
+            At home <span class="tabular-nums font-normal opacity-70">{{home_count}}</span>
+          </h3>
+          {{#if at_home}}
+            <div class="grid gap-2 sm:grid-cols-2">
+              {{#each at_home}}
+                <button type="button" class="neo-pm-card neo-pm-card--home" :class="{ 'is-selected': sel === '{{id}}' }" @click="pick('{{id}}')">
+                  <span class="w-9 h-9 shrink-0 rounded-lg bg-success text-success-content flex items-center justify-center">{{> options/group_icon icon=icon tint=icon_tint}}</span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-sm font-semibold truncate">{{label}}</span>
+                    <span class="block text-xs text-base-content/60 truncate">{{#each services}}{{#if enabled}}<span class="neo-pm-kept">{{name}}</span>{{/if}}{{/each}}</span>
+                  </span>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-success shrink-0" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>
+                </button>
+              {{/each}}
+            </div>
+          {{else}}
+            <p class="text-sm text-base-content/60 pb-1">Nothing yet. Pick a kind of data above to bring it home.</p>
+          {{/if}}
+        </div>
+      </section>
+    </div>
     </div>
 
     {{!-- Detail panel for the selected category. --}}

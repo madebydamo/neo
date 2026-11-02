@@ -311,7 +311,7 @@ impl NixEvaluator {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("web: nix extract_neo_theme failed: {e}");
-                "lofi".to_string()
+                "light".to_string()
             }
         }
     }

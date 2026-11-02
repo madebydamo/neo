@@ -80,7 +80,7 @@
 {{!-- Apply shell metadata once services (and domain/theme) are known --}}
 <script>
   (function () {
-    var theme = {{#if theme}}"{{theme}}"{{else}}"lofi"{{/if}};
+    var theme = {{#if theme}}"{{theme}}"{{else}}"light"{{/if}};
     document.body.setAttribute('data-theme', theme);
     {{#if hostname}}
     document.title = 'neo — {{hostname}}';

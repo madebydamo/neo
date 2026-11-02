@@ -8,8 +8,81 @@
 @source not "../static/neo-ui.css";
 @source not "./**";
 
+/* Two themes, both lofi-style black and white with strong status colours.
+   Success, info and error are dark enough to read as text on the base
+   colours and carry a contrasting -content colour for solid badges and
+   buttons; warning stays yellow (hue 88, not orange).
+   The names match neo.services.neo.theme ("light" / "dark"). */
 @plugin "daisyui" {
-  themes: all;
+  themes: false;
+}
+
+@plugin "daisyui/theme" {
+  name: "light";
+  default: true;
+  color-scheme: light;
+  --color-base-100: oklch(100% 0 0);
+  --color-base-200: oklch(97% 0 0);
+  --color-base-300: oklch(93.5% 0 0);
+  --color-base-content: oklch(16% 0 0);
+  --color-primary: oklch(16% 0 0);
+  --color-primary-content: oklch(100% 0 0);
+  --color-secondary: oklch(26% 0 0);
+  --color-secondary-content: oklch(100% 0 0);
+  --color-accent: oklch(34% 0 0);
+  --color-accent-content: oklch(100% 0 0);
+  --color-neutral: oklch(16% 0 0);
+  --color-neutral-content: oklch(100% 0 0);
+  --color-info: oklch(52% 0.16 250);
+  --color-info-content: oklch(100% 0 0);
+  --color-success: oklch(53% 0.15 150);
+  --color-success-content: oklch(100% 0 0);
+  --color-warning: oklch(77% 0.16 88);
+  --color-warning-content: oklch(20% 0.04 88);
+  --color-error: oklch(53% 0.2 27);
+  --color-error-content: oklch(100% 0 0);
+  --radius-selector: 2rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "dark";
+  prefersdark: false;
+  color-scheme: dark;
+  --color-base-100: oklch(21% 0 0);
+  --color-base-200: oklch(18% 0 0);
+  --color-base-300: oklch(14.5% 0 0);
+  --color-base-content: oklch(93% 0 0);
+  --color-primary: oklch(95% 0 0);
+  --color-primary-content: oklch(16% 0 0);
+  --color-secondary: oklch(85% 0 0);
+  --color-secondary-content: oklch(16% 0 0);
+  --color-accent: oklch(78% 0 0);
+  --color-accent-content: oklch(16% 0 0);
+  --color-neutral: oklch(95% 0 0);
+  --color-neutral-content: oklch(16% 0 0);
+  --color-info: oklch(74% 0.13 245);
+  --color-info-content: oklch(18% 0.04 245);
+  --color-success: oklch(76% 0.17 150);
+  --color-success-content: oklch(18% 0.05 150);
+  --color-warning: oklch(81% 0.15 75);
+  --color-warning-content: oklch(20% 0.05 75);
+  --color-error: oklch(70% 0.18 25);
+  --color-error-content: oklch(18% 0.05 25);
+  --radius-selector: 2rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
 }
 
 :root {
@@ -1540,88 +1613,341 @@ a.neo-sem-name:focus-visible {
 }
 
 
-/* Privacy map scene: floating bubbles over a sky, a house for "at home". */
-.neo-privacy-scene {
-  height: 30rem;
-  background: linear-gradient(to bottom,
-    color-mix(in oklab, var(--color-info) 14%, var(--color-base-100)),
-    var(--color-base-100) 70%);
+/* Privacy map (templates/privacy.html.hbs). */
+.neo-pm-hero {
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, var(--color-success) 12%, transparent), transparent 55%),
+    var(--color-base-100);
 }
-@media (min-width: 640px) { .neo-privacy-scene { height: 28rem; } }
-.neo-privacy-cloudart path { fill: color-mix(in oklab, var(--color-base-100) 70%, transparent); }
-.neo-privacy-ground {
-  height: 8%;
-  background: color-mix(in oklab, var(--color-success) 12%, var(--color-base-200));
+.neo-pm-next { transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s; }
+.neo-pm-next:hover {
+  border-color: var(--color-success);
+  box-shadow: 0 8px 24px -14px var(--color-success);
+  transform: translateY(-1px);
 }
-.neo-privacy-roof-art { fill: color-mix(in oklab, var(--color-success) 26%, var(--color-base-100)); }
-.neo-privacy-wall {
-  fill: color-mix(in oklab, var(--color-success) 9%, var(--color-base-100));
-  stroke: color-mix(in oklab, var(--color-success) 40%, transparent);
-  stroke-width: 0.6;
-  vector-effect: non-scaling-stroke;
+.neo-pm-meter { display: flex; gap: 3px; height: 0.5rem; }
+.neo-pm-meter > span {
+  flex: 1;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--color-base-content) 10%, transparent);
 }
-.neo-privacy-bubble {
-  transform: translate(-50%, -50%);
+.neo-pm-meter > span.is-home {
+  background: var(--color-success);
+  box-shadow: 0 0 8px -1px color-mix(in oklab, var(--color-success) 70%, transparent);
+}
+
+/* 1. Lights on: always a night scene, in both themes, so the lights pop. */
+.neo-pm-night {
+  --neo-pm-glow: oklch(88% 0.13 85);
+  --neo-pm-glow-deep: oklch(76% 0.16 70);
+  --neo-pm-glass: oklch(30% 0.03 265);
+  --neo-pm-wall: oklch(36% 0.025 265);
+  background:
+    radial-gradient(60% 50% at 50% 100%, oklch(42% 0.09 300 / 0.55), transparent 70%),
+    linear-gradient(to bottom, oklch(19% 0.05 270), oklch(27% 0.07 285) 65%, oklch(33% 0.08 300));
+  padding-bottom: 3.5rem;
+  color: white;
+}
+.neo-pm-stars {
+  position: absolute;
+  inset: 0 0 40% 0;
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, white, transparent),
+    radial-gradient(1px 1px at 27% 42%, white, transparent),
+    radial-gradient(1.5px 1.5px at 41% 12%, white, transparent),
+    radial-gradient(1px 1px at 58% 33%, white, transparent),
+    radial-gradient(1px 1px at 71% 9%, white, transparent),
+    radial-gradient(1.5px 1.5px at 86% 28%, white, transparent),
+    radial-gradient(1px 1px at 93% 52%, white, transparent),
+    radial-gradient(1px 1px at 6% 60%, white, transparent),
+    radial-gradient(1px 1px at 34% 70%, white, transparent),
+    radial-gradient(1px 1px at 66% 58%, white, transparent);
+  opacity: 0.7;
+  animation: neo-pm-twinkle 5s ease-in-out infinite alternate;
+}
+@keyframes neo-pm-twinkle { to { opacity: 0.35; } }
+.neo-pm-moon {
+  position: absolute;
+  top: 1.1rem;
+  right: 1.5rem;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 9999px;
+  background: oklch(95% 0.03 90);
+  box-shadow: 0 0 40px 6px oklch(95% 0.05 90 / 0.35);
+  -webkit-mask: radial-gradient(circle at 30% 35%, transparent 0 0.95rem, black 1rem);
+  mask: radial-gradient(circle at 30% 35%, transparent 0 0.95rem, black 1rem);
+}
+.neo-pm-nightcloud { position: absolute; fill: oklch(45% 0.04 280 / 0.45); animation: neo-pm-drift 38s ease-in-out infinite alternate; }
+.neo-pm-nightcloud--slow { animation-duration: 55s; animation-direction: alternate-reverse; }
+@keyframes neo-pm-drift { to { translate: 2.5rem 0; } }
+.neo-pm-house { max-width: 46rem; filter: drop-shadow(0 24px 40px oklch(10% 0.05 280 / 0.6)); }
+.neo-pm-roof {
+  position: relative;
+  height: clamp(3.5rem, 12vw, 6rem);
+  margin: 0 -4%;
+  background: linear-gradient(to bottom, oklch(30% 0.03 20), oklch(25% 0.025 20));
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+.neo-pm-chimney {
+  position: absolute;
+  right: 22%;
+  bottom: 40%;
+  width: 7%;
+  height: 50%;
+  background: oklch(28% 0.025 20);
+}
+.neo-pm-facade {
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 1.4rem, oklch(100% 0 0 / 0.025) 1.4rem 1.5rem),
+    var(--neo-pm-wall);
+  padding: clamp(0.6rem, 2.5vw, 1.25rem);
+  padding-bottom: 0;
+  border-radius: 0 0 0.25rem 0.25rem;
+}
+/* Flex so a short last row sits centred under the others. */
+.neo-pm-windows {
+  --neo-pm-cols: 4;
+  --neo-pm-gap: clamp(0.4rem, 2vw, 0.9rem);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--neo-pm-gap);
+}
+@media (min-width: 640px) { .neo-pm-windows { --neo-pm-cols: 6; } }
+.neo-pm-window {
+  width: calc((100% - (var(--neo-pm-cols) - 1) * var(--neo-pm-gap)) / var(--neo-pm-cols));
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.neo-pm-pane {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: 0.3rem 0.3rem 0.15rem 0.15rem;
+  background: linear-gradient(160deg, oklch(36% 0.03 265), var(--neo-pm-glass));
+  border: 3px solid oklch(24% 0.02 265);
+  color: oklch(70% 0.02 265 / 0.55);
+  transition: transform 0.2s, box-shadow 0.4s, background 0.4s, color 0.4s;
+}
+/* Window cross. */
+/* Transom bar near the top, clear of the icon. */
+.neo-pm-pane::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 22%;
+  height: 2px;
+  background: oklch(24% 0.02 265 / 0.85);
+  pointer-events: none;
+}
+.neo-pm-pane > * { position: relative; z-index: 1; width: 1.6rem; height: 1.6rem; margin-top: 12%; }
+.neo-pm-window.is-lit .neo-pm-pane {
+  background: radial-gradient(circle at 50% 40%, oklch(97% 0.06 95), var(--neo-pm-glow) 45%, var(--neo-pm-glow-deep));
+  color: oklch(38% 0.09 60);
+  box-shadow: 0 0 22px 2px oklch(85% 0.15 80 / 0.55), 0 0 60px 6px oklch(80% 0.15 75 / 0.22);
+  animation: neo-pm-flicker 7s ease-in-out infinite;
+  animation-delay: var(--neo-float-delay, 0s);
+}
+.neo-pm-window.is-lit .neo-pm-pane::before { background: oklch(30% 0.04 40 / 0.45); }
+@keyframes neo-pm-flicker {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.06); }
+}
+.neo-pm-window:hover .neo-pm-pane, .neo-pm-window:focus-visible .neo-pm-pane { transform: translateY(-2px) scale(1.04); color: oklch(85% 0.02 265); }
+.neo-pm-window.is-lit:hover .neo-pm-pane, .neo-pm-window.is-lit:focus-visible .neo-pm-pane { color: oklch(32% 0.09 60); }
+.neo-pm-window.is-selected .neo-pm-pane { outline: 2px solid white; outline-offset: 2px; }
+.neo-pm-wlabel {
+  font-size: 0.68rem;
+  line-height: 1.15;
+  text-align: center;
+  color: oklch(85% 0.02 265 / 0.75);
+  min-height: 2.3em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.neo-pm-window.is-lit .neo-pm-wlabel { color: oklch(95% 0.05 90); font-weight: 600; }
+.neo-pm-door {
+  width: 18%;
+  min-width: 2.5rem;
+  height: clamp(3rem, 9vw, 4.5rem);
+  margin: 0.5rem auto 0;
+  border-radius: 0.4rem 0.4rem 0 0;
+  background: linear-gradient(to bottom, oklch(32% 0.06 40), oklch(26% 0.05 40));
+  position: relative;
+}
+.neo-pm-door span {
+  position: absolute;
+  right: 18%;
+  top: 52%;
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 9999px;
+  background: var(--neo-pm-glow);
+  box-shadow: 0 0 6px var(--neo-pm-glow);
+}
+.neo-pm-lawn {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 3.6rem;
+  background: linear-gradient(to bottom, oklch(30% 0.06 155), oklch(22% 0.05 160));
+  border-top: 1px solid oklch(40% 0.08 150 / 0.6);
+}
+.neo-pm-dot { width: 0.6rem; height: 0.6rem; border-radius: 0.15rem; background: var(--neo-pm-glass); border: 1px solid oklch(60% 0.02 265 / 0.6); }
+.neo-pm-dot.is-lit { background: var(--neo-pm-glow); border-color: var(--neo-pm-glow); box-shadow: 0 0 8px var(--neo-pm-glow); }
+
+/* 2. Orbit. */
+.neo-pm-orbit {
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in oklab, var(--color-success) 16%, transparent), transparent 38%),
+    radial-gradient(circle at 50% 50%, var(--color-base-100), var(--color-base-200));
+}
+.neo-pm-orbit-square { position: relative; width: 100%; max-width: 42rem; margin: 0 auto; aspect-ratio: 1; }
+.neo-pm-ring { fill: none; stroke-width: 0.25; vector-effect: non-scaling-stroke; }
+.neo-pm-ring--cloud { stroke: color-mix(in oklab, var(--color-base-content) 22%, transparent); stroke-dasharray: 1.2 1.6; animation: neo-pm-spin 120s linear infinite; transform-origin: 50px 50px; }
+.neo-pm-ring--home { stroke: color-mix(in oklab, var(--color-success) 55%, transparent); stroke-width: 1.5; }
+@keyframes neo-pm-spin { to { transform: rotate(360deg); } }
+.neo-pm-link { stroke: var(--color-success); stroke-width: 1.5; vector-effect: non-scaling-stroke; stroke-dasharray: 2 2; animation: neo-pm-flow 1.6s linear infinite; opacity: 0.8; }
+.neo-pm-link--ghost { stroke: color-mix(in oklab, var(--color-base-content) 45%, transparent); opacity: 0; transition: opacity 0.2s; }
+.neo-pm-link--ghost.is-on { opacity: 0.8; }
+@keyframes neo-pm-flow { to { stroke-dashoffset: -4; } }
+.neo-pm-progress-track { fill: none; stroke: color-mix(in oklab, var(--color-base-content) 10%, transparent); stroke-width: 1.4; }
+.neo-pm-progress { fill: none; stroke: var(--color-success); stroke-width: 1.4; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50px 50px; }
+.neo-pm-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 17%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 9999px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  background: var(--color-success);
+  color: var(--color-success-content);
+  font-weight: 700;
+  font-size: clamp(0.7rem, 2vw, 1rem);
+  box-shadow: 0 0 0 6px color-mix(in oklab, var(--color-success) 18%, transparent), 0 0 50px 4px color-mix(in oklab, var(--color-success) 45%, transparent);
+  animation: neo-pm-pulse 4s ease-in-out infinite;
+}
+.neo-pm-core svg { width: 42%; height: 42%; }
+@keyframes neo-pm-pulse {
+  0%, 100% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--color-success) 18%, transparent), 0 0 50px 4px color-mix(in oklab, var(--color-success) 45%, transparent); }
+  50% { box-shadow: 0 0 0 12px color-mix(in oklab, var(--color-success) 8%, transparent), 0 0 70px 10px color-mix(in oklab, var(--color-success) 35%, transparent); }
+}
+.neo-pm-planet {
+  position: absolute;
+  translate: -50% -50%;
   display: flex;
   flex-direction: column;
   align-items: center;
   outline: none;
-  -webkit-touch-callout: none;
-  touch-action: manipulation;
   z-index: 1;
+  -webkit-tap-highlight-color: transparent;
 }
-.neo-privacy-icon {
+.neo-pm-planet-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: clamp(2.2rem, 7vw, 3rem);
+  height: clamp(2.2rem, 7vw, 3rem);
   border-radius: 9999px;
   background: var(--color-base-100);
-  color: color-mix(in oklab, var(--color-base-content) 75%, transparent);
-  border: 1px solid var(--color-base-300);
-  box-shadow: 0 4px 14px -6px color-mix(in oklab, var(--color-base-content) 35%, transparent);
+  color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
+  border: 1.5px dashed color-mix(in oklab, var(--color-base-content) 30%, transparent);
   animation: neo-float 6s ease-in-out infinite;
   animation-delay: var(--neo-float-delay, 0s);
-  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  transition: transform 0.15s, border-color 0.15s, color 0.15s;
 }
-.neo-privacy-bubble--home .neo-privacy-icon {
-  color: var(--color-success);
-  border-color: color-mix(in oklab, var(--color-success) 45%, transparent);
+.neo-pm-planet.is-home .neo-pm-planet-icon {
+  background: var(--color-success);
+  color: var(--color-success-content);
+  border: 0;
+  box-shadow: 0 6px 18px -6px color-mix(in oklab, var(--color-success) 80%, transparent);
   animation-duration: 9s;
 }
-.neo-privacy-bubble:hover .neo-privacy-icon,
-.neo-privacy-bubble:focus-visible .neo-privacy-icon { transform: scale(1.12); border-color: var(--color-primary); }
-.neo-privacy-bubble.is-selected .neo-privacy-icon {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 35%, transparent);
-}
-.neo-privacy-label {
+.neo-pm-planet:hover .neo-pm-planet-icon, .neo-pm-planet:focus-visible .neo-pm-planet-icon { transform: scale(1.12); border-color: var(--color-base-content); color: var(--color-base-content); }
+.neo-pm-planet.is-home:hover .neo-pm-planet-icon, .neo-pm-planet.is-home:focus-visible .neo-pm-planet-icon { color: var(--color-success-content); }
+.neo-pm-planet.is-selected .neo-pm-planet-icon { box-shadow: 0 0 0 3px var(--color-base-100), 0 0 0 5px var(--color-base-content); }
+.neo-pm-planet-label {
   position: absolute;
-  top: calc(100% + 0.3rem);
+  top: calc(100% + 0.25rem);
   white-space: nowrap;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 500;
-  padding: 0.1rem 0.45rem;
+  padding: 0.05rem 0.4rem;
   border-radius: 9999px;
-  background: var(--color-base-content);
-  color: var(--color-base-100);
-  opacity: 0;
-  transform: translateY(-3px);
+  color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
+  background: color-mix(in oklab, var(--color-base-100) 85%, transparent);
   pointer-events: none;
-  transition: opacity 0.15s, transform 0.15s;
-  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.15s;
 }
-.neo-privacy-bubble:hover .neo-privacy-label,
-.neo-privacy-bubble:focus-visible .neo-privacy-label,
-.neo-privacy-bubble.show-label .neo-privacy-label,
-.neo-privacy-bubble.is-selected .neo-privacy-label { opacity: 1; transform: none; }
-.neo-privacy-bubble:hover, .neo-privacy-bubble.is-selected, .neo-privacy-bubble.show-label { z-index: 3; }
+.neo-pm-planet.is-home .neo-pm-planet-label { color: var(--color-success); font-weight: 600; }
+@media (min-width: 768px) { .neo-pm-planet-label { opacity: 1; } }
+.neo-pm-planet:hover .neo-pm-planet-label, .neo-pm-planet:focus-visible .neo-pm-planet-label, .neo-pm-planet.is-selected .neo-pm-planet-label { opacity: 1; background: var(--color-base-content); color: var(--color-base-100); }
+.neo-pm-planet:hover, .neo-pm-planet.is-selected { z-index: 3; }
 @keyframes neo-float {
   0%, 100% { translate: 0 0; }
-  50% { translate: 0 -7px; }
+  50% { translate: 0 -5px; }
 }
-@media (prefers-reduced-motion: reduce) { .neo-privacy-icon { animation: none; } }
+
+/* 3. Lanes. */
+.neo-pm-lane--cloud {
+  border: 1px dashed color-mix(in oklab, var(--color-base-content) 22%, transparent);
+  background: color-mix(in oklab, var(--color-base-content) 3%, var(--color-base-100));
+}
+.neo-pm-lane--home {
+  border: 1.5px solid color-mix(in oklab, var(--color-success) 55%, transparent);
+  background: color-mix(in oklab, var(--color-success) 7%, var(--color-base-100));
+  overflow: hidden;
+}
+.neo-pm-card {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  border-radius: var(--radius-box);
+  border: 1px solid var(--color-base-300);
+  background: var(--color-base-100);
+  transition: border-color 0.15s, transform 0.15s;
+}
+.neo-pm-card:hover { border-color: var(--color-success); transform: translateY(-1px); }
+.neo-pm-card.is-selected { border-color: var(--color-base-content); box-shadow: 0 0 0 1px var(--color-base-content); }
+.neo-pm-card--home { border-color: color-mix(in oklab, var(--color-success) 35%, transparent); }
+.neo-pm-kept + .neo-pm-kept::before { content: " · "; }
+.neo-pm-kept { font-family: var(--font-mono, ui-monospace, monospace); }
+.neo-pm-flow { display: flex; flex-direction: column; align-items: center; gap: 0; height: 2.2rem; justify-content: center; }
+.neo-pm-flow span {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-right: 2px solid var(--color-success);
+  border-bottom: 2px solid var(--color-success);
+  rotate: 45deg;
+  margin-top: -0.25rem;
+  animation: neo-pm-chev 1.5s ease-in-out infinite;
+}
+.neo-pm-flow span:nth-child(2) { animation-delay: 0.2s; }
+.neo-pm-flow span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes neo-pm-chev { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .neo-pm-stars, .neo-pm-nightcloud, .neo-pm-window.is-lit .neo-pm-pane, .neo-pm-ring--cloud,
+  .neo-pm-link, .neo-pm-core, .neo-pm-planet-icon, .neo-pm-flow span { animation: none; }
+}
 .neo-agent-tools summary {
   cursor: pointer;
   list-style: none;

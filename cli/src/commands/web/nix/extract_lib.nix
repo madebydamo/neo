@@ -56,11 +56,11 @@
   in
     !(builtins.isBool g) || g;
 
-  # DaisyUI theme from neo.services.neo.theme.
+  # DaisyUI theme from neo.services.neo.theme (light or dark, cli/web-css/input.css).
   theme = let
-    t = (neoConfig.services or {}).neo.theme or "lofi";
+    t = (neoConfig.services or {}).neo.theme or "light";
   in
-    if builtins.isString t
-    then t
-    else "lofi";
+    if t == "dark"
+    then "dark"
+    else "light";
 }

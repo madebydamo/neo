@@ -19,11 +19,17 @@
               };
 
               theme = mkOption {
-                type = types.enum ["lofi" "halloween" "dark" "light"];
-                default = "lofi";
+                type = types.enum ["light" "dark"];
+                default = "light";
                 rank = 10;
-                description = "Look of the neo dashboard and settings pages. lofi is a calm black-and-white style, halloween is dark with orange, dark and light are plain dark or light.";
-                ui = lib.neo.ui.mkUi {label = "Color theme";};
+                description = "Look of the neo dashboard and settings pages: calm black and white, light or dark.";
+                ui = lib.neo.ui.mkUi {
+                  label = "Color theme";
+                  choiceLabels = {
+                    light = "Light";
+                    dark = "Dark";
+                  };
+                };
               };
 
               guides = mkOption {

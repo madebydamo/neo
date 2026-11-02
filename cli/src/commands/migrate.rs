@@ -114,6 +114,7 @@ const CUSTOM_MIGRATIONS: &[(&str, MigrationFn)] = &[
         "011-drop-bootstrap-method",
         migrate_011_drop_bootstrap_method,
     ),
+    ("012-neo-two-themes", migrate_012_neo_two_themes),
 ];
 
 /// Delete retired [neo-service] and [nixos] tables.
@@ -439,6 +440,24 @@ fn migrate_011_drop_bootstrap_method(doc: &mut DocumentMut) {
     }
 }
 
+/// The web UI has only `light` and `dark` now: `lofi` became `light`,
+/// `halloween` (dark with orange) becomes `dark`.
+fn migrate_012_neo_two_themes(doc: &mut DocumentMut) {
+    let Some(neo) = doc
+        .get_mut("services")
+        .and_then(|t| t.get_mut("neo"))
+        .and_then(|t| t.as_table_like_mut())
+    else {
+        return;
+    };
+    let new = match neo.get("theme").and_then(|v| v.as_str()) {
+        Some("lofi") => "light",
+        Some("halloween") => "dark",
+        _ => return,
+    };
+    neo.insert("theme", toml_edit::value(new));
+}
+
 /// Move the single tinyauth Entra block into the multi-provider `oauth` attrset:
 /// `entra.*` → `oauth.entra.*` (+ `type = "entra"`), `entra.autoRedirect` →
 /// `oauthAutoRedirect = "entra"`, and `entraGroups` → `oauthGroups`.
@@ -622,6 +641,16 @@ fn move_dotted(doc: &mut DocumentMut, from: &str, to: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn migration_012_maps_old_themes() {
+        let mut doc: DocumentMut = "[services.neo]\ntheme = \"halloween\"\n".parse().unwrap();
+        assert!(apply_migrations(&mut doc));
+        assert_eq!(doc["services"]["neo"]["theme"].as_str(), Some("dark"));
+        let mut doc: DocumentMut = "[services.neo]\ntheme = \"lofi\"\n".parse().unwrap();
+        apply_migrations(&mut doc);
+        assert_eq!(doc["services"]["neo"]["theme"].as_str(), Some("light"));
+    }
 
     #[test]
     fn migration_010_moves_entra_into_oauth_providers() {
