@@ -16,7 +16,7 @@ Photos, files, passwords, documents stay on hardware you control.
 
 That's Neo's philosophy. Sovereignty over your machine, privacy for your life on it, ownership of the software and the data.
 
-**Documentation.** [Install](docs/INSTALL.md) · [How it works](docs/ARCHITECTURE.md) · [Plugins](docs/PLUGINS.md) · [CLI](docs/CLI.md)
+**Documentation.** [Install](docs/INSTALL.md) · [Move or restore](docs/RESTORE.md) · [How it works](docs/ARCHITECTURE.md) · [Plugins](docs/PLUGINS.md) · [CLI](docs/CLI.md)
 
 ## Getting started
 

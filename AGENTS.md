@@ -1,6 +1,6 @@
 # AGENTS.md — Neo development guide
 
-Map for humans and coding agents. Deeper docs: [README.md](README.md), [docs/INSTALL.md](docs/INSTALL.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/CLI.md](docs/CLI.md), [docs/PLUGINS.md](docs/PLUGINS.md).
+Map for humans and coding agents. Deeper docs: [README.md](README.md), [docs/INSTALL.md](docs/INSTALL.md), [docs/RESTORE.md](docs/RESTORE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/CLI.md](docs/CLI.md), [docs/PLUGINS.md](docs/PLUGINS.md).
 
 ## What this is
 
@@ -24,6 +24,7 @@ NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) + Rust *
 | `just web` | Web UI on the host against the existing `build/` (run `just build` once first) |
 | `just test-widgets` | JS tests for the web UI widgets and static scripts |
 | `just exec 'CMD'` / `just logs SVC` / `just ssh` | Guest shell / `journalctl -b -u SVC` |
+| `just test-disko-boot` | Install the Disko layout into disk images and boot them from disk under UEFI and BIOS (GRUB, firmware boot entry). `just launch` boots the kernel directly and never tests the boot loader |
 | `just format` / `just check` | alejandra + cargo fmt / flake check. Tracked pre-commit in `.githooks` runs `just format`; `nix develop` sets `core.hooksPath` (skip with `git commit --no-verify`) |
 
 **Flakes only see git-tracked files** — `git add` new `nix/` paths before `just launch`.
@@ -69,6 +70,10 @@ Naming: options camelCase under `neo.services.*`; plain-string descriptions; vol
 **Git identity:** `neo.core.git` (`nix/modules/core/git.nix`) is the one machine git user: SSH key `/var/lib/neo/git/id_ed25519` (root:neo-git 0640), `tokens` (git credential helper + Nix `access-tokens`), `knownHosts`, `userName`/`userEmail` (system gitconfig, config repo commits). A module whose user needs git appends to the internal `neo.core.git.users`; never hand-roll per-service ssh/git config. Root is not a member (switch reuses fetched inputs).
 
 **Rust:** clap, `anyhow::Result`, `?` + `.context`, `toml_edit::DocumentMut`; no `unwrap` in lib paths.
+
+## Disko, boot, restore
+
+`nix/modules/disko/`: the main disk is EF02 (1M) + ESP (`/boot`) + ZFS `zroot` (`root` → `/`, `neo` → `/var/neo`, snapshotted). GRUB: UEFI removable path from `core/base.nix`; `boot-install.sh` (grub `extraInstallCommands`) adds the BIOS install when the EF02 partition exists, a NixOS firmware entry and `startup.nsh`. It must never fail a switch: log and go on. Disks partitioned before EF02 existed stay UEFI-only, so never put the main disk into `boot.loader.grub.devices`. Boot changes need `just test-disko-boot`. Moving or restoring a machine: [docs/RESTORE.md](docs/RESTORE.md).
 
 ## Guides
 

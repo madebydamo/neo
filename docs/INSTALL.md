@@ -330,6 +330,14 @@ For greenfield installs, Neo can partition with [Disko](https://github.com/nix-c
 
 Default: boot partition + ZFS for the system and Neo data (with snapshots on Neo’s data dataset). Snapshots you take by hand in the web UI are never pruned, and pinned ones are kept. One disk today: `mainDisk` becomes the OS pool (`zroot`). Extra disks in `additionalDisks` each get their own pool.
 
+Use the disk's `/dev/disk/by-id/…` name for `mainDisk`; `/dev/sda` and `/dev/nvme0n1` can change between boots.
+
+**Booting.** The layout is a 1 MB BIOS boot partition, a 1 GB EFI system partition at `/boot`, and the ZFS pool. GRUB is installed for both UEFI (in the fallback path `\EFI\BOOT\BOOTX64.EFI`) and legacy BIOS (MBR + the BIOS boot partition), so the same disk boots on cloud VMs with SeaBIOS and on UEFI bare metal. On UEFI, every boot loader install also makes sure the firmware has a **NixOS** boot entry: if it is missing, it is created first in the boot order, and entries of Neo installs whose partition is gone are removed. An entry that exists keeps its place, so you can still put network boot first on purpose. A `startup.nsh` on the ESP boots the disk from the EFI Shell, for firmware that ends up there. Turn the entry off with **Disko → Advanced → Add a firmware boot entry** (`bootEntry = false`).
+
+This matters on rented servers: some hosters boot PXE first, then the previous OS's entries, then the EFI Shell. Disko replaces the ESP, the old entries point nowhere, and without a NixOS entry the machine stops in the EFI Shell after a successful install. Disks partitioned by an older Neo (no BIOS boot partition) keep booting via UEFI; they get the BIOS boot only with a reinstall.
+
+`just test-disko-boot` (in the Neo repo) installs this layout into disk images and boots them from the disk under UEFI and BIOS firmware.
+
 Snapshots are restorable from the web UI (only Neo's data dataset is snapshotted, never the system or `/nix`):
 
 - **Service pane → Snapshots:** list, *Snapshot now*, *Restore*. Restore takes a `neo-prerestore-<service>-…` snapshot, stops `neo-<service>.target`, copies the service's appdata folder back from the snapshot (other services are untouched), and starts it again.
@@ -448,7 +456,9 @@ If the machine dies, a new one can install itself from the config repo. You need
      --mode destroy,format,mount --flake /tmp/config#neo
    ```
 
-   Without Disko, partition by hand and adjust `hardware-configuration.nix` in the repo.
+   Private `github:` plugins: Nix needs `core.git.tokens` for every evaluation, Disko included. Pass them without printing them, e.g. `export NIX_CONFIG="access-tokens = github.com=$(sops -d secrets.sops.yaml | yq '.core.git.tokens."github.com"')"` (with your admin key in `SOPS_AGE_SSH_PRIVATE_KEY_FILE`). `git+file:` plugins must exist at their absolute path on the installer.
+
+   Use a `hardware-configuration.nix` for the **new** machine (`nixos-generate-config --no-filesystems --show-hardware-config`): the old one may describe another disk layout or a VM. Without Disko, partition by hand and adjust `hardware-configuration.nix` in the repo.
 2. Restore and install:
 
    ```bash
@@ -458,6 +468,8 @@ If the machine dies, a new one can install itself from the config repo. You need
 
    This clones the repo to `/mnt/<configPath>`, decrypts `identity.sops.yaml` with your key and writes the old SSH host key to `/mnt/etc/ssh`. It refuses a key that doesn't match `core.secrets.hostKey` in the repo. It then hands `core.git.tokens` to Nix (for private plugins) and runs `nixos-install`. `--no-install` stops after the clone and the host key, `--target` changes `/mnt`, `--config` the configuration name (default `neo`).
 3. Reboot. The machine has its old SSH host key, so clients don't warn about it, and it decrypts its secrets on first boot. Restore appdata from your backups, then **Activate**.
+
+Step-by-step runbook for a full move or restore (Disko, nixos-anywhere, copying `/var/neo/DATA`, test boot and cutover, and the traps found on a real move): [RESTORE.md](RESTORE.md). Read its [checklist](RESTORE.md#before-you-start-check-these-facts) before wiping anything.
 
 For a private repo, use an SSH URL with your key loaded (`ssh-agent`, or `ssh -A` into the installer). Don't put a token in the URL: it would end up as the restored repo's remote.
 
