@@ -124,7 +124,7 @@ enum Commands {
     Restore {
         /// Config repository (git URL or local checkout; HEAD is restored).
         repo: String,
-        /// Restore that machine from here (root@IP). nixos-anywhere boots it
+        /// Restore that machine from here (root@IP[:PORT]). nixos-anywhere boots it
         /// into an installer first when it runs another system.
         #[arg(long)]
         host: Option<String>,

@@ -18,6 +18,23 @@ use crate::utils::command::shell_quote;
 use crate::utils::execute_command;
 
 const UNIT: &str = "neo-restore";
+
+/// SSH port of the target (`--host root@IP:PORT`), for every ssh/nix/nixos-anywhere call.
+static PORT: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+/// The admin key also logs in to the target (besides the agent and ssh's defaults).
+static KEY: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// `root@IP:PORT` → (`root@IP`, Some(PORT)). IPv6 needs brackets: `root@[::1]:22`.
+pub(crate) fn split_port(host: &str) -> (String, Option<String>) {
+    if let Some((h, p)) = host.rsplit_once(':') {
+        let bracketed = h.contains('[') && h.ends_with(']');
+        if !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()) && (bracketed || !h.contains(':'))
+        {
+            return (h.replace(['[', ']'], ""), Some(p.to_string()));
+        }
+    }
+    (host.to_string(), None)
+}
 const RESULT_MARK: &str = "NEO-RESTORE-RESULT=";
 
 /// ssh options for the target. `ephemeral`: the installer's host key changes
@@ -52,6 +69,12 @@ fn ssh_opts(ephemeral: bool) -> Vec<String> {
             "-o".to_string(),
             "StrictHostKeyChecking=accept-new".to_string(),
         ]);
+    }
+    if let Some(Some(p)) = PORT.get() {
+        o.extend(["-p".to_string(), p.clone()]);
+    }
+    if let Some(k) = KEY.get() {
+        o.extend(["-i".to_string(), k.display().to_string()]);
     }
     o
 }
@@ -110,7 +133,8 @@ fn kexec(host: &str) -> Result<()> {
         );
     }
     let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    execute_command(Command::new("nixos-anywhere").args([
+    let mut anywhere = Command::new("nixos-anywhere");
+    anywhere.args([
         "--phases",
         "kexec",
         "--store-paths",
@@ -118,7 +142,18 @@ fn kexec(host: &str) -> Result<()> {
         &p,
         "--target-host",
         host,
-    ]))?;
+    ]);
+    if let Some(Some(port)) = PORT.get() {
+        anywhere.args(["--ssh-port", port]);
+    }
+    if let Some(k) = KEY.get() {
+        // Not `-i`: that ssh-adds the key to the user's agent (a gpg-agent then
+        // asks for a passphrase to store it).
+        anywhere
+            .arg("--ssh-option")
+            .arg(format!("IdentityFile={}", k.display()));
+    }
+    execute_command(&mut anywhere)?;
     println!("Waiting for the installer …");
     let start = Instant::now();
     while !ssh_ok(host, true, INSTALLER_TEST) {
@@ -189,11 +224,15 @@ fn default_key() -> Option<PathBuf> {
 }
 
 pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
+    let (host, port) = split_port(host);
+    let _ = PORT.set(port);
+    let host = host.as_str();
     let key = args
         .key
         .clone()
         .or_else(default_key)
         .context("pass --key with an admin ssh-ed25519 private key")?;
+    let _ = KEY.set(key.clone());
 
     // Clone on the client: it has the credentials for a private repo.
     let tmp = env::temp_dir().join(format!("neo-restore-{}", std::process::id()));
@@ -366,6 +405,20 @@ fn follow(host: &str, rebooting: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn host_with_port() {
+        assert_eq!(
+            split_port("root@1.2.3.4:2222"),
+            ("root@1.2.3.4".into(), Some("2222".into()))
+        );
+        assert_eq!(split_port("root@box"), ("root@box".into(), None));
+        assert_eq!(
+            split_port("root@[::1]:22"),
+            ("root@::1".into(), Some("22".into()))
+        );
+        assert_eq!(split_port("root@::1"), ("root@::1".into(), None));
+    }
 
     #[test]
     fn pinned_neo_from_lock() {

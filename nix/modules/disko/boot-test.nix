@@ -47,6 +47,10 @@ in {
             disko.devices.disk.main.imageSize = "12G";
             disko.memSize = 2048;
             boot.kernelParams = ["console=ttyS0,115200"];
+            # The image builder leaves the pool imported by its own VM (another
+            # hostid, never exported), like disko's interactive VM. A real
+            # install exports it before the first reboot.
+            boot.zfs.forceImportRoot = true;
             boot.loader.timeout = lib.mkForce 1;
             documentation.enable = false;
 
@@ -129,7 +133,7 @@ in {
           echo "== $name: booting ($fw)"
           timeout 900 qemu-system-x86_64 -enable-kvm -cpu host -m 3072 -smp 2 \
             -display none -monitor none -serial "file:$log" -nic none \
-            "''${fwopts[@]}" -drive "file=$disk,if=virtio,format=qcow2,serial=neo-boot-test" || true
+            "''${fwopts[@]}" -drive "file=$disk,if=none,id=disk,format=qcow2" -device virtio-blk-pci,drive=disk,serial=neo-boot-test || true
           grep -a 'NEO-BOOT-TEST\|neo-boot:' "$log" || true
           local want
           for want in "NEO-BOOT-TEST result=ok" "$@"; do
