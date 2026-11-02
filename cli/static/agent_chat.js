@@ -117,7 +117,9 @@
           slot.className = 'mt-2';
           node.appendChild(slot);
           if (typeof htmx !== 'undefined') {
-            htmx.ajax('GET', '/proposals/' + id + '/card', { target: slot, swap: 'innerHTML' });
+            // The card arrives after the reply: scroll again once it is in.
+            var loaded = htmx.ajax('GET', '/proposals/' + id + '/card', { target: slot, swap: 'innerHTML' });
+            if (loaded && typeof loaded.then === 'function') loaded.then(scrollDown, scrollDown);
           }
         });
         scrollDown();
