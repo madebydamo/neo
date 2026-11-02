@@ -62,7 +62,263 @@
     return 'Working (' + n.replace(/^mcp_[a-z]+_/, '') + ')';
   }
 
-  var api = { parseSse: parseSse, proposalIds: proposalIds, toolLabel: toolLabel };
+  // ---- @ references -------------------------------------------------------
+  // Same token rules as agent_refs.rs parse_refs: `@` after the start, a space,
+  // an opening bracket or quote; token chars [A-Za-z0-9_.:-]; trailing . : -
+  // are punctuation, not part of the token.
+
+  var TOKEN_CHAR = /[A-Za-z0-9_.:\-]/;
+  var BEFORE_AT = /[\s([{"']/;
+
+  function trimToken(t) {
+    return t.replace(/[.:\-]+$/, '');
+  }
+
+  /** The `@query` being typed at `caret`: { start (index of @), query } or null. */
+  function refQuery(text, caret) {
+    var i = caret;
+    while (i > 0 && TOKEN_CHAR.test(text.charAt(i - 1))) i--;
+    if (i === 0 || text.charAt(i - 1) !== '@') return null;
+    var at = i - 1;
+    if (at > 0 && !BEFORE_AT.test(text.charAt(at - 1))) return null;
+    return { start: at, query: text.slice(i, caret) };
+  }
+
+  /** Text split into [{ text } | { ref }] segments for chips in a bubble. */
+  function splitRefs(text) {
+    var out = [];
+    var buf = '';
+    var s = String(text || '');
+    var i = 0;
+    while (i < s.length) {
+      var c = s.charAt(i);
+      if (c === '@' && (i === 0 || BEFORE_AT.test(s.charAt(i - 1)))) {
+        var j = i + 1;
+        while (j < s.length && TOKEN_CHAR.test(s.charAt(j))) j++;
+        var tok = trimToken(s.slice(i + 1, j));
+        if (/^[A-Za-z0-9]/.test(tok)) {
+          if (buf) out.push({ text: buf });
+          buf = '';
+          out.push({ ref: tok });
+          i += 1 + tok.length;
+          continue;
+        }
+      }
+      buf += c;
+      i++;
+    }
+    if (buf) out.push({ text: buf });
+    return out;
+  }
+
+  function isBoundary(text, i) {
+    if (i === 0) return true;
+    var p = text.charAt(i - 1);
+    var c = text.charAt(i);
+    if (/[\s._:\-\/›]/.test(p)) return true;
+    return /[a-z0-9]/.test(p) && /[A-Z]/.test(c);
+  }
+
+  /**
+   * Fuzzy score of `query` against `text` (higher is better), or -1 when the
+   * query is not a subsequence. Rewards matches at word starts (also camelCase
+   * and after . : -), consecutive runs and a match at the very start; gaps
+   * cost a little. "nxtc" matches "nextcloud".
+   */
+  function fuzzyScore(query, text) {
+    var q = String(query || '').toLowerCase();
+    var raw = String(text || '');
+    var t = raw.toLowerCase();
+    if (!q) return 0;
+    var best = -1;
+    // Try each position of the first query char as the anchor; greedy after.
+    for (var start = t.indexOf(q.charAt(0)); start >= 0; start = t.indexOf(q.charAt(0), start + 1)) {
+      var score = 0;
+      var ti = start;
+      var prev = -2;
+      var ok = true;
+      for (var qi = 0; qi < q.length; qi++) {
+        var ch = q.charAt(qi);
+        var found = -1;
+        // Prefer a word-start occurrence nearby over the very next one.
+        var next = t.indexOf(ch, ti);
+        if (next < 0) { ok = false; break; }
+        found = next;
+        if (prev + 1 !== next && !isBoundary(raw, next)) {
+          for (var k = next + 1; k < t.length && k < next + 24; k++) {
+            if (t.charAt(k) === ch && isBoundary(raw, k)) { found = k; break; }
+          }
+        }
+        score += 1;
+        if (found === prev + 1) score += 3;
+        if (isBoundary(raw, found)) score += 4;
+        if (found === 0) score += 6;
+        if (prev >= 0) score -= Math.min(found - prev - 1, 8) * 0.15;
+        prev = found;
+        ti = found + 1;
+      }
+      if (ok) {
+        if (q === t) score += 10;
+        else if (t.indexOf(q) === 0) score += 5;
+        score -= t.length * 0.01;
+        if (score > best) best = score;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Best `limit` candidates for `query`. Empty query: installed services and
+   * guides in server order. Settings rank below apps and guides unless the
+   * query names one (contains a dot); installed beats not installed and
+   * plumbing (advanced) comes last.
+   */
+  function rankRefs(items, query, limit) {
+    limit = limit || 8;
+    var q = String(query || '');
+    if (!q) {
+      return items.filter(function (it) {
+        return it.kind !== 'option' && (it.kind !== 'service' || it.enabled);
+      }).slice(0, limit);
+    }
+    var dotted = q.indexOf('.') >= 0;
+    var scored = [];
+    items.forEach(function (it, idx) {
+      var s1 = fuzzyScore(q, it.token);
+      var s2 = fuzzyScore(q, it.label) - 1;
+      var s = Math.max(s1, s2);
+      if (s < 0) return;
+      if (it.enabled) s += 2;
+      if (it.advanced) s -= 3;
+      if (it.kind === 'option') s += dotted ? 2 : -3;
+      scored.push({ it: it, s: s, idx: idx });
+    });
+    scored.sort(function (a, b) {
+      return b.s - a.s || a.idx - b.idx;
+    });
+    return scored.slice(0, limit).map(function (x) {
+      return x.it;
+    });
+  }
+
+  /** Text after inserting `@token ` for the query at `start..caret`. */
+  function insertRef(text, start, caret, token) {
+    var after = text.slice(caret);
+    var rest = after.replace(/^[A-Za-z0-9_.:\-]*/, '');
+    var gap = /^\s/.test(rest) ? '' : ' ';
+    var head = text.slice(0, start) + '@' + token + gap;
+    return { text: head + rest, caret: head.length };
+  }
+
+  // ---- tool call details ----------------------------------------------------
+
+  var MAX_DETAIL = 6000;
+
+  function clip(s, max) {
+    max = max || MAX_DETAIL;
+    s = String(s);
+    if (s.length <= max) return s;
+    return s.slice(0, max) + '\n… (' + (s.length - max) + ' more characters)';
+  }
+
+  /** Pretty JSON for arguments / results; JSON text is parsed first. */
+  function prettyValue(v, max) {
+    if (v == null || v === '') return '';
+    if (typeof v === 'string') {
+      var t = v.trim();
+      if (/^[\[{]/.test(t)) {
+        try {
+          return clip(JSON.stringify(JSON.parse(t), null, 2), max);
+        } catch (e) { /* plain text */ }
+      }
+      return clip(v, max);
+    }
+    try {
+      return clip(JSON.stringify(v, null, 2), max);
+    } catch (e) {
+      return clip(String(v), max);
+    }
+  }
+
+  function formatDuration(sec) {
+    if (sec == null || !isFinite(sec) || sec < 0) return '';
+    if (sec < 1) return Math.max(1, Math.round(sec * 1000)) + ' ms';
+    if (sec < 60) return (Math.round(sec * 10) / 10) + ' s';
+    var m = Math.floor(sec / 60);
+    return m + ' min ' + Math.round(sec - m * 60) + ' s';
+  }
+
+  /** Tool calls of a turn transcript (run.completed `messages`), with results. */
+  function toolCallsFromMessages(messages) {
+    var calls = [];
+    var byId = {};
+    (messages || []).forEach(function (m) {
+      if (!m) return;
+      if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
+        m.tool_calls.forEach(function (tc) {
+          var f = tc.function || tc;
+          var args = f.arguments;
+          if (typeof args === 'string') {
+            try { args = JSON.parse(args); } catch (e) { /* keep text */ }
+          }
+          var c = { id: tc.id || tc.call_id || '', name: f.name || '', args: args };
+          calls.push(c);
+          if (c.id) byId[c.id] = c;
+        });
+      } else if (m.role === 'tool') {
+        var c = byId[m.tool_call_id];
+        if (c && c.result === undefined) {
+          var content = m.content;
+          if (Array.isArray(content)) {
+            content = content.map(function (p) { return (p && p.text) || ''; }).join('\n');
+          }
+          c.result = content == null ? '' : content;
+        }
+      }
+    });
+    return calls;
+  }
+
+  var STATUS_TEXT = { running: 'Running', done: 'Done', error: 'Failed', stopped: 'Stopped' };
+
+  /**
+   * What the expanded tool call shows: status line + sections (label, text).
+   * `line`: { name, args, preview, status, started, ended, result }.
+   */
+  function toolDetail(line) {
+    var meta = [STATUS_TEXT[line.status] || 'Done'];
+    var dur = line.started != null && line.ended != null ? formatDuration(line.ended - line.started) : '';
+    if (dur) meta.push(dur);
+    var sections = [{ label: 'Tool', text: String(line.name || ''), mono: true }];
+    var args = prettyValue(line.args, 4000);
+    if (args) sections.push({ label: 'Input', text: args, pre: true });
+    else if (line.preview) sections.push({ label: 'Input', text: String(line.preview), pre: true });
+    if (line.result !== undefined && line.result !== null) {
+      sections.push({ label: 'Output', text: prettyValue(line.result) || '(empty)', pre: true });
+    } else if (line.status === 'running') {
+      sections.push({ label: 'Output', text: 'Waiting for the result…' });
+    } else if (!line.final) {
+      sections.push({ label: 'Output', text: 'Shown when the reply is finished.' });
+    } else {
+      sections.push({ label: 'Output', text: 'No output was recorded.' });
+    }
+    return { status: line.status || 'done', meta: meta.join(' · '), duration: dur, sections: sections };
+  }
+
+  var api = {
+    parseSse: parseSse,
+    proposalIds: proposalIds,
+    toolLabel: toolLabel,
+    refQuery: refQuery,
+    splitRefs: splitRefs,
+    fuzzyScore: fuzzyScore,
+    rankRefs: rankRefs,
+    insertRef: insertRef,
+    prettyValue: prettyValue,
+    formatDuration: formatDuration,
+    toolCallsFromMessages: toolCallsFromMessages,
+    toolDetail: toolDetail,
+  };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof document === 'undefined') return;
 
@@ -92,6 +348,251 @@
     var n = bubble('note', null, text);
     if (cls) n.classList.add(cls);
     return n;
+  }
+
+  // ---- @ references (DOM) -------------------------------------------------
+
+  var refs = { promise: null, at: 0, byToken: {} };
+  var REFS_TTL = 5 * 60 * 1000;
+
+  /** Candidates from /agent/refs (cached server-side; refetched after 5 min). */
+  function loadRefs() {
+    if (refs.promise && Date.now() - refs.at < REFS_TTL) return refs.promise;
+    refs.at = Date.now();
+    refs.promise = fetch('/agent/refs', { credentials: 'same-origin' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('references unavailable (' + r.status + ')');
+        return r.json();
+      })
+      .then(function (j) {
+        var items = j.items || [];
+        refs.byToken = {};
+        items.forEach(function (it) {
+          refs.byToken[it.token] = it;
+        });
+        return items;
+      });
+    refs.promise.catch(function () {
+      refs.promise = null;
+    });
+    return refs.promise;
+  }
+
+  var KIND_LABEL = { service: 'App', option: 'Setting', guide: 'Guide', privacy: 'Privacy' };
+
+  function navLink(a, url) {
+    a.setAttribute('href', url);
+    a.setAttribute('hx-get', url);
+    a.setAttribute('hx-target', '#config-content');
+    a.setAttribute('hx-swap', 'innerHTML');
+    a.setAttribute('hx-push-url', 'true');
+  }
+
+  /** Known `@tokens` in a user bubble become chips linking to their page. */
+  function chipify(node, text) {
+    var parts = splitRefs(text);
+    if (!parts.some(function (p) { return p.ref && refs.byToken[p.ref]; })) return;
+    node.textContent = '';
+    parts.forEach(function (p) {
+      var it = p.ref && refs.byToken[p.ref];
+      if (!it) {
+        node.appendChild(document.createTextNode(p.text != null ? p.text : '@' + p.ref));
+        return;
+      }
+      var a = document.createElement('a');
+      a.className = 'neo-agent-ref';
+      navLink(a, it.url);
+      a.title = (KIND_LABEL[it.kind] || '') + ': ' + it.label;
+      if (it.icon) {
+        var img = document.createElement('img');
+        img.src = it.icon;
+        img.alt = '';
+        a.appendChild(img);
+      }
+      a.appendChild(document.createTextNode('@' + it.token));
+      node.appendChild(a);
+    });
+    if (typeof htmx !== 'undefined') htmx.process(node);
+  }
+
+  function userBubble(text) {
+    var b = bubble('user', null, text);
+    if (text && text.indexOf('@') >= 0) {
+      loadRefs().then(function () { chipify(b, text); }, function () {});
+    }
+    return b;
+  }
+
+  /**
+   * The `@` popup on the chat input: opens while an `@query` is typed, filters
+   * fuzzily, ↑/↓ choose, Enter/Tab insert, Esc closes, click inserts.
+   * `key(e)` returns true when it handled the key.
+   */
+  function refPicker(input, pop) {
+    var st = { open: false, q: null, list: [], sel: 0, seq: 0 };
+    if (!pop) return { key: function () { return false; }, close: function () {} };
+
+    function close() {
+      st.open = false;
+      st.list = [];
+      pop.classList.add('hidden');
+      input.setAttribute('aria-expanded', 'false');
+      input.removeAttribute('aria-activedescendant');
+    }
+
+    function row(it, i) {
+      var r = document.createElement('div');
+      r.id = 'neo-agent-ref-' + i;
+      r.setAttribute('role', 'option');
+      r.setAttribute('aria-selected', i === st.sel ? 'true' : 'false');
+      r.className = 'neo-agent-ref-opt' + (i === st.sel ? ' is-active' : '');
+      var ico = document.createElement('span');
+      ico.className = 'neo-agent-ref-ico';
+      if (it.icon) {
+        var img = document.createElement('img');
+        img.src = it.icon;
+        img.alt = '';
+        ico.appendChild(img);
+      } else {
+        ico.textContent = it.kind === 'option' ? '⚙' : it.kind === 'guide' ? '☰' : it.kind === 'privacy' ? '◎' : '▣';
+      }
+      r.appendChild(ico);
+      var main = document.createElement('span');
+      main.className = 'min-w-0 flex-1';
+      var top = document.createElement('span');
+      top.className = 'flex items-baseline gap-1.5 min-w-0';
+      var label = document.createElement('span');
+      label.className = 'text-sm font-medium truncate';
+      label.textContent = it.label;
+      var tok = document.createElement('span');
+      tok.className = 'text-xs font-mono text-base-content/60 truncate';
+      tok.textContent = '@' + it.token;
+      top.appendChild(label);
+      top.appendChild(tok);
+      main.appendChild(top);
+      var hint = [];
+      if (it.hint) hint.push(it.hint);
+      if (it.kind === 'service' && !it.enabled) hint.push('not installed');
+      if (it.secret) hint.push('secret, value stays hidden');
+      if (hint.length) {
+        var h = document.createElement('span');
+        h.className = 'block text-xs text-base-content/60 truncate';
+        h.textContent = hint.join(' · ');
+        main.appendChild(h);
+      }
+      r.appendChild(main);
+      var badge = document.createElement('span');
+      badge.className = 'badge badge-ghost badge-xs shrink-0';
+      badge.textContent = KIND_LABEL[it.kind] || it.kind;
+      r.appendChild(badge);
+      r.addEventListener('mousedown', function (e) {
+        e.preventDefault(); // keep the focus in the input
+        pick(i);
+      });
+      r.addEventListener('mousemove', function () {
+        if (st.sel !== i) { st.sel = i; paint(); }
+      });
+      return r;
+    }
+
+    function paint() {
+      pop.textContent = '';
+      if (!st.list.length) {
+        var none = document.createElement('div');
+        none.className = 'px-3 py-2 text-xs text-base-content/60';
+        none.textContent = st.loading ? 'Loading…' : st.error ? st.error : 'Nothing matches @' + st.q.query + '.';
+        pop.appendChild(none);
+      }
+      st.list.forEach(function (it, i) {
+        pop.appendChild(row(it, i));
+      });
+      var foot = document.createElement('div');
+      foot.className = 'neo-agent-ref-foot';
+      foot.textContent = '↑↓ choose · Enter insert · Esc close';
+      pop.appendChild(foot);
+      pop.classList.remove('hidden');
+      input.setAttribute('aria-expanded', 'true');
+      if (st.list.length) input.setAttribute('aria-activedescendant', 'neo-agent-ref-' + st.sel);
+      var act = pop.querySelector('.is-active');
+      if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest' });
+    }
+
+    function update() {
+      var q = refQuery(input.value, input.selectionStart || 0);
+      if (!q || input.selectionStart !== input.selectionEnd) return close();
+      var changed = !st.open || !st.q || st.q.query !== q.query || st.q.start !== q.start;
+      st.q = q;
+      st.open = true;
+      if (!changed) return;
+      st.sel = 0;
+      var seq = ++st.seq;
+      st.loading = true;
+      st.error = null;
+      if (!st.list.length) paint();
+      loadRefs().then(
+        function (items) {
+          if (seq !== st.seq || !st.open) return;
+          st.loading = false;
+          st.list = rankRefs(items, q.query, 8);
+          paint();
+        },
+        function () {
+          if (seq !== st.seq || !st.open) return;
+          st.loading = false;
+          st.list = [];
+          st.error = 'References are not available right now.';
+          paint();
+        }
+      );
+    }
+
+    function pick(i) {
+      var it = st.list[i];
+      if (!it || !st.q) return close();
+      var caret = input.selectionStart || 0;
+      var out = insertRef(input.value, st.q.start, caret, it.token);
+      input.value = out.text;
+      input.setSelectionRange(out.caret, out.caret);
+      close();
+      input.focus();
+    }
+
+    function key(e) {
+      if (!st.open || e.isComposing) return false;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+        return true;
+      }
+      if (!st.list.length) return false;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        var n = st.list.length;
+        st.sel = (st.sel + (e.key === 'ArrowDown' ? 1 : n - 1)) % n;
+        paint();
+        return true;
+      }
+      if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+        e.preventDefault();
+        pick(st.sel);
+        return true;
+      }
+      return false;
+    }
+
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-controls', pop.id);
+    input.setAttribute('aria-expanded', 'false');
+    input.addEventListener('input', update);
+    input.addEventListener('click', update);
+    input.addEventListener('keyup', function (e) {
+      if (/^(ArrowLeft|ArrowRight|Home|End)$/.test(e.key)) update();
+    });
+    input.addEventListener('blur', function () {
+      setTimeout(close, 120);
+    });
+    return { key: key, close: close };
   }
 
   function post(url, body) {
@@ -228,8 +729,8 @@
   };
 
   Turn.prototype.summarize = function (g, running) {
-    var failed = g.lines.filter(function (l) { return l.failed; }).length;
-    var open = g.lines.filter(function (l) { return !l.done; });
+    var failed = g.lines.filter(function (l) { return l.status === 'error'; }).length;
+    var open = g.lines.filter(function (l) { return l.status === 'running'; });
     if (running && open.length) {
       g.sum.innerHTML = '<span class="loading loading-dots loading-xs"></span> ';
       g.sum.appendChild(document.createTextNode(toolLabel(open[open.length - 1].name)));
@@ -240,34 +741,130 @@
     }
   };
 
-  Turn.prototype.toolStarted = function (name) {
-    var g = this.group();
-    var el = document.createElement('div');
-    el.textContent = '… ' + toolLabel(name);
+  var STATUS_ICON = { running: '…', done: '✓', error: '✗', stopped: '–' };
+
+  /** Summary row of one tool call: icon, plain label, duration. */
+  function paintLine(line) {
+    var s = line.sum;
+    s.textContent = '';
+    var icon = document.createElement('span');
+    icon.className = 'neo-agent-tool-icon neo-agent-tool-icon--' + line.status;
+    icon.textContent = STATUS_ICON[line.status] || '✓';
+    s.appendChild(icon);
+    s.appendChild(document.createTextNode(toolLabel(line.name)));
+    var d = toolDetail(line);
+    if (d.duration) {
+      var t = document.createElement('span');
+      t.className = 'neo-agent-tool-time';
+      t.textContent = d.duration;
+      s.appendChild(t);
+    }
+    if (line.el.open) paintDetail(line);
+  }
+
+  /** Expanded body: tool name, pretty input, output (filled lazily on open). */
+  function paintDetail(line) {
+    var d = toolDetail(line);
+    var body = line.body;
+    body.textContent = '';
+    var meta = document.createElement('div');
+    meta.className = 'neo-agent-tool-meta';
+    meta.textContent = d.meta;
+    body.appendChild(meta);
+    d.sections.forEach(function (sec) {
+      var label = document.createElement('div');
+      label.className = 'neo-agent-tool-label';
+      label.textContent = sec.label;
+      body.appendChild(label);
+      var v = document.createElement(sec.pre ? 'pre' : 'div');
+      v.className = sec.pre ? 'neo-agent-tool-pre' : sec.mono ? 'neo-agent-tool-name' : 'neo-agent-tool-note';
+      v.textContent = sec.text;
+      body.appendChild(v);
+    });
+  }
+
+  /** A collapsible tool call inside group `g`. */
+  function toolLine(g, data) {
+    var el = document.createElement('details');
+    el.className = 'neo-agent-tool';
+    var sum = document.createElement('summary');
+    var body = document.createElement('div');
+    body.className = 'neo-agent-tool-body';
+    el.appendChild(sum);
+    el.appendChild(body);
     g.body.appendChild(el);
-    var line = { name: name, el: el, done: false, failed: false, group: g };
+    var line = {
+      name: data.name || '',
+      args: data.args,
+      preview: data.preview || '',
+      started: data.started,
+      ended: data.ended,
+      result: data.result,
+      status: data.status || 'running',
+      final: !!data.final,
+      el: el,
+      sum: sum,
+      body: body,
+      group: g,
+    };
+    el.addEventListener('toggle', function () {
+      if (el.open) paintDetail(line);
+    });
     g.lines.push(line);
+    paintLine(line);
+    return line;
+  }
+
+  Turn.prototype.toolStarted = function (d) {
+    var g = this.group();
+    var line = toolLine(g, { name: d.tool_name, args: d.args, preview: d.preview, started: d.ts });
     this.lines.push(line);
     this.summarize(g, true);
     scrollDown();
   };
 
-  Turn.prototype.toolDone = function (name, failed) {
+  Turn.prototype.toolDone = function (d, failed) {
     var line = null;
     for (var i = 0; i < this.lines.length; i++) {
-      if (!this.lines[i].done && this.lines[i].name === name) { line = this.lines[i]; break; }
+      if (this.lines[i].status === 'running' && this.lines[i].name === d.tool_name) { line = this.lines[i]; break; }
     }
     if (!line) return;
-    line.done = true;
-    line.failed = failed;
-    line.el.textContent = (failed ? '✗ ' : '✓ ') + toolLabel(name);
+    line.status = failed ? 'error' : 'done';
+    line.ended = d.ts;
+    paintLine(line);
     this.summarize(line.group, true);
+  };
+
+  /** Results from the turn transcript: nth call of a tool ↔ nth line of it. */
+  Turn.prototype.results = function (calls) {
+    var used = [];
+    this.lines.forEach(function (line) {
+      for (var i = 0; i < calls.length; i++) {
+        if (used[i] || calls[i].name !== line.name) continue;
+        used[i] = true;
+        if (calls[i].result !== undefined) line.result = calls[i].result;
+        if (line.args == null && calls[i].args != null) line.args = calls[i].args;
+        break;
+      }
+    });
+  };
+
+  /** Earlier tool calls of a resumed chat (history `{role: "tools"}` entry). */
+  Turn.prototype.replayTools = function (calls) {
+    var g = this.group();
+    var self = this;
+    calls.forEach(function (c) {
+      self.lines.push(toolLine(g, { name: c.name, args: c.args, result: c.result, status: 'done', final: true }));
+    });
+    this.summarize(g, false);
   };
 
   Turn.prototype.finish = function (finalText) {
     var self = this;
     this.lines.forEach(function (l) {
-      if (!l.done) { l.done = true; l.el.textContent = '– ' + toolLabel(l.name); }
+      if (l.status === 'running') l.status = 'stopped';
+      l.final = true;
+      paintLine(l);
     });
     this.groups.forEach(function (g) { self.summarize(g, false); });
     // The final answer arrives in full with assistant.completed; it is the
@@ -285,7 +882,7 @@
   function send(text) {
     text = (text || '').trim();
     if (!text || state.busy || !state.session) return;
-    bubble('user', null, text);
+    userBubble(text);
     var turn = new Turn(el('neo-agent-log'));
     var waiting = turn.append(document.createElement('div'));
     waiting.className = 'neo-agent-msg neo-agent-msg--note';
@@ -315,13 +912,19 @@
           }
           break;
         case 'tool.started':
-          turn.toolStarted(d.tool_name);
+          turn.toolStarted(d);
           break;
         case 'tool.completed':
-          turn.toolDone(d.tool_name, false);
+          turn.toolDone(d, false);
           break;
         case 'tool.failed':
-          turn.toolDone(d.tool_name, true);
+          turn.toolDone(d, true);
+          break;
+        case 'run.completed':
+        case 'run.failed':
+        case 'run.cancelled':
+          // The turn transcript carries each tool call's output.
+          if (Array.isArray(d.messages)) turn.results(toolCallsFromMessages(d.messages));
           break;
         case 'approval.request':
           turn.seg = null;
@@ -387,6 +990,7 @@
     var log = el('neo-agent-log');
     log.innerHTML = '';
     var loading = note('Connecting to the assistant…');
+    loadRefs().catch(function () {});
     post('/agent/open', { context: state.context, fresh: fresh })
       .then(function (r) {
         return r.json().then(function (j) {
@@ -401,7 +1005,8 @@
         state.first = msgs.length === 0;
         var chain = Promise.resolve();
         msgs.forEach(function (m) {
-          if (m.role === 'user') bubble('user', null, m.content);
+          if (m.role === 'user') userBubble(m.content);
+          else if (m.role === 'tools') new Turn(log).replayTools(m.calls || []);
           else {
             var b = bubble('assistant', null, m.content);
             chain = chain.then(function () {
@@ -439,14 +1044,17 @@
     var form = el('neo-agent-form');
     if (!form) return;
     var input = el('neo-agent-input');
+    var picker = refPicker(input, el('neo-agent-refs'));
     form.addEventListener('submit', function (e) {
       e.preventDefault();
+      picker.close();
       var t = input.value;
       input.value = '';
       send(t);
     });
     input.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (picker.key(e)) return;
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
         e.preventDefault();
         form.requestSubmit();
       }

@@ -10,6 +10,7 @@ use rocket_dyn_templates::Template;
 
 mod action_bar;
 mod agent;
+mod agent_refs;
 mod diff;
 mod git;
 mod guides;

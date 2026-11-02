@@ -29,8 +29,10 @@ pub static EXTRACT_SECRET_PATHS: NixExtractor =
 
 pub static EXTRACT_GUIDES: NixExtractor = extractor!("extract_guides.nix", "extractGuides");
 pub static EXTRACT_PRIVACY: NixExtractor = extractor!("extract_privacy.nix", "extractPrivacy");
+pub static EXTRACT_OPTION_INDEX: NixExtractor =
+    extractor!("extract_option_index.nix", "extractOptionIndex");
 
-pub static NIX_EXTRACTORS: [&NixExtractor; 8] = [
+pub static NIX_EXTRACTORS: [&NixExtractor; 9] = [
     &EXTRACT_SERVICES,
     &EXTRACT_SERVICE_OPTIONS,
     &EXTRACT_PROXIED_SERVICES,
@@ -39,6 +41,7 @@ pub static NIX_EXTRACTORS: [&NixExtractor; 8] = [
     &EXTRACT_SECRET_PATHS,
     &EXTRACT_GUIDES,
     &EXTRACT_PRIVACY,
+    &EXTRACT_OPTION_INDEX,
 ];
 
 /// Helpers the extractors `import ./extract_lib.nix` (written, not bound).

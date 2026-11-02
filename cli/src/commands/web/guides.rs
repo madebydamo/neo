@@ -140,7 +140,7 @@ fn nav_attrs(url: &str) -> String {
 }
 
 /// Web UI URL for an `option:` target (`pihole.localIP`, `core.volumes.appdata`).
-fn option_url(target: &str) -> String {
+pub(crate) fn option_url(target: &str) -> String {
     let mut parts = target.splitn(2, '.');
     let root = parts.next().unwrap_or_default();
     let rest = parts.next().unwrap_or_default();

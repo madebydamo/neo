@@ -1,7 +1,8 @@
 use super::errors::eval_error_ui;
 use super::registry::{
-    NixExtractor, EXTRACT_GUIDES, EXTRACT_NEO_THEME, EXTRACT_PLUGIN_INVENTORY, EXTRACT_PRIVACY,
-    EXTRACT_PROXIED_SERVICES, EXTRACT_SECRET_PATHS, EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
+    NixExtractor, EXTRACT_GUIDES, EXTRACT_NEO_THEME, EXTRACT_OPTION_INDEX,
+    EXTRACT_PLUGIN_INVENTORY, EXTRACT_PRIVACY, EXTRACT_PROXIED_SERVICES, EXTRACT_SECRET_PATHS,
+    EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
 };
 use super::repl::NixEvaluator;
 use crate::commands::web::plugins::{attach_service_plugin_badges, plugin_badges, plugin_filters};
@@ -356,6 +357,29 @@ impl NixEvaluator {
         Ok(raw)
     }
 
+    /// Path, label and secret flag of every setting (chat `@` references).
+    /// Labels without `ui.label` are humanized like the option pane's.
+    pub async fn extract_option_index(&mut self) -> anyhow::Result<OptionIndex> {
+        let mut raw: OptionIndex = self.query_extractor(&EXTRACT_OPTION_INDEX).await?;
+        for e in raw
+            .services
+            .values_mut()
+            .flatten()
+            .chain(raw.core.iter_mut())
+        {
+            if e.label.as_deref().is_none_or(str::is_empty) {
+                e.label = Some(
+                    e.path
+                        .split('.')
+                        .map(super::sections::humanize)
+                        .collect::<Vec<_>>()
+                        .join(" › "),
+                );
+            }
+        }
+        Ok(raw)
+    }
+
     /// Guides (`neo.guides`) with links checked and icons published.
     pub async fn extract_guides(
         &mut self,
@@ -370,4 +394,26 @@ impl NixEvaluator {
         }
         Ok(raw)
     }
+}
+
+/// One setting in [`OptionIndex`]: `path` is relative to its service (or core).
+#[derive(serde::Deserialize, Clone, Debug, Default)]
+pub struct OptionIndexEntry {
+    pub path: String,
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub secret: bool,
+    /// `ui.group` id (own or inherited), e.g. `access`, `advanced`.
+    #[serde(default)]
+    pub group: Option<String>,
+}
+
+/// `extract_option_index.nix`: settings per service plus core.
+#[derive(serde::Deserialize, Clone, Debug, Default)]
+pub struct OptionIndex {
+    #[serde(default)]
+    pub services: std::collections::BTreeMap<String, Vec<OptionIndexEntry>>,
+    #[serde(default)]
+    pub core: Vec<OptionIndexEntry>,
 }

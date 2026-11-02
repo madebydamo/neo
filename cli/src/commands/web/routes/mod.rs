@@ -4,7 +4,7 @@ mod agent;
 mod agent_tools;
 mod branches;
 mod changes;
-mod guides;
+pub(crate) mod guides;
 mod helpers;
 mod icons;
 mod locks;
@@ -54,6 +54,7 @@ pub fn routes() -> Vec<rocket::Route> {
         agent::agent_approve,
         agent::agent_stop,
         agent::agent_render,
+        agent::agent_ref_list,
         helpers::run_helper,
         oauth::run_oauth,
         save::save_service,

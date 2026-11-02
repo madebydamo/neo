@@ -9,13 +9,14 @@ use rocket::response::content::RawHtml;
 use rocket::response::stream::ByteStream;
 use rocket::response::{self, Responder};
 use rocket::serde::json::Json;
-use rocket::{post, State};
+use rocket::{get, post, State};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::agent_tools::describe;
 use super::guides::load_guides;
 use crate::commands::web::agent::{self, valid_run_id, valid_session_id};
+use crate::commands::web::agent_refs;
 use crate::commands::web::guides::{render, RenderCtx};
 use crate::commands::web::schema_cache::load_options;
 use crate::commands::web::types::AppConfig;
@@ -172,7 +173,13 @@ pub async fn agent_chat(
         } else {
             None
         };
-        gw.chat_stream(&req.session_id, message, extra.as_deref())
+        // `@` references: what each one is, appended for the assistant (and
+        // cut off again when the history is shown).
+        let message = match agent_refs::context_for(config, message).await {
+            Some(block) => format!("{message}{block}"),
+            None => message.to_string(),
+        };
+        gw.chat_stream(&req.session_id, &message, extra.as_deref())
             .await
             .map_err(|e| e.to_string())
     }
@@ -198,6 +205,21 @@ pub async fn agent_chat(
             }
         }
     })
+}
+
+/// Candidates for the drawer's `@` popup (matched on the client).
+#[get("/agent/refs")]
+pub async fn agent_ref_list(config: &State<Arc<AppConfig>>) -> (Status, Json<Value>) {
+    if !agent::available() {
+        return (
+            Status::NotFound,
+            Json(json!({"error": "The assistant is not set up."})),
+        );
+    }
+    match agent_refs::cached_candidates(config).await {
+        Ok(items) => (Status::Ok, Json(json!({"items": items.as_ref()}))),
+        Err(e) => (Status::InternalServerError, Json(json!({"error": e}))),
+    }
 }
 
 #[derive(Deserialize)]
