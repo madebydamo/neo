@@ -295,7 +295,9 @@ pub fn check(access: &Access, source: &Source, data_from: Option<&Path>) -> Resu
                     .is_ok_and(|s| s.success());
                 if !listed {
                     execute_command(Command::new("zpool").args(["import", "-N", pool]))
-                        .with_context(|| format!("import the backup pool {pool}: is the disk attached?"))?;
+                        .with_context(|| {
+                            format!("import the backup pool {pool}: is the disk attached?")
+                        })?;
                 }
             }
             let snap = newest_snapshot(access, source)?
@@ -346,7 +348,9 @@ pub fn restore_into(
                     rsync.arg("-e").arg(access.ssh_line(source));
                 }
             }
-            rsync.arg(&origin).arg(format!("{}/", target_root.display()));
+            rsync
+                .arg(&origin)
+                .arg(format!("{}/", target_root.display()));
             execute_command(&mut rsync)
         }
         Format::Zfs => {

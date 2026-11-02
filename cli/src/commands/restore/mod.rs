@@ -98,7 +98,11 @@ pub(crate) fn int_setting(doc: &DocumentMut, key: &str, default: i64) -> i64 {
 }
 
 /// `access-tokens = host=token …` from whichever place holds core.git.tokens.
-pub(crate) fn access_tokens(repo: &Path, doc: &DocumentMut, key: Option<&Path>) -> Result<Option<String>> {
+pub(crate) fn access_tokens(
+    repo: &Path,
+    doc: &DocumentMut,
+    key: Option<&Path>,
+) -> Result<Option<String>> {
     let mut tokens: Vec<(String, String)> = Vec::new();
     if let Some(t) = doc
         .get("core")

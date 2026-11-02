@@ -23,18 +23,35 @@ const RESULT_MARK: &str = "NEO-RESTORE-RESULT=";
 /// ssh options for the target. `ephemeral`: the installer's host key changes
 /// with every kexec, so it is never written to known_hosts.
 fn ssh_opts(ephemeral: bool) -> Vec<String> {
-    let mut o: Vec<String> = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+    let mut o: Vec<String> = [
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "ServerAliveInterval=15",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
     if ephemeral {
         o.extend(
-            ["-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR"]
-                .iter()
-                .map(|s| s.to_string()),
+            [
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                "-o",
+                "LogLevel=ERROR",
+            ]
+            .iter()
+            .map(|s| s.to_string()),
         );
     } else {
-        o.extend(["-o".to_string(), "StrictHostKeyChecking=accept-new".to_string()]);
+        o.extend([
+            "-o".to_string(),
+            "StrictHostKeyChecking=accept-new".to_string(),
+        ]);
     }
     o
 }
@@ -75,20 +92,33 @@ fn kexec(host: &str) -> Result<()> {
     fs::create_dir_all(&tmp)?;
     fs::write(tmp.join("system"), "x86_64-linux")?;
     let out = Command::new("nix")
-        .args(["--extra-experimental-features", "nix-command", "store", "add-path"])
+        .args([
+            "--extra-experimental-features",
+            "nix-command",
+            "store",
+            "add-path",
+        ])
         .arg(&tmp)
         .args(["--name", "neo-restore-placeholder"])
         .output()
         .context("nix store add-path")?;
     let _ = fs::remove_dir_all(&tmp);
     if !out.status.success() {
-        bail!("nix store add-path failed: {}", String::from_utf8_lossy(&out.stderr));
+        bail!(
+            "nix store add-path failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
     let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    execute_command(
-        Command::new("nixos-anywhere")
-            .args(["--phases", "kexec", "--store-paths", &p, &p, "--target-host", host]),
-    )?;
+    execute_command(Command::new("nixos-anywhere").args([
+        "--phases",
+        "kexec",
+        "--store-paths",
+        &p,
+        &p,
+        "--target-host",
+        host,
+    ]))?;
     println!("Waiting for the installer …");
     let start = Instant::now();
     while !ssh_ok(host, true, INSTALLER_TEST) {
@@ -113,7 +143,13 @@ fn neo_on_target(host: &str, args: &RestoreArgs, repo: &Path) -> Result<String> 
         if pkg.starts_with("/nix/store/") && Path::new(&pkg).exists() {
             println!("Copying this neo to {host} …");
             let copied = Command::new("nix")
-                .args(["--extra-experimental-features", "nix-command", "copy", "--no-check-sigs", "--to"])
+                .args([
+                    "--extra-experimental-features",
+                    "nix-command",
+                    "copy",
+                    "--no-check-sigs",
+                    "--to",
+                ])
                 .arg(format!("ssh-ng://{host}"))
                 .arg(&pkg)
                 .env("NIX_SSHOPTS", ssh_opts(true).join(" "))
@@ -136,7 +172,12 @@ pub(crate) fn pinned_neo(repo: &Path) -> String {
     let lock = fs::read_to_string(repo.join("flake.lock")).unwrap_or_default();
     let v: serde_json::Value = serde_json::from_str(&lock).unwrap_or_default();
     let l = &v["nodes"]["neo"]["locked"];
-    match (l["type"].as_str(), l["owner"].as_str(), l["repo"].as_str(), l["rev"].as_str()) {
+    match (
+        l["type"].as_str(),
+        l["owner"].as_str(),
+        l["repo"].as_str(),
+        l["rev"].as_str(),
+    ) {
         (Some("github"), Some(o), Some(r), Some(rev)) => format!("github:{o}/{r}/{rev}"),
         _ => "github:madebydamo/neo".into(),
     }
@@ -158,7 +199,11 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
     let tmp = env::temp_dir().join(format!("neo-restore-{}", std::process::id()));
     let local = tmp.join("config");
     fs::create_dir_all(&tmp)?;
-    execute_command(Command::new("git").args(["clone", "-q", &args.repo]).arg(&local))?;
+    execute_command(
+        Command::new("git")
+            .args(["clone", "-q", &args.repo])
+            .arg(&local),
+    )?;
     let origin = match &args.origin {
         Some(o) => o.clone(),
         None if Path::new(&args.repo).is_dir() => Command::new("git")
@@ -179,7 +224,9 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
         if !ssh_ok(host, false, "true") {
             bail!("cannot log in to {host} as root with your SSH key");
         }
-        println!("{host} is not a NixOS installer: nixos-anywhere will boot one into its RAM (kexec).");
+        println!(
+            "{host} is not a NixOS installer: nixos-anywhere will boot one into its RAM (kexec)."
+        );
         if !args.yes {
             confirm("The running system on it stops.")?;
         }
@@ -206,10 +253,14 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
         bail!("copying the repo to {host} failed");
     }
     let key_file = fs::File::open(&key).with_context(|| format!("open {}", key.display()))?;
-    if !ssh(host, true, &format!("umask 077; cat > {WORK_DIR}/admin-key"))
-        .stdin(key_file)
-        .status()?
-        .success()
+    if !ssh(
+        host,
+        true,
+        &format!("umask 077; cat > {WORK_DIR}/admin-key"),
+    )
+    .stdin(key_file)
+    .status()?
+    .success()
     {
         bail!("copying the key to {host} failed");
     }
@@ -246,7 +297,14 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
     // Plan first (no changes), then the run after a yes here.
     let check = format!("{} --check", cmd.join(" "));
     println!("Checking on {host} …");
-    if !ssh(host, true, &format!("PATH=/run/current-system/sw/bin:$PATH {check}")).status()?.success() {
+    if !ssh(
+        host,
+        true,
+        &format!("PATH=/run/current-system/sw/bin:$PATH {check}"),
+    )
+    .status()?
+    .success()
+    {
         bail!("the preflight on {host} failed (see above); nothing was changed");
     }
     if args.check {
@@ -319,7 +377,11 @@ mod tests {
         )
         .unwrap();
         assert_eq!(pinned_neo(&dir), "github:madebydamo/neo/abc123");
-        fs::write(dir.join("flake.lock"), r#"{"nodes":{"neo":{"locked":{"type":"git","url":"file:///x"}}}}"#).unwrap();
+        fs::write(
+            dir.join("flake.lock"),
+            r#"{"nodes":{"neo":{"locked":{"type":"git","url":"file:///x"}}}}"#,
+        )
+        .unwrap();
         assert_eq!(pinned_neo(&dir), "github:madebydamo/neo");
         let _ = fs::remove_dir_all(&dir);
     }

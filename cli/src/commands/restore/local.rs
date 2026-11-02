@@ -10,7 +10,9 @@ use std::process::{Command, Stdio};
 use toml_edit::DocumentMut;
 
 use super::backup::{self, Access, Format, Source};
-use super::{access_tokens, int_setting, restore_identity, under, RestoreArgs, DEFAULT_CONFIG_PATH};
+use super::{
+    access_tokens, int_setting, restore_identity, under, RestoreArgs, DEFAULT_CONFIG_PATH,
+};
 use crate::utils::execute_command;
 
 pub const WORK_DIR: &str = "/root/neo-restore";
@@ -121,7 +123,13 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     println!("Cloning {} …", args.repo);
     execute_command(
         Command::new("git")
-            .args(["-c", "safe.directory=*", "clone", "--no-hardlinks", &args.repo])
+            .args([
+                "-c",
+                "safe.directory=*",
+                "clone",
+                "--no-hardlinks",
+                &args.repo,
+            ])
             .arg(&staging),
     )?;
     let settings_path = staging.join("settings.toml");
@@ -151,10 +159,10 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         changes.push(format!("disko.mainDisk = {disk}"));
     }
     if !args.keep_hardware {
-        let hw = capture(Command::new("nixos-generate-config").args([
-            "--no-filesystems",
-            "--show-hardware-config",
-        ]))
+        let hw = capture(
+            Command::new("nixos-generate-config")
+                .args(["--no-filesystems", "--show-hardware-config"]),
+        )
         .context("nixos-generate-config (pass --keep-hardware to keep the repo's)")?;
         let path = staging.join("hardware-configuration.nix");
         if fs::read_to_string(&path).unwrap_or_default().trim() != hw.trim() {
@@ -196,12 +204,16 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
             missing.join(", ")
         );
     }
-    let main_disk = str_at(&doc, &["disko", "mainDisk"]).unwrap_or("/dev/vda").to_string();
+    let main_disk = str_at(&doc, &["disko", "mainDisk"])
+        .unwrap_or("/dev/vda")
+        .to_string();
     if !mounted && !Path::new(&main_disk).exists() {
         bail!("disko.mainDisk {main_disk} does not exist here; pick one from `ls -l /dev/disk/by-id` and pass --disk");
     }
     let root = backup::volumes_root(&doc);
-    let pool = str_at(&doc, &["disko", "poolName"]).unwrap_or("zroot").to_string();
+    let pool = str_at(&doc, &["disko", "poolName"])
+        .unwrap_or("zroot")
+        .to_string();
     let config_path = doc
         .get("neo-cli")
         .and_then(|n| n.get("server"))
@@ -268,15 +280,37 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
 
     println!();
     println!("Restore plan");
-    println!("  machine   {} (domain {})", backup::hostname(&doc), str_at(&doc, &["services", "swag", "domain"]).unwrap_or("-"));
+    println!(
+        "  machine   {} (domain {})",
+        backup::hostname(&doc),
+        str_at(&doc, &["services", "swag", "domain"]).unwrap_or("-")
+    );
     if mounted {
-        println!("  disk      already mounted at {} (no Disko)", args.target.display());
+        println!(
+            "  disk      already mounted at {} (no Disko)",
+            args.target.display()
+        );
     } else {
         println!("  disk      {main_disk} — ERASED");
     }
-    println!("  identity  {}", if identity { "old SSH host key (secrets decrypt)" } else { "new host key" });
+    println!(
+        "  identity  {}",
+        if identity {
+            "old SSH host key (secrets decrypt)"
+        } else {
+            "new host key"
+        }
+    );
     println!("  data      {data_line}");
-    println!("  install   {}{}", if args.no_install { "skipped" } else { "nixos-install" }, if args.reboot { ", then reboot" } else { "" });
+    println!(
+        "  install   {}{}",
+        if args.no_install {
+            "skipped"
+        } else {
+            "nixos-install"
+        },
+        if args.reboot { ", then reboot" } else { "" }
+    );
     println!();
     if args.check {
         let _ = fs::remove_dir_all(&identity_target);
@@ -329,17 +363,27 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         execute_command(git(&repo).args(["remote", "set-url", "origin", &origin]))?;
     }
     if restore_identity(&repo, &args.target, &doc, key)? {
-        println!("✓ Host key restored from the escrow: same identity, secrets decrypt on first boot");
+        println!(
+            "✓ Host key restored from the escrow: same identity, secrets decrypt on first boot"
+        );
     } else {
         println!("! No identity escrow: the machine gets a new host key (re-trust it on clients)");
     }
     let uid = int_setting(&doc, "uid", 1000);
     let gid = int_setting(&doc, "gid", 1000);
-    execute_command(Command::new("chown").arg("-R").arg(format!("{uid}:{gid}")).arg(&repo))?;
+    execute_command(
+        Command::new("chown")
+            .arg("-R")
+            .arg(format!("{uid}:{gid}"))
+            .arg(&repo),
+    )?;
     let _ = fs::remove_dir_all(&identity_target);
 
     if args.no_install {
-        println!("Config repository at {} (skipped nixos-install)", repo.display());
+        println!(
+            "Config repository at {} (skipped nixos-install)",
+            repo.display()
+        );
         return finish(args);
     }
     execute_command(
@@ -360,9 +404,9 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
                 .find_map(|l| l.strip_prefix("BootOrder: "))
                 .and_then(|o| o.split(',').next())
                 .unwrap_or("");
-            let ours = out.lines().any(|l| {
-                l.starts_with(&format!("Boot{first}")) && l.contains("NixOS")
-            });
+            let ours = out
+                .lines()
+                .any(|l| l.starts_with(&format!("Boot{first}")) && l.contains("NixOS"));
             if ours {
                 println!("✓ Firmware boots NixOS first (Boot{first})");
             } else {
@@ -385,10 +429,11 @@ fn finish(args: &RestoreArgs) -> Result<()> {
         let _ = Command::new("sync").status();
         let _ = Command::new("umount").arg("-R").arg(&args.target).status();
         let _ = Command::new("zpool").args(["export", "-a"]).status();
-        execute_command(
-            Command::new("systemd-run")
-                .args(["--on-active=3", "systemctl", "reboot"]),
-        )?;
+        execute_command(Command::new("systemd-run").args([
+            "--on-active=3",
+            "systemctl",
+            "reboot",
+        ]))?;
     } else {
         println!(
             "Reboot when ready (umount -R {} && zpool export -a && reboot).",
