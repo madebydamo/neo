@@ -115,6 +115,7 @@ const CUSTOM_MIGRATIONS: &[(&str, MigrationFn)] = &[
         migrate_011_drop_bootstrap_method,
     ),
     ("012-neo-two-themes", migrate_012_neo_two_themes),
+    ("013-backup-keeps-ssh-key", migrate_013_backup_keeps_ssh_key),
 ];
 
 /// Delete retired [neo-service] and [nixos] tables.
@@ -437,6 +438,23 @@ fn migrate_011_drop_bootstrap_method(doc: &mut DocumentMut) {
         "neo-cli.server.bootstrapMethod",
     ] {
         remove_dotted(doc, path);
+    }
+}
+
+/// The backup's default SSH key became the host key (escrowed, so it survives a
+/// restore). Configured backups keep the homeserver key their remote trusts.
+fn migrate_013_backup_keeps_ssh_key(doc: &mut DocumentMut) {
+    let configured = doc
+        .get("services")
+        .and_then(|t| t.get("backup"))
+        .and_then(|t| t.as_table_like())
+        .is_some_and(|t| t.contains_key("host") && !t.contains_key("sshKey"));
+    if configured {
+        insert_dotted(
+            doc,
+            "services.backup.sshKey",
+            Item::Value("/home/homeserver/.ssh/id_ed25519".into()),
+        );
     }
 }
 
@@ -1084,6 +1102,29 @@ bootstrapMethod = "clone"
             cli.get("repoUrl").and_then(|v| v.as_str()),
             Some("https://example.test/cfg.git")
         );
+    }
+
+    #[test]
+    fn migration_013_pins_the_old_backup_key() {
+        let mut doc: DocumentMut = "[services.backup]\nenabled = true\nhost = \"b.example\"\n"
+            .parse()
+            .unwrap();
+        assert!(apply_migrations(&mut doc));
+        let key = doc["services"]["backup"]["sshKey"].as_str();
+        assert_eq!(key, Some("/home/homeserver/.ssh/id_ed25519"));
+
+        let mut kept: DocumentMut = "[services.backup]\nhost = \"b\"\nsshKey = \"/k\"\n"
+            .parse()
+            .unwrap();
+        apply_migrations(&mut kept);
+        assert_eq!(kept["services"]["backup"]["sshKey"].as_str(), Some("/k"));
+
+        let mut fresh = DocumentMut::new();
+        apply_migrations(&mut fresh);
+        assert!(fresh
+            .get("services")
+            .and_then(|s| s.get("backup"))
+            .is_none());
     }
 
     #[test]

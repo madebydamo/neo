@@ -1,35 +1,79 @@
-//! `neo restore <repo>`: reinstall a machine from its config repository
-//! (docs/design/secrets.md §6). Run as root on a NixOS live system with the
-//! target filesystems mounted (disko / hardware config are out of scope).
+//! `neo restore <repo>`: rebuild a machine from its config repository and its
+//! backup (docs/design/backup-restore.md §3, docs/RESTORE.md).
 //!
-//!   1. clone the repo into <target>/<neo-cli.server.configPath>
-//!   2. decrypt identity.sops.yaml with an admin SSH key → <target>/etc/ssh host key,
-//!      so the reinstalled machine decrypts its secrets and keeps its identity
-//!   3. decrypt core.git.tokens for private flake inputs (NIX_CONFIG access-tokens)
-//!   4. hand the repo to the neo user, then `nixos-install --flake <repo>#<config>`
+//! - local (no `--host`): as root on a NixOS installer. Clone, unlock the
+//!   escrowed host key, adapt the repo to this machine (disk, hardware config),
+//!   Disko, data from the backup, `nixos-install`.
+//! - remote (`--host root@IP`): from a client. nixos-anywhere kexecs the target
+//!   into an installer when needed, then the local mode runs there.
+//!
+//! A target that is already mounted (the old `neo restore --target /mnt`) skips
+//! Disko and installs into what is mounted.
 
 use anyhow::{bail, Context, Result};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use toml_edit::DocumentMut;
 
-use crate::utils::execute_command;
 use crate::utils::secrets::{self, Node, Tree};
 use crate::utils::secrets_store::{decrypt_with_key, IDENTITY_FILE};
 
+pub mod backup;
+mod local;
+mod remote;
+
 const DEFAULT_CONFIG_PATH: &str = "/var/neo/DATA/AppData/configuration";
 
+#[derive(Debug, Clone, Default)]
 pub struct RestoreArgs {
     pub repo: String,
     pub target: PathBuf,
     pub key: Option<PathBuf>,
     pub config: String,
     pub no_install: bool,
+    /// Run on this machine (root@IP) from a client.
+    pub host: Option<String>,
+    /// New disko.mainDisk.
+    pub disk: Option<String>,
+    /// Restore the data from the configured backup (false: --data none).
+    pub data: bool,
+    /// Read a files backup from this folder instead of the configured place.
+    pub data_from: Option<PathBuf>,
+    /// Extra key for the backup login.
+    pub backup_key: Option<PathBuf>,
+    pub keep_hardware: bool,
+    pub yes: bool,
+    pub reboot: bool,
+    /// Preflight and plan only.
+    pub check: bool,
+    /// Remote of the restored repo (default: the repo URL).
+    pub origin: Option<String>,
+    /// Delete --key when done (remote mode copies it into the installer's RAM).
+    pub shred_key: bool,
+    /// Flake ref of the neo that runs on the target (remote mode).
+    pub neo: Option<String>,
 }
 
-fn leaf<'a>(tree: &'a Tree, path: &[&str]) -> Option<&'a Node> {
+pub fn restore(args: &RestoreArgs, dry_run: bool) -> Result<()> {
+    if dry_run {
+        println!(
+            "DRY-RUN: would restore {} {}",
+            args.repo,
+            args.host
+                .as_deref()
+                .map(|h| format!("on {h}"))
+                .unwrap_or_else(|| "on this machine".into())
+        );
+        return Ok(());
+    }
+    match &args.host {
+        Some(host) => remote::run(args, host),
+        None => local::run(args),
+    }
+}
+
+pub(crate) fn leaf<'a>(tree: &'a Tree, path: &[&str]) -> Option<&'a Node> {
     let (first, rest) = path.split_first()?;
     let node = tree.get(*first)?;
     if rest.is_empty() {
@@ -42,11 +86,11 @@ fn leaf<'a>(tree: &'a Tree, path: &[&str]) -> Option<&'a Node> {
 }
 
 /// Inside `target` (absolute path joined below it).
-fn under(target: &Path, abs: &str) -> PathBuf {
+pub(crate) fn under(target: &Path, abs: &str) -> PathBuf {
     target.join(abs.trim_start_matches('/'))
 }
 
-fn int_setting(doc: &DocumentMut, key: &str, default: i64) -> i64 {
+pub(crate) fn int_setting(doc: &DocumentMut, key: &str, default: i64) -> i64 {
     doc.get("core")
         .and_then(|c| c.get(key))
         .and_then(|v| v.as_integer())
@@ -54,7 +98,7 @@ fn int_setting(doc: &DocumentMut, key: &str, default: i64) -> i64 {
 }
 
 /// `access-tokens = host=token …` from whichever place holds core.git.tokens.
-fn access_tokens(repo: &Path, doc: &DocumentMut, key: Option<&Path>) -> Result<Option<String>> {
+pub(crate) fn access_tokens(repo: &Path, doc: &DocumentMut, key: Option<&Path>) -> Result<Option<String>> {
     let mut tokens: Vec<(String, String)> = Vec::new();
     if let Some(t) = doc
         .get("core")
@@ -94,7 +138,7 @@ fn access_tokens(repo: &Path, doc: &DocumentMut, key: Option<&Path>) -> Result<O
 }
 
 /// Write the escrowed host key into <target>/etc/ssh.
-fn restore_identity(
+pub(crate) fn restore_identity(
     repo: &Path,
     target: &Path,
     doc: &DocumentMut,
@@ -138,106 +182,6 @@ fn restore_identity(
     fs::write(&pub_path, format!("{}\n", public.trim()))?;
     fs::set_permissions(&pub_path, fs::Permissions::from_mode(0o644))?;
     Ok(true)
-}
-
-pub fn restore(args: &RestoreArgs, dry_run: bool) -> Result<()> {
-    if !args.target.is_dir() {
-        bail!(
-            "target {} does not exist (mount the new system there first)",
-            args.target.display()
-        );
-    }
-    let staging = std::env::temp_dir().join(format!("neo-restore-{}", std::process::id()));
-    println!("Cloning {} …", args.repo);
-    execute_command(
-        Command::new("git")
-            .args(["clone", &args.repo])
-            .arg(&staging),
-    )?;
-    let doc: DocumentMut = fs::read_to_string(staging.join("settings.toml"))
-        .context("the repository has no settings.toml")?
-        .parse()
-        .context("parse settings.toml")?;
-    let config_path = doc
-        .get("neo-cli")
-        .and_then(|n| n.get("server"))
-        .and_then(|s| s.get("configPath"))
-        .and_then(|p| p.as_str())
-        .unwrap_or(DEFAULT_CONFIG_PATH)
-        .to_string();
-    let repo = under(&args.target, &config_path);
-    if repo.exists() && fs::read_dir(&repo)?.next().is_some() {
-        bail!("{} already exists and is not empty", repo.display());
-    }
-    if dry_run {
-        println!(
-            "DRY-RUN: would restore into {} and install #{}",
-            repo.display(),
-            args.config
-        );
-        let _ = fs::remove_dir_all(&staging);
-        return Ok(());
-    }
-    if let Some(parent) = repo.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    execute_command(
-        Command::new("git")
-            .args(["clone", "--no-hardlinks"])
-            .arg(&staging)
-            .arg(&repo),
-    )?;
-    execute_command(
-        Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["remote", "set-url", "origin", &args.repo]),
-    )?;
-    let _ = fs::remove_dir_all(&staging);
-
-    let key = args.key.as_deref();
-    let restored = restore_identity(&repo, &args.target, &doc, key)?;
-    if restored {
-        println!("✓ Host key restored from {IDENTITY_FILE}: same identity, secrets decrypt on first boot");
-    } else {
-        println!("! No {IDENTITY_FILE}: the machine gets a new host key (re-trust it on clients)");
-    }
-    let tokens = access_tokens(&repo, &doc, key)?;
-
-    let uid = int_setting(&doc, "uid", 1000);
-    let gid = int_setting(&doc, "gid", 1000);
-    execute_command(
-        Command::new("chown")
-            .arg("-R")
-            .arg(format!("{uid}:{gid}"))
-            .arg(&repo),
-    )?;
-
-    if args.no_install {
-        println!(
-            "Config repository at {} (skipped nixos-install)",
-            repo.display()
-        );
-        return Ok(());
-    }
-    let mut install = Command::new("nixos-install");
-    install
-        .arg("--root")
-        .arg(&args.target)
-        .arg("--no-root-passwd")
-        .arg("--flake")
-        .arg(format!("{}#{}", repo.display(), args.config))
-        .env("NIX_CONFIG", {
-            let mut c = "experimental-features = nix-command flakes\n".to_string();
-            if let Some(t) = &tokens {
-                c.push_str(t);
-                c.push('\n');
-            }
-            c
-        });
-    execute_command(&mut install)?;
-    println!("Installed. Reboot into the restored system; appdata comes back from your backups.");
-    Ok(())
 }
 
 #[cfg(test)]

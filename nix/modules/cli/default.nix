@@ -124,6 +124,9 @@
       cp ${neoWebCss}/neo-ui.css $out/neo-ui.css
     '';
     unwrapped = neoUnwrapped pkgs;
+    # neo restore on a bare NixOS installer / a client laptop (after the
+    # system's own tools on PATH).
+    restoreTools = with pkgs; [git rsync openssh efibootmgr gnutar nixos-anywhere];
   in
     pkgs.runCommand "neo-0.1.0" {
       nativeBuildInputs = [pkgs.makeWrapper];
@@ -139,7 +142,9 @@
         --set TEMPLATE_DIR ${templateDir} \
         --set STATIC_DIR ${staticDir} \
         --set DEFAULT_SETTINGS_PATH ${defaults} \
-        --set-default SOPS_BINARY_PATH ${pkgs.sops}/bin/sops
+        --set-default SOPS_BINARY_PATH ${pkgs.sops}/bin/sops \
+        --set NEO_PACKAGE $out \
+        --suffix PATH : ${pkgs.lib.makeBinPath restoreTools}
     '';
   cfgPackage = self.nixosConfigurations.homeserver.config.neo;
 in {

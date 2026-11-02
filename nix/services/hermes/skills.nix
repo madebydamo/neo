@@ -418,7 +418,7 @@
       services.hermes-agent.documents."AGENTS.md" = lib.mkForce agentsMd;
 
       # skill_view resolves HERMES_HOME/skills and external_dirs and refuses two resolved paths for one name.
-      system.activationScripts.hermes-neo-skills = lib.stringAfter ["users" "hermes-agent-setup"] ''
+      system.activationScripts.hermes-neo-skills = lib.stringAfter ["users" "hermes-reown" "hermes-agent-setup"] ''
         set -euo pipefail
         hermes_home="${cfg.stateDir}/.hermes"
         skills_dir="$hermes_home/skills"
@@ -499,7 +499,7 @@
         prune_neo_links "$external_dir"
       '';
 
-      system.activationScripts.hermes-neo-soul = lib.stringAfter ["users" "hermes-agent-setup"] (
+      system.activationScripts.hermes-neo-soul = lib.stringAfter ["users" "hermes-reown" "hermes-agent-setup"] (
         if cfg.forceSoul
         then ''
           install -o hermes -g hermes -m 0640 ${soulFile} ${cfg.stateDir}/.hermes/SOUL.md

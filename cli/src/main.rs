@@ -118,24 +118,61 @@ enum Commands {
         #[command(subcommand)]
         action: Option<GenerationAction>,
     },
-    /// Reinstall a machine from its config repository (run as root on a live
-    /// system with the target mounted): restores the escrowed host key, then
-    /// nixos-install.
+    /// Rebuild a machine from its config repository and its backup. On a
+    /// NixOS installer as root, or from another computer with --host
+    /// (docs/RESTORE.md).
     Restore {
-        /// Config repository URL (git clone).
+        /// Config repository (git URL or local checkout; HEAD is restored).
         repo: String,
-        /// Root of the mounted target system.
-        #[arg(long, default_value = "/mnt")]
-        target: PathBuf,
-        /// Admin ssh-ed25519 private key (default: sops uses ~/.ssh/id_ed25519).
+        /// Restore that machine from here (root@IP). nixos-anywhere boots it
+        /// into an installer first when it runs another system.
+        #[arg(long)]
+        host: Option<String>,
+        /// Disk to install onto (sets disko.mainDisk), e.g. /dev/disk/by-id/….
+        #[arg(long)]
+        disk: Option<String>,
+        /// Admin ssh-ed25519 private key (default: ~/.ssh/id_ed25519).
         #[arg(long)]
         key: Option<PathBuf>,
+        /// `backup`: data from the backup configured in the repo; `none`: empty.
+        #[arg(long, default_value = "backup", value_parser = ["backup", "none"])]
+        data: String,
+        /// Read a plain-files backup from this folder (e.g. a mounted disk).
+        #[arg(long)]
+        data_from: Option<PathBuf>,
+        /// Another key that may log in to the backup.
+        #[arg(long)]
+        backup_key: Option<PathBuf>,
+        /// Keep the repo's hardware-configuration.nix instead of generating one.
+        #[arg(long)]
+        keep_hardware: bool,
+        /// Only check and print the plan.
+        #[arg(long)]
+        check: bool,
+        /// Do not ask before erasing the disk.
+        #[arg(long)]
+        yes: bool,
+        /// Reboot into the restored system when done.
+        #[arg(long)]
+        reboot: bool,
+        /// Root of the target system.
+        #[arg(long, default_value = "/mnt")]
+        target: PathBuf,
         /// nixosConfigurations entry to install.
         #[arg(long, default_value = "neo")]
         config: String,
         /// Only clone the repo and restore the host key.
         #[arg(long)]
         no_install: bool,
+        /// Neo flake ref to run on the target (remote mode).
+        #[arg(long)]
+        neo: Option<String>,
+        /// Remote of the restored repo ("" for none; default: the repo URL).
+        #[arg(long, hide = true)]
+        origin: Option<String>,
+        /// Delete --key when done.
+        #[arg(long, hide = true)]
+        shred_key: bool,
     },
     /// Secret settings kept outside settings.toml.
     Secrets {
@@ -311,10 +348,22 @@ fn run(cli: Cli) -> Result<()> {
         },
         Commands::Restore {
             repo,
-            target,
+            host,
+            disk,
             key,
+            data,
+            data_from,
+            backup_key,
+            keep_hardware,
+            check,
+            yes,
+            reboot,
+            target,
             config,
             no_install,
+            neo,
+            origin,
+            shred_key,
         } => commands::restore::restore(
             &commands::restore::RestoreArgs {
                 repo,
@@ -322,6 +371,18 @@ fn run(cli: Cli) -> Result<()> {
                 key,
                 config,
                 no_install,
+                host,
+                disk,
+                data: data == "backup",
+                data_from,
+                backup_key,
+                keep_hardware,
+                yes,
+                reboot,
+                check,
+                origin,
+                shred_key,
+                neo,
             },
             dry_run,
         ),

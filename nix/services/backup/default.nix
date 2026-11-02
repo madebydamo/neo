@@ -1,4 +1,5 @@
-# Backup service implementation.
+# Backup service implementation (docs/design/backup-restore.md). The script is
+# backup.sh; `neo restore` reads the same settings to bring the data back.
 {...}: {
   flake.modules.nixos.backup = {
     config,
@@ -8,66 +9,66 @@
   }:
     with lib; let
       cfg = config.neo.services.backup;
+      disko = config.neo.disko;
+      root = config.neo.core.volumes.root;
 
-      excludes = concatStringsSep " " (map (dir: "--exclude '${dir}'") cfg.excludedDirs);
+      sshCommand = concatStringsSep " " (
+        ["${pkgs.openssh}/bin/ssh" "-i" (escapeShellArg cfg.sshKey) "-o" "BatchMode=yes"] ++ cfg.extraOptions
+      );
 
-      sshOptions = "-i ${escapeShellArg cfg.sshKey} ${concatStringsSep " " cfg.extraOptions}";
-
-      backup-script = pkgs.writeShellScriptBin "backup-to-rsync" ''
-        set -e
-
-        SOURCE_DIR="${cfg.sourceDir}"
-        DEST_DIR="${cfg.user}@${cfg.host}:${cfg.remotePath}"
-        LOG_FILE="${cfg.logFile}"
-        SSH_KEY="${cfg.sshKey}"
-
-        if [ ! -f "$SSH_KEY" ]; then
-          echo "Backup SSH key missing at $SSH_KEY (homeserver key is generated on activation)" >&2
-          exit 1
-        fi
-
-        # Du+w: remote dirs stay owner-writable. A read-only dir (e.g. copied out
-        # of /nix/store) that later becomes a symlink or file is otherwise stuck:
-        # rsync unlinks its contents without making it writable first.
-        run_rsync() {
-          ${pkgs.rsync}/bin/rsync -avz --delete --chmod=Du+w -e "${pkgs.openssh}/bin/ssh ${sshOptions}" ${excludes} "$SOURCE_DIR" "$DEST_DIR"
-        }
-
-        # Remotes already holding such a read-only dir: make it writable, retry once.
-        # Logged paths are relative to remotePath.
-        unstick_remote() {
-          mapfile -t stuck < <(
-            ${pkgs.gnused}/bin/sed -n 's/^rsync: \[generator\] delete_file: unlink(\(.*\)) failed: Permission denied (13)$/\1/p' "$LOG_FILE" \
-              | while IFS= read -r f; do dirname -- "$f"; done | sort -u
-          )
-          [ "''${#stuck[@]}" -gt 0 ] || return 1
-          args=()
-          for d in "''${stuck[@]}"; do
-            args+=("$(printf '%q' "${optionalString (cfg.remotePath != "") "${cfg.remotePath}/"}$d")")
-          done
-          echo "Making read-only remote dirs writable: ''${stuck[*]}"
-          ${pkgs.openssh}/bin/ssh ${sshOptions} "${cfg.user}@${cfg.host}" chmod u+w "''${args[@]}"
-        }
-
-        echo "Starting backup to ${cfg.host} at $(date)"
-
-        if run_rsync > "$LOG_FILE" 2>&1 \
-          || { unstick_remote && run_rsync >> "$LOG_FILE" 2>&1; }; then
-          echo "Backup completed successfully to ${cfg.host} at $(date)"
-          echo "Backup details written to $LOG_FILE"
-        else
-          echo "Backup failed to ${cfg.host} at $(date)" >&2
-          echo "Check $LOG_FILE for details" >&2
-          exit 1
-        fi
-      '';
+      backup = pkgs.writeShellApplication {
+        name = "neo-backup";
+        runtimeInputs = with pkgs; [coreutils findutils gnugrep gnused rsync openssh util-linux config.boot.zfs.package];
+        bashOptions = ["errexit" "nounset" "pipefail"];
+        text = builtins.readFile ./backup.sh;
+      };
     in {
       config = mkIf cfg.enabled {
+        assertions = [
+          {
+            assertion = cfg.format != "zfs" || disko.enabled;
+            message = "neo.services.backup: the ZFS format needs the ZFS disk layout (neo.disko.enabled).";
+          }
+          {
+            assertion = cfg.format != "zfs" || cfg.dataset != "";
+            message = "neo.services.backup: set dataset (e.g. tank/backup/${config.neo.core.hostname}) for the ZFS format.";
+          }
+          {
+            assertion = cfg.target != "ssh" || cfg.host != "";
+            message = "neo.services.backup: set the backup server (host).";
+          }
+          {
+            assertion = cfg.target != "disk" || cfg.format != "files" || hasPrefix "/" cfg.remotePath;
+            message = "neo.services.backup: on a disk, the backup folder must be an absolute path (where the disk is mounted).";
+          }
+        ];
+
         systemd.services.backup = {
-          description = "Rsync backup to remote server";
+          description = "Neo backup (${cfg.format} to ${cfg.target})";
+          after = ["network-online.target"];
+          wants = ["network-online.target"];
+          environment = {
+            NEO_TARGET = cfg.target;
+            NEO_FORMAT = cfg.format;
+            NEO_SOURCE_DIR = toString cfg.sourceDir;
+            NEO_ROOT = root;
+            # The Neo data dataset holds volumes.root unless an additional disk
+            # replaces it (then the files format copies the live folder).
+            NEO_DATASET =
+              if disko.enabled && !(elem root (attrValues disko.additionalDisks)) && hasPrefix root (toString cfg.sourceDir)
+              then "${disko.poolName}/neo"
+              else "";
+            NEO_DEST = cfg.remotePath;
+            NEO_DEST_DATASET = cfg.dataset;
+            NEO_KEEP = toString cfg.keep;
+            NEO_SSH_DEST = "${cfg.user}@${cfg.host}";
+            NEO_SSH = sshCommand;
+            NEO_EXCLUDES = concatStringsSep "\n" cfg.excludedDirs;
+            NEO_LOG = cfg.logFile;
+          };
           serviceConfig = {
             Type = "oneshot";
-            ExecStart = "${backup-script}/bin/backup-to-rsync";
+            ExecStart = getExe backup;
           };
         };
 
@@ -76,6 +77,7 @@
           partOf = ["backup.service"];
           timerConfig = {
             OnCalendar = cfg.schedule;
+            Persistent = true;
             Unit = "backup.service";
           };
         };

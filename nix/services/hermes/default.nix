@@ -317,7 +317,27 @@
       };
 
       # .env is assembled at activation: read hermes.env after it is rendered.
-      system.activationScripts.hermes-agent-setup.deps = ["neo-secrets"];
+      system.activationScripts.hermes-agent-setup.deps = ["neo-secrets" "hermes-reown"];
+
+      # hermes has no fixed uid: a reinstall (neo restore) may allocate other
+      # ids than the ones the restored appdata belongs to. Re-own what still
+      # carries the old ids (the state dir's owner) before anything writes there.
+      system.activationScripts.hermes-reown = lib.stringAfter ["users" "groups"] ''
+        d=${lib.escapeShellArg cfg.stateDir}
+        if [ -d "$d" ] && u=$(${pkgs.coreutils}/bin/id -u hermes 2>/dev/null); then
+          g=$(${pkgs.coreutils}/bin/id -g hermes)
+          ou=$(${pkgs.coreutils}/bin/stat -c %u "$d")
+          og=$(${pkgs.coreutils}/bin/stat -c %g "$d")
+          if [ "$ou" != 0 ] && [ "$ou" != "$u" ]; then
+            echo "hermes: re-owning $d from uid $ou to $u"
+            ${pkgs.findutils}/bin/find "$d" -xdev -user "$ou" -exec ${pkgs.coreutils}/bin/chown -h "$u" {} +
+          fi
+          if [ "$og" != 0 ] && [ "$og" != "$g" ]; then
+            echo "hermes: re-owning $d from gid $og to $g"
+            ${pkgs.findutils}/bin/find "$d" -xdev -group "$og" -exec ${pkgs.coreutils}/bin/chgrp -h "$g" {} +
+          fi
+        fi
+      '';
 
       # Disable ALL sandboxing/hardening (full system access)
       systemd.services.hermes-agent.serviceConfig = {
