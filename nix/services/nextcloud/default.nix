@@ -48,6 +48,8 @@
             environment = {
               MYSQL_DATABASE = "nextcloud";
               MYSQL_USER = "nextcloud";
+              # Runs mariadb-upgrade when the image is newer than the data dir (e.g. 10.6 → 11.4).
+              MARIADB_AUTO_UPGRADE = "1";
             };
             volumes = [
               "${appdata}/db:/var/lib/mysql"

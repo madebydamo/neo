@@ -85,7 +85,7 @@
               ];
             }
             // lib.neo.mkContainerDefinitions {
-              "nextcloud-db" = "mariadb:10.6";
+              "nextcloud-db" = "mariadb:11.4";
               "nextcloud-redis" = "redis:alpine";
               "nextcloud" = "nextcloud:apache";
               "nextcloud-cron" = "nextcloud:apache";

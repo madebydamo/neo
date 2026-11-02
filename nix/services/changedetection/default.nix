@@ -1,4 +1,4 @@
-# Changedetection service implementation (main + selenium webengine).
+# Changedetection service implementation (main + sockpuppetbrowser Chrome).
 # Web UI is behind tinyauth via the swag proxy config.
 {...}: {
   flake.modules.nixos.changedetection = {
@@ -21,7 +21,7 @@
               PUID = toString config.neo.core.uid;
               PGID = toString config.neo.core.gid;
               TZ = config.neo.core.timeZone;
-              WEBDRIVER_URL = "http://changedetection-webengine:4444/wd/hub";
+              PLAYWRIGHT_DRIVER_URL = "ws://changedetection-webengine:4444";
               ALLOW_IANA_RESTRICTED_ADDRESSES = toString true;
             };
             volumes = [
@@ -33,10 +33,8 @@
           changedetection-webengine = {
             image = cfg.containers."changedetection-webengine";
             autoStart = true;
-            environment = {
-              PUID = toString config.neo.core.uid;
-              PGID = toString config.neo.core.gid;
-            };
+            # Off the default 3000/8080, which karakeep and searxng use inside the shared VPN namespace.
+            cmd = ["/usr/local/bin/entrypoint.sh" "--port" "4444" "--sport" "4445"];
             extraOptions = [
               "--shm-size=2gb"
             ];

@@ -26,11 +26,11 @@
             // lib.neo.mkVpnOptions {
               containers = ["changedetection" "changedetection-webengine"];
               networks = ["internal"];
-              ports = [5000 4444];
+              ports = [5000 4444 4445];
             }
             // lib.neo.mkContainerDefinitions {
               changedetection = "dgtlmoon/changedetection.io";
-              "changedetection-webengine" = "selenium/standalone-chrome-debug:3.141.59";
+              "changedetection-webengine" = "dgtlmoon/sockpuppetbrowser:latest";
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/changedetection"
             // lib.neo.mkServiceMeta {
