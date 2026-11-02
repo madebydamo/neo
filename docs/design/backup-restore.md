@@ -61,7 +61,8 @@ Two modes, one code path:
   runs locally.
 - **From a client** (`--host root@IP`): a laptop with Nix. If the target is not a NixOS installer
   yet (any Linux with root SSH, e.g. the hoster's Ubuntu), **nixos-anywhere** kexecs it into one.
-  The repo and the admin key are copied into the installer's RAM, and the local mode runs there as a
+  The repo, the admin key and every locked flake input (`nix flake archive`, fetched with the
+  client's credentials) are copied into the installer's RAM, and the local mode runs there as a
   systemd unit (it survives a dropped connection); its journal is streamed back. The `neo` that runs
   there is the revision pinned in the repo's `flake.lock`, so restore and the config match.
 

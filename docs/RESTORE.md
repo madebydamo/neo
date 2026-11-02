@@ -9,6 +9,30 @@ Nothing else from the old machine is used: no `/var/lib`, no `/etc`, no home dir
 
 It is written so a person or an AI coding agent can follow it step by step. The examples follow a typical move: an old server (say an ext4 VPS) to a new one (say a rented bare-metal machine with one NVMe that runs another OS today), possibly with a new domain on the way. Without a firmware boot entry such a move installs fine and then never boots (see [fact 5](#before-you-start-check-these-facts)); with one ([step 8](#8-boot-entry-test-boot-cutover), built into Neo) the downtime is a few minutes. The background is in [INSTALL.md — Rebuild from the config repo](INSTALL.md#rebuild-a-machine-from-its-config-repo).
 
+## The short way: `neo restore`
+
+Everything this page does by hand is built into `neo restore` now ([design](design/backup-restore.md)). With the backup service configured in the repo ([INSTALL.md — Backups](INSTALL.md#backups)):
+
+```bash
+# from a laptop with Nix; the target runs any Linux with root SSH, or a NixOS installer
+nix run github:madebydamo/neo#neo -- restore git@github.com:you/homeserver-config.git \
+  --host root@NEW --disk /dev/disk/by-id/nvme-… --key ~/.ssh/<admin-key> --reboot
+```
+
+| Manual step below | `neo restore` |
+|-------------------|---------------|
+| 2. kexec with nixos-anywhere (placeholder store path) | done when the target is not a NixOS installer |
+| 3. hardware config | generated on the target and committed (`--keep-hardware` to skip) |
+| 4. repo, key, tokens on the installer | copied into the installer's RAM, with every flake input (`nix flake archive`, fetched with your laptop's credentials); tokens from `secrets.sops.yaml` to Nix; the key is deleted at the end |
+| 5. Disko, ARC cap | the config's own `diskoScript`, ARC capped |
+| 6. copy DATA, fix ownership | from the configured backup (rsync or `zfs send`); Hermes re-owns its data itself |
+| 7. `neo restore` | the same, as the unit `neo-restore` on the target |
+| 8. boot entry | Neo's boot loader install adds it; `neo restore` checks it |
+
+`--check` prints the plan and changes nothing. The checklist below still applies: DNS, local plugins (refused when missing), the provider's boot order. A cutover from a machine that still runs is not automatic: stop the old one (step 6, "Old machine still running") and let its last backup run first, or use `--data-from` with a final copy.
+
+The rest of this page is the manual procedure from the real move, kept because it explains each step and helps when something fails halfway.
+
 ## What you need
 
 | Thing | Why |
@@ -322,9 +346,17 @@ This builds on the laptop and skips `neo restore`'s checks (escrow matches `core
 
 ## Known gaps (for Neo developers)
 
-- **Disko boot** (fixed). `neo.disko` was UEFI-only and relied on the firmware finding `\EFI\BOOT\BOOTX64.EFI` by itself: on firmware that never tries that path it did not boot, and on legacy-BIOS machines it could not boot at all, so those needed a hand-written `EF02` + ext4 layout. The layout now has a 1 MB `EF02` partition, GRUB goes into the MBR as well, and the boot loader install keeps a NixOS firmware entry and `startup.nsh` (`nix/modules/disko/boot-install.sh`). `just test-disko-boot` boots the layout under OVMF and SeaBIOS.
+Fixed since the move:
+
+- **Disko boot.** `neo.disko` was UEFI-only and relied on the firmware finding `\EFI\BOOT\BOOTX64.EFI` by itself: on firmware that never tries that path it did not boot, and on legacy-BIOS machines it could not boot at all, so those needed a hand-written `EF02` + ext4 layout. The layout now has a 1 MB `EF02` partition, GRUB goes into the MBR as well, and the boot loader install keeps a NixOS firmware entry and `startup.nsh` (`nix/modules/disko/boot-install.sh`). `just test-disko-boot` boots the layout under OVMF and SeaBIOS.
+- **Manual restore.** `neo restore` does Disko, the data and the install, also from a client (`--host`).
+- **Hermes uid.** Its activation re-owns its appdata when the uid changed (`hermes-reown`).
+- **Backup key.** The backup logs in with the escrowed host key by default, so it survives a restore.
+
+Open:
+
 - Machine-specific settings (boot loader, hardware) can hide in local plugins and nothing flags them on restore; `neo restore` could print the effective `boot.loader` and warn when it doesn't match the installer (EFI vs BIOS).
-- `neo restore` cannot resolve `git+file:` plugins that live in DATA; it could copy them or bind-mount `<target>/var/neo` over `/var/neo` for the install.
-- Native service users without a fixed uid (Hermes) change ids on reinstall; pinning `uid`/`gid` would make DATA portable.
+- `git+file:` plugins that live in DATA: `neo restore` refuses them (the flake must evaluate before the data is back). Put such plugins into git.
+- Cutover from a running machine is manual: stop the old one, let its backup run, then restore.
 - The `hermes-neo-skills` activation snippet uses `exit 1`, which ends the whole activation script (later snippets and `/run/current-system` are skipped), not just that snippet.
 - Encrypting in Settings → Secrets moved only options declared with `mkSecretOption`; several plugin API keys and session secrets stayed in plain text in `settings.toml`. Check before pushing the repo anywhere public.

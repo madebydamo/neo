@@ -92,7 +92,7 @@ If the machine at home has no public IP, route the traffic with [streamproxy](do
 
 - **LAN privacy.** Pi-hole across the network. WireGuard egress for the apps you choose. Tailscale for private reach. NTP for the LAN.
 - **Snapshots.** Automatic ZFS snapshots of all Neo data. Restore one service, or everything, from the web UI.
-- **Off-site backup.** Scheduled rsync over SSH to a machine you choose.
+- **Backup and restore.** Nightly copy to another computer or a disk, as files or ZFS snapshots. `neo restore` rebuilds a machine from the config repo and that backup in one command.
 - **Encrypted secrets.** Passwords and tokens encrypted with sops, readable by the machine and your SSH keys. The config repo can go to GitHub, and a dead machine reinstalls itself from it with `neo restore`. [Secrets](docs/INSTALL.md#secrets-and-encryption).
 
 ### Extend

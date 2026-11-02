@@ -11,7 +11,7 @@ Two paths, a fallback when the laptop cannot build the system, and the way back 
 | **[Laptop cannot build](#when-the-laptop-cannot-build-mac-live-usb-or-wrong-architecture)** | Mac, architecture mismatch, or a live USB with too little disk — build **on the target** |
 | **[Rebuild from the config repo](#rebuild-a-machine-from-its-config-repo)** | A machine died: reinstall a new one from its config repo with `neo restore` |
 
-Also: [what you need](#what-you-need), [first login](#first-login), [minimal starter config](#minimal-starter-config), [sign-in with OAuth](#sign-in-with-oauth-optional), [disks (Disko)](#automatic-disk-layout-disko), [no public IP](#no-public-ip-streamproxy), [per-service ingress](#per-service-ingress), [secrets and encryption](#secrets-and-encryption), [after install](#after-install), [learning links](#learning-links).
+Also: [what you need](#what-you-need), [first login](#first-login), [minimal starter config](#minimal-starter-config), [sign-in with OAuth](#sign-in-with-oauth-optional), [disks (Disko)](#automatic-disk-layout-disko), [backups](#backups), [rebuild a machine](#rebuild-a-machine-from-its-config-repo), [no public IP](#no-public-ip-streamproxy), [per-service ingress](#per-service-ingress), [secrets and encryption](#secrets-and-encryption), [after install](#after-install), [learning links](#learning-links).
 
 ---
 
@@ -430,11 +430,43 @@ Editing doesn't change: the web UI shows and saves secrets the same way in all t
 
 What stays out of git anyway: decrypted values only exist in `/run/neo-secrets` (RAM) on the running machine, readable by root and the service that needs them.
 
+## Backups
+
+The **backup** service copies all Neo data (`/var/neo`: every service's appdata and the config repo) every night. Settings in the web UI under **Backup**, or in `settings.toml`:
+
+| Setting | Values |
+|---------|--------|
+| **Back up to** (`target`) | `ssh`: another computer you can log in to · `disk`: a disk attached to this server |
+| **Backup format** (`format`) | `files`: a plain copy with rsync, any filesystem · `zfs`: ZFS snapshots with `zfs send`, faster and keeps versions, needs ZFS on both sides and the Disko layout here |
+| `host`, `user`, `extraOptions` | the SSH login (`ssh` only), e.g. `extraOptions = ["-p", "23"]` |
+| **Backup folder** (`remotePath`) | `files`: a folder; on another computer relative to the user's home, on a disk the absolute path below its mount point |
+| **Backup dataset** (`dataset`) | `zfs`: e.g. `tank/backup/myhome`, created on the first run |
+| **Backups to keep** (`keep`) | `zfs`: snapshots kept at the destination (default 14) |
+
+```toml
+[services.backup]
+enabled = true
+host = "backup.example.com"
+user = "root"
+format = "zfs"
+dataset = "tank/backup/myhome"
+```
+
+- On the Disko (ZFS) layout every run copies **from a snapshot**, so databases are copied at one moment.
+- The login key is the server's **SSH host key** by default. Put its public key (**System → SSH**) into the backup computer's `~/.ssh/authorized_keys`. The host key is part of the encrypted config repo, so a restored machine and `neo restore` log in with the same key. (Backups set up before this kept the `homeserver` user's key; that key is not restored with the machine.)
+- `zfs` to a non-root user: on the destination, `zfs allow <user> create,receive,mount,destroy,hold <parent dataset>`. The first run sends everything, later runs only the changes. It never overwrites a dataset that holds something else.
+- `disk`: the disk must be mounted (`files`) or its pool importable (`zfs`). A `files` backup refuses to write onto the system disk, so an unplugged disk doesn't fill `/`.
+- Run one now: `sudo systemctl start backup`, log: `journalctl -u backup`.
+
+---
+
 ## Rebuild a machine from its config repo
 
-If the machine dies, a new one can install itself from the config repo. You need:
+If the machine dies or moves, `neo restore` rebuilds it from two things: the config repo (with encrypted secrets) and the backup the repo configures. Details and the manual steps behind it: [RESTORE.md](RESTORE.md).
 
-- the config repo on a git host. Neo doesn't push it yet. Push it yourself, as `homeserver` on the machine:
+You need:
+
+- the config repo on a git host, committed. Neo doesn't push it yet; as `homeserver` on the machine:
 
   ```bash
   cd /var/neo/DATA/AppData/configuration     # neo-cli.server.configPath
@@ -444,36 +476,32 @@ If the machine dies, a new one can install itself from the config repo. You need
 
   Encrypt first ([above](#secrets-and-encryption)) if the repo isn't private.
 - one of the ed25519 private keys listed in **System → SSH** at the time of the last push.
-- your data from backups (snapshots and the **backup** service). The repo holds configuration, not appdata.
+- root SSH to the new machine: any Linux (a hoster's fresh Ubuntu is fine) or a booted NixOS installer.
 
-**Steps** (on the new machine, booted from a NixOS installer, as root):
+From your laptop (needs Nix):
 
-1. Partition and mount the target at `/mnt`. With Neo's Disko layout, Disko can do it from the repo (check `mainDisk` first, it is wiped):
+```bash
+nix run github:madebydamo/neo#neo -- restore git@github.com:you/homeserver-config.git \
+  --host root@203.0.113.7 --disk /dev/disk/by-id/nvme-… --key ~/.ssh/id_ed25519 --reboot
+```
 
-   ```bash
-   git clone git@github.com:you/homeserver-config.git /tmp/config
-   nix --extra-experimental-features "nix-command flakes" run github:nix-community/disko/latest -- \
-     --mode destroy,format,mount --flake /tmp/config#neo
-   ```
+Or on the new machine itself, booted from a NixOS installer, as root: the same without `--host`.
 
-   Private `github:` plugins: Nix needs `core.git.tokens` for every evaluation, Disko included. Pass them without printing them, e.g. `export NIX_CONFIG="access-tokens = github.com=$(sops -d secrets.sops.yaml | yq '.core.git.tokens."github.com"')"` (with your admin key in `SOPS_AGE_SSH_PRIVATE_KEY_FILE`). `git+file:` plugins must exist at their absolute path on the installer.
+What happens, with a plan shown and a "yes" asked before the disk is erased:
 
-   Use a `hardware-configuration.nix` for the **new** machine (`nixos-generate-config --no-filesystems --show-hardware-config`): the old one may describe another disk layout or a VM. Without Disko, partition by hand and adjust `hardware-configuration.nix` in the repo.
-2. Restore and install:
+1. Not an installer yet? nixos-anywhere boots one into the machine's RAM (kexec).
+2. The repo is cloned and adapted to the machine: `--disk` sets `disko.mainDisk`, and a new `hardware-configuration.nix` is generated (`--keep-hardware` keeps the repo's). This is one commit, "restore: …".
+3. The escrowed host key is decrypted with your key (`identity.sops.yaml`), so the machine keeps its identity and decrypts its secrets on first boot; `core.git.tokens` go to Nix for private plugins.
+4. Disko partitions the disk, the data comes back from the backup (the newest ZFS snapshot, or the files), and `nixos-install` installs. The backup's copy of the config repo is kept next to it as `configuration.from-backup`; the repo from git is the one installed.
+5. `--reboot` boots the restored system.
 
-   ```bash
-   nix --extra-experimental-features "nix-command flakes" run github:madebydamo/neo#neo -- \
-     restore git@github.com:you/homeserver-config.git --key ~/.ssh/id_ed25519
-   ```
+Useful flags: `--check` (plan only, changes nothing), `--data none` (no data), `--data-from /mnt/usb/myhome` (a files backup on a disk you mounted on the new machine), `--host root@IP:PORT`. Over `--host` the restore runs on the machine as the unit `neo-restore`: it keeps going if your laptop disconnects (`ssh root@IP journalctl -fu neo-restore`).
 
-   This clones the repo to `/mnt/<configPath>`, decrypts `identity.sops.yaml` with your key and writes the old SSH host key to `/mnt/etc/ssh`. It refuses a key that doesn't match `core.secrets.hostKey` in the repo. It then hands `core.git.tokens` to Nix (for private plugins) and runs `nixos-install`. `--no-install` stops after the clone and the host key, `--target` changes `/mnt`, `--config` the configuration name (default `neo`).
-3. Reboot. The machine has its old SSH host key, so clients don't warn about it, and it decrypts its secrets on first boot. Restore appdata from your backups, then **Activate**.
+Before you wipe a running machine, read the [checklist](RESTORE.md#before-you-start-check-these-facts): DNS, private plugins, the provider's boot order.
 
-Step-by-step runbook for a full move or restore (Disko, nixos-anywhere, copying `/var/neo/DATA`, test boot and cutover, and the traps found on a real move): [RESTORE.md](RESTORE.md). Read its [checklist](RESTORE.md#before-you-start-check-these-facts) before wiping anything.
+For a private repo, use an SSH URL with your key loaded (`ssh-agent`). Don't put a token in the URL: it would end up as the restored repo's remote.
 
-For a private repo, use an SSH URL with your key loaded (`ssh-agent`, or `ssh -A` into the installer). Don't put a token in the URL: it would end up as the restored repo's remote.
-
-Without `identity.sops.yaml` (plain secrets, or a repo that was never encrypted on the machine), the restore still works, but the machine gets a new host key. Re-trust it on your clients, and update forges if `core.git.useHostKey` is on. An encrypted repo without an escrow can't be restored this way: decrypt (`neo secrets disable`) and re-encrypt on a running machine first.
+Without `identity.sops.yaml` (plain secrets, or a repo that was never encrypted on the machine), the restore still works, but the machine gets a new host key. Re-trust it on your clients, and update forges and the backup computer if they trusted the old one. An encrypted repo without an escrow can't be restored this way: decrypt (`neo secrets disable`) and re-encrypt on a running machine first.
 
 ---
 
@@ -485,7 +513,7 @@ Without `identity.sops.yaml` (plain secrets, or a repo that was never encrypted 
 4. **Activate** from the UI. The changes preview shows what will change first, including updated flake inputs and plugins  
 5. Leave **system-updater** (and **docker-updater**) on if you want hands-off upgrades  
 6. Optional: [encrypt secrets](#secrets-and-encryption) and push the config repo, so the machine can be [rebuilt from it](#rebuild-a-machine-from-its-config-repo)
-7. Optional: set up [backups](#automatic-disk-layout-disko) (ZFS snapshots, the **backup** service for off-site rsync), and the SWAG **Geo & IP filter** and **Auto ban** sections if the machine is on the public web  
+7. Optional: set up [backups](#backups) (local ZFS snapshots, and the **backup** service to another computer or disk), and the SWAG **Geo & IP filter** and **Auto ban** sections if the machine is on the public web  
 
 Restart and shut down live under **Settings → Power**. Booting an older generation lives under **Versioning**.
 

@@ -73,7 +73,9 @@ Naming: options camelCase under `neo.services.*`; plain-string descriptions; vol
 
 ## Disko, boot, restore
 
-`nix/modules/disko/`: the main disk is EF02 (1M) + ESP (`/boot`) + ZFS `zroot` (`root` → `/`, `neo` → `/var/neo`, snapshotted). GRUB: UEFI removable path from `core/base.nix`; `boot-install.sh` (grub `extraInstallCommands`) adds the BIOS install when the EF02 partition exists, a NixOS firmware entry and `startup.nsh`. It must never fail a switch: log and go on. Disks partitioned before EF02 existed stay UEFI-only, so never put the main disk into `boot.loader.grub.devices`. Boot changes need `just test-disko-boot`. Moving or restoring a machine: [docs/RESTORE.md](docs/RESTORE.md).
+`nix/modules/disko/`: the main disk is EF02 (1M) + ESP (`/boot`) + ZFS `zroot` (`root` → `/`, `neo` → `/var/neo`, snapshotted). GRUB: UEFI removable path from `core/base.nix`; `boot-install.sh` (grub `extraInstallCommands`) adds the BIOS install when the EF02 partition exists, a NixOS firmware entry and `startup.nsh`. It must never fail a switch: log and go on. Disks partitioned before EF02 existed stay UEFI-only, so never put the main disk into `boot.loader.grub.devices`. Boot changes need `just test-disko-boot`.
+
+Backup (`nix/services/backup`, script `backup.sh`) and `neo restore` (`cli/src/commands/restore/`: `local.rs` on the installer, `remote.rs` = nixos-anywhere kexec + run local there, `backup.rs` reads the same backup settings) share one destination model: `target` ssh|disk × `format` files|zfs, snapshots named `neo-backup-*`. Change both sides together. Design: [docs/design/backup-restore.md](docs/design/backup-restore.md); runbook: [docs/RESTORE.md](docs/RESTORE.md).
 
 ## Guides
 
