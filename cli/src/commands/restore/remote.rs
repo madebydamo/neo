@@ -12,7 +12,8 @@ use std::process::{Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use super::local::WORK_DIR;
+use super::backup::{self, Access, Location, Source};
+use super::local::{commit_uncommitted, remote_url, WORK_DIR};
 use super::RestoreArgs;
 use crate::utils::command::shell_quote;
 use crate::utils::execute_command;
@@ -218,7 +219,7 @@ pub(crate) fn pinned_neo(repo: &Path) -> String {
     }
 }
 
-fn default_key() -> Option<PathBuf> {
+pub(crate) fn default_key() -> Option<PathBuf> {
     let k = PathBuf::from(env::var("HOME").ok()?).join(".ssh/id_ed25519");
     k.exists().then_some(k)
 }
@@ -234,17 +235,52 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
         .context("pass --key with an admin ssh-ed25519 private key")?;
     let _ = KEY.set(key.clone());
 
-    // Clone on the client: it has the credentials for a private repo.
+    // Clone on the client: it has the credentials for a private repo. Without
+    // a repo, take it out of the backup here (the admin key opens it).
     let tmp = env::temp_dir().join(format!("neo-restore-{}", std::process::id()));
     let local = tmp.join("config");
     fs::create_dir_all(&tmp)?;
-    execute_command(
-        Command::new("git")
-            .args(["clone", "-q", &args.repo])
-            .arg(&local),
-    )?;
+    fs::set_permissions(&tmp, std::os::unix::fs::PermissionsExt::from_mode(0o700))?;
+    let from_backup = match &args.from_backup {
+        Some(spec) => {
+            let source = Source::from_location(spec)?;
+            if source.location == Location::Disk {
+                bail!("with --host, --from-backup takes user@host:folder or ssh://…; for a disk attached to the new machine run neo restore on it");
+            }
+            Some((spec, source))
+        }
+        None => None,
+    };
+    let from_backup_repo = args.repo.is_empty();
+    if let (true, Some((_, source))) = (from_backup_repo, &from_backup) {
+        let access = Access {
+            identities: args
+                .backup_key
+                .iter()
+                .cloned()
+                .chain([key.clone()])
+                .collect(),
+            known_hosts: tmp.join("known_hosts"),
+            work: tmp.join("backup"),
+        };
+        let source = backup::detect(&access, source.clone())?;
+        println!(
+            "Taking the config repo out of the backup ({}) …",
+            source.describe()
+        );
+        backup::extract_config(&access, &source, &local)?;
+        let _ = fs::remove_dir_all(tmp.join("backup"));
+        commit_uncommitted(&local)?;
+    } else {
+        execute_command(
+            Command::new("git")
+                .args(["clone", "-q", &args.repo])
+                .arg(&local),
+        )?;
+    }
     let origin = match &args.origin {
         Some(o) => o.clone(),
+        None if from_backup_repo => remote_url(&local),
         None if Path::new(&args.repo).is_dir() => Command::new("git")
             .arg("-C")
             .arg(&args.repo)
@@ -346,6 +382,9 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
     }
     if let Some(p) = &args.data_from {
         cmd.extend(["--data-from".into(), shell_quote(&p.display().to_string())]);
+    }
+    if let Some((spec, _)) = &from_backup {
+        cmd.extend(["--from-backup".into(), shell_quote(spec)]);
     }
     if args.keep_hardware {
         cmd.push("--keep-hardware".into());

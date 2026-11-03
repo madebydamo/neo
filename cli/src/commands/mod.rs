@@ -1,6 +1,7 @@
 //! CLI subcommand entry points. Shared helpers live in `crate::utils`.
 
 pub mod activate;
+pub mod backup;
 pub mod build;
 pub mod docker_update;
 pub mod edit;

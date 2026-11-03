@@ -1,5 +1,5 @@
 //! Local mode: as root on the machine being restored, booted from a NixOS
-//! installer (docs/design/backup-restore.md §3).
+//! installer (docs/design/backup-restore.md §4).
 
 use anyhow::{bail, Context, Result};
 use std::fs;
@@ -117,10 +117,60 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     fs::create_dir_all(&work)?;
     fs::set_permissions(&work, fs::Permissions::from_mode(0o700))?;
 
+    // 0. --from-backup: the backup to restore from, and the config repo in it
+    //    when no repo is given (the admin key opens an encrypted backup).
+    let key = args.key.as_deref();
+    // Opens neo-backup.age (age reads ~/.ssh/id_ed25519 only when told to).
+    let admin_key = args.key.clone().or_else(super::remote::default_key);
+    let from_backup = match &args.from_backup {
+        Some(spec) => {
+            let access = Access {
+                identities: args
+                    .backup_key
+                    .iter()
+                    .chain(admin_key.iter())
+                    .cloned()
+                    .collect(),
+                known_hosts: work.join("known_hosts"),
+                work: work.join("backup"),
+            };
+            let source = backup::detect(&access, Source::from_location(spec)?)?;
+            let repo = if args.repo.is_empty() {
+                let out = work.join("from-backup");
+                let _ = fs::remove_dir_all(&out);
+                println!(
+                    "Taking the config repo out of the backup ({}) …",
+                    source.describe()
+                );
+                backup::extract_config(&access, &source, &out)?;
+                commit_uncommitted(&out)?;
+                Some(out)
+            } else {
+                None
+            };
+            Some((source, repo))
+        }
+        None => None,
+    };
+    let repo_url = match from_backup.as_ref().and_then(|(_, r)| r.as_ref()) {
+        Some(r) => r.display().to_string(),
+        None if args.repo.is_empty() => bail!("give the config repo, or --from-backup <backup>"),
+        None => args.repo.clone(),
+    };
+    // Remote of the installed repo: the backup's copy keeps its own.
+    let origin = match (
+        &args.origin,
+        from_backup.as_ref().and_then(|(_, r)| r.as_ref()),
+    ) {
+        (Some(o), _) => o.clone(),
+        (None, Some(r)) => remote_url(r),
+        (None, None) => args.repo.clone(),
+    };
+
     // 1. Clone (HEAD only: uncommitted changes in a source checkout are not restored).
     let staging = work.join("config");
     let _ = fs::remove_dir_all(&staging);
-    println!("Cloning {} …", args.repo);
+    println!("Cloning {repo_url} …");
     execute_command(
         Command::new("git")
             .args([
@@ -128,7 +178,7 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
                 "safe.directory=*",
                 "clone",
                 "--no-hardlinks",
-                &args.repo,
+                &repo_url,
             ])
             .arg(&staging),
     )?;
@@ -184,7 +234,6 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     }
 
     // 3. Unlock: escrowed host key and the tokens for private plugins.
-    let key = args.key.as_deref();
     let identity_target = work.join("identity");
     let _ = fs::remove_dir_all(&identity_target);
     let identity = restore_identity(&staging, &identity_target, &doc, key)?;
@@ -228,10 +277,10 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         .strip_prefix(&format!("{root}/"))
         .map(str::to_string);
 
-    let source = if args.data {
-        Source::from_settings(&doc)?
-    } else {
-        None
+    let source = match (&from_backup, args.data) {
+        (_, false) => None,
+        (Some((s, _)), true) => Some(s.clone()),
+        (None, true) => Source::from_settings(&doc)?,
     };
     if args.data && source.is_none() && args.data_from.is_none() {
         bail!("the backup is off in this config: restore without data (--data none), or point --data-from at a copy");
@@ -243,12 +292,13 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     if identity && host_key.exists() {
         identities.push(host_key.clone());
     }
-    if let Some(k) = key {
-        identities.push(k.to_path_buf());
+    if let Some(k) = &admin_key {
+        identities.push(k.clone());
     }
     let access = Access {
         identities,
         known_hosts: work.join("known_hosts"),
+        work: work.join("backup"),
     };
     let data_line = match &source {
         Some(s) => {
@@ -364,7 +414,6 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
             .arg(&staging)
             .arg(&repo),
     )?;
-    let origin = args.origin.clone().unwrap_or_else(|| args.repo.clone());
     if origin.is_empty() || Path::new(&origin).is_dir() {
         execute_command(git(&repo).args(["remote", "remove", "origin"]))?;
     } else {
@@ -386,6 +435,7 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
             .arg(&repo),
     )?;
     let _ = fs::remove_dir_all(&identity_target);
+    let _ = fs::remove_dir_all(work.join("backup"));
 
     if args.no_install {
         println!(
@@ -427,6 +477,38 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     }
     println!("Installed {}.", backup::hostname(&doc));
     finish(args)
+}
+
+/// Commit what the backup's config repo had not committed yet (settings
+/// saved in the web UI before the last backup), so the clone carries it.
+pub(crate) fn commit_uncommitted(repo: &Path) -> Result<()> {
+    if !repo.join(".git").exists() {
+        bail!("{} in the backup is not a git repository", repo.display());
+    }
+    let status = capture(git(repo).args(["status", "--porcelain"]))?;
+    if status.is_empty() {
+        return Ok(());
+    }
+    println!("  committing changes the backup's repo had not committed yet");
+    execute_command(git(repo).args(["add", "-A"]))?;
+    execute_command(git(repo).args([
+        "commit",
+        "-q",
+        "-m",
+        "restore: uncommitted changes from the backup",
+    ]))
+}
+
+/// `origin` of a repo, "" without one.
+pub(crate) fn remote_url(repo: &Path) -> String {
+    git(repo)
+        .args(["remote", "get-url", "origin"])
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
 }
 
 fn finish(args: &RestoreArgs) -> Result<()> {

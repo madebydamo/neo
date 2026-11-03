@@ -29,14 +29,17 @@
               };
 
               format = mkOption {
-                type = types.enum ["files" "zfs"];
+                # encrypted: restic repository + neo-backup.age (data key for the
+                # host key and the admin keys), docs/design/backup-restore.md §3.
+                type = types.enum ["files" "encrypted" "zfs"];
                 default = "files";
                 rank = 7;
-                description = "Plain files work with any computer or disk. ZFS snapshots are faster and keep several versions, but need ZFS on both sides.";
+                description = "Plain files work with any computer or disk. Encrypted keeps several versions that only this server and your SSH keys can open. ZFS snapshots are fastest, but need ZFS on both sides.";
                 ui = lib.neo.ui.mkUi {
                   label = "Backup format";
                   choiceLabels = {
                     files = "Plain files";
+                    encrypted = "Encrypted";
                     zfs = "ZFS snapshots";
                   };
                 };
@@ -46,7 +49,7 @@
               sourceDir = mkOption {
                 type = types.path;
                 default = config.neo.core.volumes.root;
-                description = "Folder on this homeserver that gets backed up. The default is the whole data volume (all app data). Plain files only.";
+                description = "Folder on this homeserver that gets backed up. The default is the whole data volume (all app data). Not used for ZFS snapshots.";
                 rank = 50;
                 ui = lib.neo.ui.mkUi {
                   label = "Folder to back up";
@@ -54,9 +57,10 @@
                 };
               };
 
-              # files: rsync destination folder. Relative paths are relative to the
-              # remote user's home directory (rsync user@host:path); a disk needs
-              # an absolute path below its mount point.
+              # files: rsync destination folder; encrypted: folder holding
+              # neo-backup.age and the restic repository. Relative paths are
+              # relative to the remote user's home directory (user@host:path); a
+              # disk needs an absolute path below its mount point.
               remotePath = mkOption {
                 type = types.str;
                 default = config.neo.core.hostname;
@@ -64,7 +68,7 @@
                 rank = 60;
                 ui = lib.neo.ui.mkUi {
                   label = "Backup folder";
-                  visibleWhen = "format=files";
+                  visibleWhen = "format=files,encrypted";
                 };
               };
 
@@ -88,7 +92,7 @@
                 rank = 62;
                 ui = lib.neo.ui.mkUi {
                   label = "Backups to keep";
-                  visibleWhen = "format=zfs";
+                  visibleWhen = "format=zfs,encrypted";
                 };
               };
 
@@ -101,15 +105,16 @@
                 ui = lib.neo.ui.mkUi {label = "Backup time";};
               };
 
-              # rsync --exclude patterns, relative to the transfer root (sourceDir).
+              # rsync --exclude patterns, relative to the transfer root (sourceDir);
+              # restic gets the same paths anchored at sourceDir.
               excludedDirs = mkOption {
                 type = types.listOf types.str;
                 default = [];
-                description = "Folders to leave out of the backup, as paths inside Folder to back up, e.g. DATA/AppData/jellyfin/cache or DATA/Media. A plain name such as cache skips every folder with that name. Plain files only.";
+                description = "Folders to leave out of the backup, as paths inside Folder to back up, e.g. DATA/AppData/jellyfin/cache or DATA/Media. A plain name such as cache skips every folder with that name. Not used for ZFS snapshots.";
                 rank = 80;
                 ui = lib.neo.ui.mkUi {
                   label = "Skip folders";
-                  visibleWhen = "format=files";
+                  visibleWhen = "format=files,encrypted";
                 };
               };
 
@@ -176,7 +181,7 @@
               '';
               notes = ''
                 Runs every night (Backup time). On the ZFS disk layout it copies from a snapshot, so databases are copied at one moment.
-                Plain files: rsync over SSH or to a mounted disk. ZFS snapshots: zfs send, incremental after the first run; the user needs root or zfs allow create,receive,mount,destroy on the destination.
+                Plain files: rsync over SSH or to a mounted disk. Encrypted: restic over SFTP or to a mounted disk; its key is stored next to the backup (neo-backup.age), readable only with this server's key or an ed25519 key from System → SSH, so you can restore even without your config repo: neo restore --from-backup user@host:folder. Replace the key with neo backup rotate-key (makes a new full backup). ZFS snapshots: zfs send, incremental after the first run; the user needs root or zfs allow create,receive,mount,destroy on the destination.
                 The default SSH key is the server's host key: add its public key (System → SSH) to the backup computer's authorized_keys.
                 Restore on a new machine: neo restore <config repo> --host root@<new machine> (docs/RESTORE.md).
               '';

@@ -1,5 +1,5 @@
 //! `neo restore <repo>`: rebuild a machine from its config repository and its
-//! backup (docs/design/backup-restore.md §3, docs/RESTORE.md).
+//! backup (docs/design/backup-restore.md §4, docs/RESTORE.md).
 //!
 //! - local (no `--host`): as root on a NixOS installer. Clone, unlock the
 //!   escrowed host key, adapt the repo to this machine (disk, hardware config),
@@ -20,14 +20,18 @@ use crate::utils::secrets::{self, Node, Tree};
 use crate::utils::secrets_store::{decrypt_with_key, IDENTITY_FILE};
 
 pub mod backup;
-mod local;
-mod remote;
+pub(crate) mod local;
+pub(crate) mod remote;
 
 const DEFAULT_CONFIG_PATH: &str = "/var/neo/DATA/AppData/configuration";
 
 #[derive(Debug, Clone, Default)]
 pub struct RestoreArgs {
+    /// Config repository; empty: taken out of `from_backup`.
     pub repo: String,
+    /// A backup location (`user@host:folder`, `ssh://…`, a local folder)
+    /// instead of the one in the settings.
+    pub from_backup: Option<String>,
     pub target: PathBuf,
     pub key: Option<PathBuf>,
     pub config: String,
@@ -59,7 +63,11 @@ pub fn restore(args: &RestoreArgs, dry_run: bool) -> Result<()> {
     if dry_run {
         println!(
             "DRY-RUN: would restore {} {}",
-            args.repo,
+            if args.repo.is_empty() {
+                args.from_backup.as_deref().unwrap_or("-")
+            } else {
+                &args.repo
+            },
             args.host
                 .as_deref()
                 .map(|h| format!("on {h}"))

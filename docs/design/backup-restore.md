@@ -20,14 +20,14 @@ ZFS the live folder is copied (as before).
 | Setting | Values | Meaning |
 |---------|--------|---------|
 | `target` | `ssh` (default), `disk` | another computer over SSH, or a disk attached to this server |
-| `format` | `files` (default), `zfs` | plain copy with rsync (any filesystem), or `zfs send` (ZFS on both sides, Disko here) |
+| `format` | `files` (default), `encrypted`, `zfs` | plain copy with rsync (any filesystem), restic repository encrypted on this server (§3), or `zfs send` (ZFS on both sides, Disko here) |
 | `host`, `user`, `sshKey`, `extraOptions` | | SSH login, `target = ssh` only |
-| `remotePath` | path | `format = files`: folder. Relative paths are in the SSH user's home; on a disk it must be absolute (the disk's mount point and a folder) |
+| `remotePath` | path | `files`/`encrypted`: folder. Relative paths are in the SSH user's home; on a disk it must be absolute (the disk's mount point and a folder) |
 | `dataset` | `pool/path` | `format = zfs`: dataset that receives the snapshots, e.g. `tank/backup/myhome` |
-| `keep` | int, default 14 | `format = zfs`: backup snapshots kept at the destination |
-| `schedule`, `excludedDirs`, `sourceDir` | | as before (`excludedDirs`/`sourceDir` only for `files`) |
+| `keep` | int, default 14 | `zfs`/`encrypted`: backups kept at the destination |
+| `schedule`, `excludedDirs`, `sourceDir` | | as before (`excludedDirs`/`sourceDir` not for `zfs`) |
 
-The four combinations:
+The combinations:
 
 - **ssh + files**: `rsync -aH --numeric-ids --delete` to `user@host:remotePath/<basename sourceDir>/`
   (the layout of the old backup service, so existing backups keep going).
@@ -41,6 +41,11 @@ The four combinations:
   without a common snapshot, instead of overwriting it.
 - **disk + zfs**: the same, `zfs recv` locally. The pool (first part of `dataset`) is imported
   with `-N` when needed and exported again afterwards.
+- **ssh/disk + encrypted**: restic over SFTP (`sftp.command` = the backup's ssh with its key and
+  options), or into the folder on the disk. See §3.
+
+Runs are serialised with a `flock` on `/run/neo-backup.lock`: the nightly run waits for a key
+rotation.
 
 **SSH key.** The default is now the SSH **host key** (`/etc/ssh/ssh_host_ed25519_key`; the backup
 runs as root). The host key is escrowed in `identity.sops.yaml` and restored on reinstall, so a
@@ -48,11 +53,133 @@ restored machine logs in to its backup with the same key, and `neo restore` can 
 it. The old default (`homeserver`'s own key) was not in DATA and was lost with the machine.
 Migration `013_backup_keeps_ssh_key` pins the old default in existing configs that enabled backup.
 
-## 3. `neo restore`
+## 3. Encrypted format
+
+Goal: the destination (a friend's server, a hoster, a disk that gets lost) only ever holds
+ciphertext, and the backup still opens **without the config repo**: the same admin SSH key that
+opens `secrets.sops.yaml` opens the backup, and the config repo is inside it.
+
+### Two layers
+
+1. **Data key.** A random 32-byte password of a restic repository. restic encrypts and
+   authenticates everything (AES-256-CTR + Poly1305-AES), deduplicates and keeps versions.
+2. **Header `neo-backup.age`.** The data key, encrypted with [age](https://age-encryption.org) to
+   the same recipients as `secrets.sops.yaml`: the SSH host key (`core.secrets.identityFile`)
+   and every ssh-ed25519 key in `core.ssh.authorizedKeys`. Plain text inside:
+
+   ```
+   version=1
+   format=restic
+   repository=restic-20261103-021500
+   password=<base64 of 32 random bytes>
+   ```
+
+At the destination, in the backup folder (`remotePath`):
+
+```
+neo-backup.age        header
+restic-<UTC>/         the repository it names
+```
+
+There is no key in the settings and none to escrow: the host key opens the header on every run,
+the admins open it on restore. The data key is not stored on the server between runs; each run
+decrypts the header into its private `RuntimeDirectory`.
+
+### A run (`backup.sh` `backup_encrypted`)
+
+1. Fetch the header (sftp `get`, or a plain copy on a disk) and decrypt it with the host key.
+   A header the host key can't open is refused ("belongs to another server or an old key"), it is
+   never overwritten.
+2. No header: new data key, new repository `restic-<UTC>`, `restic init`.
+3. `restic backup .` from the ZFS snapshot folder (or the live folder without ZFS), host
+   `core.hostname`, tag `neo`, `--group-by host,tags` (the snapshot path changes every run, so
+   the parent is found by tag). Paths in the snapshot are relative to `/var/neo`.
+   `excludedDirs` as with rsync: a path is anchored at the folder, a plain name matches anywhere.
+   Exit code 3 (some files unreadable) is logged, not fatal.
+4. Write the header again, encrypted to the **current** recipients, and upload it as
+   `neo-backup.age.tmp` + rename (sftp posix-rename; plain `rm` + rename as a fallback). The
+   header goes up only after a snapshot exists, so a header always opens a backup. Adding or
+   removing a key in System → SSH applies at the next run.
+5. `restic forget --tag neo --keep-last <keep> --prune`.
+6. Every other `restic-*` folder in the backup folder is removed: the old repository after a
+   rotation, and repositories of first runs that failed before their header went up. Over SSH
+   this is `rm -rf` through the shell; without shell access (restricted accounts) it is logged
+   to delete by hand.
+
+### Key rotation (`neo backup rotate-key`)
+
+Starts `backup-rotate-key.service` (the same script, `NEO_ROTATE=true`; only defined for the
+encrypted format and kept out of `systemdUnits`, so the service target never starts it):
+new data key, new repository, **full** backup into it, new header, then the old repository is
+deleted. Until the new header is up the old backup stays complete and usable; an interrupted
+rotation leaves a stray `restic-*` folder that the next successful run removes.
+
+Rotation replaces the repository instead of `restic key passwd` on purpose: a restic password
+only wraps the repository's master key, so someone who once had the data key and a copy of the
+repository's `keys/` would keep access. A new repository has a new master key. The cost is one
+full upload.
+
+When to rotate: after removing someone's key from System → SSH (they stop being a recipient at
+the next run, but may know the data key), or when the server's host key may have leaked.
+
+### Security of the header
+
+`neo-backup.age` may be public. age encrypts a random 128-bit file key to each recipient with
+X25519 (ssh-ed25519 keys are converted to X25519), the body with ChaCha20-Poly1305. Without one
+of the private keys there is nothing to guess: no password, no low-entropy secret, and the data
+key inside is 256 random bits. What it reveals: the number of recipients and, per recipient, a
+4-byte tag of the SSH public key (lets someone holding a candidate public key, e.g. from GitHub,
+check that it is one of the recipients). Limits: anyone with an admin key or the host key opens
+it; X25519 is not post-quantum, so a recorded backup could be opened by a future large quantum
+computer (true for SSH and sops today as well). Passphrase-protected admin keys work (age asks).
+
+### Restoring without the config repo
+
+`neo restore --from-backup <backup>` (no repo argument), or only the repo:
+`neo backup extract-config <backup> [--out dir]`. `<backup>` is `user@host:folder` (relative to
+the home folder), `ssh://user@host:port/abs/folder`, or a local folder (a mounted disk).
+
+1. **Detect** what is there (sftp `ls`): `neo-backup.age` → encrypted; `neo/DATA` (or `DATA`) →
+   plain files. ZFS backups can't be read without the repo.
+2. **Open** the header with `--key` (default `~/.ssh/id_ed25519`), or the host key once known.
+3. **Extract** `DATA/AppData/configuration` from the newest snapshot (`restic restore --include`);
+   if `configPath` was elsewhere, the shortest folder with `settings.toml` next to `.git`.
+   Plain files: rsync of the same folder.
+4. Uncommitted changes in that repo (settings saved in the web UI) are committed ("restore:
+   uncommitted changes from the backup") so the clone carries them; its own `origin` stays the
+   remote of the restored repo.
+5. The normal restore continues with that repo. `--from-backup` also replaces the settings'
+   backup location as the data source. With `--host`, the client extracts the repo (it has your
+   key) and passes `--from-backup` on; a disk path then makes no sense and is refused.
+
+Preconditions: your key was in System → SSH at a backup run after it was added; you can log in
+to the backup computer yourself (the server logs in with its host key, which is escrowed in the
+repo you don't have). Add your own public key there too, or use the hoster's other access.
+
+### Not yet: ZFS raw sends
+
+The ZFS format could get the same property with `zfs send -w` (raw, still encrypted) and the
+header as a user property of the destination dataset (`neo:key`, fits the 8 KB limit for a few
+recipients). It needs `zroot/neo` encrypted **on the server**, which `encrypted` files do not:
+
+- Disko creates `neo` with `encryption=aes-256-gcm keyformat=raw keylocation=file:///var/lib/neo/backup/zfs.key`
+  (on the unencrypted root: protects the backup, not the local disk), generated in a
+  `preCreateHook`; the key must be loaded before `/var/neo` is mounted in the initrd
+  (`sysroot.mount` first, then `zfs load-key`), and `zfs-restore.sh` must load it too.
+- Existing machines can't encrypt a dataset in place: `zfs send | zfs recv -o encryption=on` into
+  a new dataset with the services stopped, needing room for a second copy, then a full send to a
+  new destination dataset.
+- Restore: raw receive into the new `zroot/neo`, data key from the header (same recipients),
+  written to the key file, `zfs load-key`. Rotation is `zfs change-key` for the wrapping key; a
+  new master key again needs a new dataset and a full send.
+- Boot changes need `just test-disko-boot`.
+
+## 4. `neo restore`
 
 ```
 neo restore <repo> [--host root@IP] [--disk /dev/disk/by-id/…] [--key ~/.ssh/admin]
-                   [--data backup|none] [--keep-hardware] [--yes] [--reboot]
+                   [--data backup|none] [--from-backup <backup>] [--keep-hardware] [--yes] [--reboot]
+neo restore --from-backup <backup> …          # the config repo from the backup (§3)
 ```
 
 Two modes, one code path:
@@ -84,8 +211,10 @@ Steps (local mode):
 5. **Disko**: the config's own `diskoScript` (destroy, format, mount), so the Disko version is the
    one the config pins. The ZFS ARC is capped while the installer's store lives in RAM.
 6. **Data** from the backup into the new `zroot/neo`: rsync of `<remotePath>/<basename>/` for
-   `files`, `zfs send` of the newest backup snapshot into `zroot/neo` for `zfs` (the next backup
-   from the new machine continues incrementally). The backup's copy of the config repo is moved
+   `files`, `restic restore latest` for `encrypted` (header opened with the escrowed host key or
+   the admin key; the next backup continues in the same repository), `zfs send` of the newest
+   backup snapshot into `zroot/neo` for `zfs` (the next backup from the new machine continues
+   incrementally). The backup's copy of the config repo is moved
    aside (`configuration.from-backup`); the repo from git is installed.
 7. **Install**: repo to `<configPath>`, host key to `/mnt/etc/ssh`, `nixos-install`.
 8. **Check** the firmware boot entry (UEFI) and, with `--reboot`, unmount, export and reboot.
@@ -93,8 +222,8 @@ Steps (local mode):
 Native NixOS service users (Hermes) get their uid from the new machine; their activation re-owns
 their appdata when the folder still belongs to the old uid, so the copy does not need fixing by hand.
 
-## 4. Not covered
+## 5. Not covered
 
-- Encryption at the destination (use an encrypted remote dataset or disk).
+- Encryption of the ZFS format (§3, "Not yet"); use `encrypted`, or an encrypted remote dataset.
 - `git+file:` plugins that live in DATA: restore refuses and names them; put them into git.
 - Restores of single services from the remote backup (local ZFS snapshots cover that).

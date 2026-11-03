@@ -25,9 +25,18 @@ nix run github:madebydamo/neo#neo -- restore git@github.com:you/homeserver-confi
 | 3. hardware config | generated on the target and committed (`--keep-hardware` to skip) |
 | 4. repo, key, tokens on the installer | copied into the installer's RAM, with every flake input (`nix flake archive`, fetched with your laptop's credentials); tokens from `secrets.sops.yaml` to Nix; the key is deleted at the end |
 | 5. Disko, ARC cap | the config's own `diskoScript`, ARC capped |
-| 6. copy DATA, fix ownership | from the configured backup (rsync or `zfs send`); Hermes re-owns its data itself |
+| 6. copy DATA, fix ownership | from the configured backup (rsync, restic or `zfs send`); Hermes re-owns its data itself |
 | 7. `neo restore` | the same, as the unit `neo-restore` on the target |
 | 8. boot entry | Neo's boot loader install adds it; `neo restore` checks it |
+
+No config repo left? With an encrypted (or plain files) backup, the repo is inside it, and your admin key opens it:
+
+```bash
+nix run github:madebydamo/neo#neo -- restore --from-backup user@backup.example.com:myhome \
+  --host root@NEW --disk /dev/disk/by-id/nvme-… --key ~/.ssh/<admin-key> --reboot
+```
+
+`neo backup extract-config user@backup.example.com:myhome` only copies the repo out (push it somewhere first).
 
 `--check` prints the plan and changes nothing. The checklist below still applies: DNS, local plugins (refused when missing), the provider's boot order. A cutover from a machine that still runs is not automatic: stop the old one (step 6, "Old machine still running") and let its last backup run first, or use `--data-from` with a final copy.
 

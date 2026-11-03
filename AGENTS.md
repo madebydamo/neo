@@ -47,7 +47,7 @@ Naming: options camelCase under `neo.services.*`; plain-string descriptions; vol
 - Give every non-obvious key a `ui.label` ("Skip Beszel login", not `enableSingleUserSystem`).
 - Secrets (passwords, keys, tokens) always stay visible, never in Advanced: the operator sets each one (usually with Generate) and should know it exists. Say what it protects and what changing it later breaks.
 - Ports and other plumbing go in `ui.group = lib.neo.ui.groups.advanced`.
-- Fields that only matter with another setting get `ui.visibleWhen` (a bool or a non-empty string hides the field while false/empty; `"opt=value"` for a choice).
+- Fields that only matter with another setting get `ui.visibleWhen` (a bool or a non-empty string hides the field while false/empty; `"opt=value"` for a choice, `"opt=a,b"` for one of several).
 
 **Service texts:** `mkServiceMeta` takes `tagline` (one line on the grid card, what you get: "Your own Google Photos"), `description` (2–3 plain sentences for non-technical users: what you can do, what it replaces), `notes` (operator facts shown collapsed as "Good to know": first login, paths that skip tinyauth, upgrade cautions), `replaces` (`[ "Google Photos" ]`) and `privacy` (privacy map category ids). No upstream marketing, env var names or internals in `tagline`/`description`. Without a `tagline` the card shows the first line of `description`. Rules and examples: `docs/design/descriptions-and-guides.md`.
 
@@ -75,7 +75,7 @@ Naming: options camelCase under `neo.services.*`; plain-string descriptions; vol
 
 `nix/modules/disko/`: the main disk is EF02 (1M) + ESP (`/boot`) + ZFS `zroot` (`root` → `/`, `neo` → `/var/neo`, snapshotted). GRUB: UEFI removable path from `core/base.nix`; `boot-install.sh` (grub `extraInstallCommands`) adds the BIOS install when the EF02 partition exists, a NixOS firmware entry and `startup.nsh`. It must never fail a switch: log and go on. Disks partitioned before EF02 existed stay UEFI-only, so never put the main disk into `boot.loader.grub.devices`. Boot changes need `just test-disko-boot`.
 
-Backup (`nix/services/backup`, script `backup.sh`) and `neo restore` (`cli/src/commands/restore/`: `local.rs` on the installer, `remote.rs` = nixos-anywhere kexec + run local there, `backup.rs` reads the same backup settings) share one destination model: `target` ssh|disk × `format` files|zfs, snapshots named `neo-backup-*`. Change both sides together. Design: [docs/design/backup-restore.md](docs/design/backup-restore.md); runbook: [docs/RESTORE.md](docs/RESTORE.md).
+Backup (`nix/services/backup`, script `backup.sh`) and `neo restore` (`cli/src/commands/restore/`: `local.rs` on the installer, `remote.rs` = nixos-anywhere kexec + run local there, `backup.rs` reads the same backup settings) share one destination model: `target` ssh|disk × `format` files|encrypted|zfs, snapshots named `neo-backup-*`. `encrypted` is restic plus `neo-backup.age` (the data key, age-encrypted to the host key and the ssh-ed25519 `authorizedKeys`, like `secrets.sops.yaml`), so `neo restore --from-backup` / `neo backup extract-config` get the config repo out with an admin key alone; `neo backup rotate-key` starts `backup-rotate-key.service`. Change both sides together. Design: [docs/design/backup-restore.md](docs/design/backup-restore.md); runbook: [docs/RESTORE.md](docs/RESTORE.md).
 
 ## Guides
 
@@ -136,7 +136,7 @@ The service pane shows **General** (ungrouped options, always open) followed by 
 - `label` — human name (default: humanized last path segment)
 - `summary = true` — value chip on the collapsed group header
 - `choiceLabels = { web = "Internet"; }` — display names for enum / choice values
-- `visibleWhen = "enabled"` — sibling bool; the field hides while it is false; `visibleWhen = "type=entra"` — hides unless the sibling equals that value (also inside attrsOf entries)
+- `visibleWhen = "enabled"` — sibling bool; the field hides while it is false; `visibleWhen = "type=entra"` — hides unless the sibling equals that value, `"format=files,encrypted"` unless it equals one of them (also inside attrsOf entries)
 
 ### `ui.choices` (multi-select)
 

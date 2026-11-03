@@ -121,9 +121,18 @@ enum Commands {
     /// Rebuild a machine from its config repository and its backup. On a
     /// NixOS installer as root, or from another computer with --host
     /// (docs/RESTORE.md).
+    #[command(arg_required_else_help = true)]
     Restore {
         /// Config repository (git URL or local checkout; HEAD is restored).
-        repo: String,
+        /// Leave it out with --from-backup to use the copy in the backup.
+        #[arg(required_unless_present = "from_backup")]
+        repo: Option<String>,
+        /// Restore from this backup instead of the one in the settings:
+        /// user@host:folder (relative to the home folder),
+        /// ssh://user@host:port/folder, or a local folder (a mounted disk).
+        /// An encrypted backup opens with --key.
+        #[arg(long, value_name = "BACKUP")]
+        from_backup: Option<String>,
         /// Restore that machine from here (root@IP[:PORT]). nixos-anywhere boots it
         /// into an installer first when it runs another system.
         #[arg(long)]
@@ -178,6 +187,34 @@ enum Commands {
     Secrets {
         #[command(subcommand)]
         action: SecretsAction,
+    },
+    /// The backup (services.backup): encryption key and reading it from elsewhere.
+    Backup {
+        #[command(subcommand)]
+        action: BackupAction,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum BackupAction {
+    /// Encrypted backup: make a new encryption key and a new full backup with
+    /// it, then delete the old one. Runs on the server, in the background.
+    RotateKey,
+    /// Copy the config repository out of a backup (encrypted or plain files),
+    /// e.g. when the server and its repo are gone.
+    ExtractConfig {
+        /// user@host:folder, ssh://user@host:port/folder, or a local folder.
+        backup: String,
+        /// Where to put the repository.
+        #[arg(long, default_value = "neo-config")]
+        out: PathBuf,
+        /// Admin ssh-ed25519 private key that opens the encrypted backup
+        /// (default: ~/.ssh/id_ed25519).
+        #[arg(long)]
+        key: Option<PathBuf>,
+        /// Another key for the SSH login to the backup.
+        #[arg(long)]
+        backup_key: Option<PathBuf>,
     },
 }
 
@@ -243,7 +280,8 @@ fn run(cli: Cli) -> Result<()> {
 
     // On a full install, run as homeserver so configPath ownership and git identity match.
     // `restore` writes into a mounted target (host key, repo) and needs root.
-    let needs_root = matches!(command, Commands::Restore { .. });
+    // `backup` reads a backup with the caller's keys or starts a unit via sudo.
+    let needs_root = matches!(command, Commands::Restore { .. } | Commands::Backup { .. });
     if etc_settings.exists() && env::var("USER").unwrap_or_default() != "homeserver" && !needs_root
     {
         let sudo_bin = cli.sudo_path.as_deref().unwrap_or("sudo");
@@ -348,6 +386,7 @@ fn run(cli: Cli) -> Result<()> {
         },
         Commands::Restore {
             repo,
+            from_backup,
             host,
             disk,
             key,
@@ -366,7 +405,8 @@ fn run(cli: Cli) -> Result<()> {
             shred_key,
         } => commands::restore::restore(
             &commands::restore::RestoreArgs {
-                repo,
+                repo: repo.unwrap_or_default(),
+                from_backup,
                 target,
                 key,
                 config,
@@ -391,6 +431,15 @@ fn run(cli: Cli) -> Result<()> {
             SecretsAction::Enable => commands::secrets::enable(&config_path, dry_run, nix_cmd),
             SecretsAction::Disable => commands::secrets::disable(&config_path, dry_run),
             SecretsAction::Rekey => commands::secrets::rekey(&config_path, dry_run),
+        },
+        Commands::Backup { action } => match action {
+            BackupAction::RotateKey => commands::backup::rotate_key(&doc, dry_run, sudo_cmd),
+            BackupAction::ExtractConfig {
+                backup,
+                out,
+                key,
+                backup_key,
+            } => commands::backup::extract_config(&backup, &out, key, backup_key, dry_run),
         },
     }
 }
@@ -459,7 +508,8 @@ fn command_lock(command: &Commands) -> Option<(LockSpec, OpInfo, Option<Operatio
         | Commands::Git
         | Commands::Lg
         | Commands::Generation { .. }
-        | Commands::Restore { .. } => None,
+        | Commands::Restore { .. }
+        | Commands::Backup { .. } => None,
     }
 }
 

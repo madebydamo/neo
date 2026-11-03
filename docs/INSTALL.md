@@ -437,11 +437,11 @@ The **backup** service copies all Neo data (`/var/neo`: every service's appdata 
 | Setting | Values |
 |---------|--------|
 | **Back up to** (`target`) | `ssh`: another computer you can log in to · `disk`: a disk attached to this server |
-| **Backup format** (`format`) | `files`: a plain copy with rsync, any filesystem · `zfs`: ZFS snapshots with `zfs send`, faster and keeps versions, needs ZFS on both sides and the Disko layout here |
+| **Backup format** (`format`) | `files`: a plain copy with rsync, any filesystem · `encrypted`: encrypted on this server before it leaves (restic), keeps versions, any computer with SFTP or any disk · `zfs`: ZFS snapshots with `zfs send`, faster and keeps versions, needs ZFS on both sides and the Disko layout here |
 | `host`, `user`, `extraOptions` | the SSH login (`ssh` only), e.g. `extraOptions = ["-p", "23"]` |
-| **Backup folder** (`remotePath`) | `files`: a folder; on another computer relative to the user's home, on a disk the absolute path below its mount point |
+| **Backup folder** (`remotePath`) | `files`/`encrypted`: a folder; on another computer relative to the user's home, on a disk the absolute path below its mount point |
 | **Backup dataset** (`dataset`) | `zfs`: e.g. `tank/backup/myhome`, created on the first run |
-| **Backups to keep** (`keep`) | `zfs`: snapshots kept at the destination (default 14) |
+| **Backups to keep** (`keep`) | `zfs`/`encrypted`: backups kept at the destination (default 14) |
 
 ```toml
 [services.backup]
@@ -457,6 +457,21 @@ dataset = "tank/backup/myhome"
 - `zfs` to a non-root user: on the destination, `zfs allow <user> create,receive,mount,destroy,hold <parent dataset>`. The first run sends everything, later runs only the changes. It never overwrites a dataset that holds something else.
 - `disk`: the disk must be mounted (`files`) or its pool importable (`zfs`). A `files` backup refuses to write onto the system disk, so an unplugged disk doesn't fill `/`.
 - Run one now: `sudo systemctl start backup`, log: `journalctl -u backup`.
+
+### Encrypted backups
+
+With **Backup format** `encrypted` the backup computer or disk only stores encrypted data. The key sits next to the backup as `neo-backup.age`, readable only with this server's host key or one of the ed25519 keys in **System → SSH**, the same keys that open your encrypted secrets. Nothing to write down, and nothing extra to keep safe.
+
+- If the server dies **and** you lost its config repo, your SSH key alone gets everything back. The config repo is inside the backup:
+
+  ```bash
+  neo restore --from-backup user@backup.example.com:myhome --host root@NEW --key ~/.ssh/id_ed25519
+  # or only take the repo out:  neo backup extract-config user@backup.example.com:myhome
+  ```
+
+  For this you must be able to log in to the backup computer yourself: add your own public key there too, not only the server's.
+- Key changes in **System → SSH** apply at the next backup. After removing someone's key, or if the server's key may have leaked, run `neo backup rotate-key` on the server. It makes a new key and a new full backup, then deletes the old one (the old one stays usable until then).
+- `neo-backup.age` is safe even if others can read it: without one of those private keys it can't be opened or guessed.
 
 ---
 
@@ -495,7 +510,7 @@ What happens, with a plan shown and a "yes" asked before the disk is erased:
 4. Disko partitions the disk, the data comes back from the backup (the newest ZFS snapshot, or the files), and `nixos-install` installs. The backup's copy of the config repo is kept next to it as `configuration.from-backup`; the repo from git is the one installed.
 5. `--reboot` boots the restored system.
 
-Useful flags: `--check` (plan only, changes nothing), `--data none` (no data), `--data-from /mnt/usb/myhome` (a files backup on a disk you mounted on the new machine), `--host root@IP:PORT`. Over `--host` the restore runs on the machine as the unit `neo-restore`: it keeps going if your laptop disconnects (`ssh root@IP journalctl -fu neo-restore`).
+Useful flags: `--check` (plan only, changes nothing), `--data none` (no data), `--data-from /mnt/usb/myhome` (a files or encrypted backup on a disk you mounted on the new machine), `--from-backup user@host:folder` (restore from that backup; without the repo argument the config repo comes out of it too, see [Encrypted backups](#encrypted-backups)), `--host root@IP:PORT`. Over `--host` the restore runs on the machine as the unit `neo-restore`: it keeps going if your laptop disconnects (`ssh root@IP journalctl -fu neo-restore`).
 
 Before you wipe a running machine, read the [checklist](RESTORE.md#before-you-start-check-these-facts): DNS, private plugins, the provider's boot order.
 
