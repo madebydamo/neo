@@ -316,6 +316,23 @@
         restartSec = 5;
       };
 
+      # The hermes-agent module also declares the state dirs as tmpfiles rules.
+      # tmpfiles refuses them under appdata (owned by homeserver, the dirs by
+      # hermes: "unsafe path transition") and its hermes-agent-setup activation
+      # creates the same dirs with the same modes, so drop them. An etc entry
+      # replaces the generated 00-nixos.conf (see nixpkgs systemd/tmpfiles.nix).
+      environment.etc."tmpfiles.d/00-nixos.conf".text = let
+        underState = rule: let
+          m = builtins.match "[^ ]+ +([^ ]+).*" rule;
+        in
+          m != null && (lib.head m == cfg.stateDir || lib.hasPrefix "${cfg.stateDir}/" (lib.head m));
+      in ''
+        # This file is created automatically and should not be modified.
+        # Please change the option ‘systemd.tmpfiles.rules’ instead.
+
+        ${lib.concatStringsSep "\n" (lib.filter (r: !underState r) config.systemd.tmpfiles.rules)}
+      '';
+
       # .env is assembled at activation: read hermes.env after it is rendered.
       system.activationScripts.hermes-agent-setup.deps = ["neo-secrets" "hermes-reown"];
 

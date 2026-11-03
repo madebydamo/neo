@@ -148,10 +148,13 @@
       TimeoutStartSec = "15min";
       Restart = "on-failure";
       RestartSec = "20";
-      StartLimitBurst = 8;
-      StartLimitIntervalSec = 600;
       ExecStart = execStart;
       EnvironmentFile = superviseEnvFile;
+    };
+    # [Unit] keys: systemd ignores StartLimitIntervalSec under [Service].
+    superviseUnitConfig = {
+      StartLimitBurst = 8;
+      StartLimitIntervalSec = 600;
     };
   in {
     config = lib.mkIf supervise {
@@ -187,6 +190,7 @@
         wants = ["network-online.target" "hermes-agent.service"];
         path = [pkgs.jq pkgs.systemd pkgs.sudo hermesPkg];
         environment = superviseEnv;
+        unitConfig = superviseUnitConfig;
         serviceConfig = superviseServiceConfig "${superviseScript}/bin/neo-hermes-supervise system";
       };
 
@@ -196,6 +200,7 @@
         wants = ["network-online.target" "hermes-agent.service"];
         path = [pkgs.jq pkgs.systemd pkgs.sudo pkgs.docker hermesPkg];
         environment = superviseEnv;
+        unitConfig = superviseUnitConfig;
         serviceConfig = superviseServiceConfig "${superviseScript}/bin/neo-hermes-supervise docker";
       };
 
