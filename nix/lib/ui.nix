@@ -41,7 +41,8 @@
 #   choiceLabels — display names for enum / ui.choices values ({ web = "Internet"; }).
 #   visibleWhen  — sibling option rule: "enabled" hides the field while that bool is
 #                  false (e.g. auth.publicPaths only while auth.enabled);
-#                  "type=entra" hides it unless the sibling equals that value.
+#                  "type=entra" hides it unless the sibling equals that value,
+#                  "format=files,encrypted" unless it equals one of them.
 #                  Also applies to fields of attrsOf submodule entries.
 #
 # ## keysFrom

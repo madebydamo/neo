@@ -325,3 +325,18 @@ test('visibleWhen supports bool and opt=value rules, top level and per attrsOf e
   assert.equal(form.isEntryFieldVisible('oauth', 'b', 'type=generic'), true);
   assert.equal(form.isEntryFieldVisible('oauth', 'a', ''), true);
 });
+
+test('visibleWhen opt=a,b shows the field for any listed value', () => {
+  installGlobals({});
+  loadOptionForm();
+  const form = optionForm();
+  form.optionsByName = { format: {}, keep: { visibleWhen: 'format=zfs,encrypted' } };
+  form.values = { format: 'files', oauth: { a: { type: 'b' } } };
+  assert.equal(form.isFieldVisible('keep'), false);
+  form.values.format = 'encrypted';
+  assert.equal(form.isFieldVisible('keep'), true);
+  form.values.format = 'zfs';
+  assert.equal(form.isFieldVisible('keep'), true);
+  assert.equal(form.isEntryFieldVisible('oauth', 'a', 'type=a,b'), true);
+  assert.equal(form.isEntryFieldVisible('oauth', 'a', 'type=a,c'), false);
+});

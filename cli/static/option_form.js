@@ -10,7 +10,7 @@ function neoWidget(name) {
   return NeoWidgets.get(name) || null;
 }
 
-/** ui.visibleWhen "opt" or "opt=value" → [opt, value | undefined]. */
+/** ui.visibleWhen "opt", "opt=value" or "opt=a,b" → [opt, value | undefined]. */
 function splitVisibleWhen(rule) {
   if (!rule) return [null, undefined];
   const at = rule.indexOf('=');
@@ -18,7 +18,7 @@ function splitVisibleWhen(rule) {
 }
 
 function visibleFor(value, want) {
-  return want === undefined ? !!value : String(value) === want;
+  return want === undefined ? !!value : want.split(',').includes(String(value));
 }
 
 function optionForm() {
@@ -411,7 +411,7 @@ function optionForm() {
 
     /**
      * ui.visibleWhen (resolved to an absolute name in Rust): "opt" hides while that
-     * bool is false, "opt=value" hides unless it equals value.
+     * bool is false, "opt=value" hides unless it equals value ("opt=a,b": one of them).
      */
     isFieldVisible(name) {
       const [dep, want] = splitVisibleWhen(this.optionsByName[name]?.visibleWhen);
