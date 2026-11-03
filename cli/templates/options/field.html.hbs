@@ -16,6 +16,13 @@
     <div class="neo-field py-3 sm:py-4" data-option="{{name}}" x-show="isFieldVisible('{{name}}')">
       {{> options/field_head}}
     </div>
+  {{else}}{{#if (eq type.kind "separatedString")}}
+    <div class="neo-field py-3 sm:py-4" data-option="{{name}}" x-show="isFieldVisible('{{name}}')">
+      {{> options/field_head}}
+      <div class="mt-2">
+        {{> options/separated_string}}
+      </div>
+    </div>
   {{else}}{{#if (or (eq type.kind "listOf") (eq type.kind "attrsOf"))}}
     <div class="neo-field py-3 sm:py-4" data-option="{{name}}" x-show="isFieldVisible('{{name}}')">
       {{> options/field_head}}
@@ -53,5 +60,5 @@
         {{/if}}{{/if}}{{/if}}{{/if}}
       </div>
     </div>
-  {{/if}}{{/if}}
+  {{/if}}{{/if}}{{/if}}
 {{/if}}

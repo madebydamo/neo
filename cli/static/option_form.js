@@ -83,6 +83,7 @@ function optionForm() {
         case 'str':
         case 'path':
         case 'strMatching':
+        case 'separatedString':
           return '';
         case 'enum':
           return (t.values && t.values.length) ? t.values[0] : '';
@@ -320,6 +321,19 @@ function optionForm() {
         return '';
       }
       return '';
+    },
+
+    /** separatedString value shown one entry per line. */
+    sepLines(name) {
+      const v = this.values[name];
+      const s = v == null ? '' : String(v);
+      const sep = this.optionsByName[name]?.type?.separator ?? '\n';
+      return (sep === '\n' || sep === '') ? s : s.split(sep).join('\n');
+    },
+
+    setSepLines(name, text) {
+      const sep = this.optionsByName[name]?.type?.separator ?? '\n';
+      this.values[name] = (sep === '\n' || sep === '') ? text : text.split('\n').join(sep);
     },
 
     patternError(name) {

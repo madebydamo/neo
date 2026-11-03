@@ -1,0 +1,8 @@
+{{! types.lines / types.commas / separatedString: one entry per line. Non-newline
+    separators are joined back on input (sepLines / setSepLines in option_form.js). }}
+<textarea class="textarea textarea-sm w-full font-mono leading-snug"
+          rows="4"
+          :value="sepLines('{{name}}')"
+          @input="setSepLines('{{name}}', $event.target.value)"
+          placeholder="One entry per line"
+          aria-label="{{label}}"></textarea>

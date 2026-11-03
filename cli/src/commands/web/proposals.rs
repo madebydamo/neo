@@ -211,7 +211,7 @@ pub fn type_check(t: &OptionType, value: &serde_json::Value) -> Result<(), Strin
             }
             Ok(())
         }
-        ("str" | "strMatching" | "path", V::String(_)) => Ok(()),
+        ("str" | "strMatching" | "separatedString" | "path", V::String(_)) => Ok(()),
         ("enum", v) => {
             let ok = t.values.as_ref().is_some_and(|vs| vs.contains(v));
             if ok {
@@ -265,7 +265,7 @@ fn kind_name(kind: &str) -> &str {
         "bool" => "true/false value",
         "int" | "port" => "whole number",
         "float" => "number",
-        "str" | "strMatching" | "path" => "text value",
+        "str" | "strMatching" | "separatedString" | "path" => "text value",
         "listOf" => "list",
         "attrsOf" | "submodule" => "set of named values",
         other => other,

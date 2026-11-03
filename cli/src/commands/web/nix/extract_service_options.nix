@@ -416,6 +416,18 @@
       kind = "enum";
       values = enumVals;
     }
+    # types.lines / types.commas / types.separatedString sep: merged
+    # definitions are joined with the separator.
+    else if n == "separatedString"
+    then {
+      kind = "separatedString";
+      separator =
+        if builtins.isAttrs fPayload && builtins.isString (fPayload.sep or null)
+        then fPayload.sep
+        else if builtins.isString fPayload
+        then fPayload
+        else "\n";
+    }
     else {
       kind =
         if n == ""
@@ -467,6 +479,11 @@
       else "float"
     else if k == "enum"
     then "enum"
+    else if k == "separatedString"
+    then
+      if (info.separator or "\n") == "\n"
+      then "lines"
+      else "list separated by \"${info.separator}\""
     else if k == "strMatching"
     then let
       p = info.pattern or null;
