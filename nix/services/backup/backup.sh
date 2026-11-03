@@ -166,7 +166,11 @@ backup_zfs() {
 
 log "starting ($NEO_FORMAT to $NEO_TARGET) at $(date)"
 if [ "$NEO_TARGET" = ssh ]; then
-  at_dest true || die "cannot log in to $NEO_SSH_DEST"
+  # ssh exits 255 only for its own failures (connect, auth). Restricted
+  # shells such as rsync.net's reject `true`, so the remote status is ignored.
+  rc=0
+  err=$(at_dest true 2>&1 >/dev/null) || rc=$?
+  [ "$rc" != 255 ] || die "cannot log in to $NEO_SSH_DEST: $err"
 fi
 case "$NEO_FORMAT" in
 files) backup_files ;;
