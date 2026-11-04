@@ -253,14 +253,37 @@ impl Gateway {
         Ok(r)
     }
 
-    /// Answer an approval prompt (`once` / `session` / `always` / `deny`).
-    pub async fn approve(&self, run_id: &str, choice: &str) -> Result<()> {
-        self.post(&format!("/v1/runs/{run_id}/approval"))
-            .json(&serde_json::json!({"choice": choice}))
+    /// Answer an approval prompt (`once` / `session` / `always` / `deny`). Session
+    /// chat runs need the exact prompt (`request_id`) and its `execution_generation`
+    /// from the `approval.request` event; Hermes refuses any other field set there.
+    pub async fn approve(
+        &self,
+        run_id: &str,
+        choice: &str,
+        request_id: Option<&str>,
+        generation: Option<i64>,
+    ) -> Result<()> {
+        let mut body = serde_json::json!({"choice": choice});
+        if let Some(id) = request_id {
+            body["request_id"] = Value::from(id);
+        }
+        if let Some(g) = generation {
+            body["execution_generation"] = Value::from(g);
+        }
+        let r = self
+            .post(&format!("/v1/runs/{run_id}/approval"))
+            .json(&body)
             .send()
             .await
-            .context("assistant not reachable")?
-            .error_for_status()?;
+            .context("assistant not reachable")?;
+        if !r.status().is_success() {
+            let s = r.status();
+            let text = r.text().await.unwrap_or_default();
+            return Err(anyhow!(
+                "assistant refused the answer ({s}): {}",
+                text.chars().take(300).collect::<String>()
+            ));
+        }
         Ok(())
     }
 

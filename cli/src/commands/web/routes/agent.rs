@@ -226,6 +226,10 @@ pub async fn agent_ref_list(config: &State<Arc<AppConfig>>) -> (Status, Json<Val
 pub struct ApproveReq {
     run_id: String,
     choice: String,
+    /// The prompt being answered (`approval.request` event `request_id`).
+    request_id: Option<String>,
+    /// The run generation that raised the prompt; Hermes' session runs refuse answers without it.
+    execution_generation: Option<i64>,
 }
 
 #[post("/agent/approve", data = "<req>")]
@@ -238,10 +242,25 @@ pub async fn agent_approve(req: Json<ApproveReq>) -> (Status, Json<Value>) {
     };
     if !valid_run_id(&req.run_id)
         || !matches!(req.choice.as_str(), "once" | "session" | "always" | "deny")
+        || req.request_id.as_deref().is_some_and(|r| {
+            r.is_empty()
+                || r.len() > 256
+                || !r
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "-_:.".contains(c))
+        })
     {
         return (Status::BadRequest, Json(json!({"error": "bad approval"})));
     }
-    match gw.approve(&req.run_id, &req.choice).await {
+    match gw
+        .approve(
+            &req.run_id,
+            &req.choice,
+            req.request_id.as_deref(),
+            req.execution_generation,
+        )
+        .await
+    {
         Ok(()) => (Status::Ok, Json(json!({"ok": true}))),
         Err(e) => (Status::BadGateway, Json(json!({"error": e.to_string()}))),
     }

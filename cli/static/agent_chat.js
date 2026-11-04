@@ -655,12 +655,30 @@
         row.querySelectorAll('button').forEach(function (b) {
           b.disabled = true;
         });
-        post('/agent/approve', { run_id: d.run_id || state.run, choice: c }).then(function (r) {
-          var done = document.createElement('div');
-          done.className = 'text-xs text-base-content/60 mt-1';
-          done.textContent = r.ok ? (c === 'deny' ? 'Denied.' : 'Allowed.') : 'Could not send the answer.';
-          card.appendChild(done);
-        });
+        // Hermes' session runs answer one exact prompt: echo its id and generation back.
+        var answer = { run_id: d.run_id || state.run, choice: c };
+        if (d.request_id) answer.request_id = d.request_id;
+        if (typeof d.execution_generation === 'number') answer.execution_generation = d.execution_generation;
+        post('/agent/approve', answer)
+          .then(function (r) {
+            if (r.ok) return c === 'deny' ? 'Denied.' : 'Allowed.';
+            return r.json().then(
+              function (j) {
+                return 'Could not send the answer' + (j && j.error ? ': ' + j.error : '.');
+              },
+              function () {
+                return 'Could not send the answer.';
+              }
+            );
+          }, function () {
+            return 'Could not send the answer.';
+          })
+          .then(function (msg) {
+            var done = document.createElement('div');
+            done.className = 'text-xs text-base-content/60 mt-1';
+            done.textContent = msg;
+            card.appendChild(done);
+          });
       });
       row.appendChild(btn);
     });
