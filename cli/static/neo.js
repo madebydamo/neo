@@ -167,6 +167,31 @@ function setActive(btn) {
   if (btn) btn.classList.add('active', 'text-primary-content');
 }
 
+// The sidebar entry for the neo settings (its subdomain is configurable, the name is not).
+function neoSidebarButton() {
+  return document.querySelector('.svc-btn[data-name="neo" i]');
+}
+
+// Top-bar neo icon: same as clicking the neo sidebar entry (new tab on modifier).
+// Already on the settings: back to their start page (like reload, canonical URL).
+function openNeoSettings(e) {
+  const plain = !(e && (e.shiftKey || e.ctrlKey || e.metaKey));
+  if (plain && currentKey === '__config') {
+    reloadFrame();
+    return;
+  }
+  const btn = neoSidebarButton();
+  if (btn) {
+    handleSidebarClick(e, btn.dataset.sub, btn.dataset.domain, btn);
+    return;
+  }
+  if (e && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+    window.open(configTargetUrl('neo', ''), '_blank');
+    return;
+  }
+  loadConfig(null, 'neo', '');
+}
+
 function hideAllOverlays() {
   const welcome = document.getElementById('welcome');
   const blocked = document.getElementById('embedding-blocked');
