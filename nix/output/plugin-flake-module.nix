@@ -76,16 +76,34 @@ in {
         if lib.length parts == 2
         then lib.concatStrings parts
         else null;
-      problems = lib.concatLists (lib.mapAttrsToList (what: get: let
-        baseNames = lib.attrNames (get base);
-        own = lib.subtractLists baseNames (lib.attrNames (get single));
-        got = lib.subtractLists baseNames (lib.attrNames (get double));
-        leaked = lib.filter (n: unprefix "neoa" n == null && unprefix "neob" n == null) got;
-        missing = lib.filter (n: !(lib.elem n (map (unprefix "neoa") got) && lib.elem n (map (unprefix "neob") got))) own;
+      # Images the plugin builds itself (nix2container, dockerTools) are tagged with a
+      # Nix hash and loaded by the plugin. Their name must carry the prefix: copies
+      # that share a name remove each other's image when they clean up old builds.
+      # Images pulled from a registry may be shared.
+      containers = double.virtualisation.oci-containers.containers;
+      ownContainers = lib.subtractLists (lib.attrNames base.virtualisation.oci-containers.containers) (lib.attrNames containers);
+      nixBuilt = image: builtins.match ".*:[0-9a-z]{32}" image != null;
+      repoOf = image: lib.head (lib.splitString ":" (lib.last (lib.splitString "/" image)));
+      sharedImages = lib.filter (n: let
+        image = containers.${n}.image;
       in
-        lib.optional (leaked != []) "${what}: ${toString leaked} (the same in every copy)"
-        ++ lib.optional (missing != []) "${what}: ${toString missing} (not created once per copy)")
-      sets);
+        nixBuilt image && unprefix "neoa" (repoOf image) == null && unprefix "neob" (repoOf image) == null)
+      ownContainers;
+      imageProblems =
+        lib.optional (sharedImages != [])
+        "images: ${lib.concatMapStringsSep ", " (n: "${n} uses ${containers.${n}.image}") sharedImages} (the same image name in every copy; load the image as \"\${name}:<tag>\")";
+      problems =
+        imageProblems
+        ++ lib.concatLists (lib.mapAttrsToList (what: get: let
+          baseNames = lib.attrNames (get base);
+          own = lib.subtractLists baseNames (lib.attrNames (get single));
+          got = lib.subtractLists baseNames (lib.attrNames (get double));
+          leaked = lib.filter (n: unprefix "neoa" n == null && unprefix "neob" n == null) got;
+          missing = lib.filter (n: !(lib.elem n (map (unprefix "neoa") got) && lib.elem n (map (unprefix "neob") got))) own;
+        in
+          lib.optional (leaked != []) "${what}: ${toString leaked} (the same in every copy)"
+          ++ lib.optional (missing != []) "${what}: ${toString missing} (not created once per copy)")
+        sets);
     in
       pkgs.runCommand "neo-plugin-instances" {} (
         if problems == []
