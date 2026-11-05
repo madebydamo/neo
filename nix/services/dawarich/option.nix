@@ -57,7 +57,7 @@
               dawarich = "freikin/dawarich:1.15.3";
               "dawarich-sidekiq" = "freikin/dawarich:1.15.3";
               "dawarich-db" = "postgis/postgis:17-3.5-alpine";
-              "dawarich-redis" = "redis:7.4-alpine";
+              "dawarich-redis" = "redis:8-alpine";
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/dawarich"
             // lib.neo.mkServiceMeta {

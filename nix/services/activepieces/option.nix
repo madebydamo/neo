@@ -68,7 +68,7 @@
             // lib.neo.mkContainerDefinitions {
               activepieces = "ghcr.io/activepieces/activepieces:latest";
               "activepieces-db" = "pgvector/pgvector:0.8.7-pg14";
-              "activepieces-redis" = "redis:7-alpine";
+              "activepieces-redis" = "redis:8-alpine";
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/activepieces"
             // lib.neo.mkServiceMeta {

@@ -58,7 +58,7 @@
               ];
             }
             // lib.neo.mkContainerDefinitions {
-              "paperless-redis" = "redis:7-alpine";
+              "paperless-redis" = "redis:8-alpine";
               "paperless-db" = "postgres:16";
               "paperless" = "ghcr.io/paperless-ngx/paperless-ngx:latest";
             }
