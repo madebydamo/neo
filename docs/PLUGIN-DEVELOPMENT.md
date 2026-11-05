@@ -14,6 +14,9 @@ Coding agents asked to "turn this project into a Neo plugin": follow the [checkl
 - [Turn your project into a Neo plugin (checklist)](#turn-your-project-into-a-neo-plugin-checklist)
 - [Service files in detail](#service-files-in-detail)
 - [Other service shapes](#other-service-shapes)
+- [Texts for the web UI](#texts-for-the-web-ui)
+- [Guides](#guides)
+- [Privacy map](#privacy-map)
 - [Verify on the host](#verify-on-the-host)
 - [Real-world plugins](#real-world-plugins)
 
@@ -158,11 +161,12 @@ Work through every item. Each one exists because it is easy to forget.
 - [ ] `// lib.neo.mkReverseProxyOptions { subdomain = name; auth.publicPaths = [ … ]; }` if it has a web UI (or `plugin.name "<short>"` for a shorter subdomain). It must not collide with another service.
 - [ ] `// lib.neo.mkContainerDefinitions { <container> = "<image:tag>"; extraUnits = [ … ]; }` for OCI services, listing every non-docker unit in `extraUnits`; or `// lib.neo.mkSystemdUnits [ … ]` for native services. Every unit the service runs is listed.
 - [ ] `// lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/<name>"` if it stores anything.
-- [ ] `// lib.neo.mkServiceMeta { category; icon; description; projectUrl; githubUrl; releaseUrl; }`.
+- [ ] `// lib.neo.mkServiceMeta { category; icon; tagline; description; notes; replaces; privacy; projectUrl; githubUrl; releaseUrl; }`.
 - [ ] `// lib.neo.mkSkillOptions {}` if you ship a `skills.nix`.
 - [ ] `// lib.neo.mkVpnOptions { … }` if containers may route through the VPN.
 - [ ] Secrets (passwords, tokens, API keys) use `lib.neo.mkSecretOption` (same arguments as `mkOption`, e.g. `type = types.nullOr types.str; default = null; helper = lib.neo.helpers.randomToken;`); never a real secret as a default.
 - [ ] Presentation metadata where useful: `label`, `ui.group`, `visibleWhen`, `choices`, `choiceLabels`.
+- [ ] `tagline`, `description`, `notes`, `replaces`, `privacy` and every option description follow [Texts for the web UI](#texts-for-the-web-ui).
 
 **`default.nix`** ([details](#defaultnix))
 
@@ -519,6 +523,95 @@ Use your plugin's inputs inside a NixOS module through the flake-parts arguments
 ### System-level additions
 
 A plugin does not have to define a service. Any `neoPlugin.modules.<name>` is imported, so disks, packages or kernel tweaks are plain NixOS config. It will not show on the Services grid. A module that is not named per instance (a shared package, a kernel setting) is imported once per copy of the plugin, so keep it to definitions that merge (no option declarations), or the plugin can only be added once.
+
+## Texts for the web UI
+
+Most people who see your service never read Nix. The service card, the option pane and the Hermes assistant show your texts to non-technical operators. Write for someone who knows what a calendar is, not what CalDAV is.
+
+**Service (`mkServiceMeta`)**
+
+| Field | Shown | Write |
+|-------|-------|-------|
+| `tagline` | Grid card, search | One line (≤ ~80 chars), what you get: "Your own Google Photos" |
+| `description` | Pane header | 2–3 plain sentences: what you can do, what it replaces, who it is for |
+| `notes` | Collapsed "Good to know" | Operator facts: first login, paths that skip the login page, upgrade cautions |
+| `replaces` | Search, privacy map | Familiar products: `["Google Keep" "Apple Notes"]` |
+| `privacy` | Privacy map | Category ids, see [Privacy map](#privacy-map) |
+
+Lead with the outcome, not the technology ("Blocks ads on every device in your home", not "DNS sinkhole"). No superlatives, upstream marketing or version numbers. Technical detail goes into `notes`, never `tagline` or `description`.
+
+**Options**
+
+- `description`: first sentence says what the setting does for the operator, in plain words (≤ ~20 words). Optional second sentence: the consequence ("Changing it signs everyone out."). Say what empty or the default means.
+- No env var names, file paths, unit names or `services.x.y` paths in descriptions. Put them in a Nix comment. Refer to other settings by their label.
+- `enabled`: say what you get ("Notes that stay on your own server"), not "MyApp service". `lib.neo.mkEnableOption` uses the text as the whole description.
+- Give every non-obvious option a `ui.label` ("Allow sign-up", not `allowSignup`).
+- Secrets stay visible (never in Advanced): say what they protect and what changing them later breaks.
+- Ports and other plumbing go in `ui.group = lib.neo.ui.groups.advanced`, or `internal = true` when the operator never changes them.
+- Fields that only matter with another setting get `ui.visibleWhen`.
+
+Background and examples: [descriptions-and-guides.md](design/descriptions-and-guides.md).
+
+## Guides
+
+Guides are outcome-focused how-tos on the web UI's **Guides** tab ("Keep your notes at home"), linked from every service they use. Every guide is also a Hermes skill (`neo-guide-<id>`), which **Do it with AI** loads. A plugin declares one like a core guide (`nix/guides/<id>/` in Neo), as a `neoPlugin.modules` entry:
+
+```nix
+# modules/guides/notes-at-home/default.nix
+{...}: {
+  neoPlugin.modules.guide-notes-at-home = {plugin, ...}: let
+    name = plugin.name "myapp";
+    # Links in the Markdown name the service; rewrite them for prefixed copies.
+    body = builtins.toFile "notes-at-home.md" (builtins.replaceStrings
+      ["service:myapp" "option:myapp." "{{service.myapp."]
+      ["service:${name}" "option:${name}." "{{service.${name}."]
+      (builtins.readFile ./guide.md));
+  in {
+    neo.guides.${plugin.name "notes-at-home"} = {
+      title = "Keep your notes at home${plugin.label}";
+      summary = "Write notes on every device without handing them to Google or Apple.";
+      services = [name];
+      optional = ["tailscale"];
+      privacy = ["notes"];
+      difficulty = "easy";           # easy | medium | advanced
+      minutes = 10;
+      tags = ["family"];
+      inherit body;
+    };
+  };
+}
+```
+
+The body is GitHub-style Markdown:
+
+| Syntax | Renders as |
+|--------|------------|
+| `[MyApp](service:myapp)` | Service chip with icon and status → service pane |
+| `[sign-up](option:myapp.allowSignup)` | Opens the pane at that field |
+| `[…](guide:<id>)`, `[…](privacy:<category>)` | Guide card, privacy map tile |
+| `{{domain}}`, `{{service.myapp.url}}` | Current values |
+| `> [!tip]`, `> [!warning]`, `> [!check] Title` | Callouts. A fenced `neo-check` block inside a check is the command the assistant runs to verify the step |
+
+Targets that do not exist on the machine render as plain text; raw HTML is shown as text. One outcome per guide, steps that point at real settings, written for non-technical readers.
+
+## Privacy map
+
+The privacy map (**Configuration → Privacy**) shows which kinds of personal data already live at home. A service tags itself with `mkServiceMeta { privacy = ["notes"]; }`; a category counts as "at home" once a tagged service is enabled. Unknown ids are a build warning.
+
+Built-in categories: `calendar`, `contacts`, `photos`, `passwords`, `location`, `documents`, `files`, `notes`, `tasks`, `bookmarks`, `search`, `browsing`, `recipes`, `code`, `automation`, `assistant` (and more; the list is `neo.privacy.categories` in `nix/modules/core/privacy.nix`). A plugin adds its own:
+
+```nix
+neo.privacy.categories.music = {
+  label = "Music";
+  icon = ./music.svg;
+  cloud = "Streaming services know what you listen to, when and where.";
+  home = "Your library plays everywhere, and only your server knows your taste.";
+  examples = ["Spotify" "Apple Music"];
+  rank = 150;
+};
+```
+
+Category ids are not prefixed: every copy of the plugin defines the same category with the same values, which merges cleanly (repeated `examples` are dropped).
 
 ## Verify on the host
 
