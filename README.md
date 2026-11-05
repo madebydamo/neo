@@ -120,7 +120,11 @@ Enable what you want in the web UI.
 
 ## For contributors
 
-Work on Neo itself starts at **[AGENTS.md](AGENTS.md)**.
+Work on Neo itself starts at **[AGENTS.md](AGENTS.md)** and the [development philosophy](docs/PHILOSOPHY.md). Coding agents: install the `neo` skills (`/plugin install neo --marketplace madebydamo/neo`).
+
+## License
+
+Neo is [MIT](LICENSE) licensed. The apps it runs are separate projects under their own licenses, pulled from their upstream images or nixpkgs; their names and logos belong to those projects.
 
 ---
 

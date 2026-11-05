@@ -7,5 +7,11 @@
   },
   "homepage": "https://github.com/madebydamo/neo",
   "repository": "https://github.com/madebydamo/neo",
-  "keywords": ["nixos", "homeserver", "nix", "self-hosting"]
+  "license": "MIT",
+  "keywords": [
+    "nixos",
+    "homeserver",
+    "nix",
+    "self-hosting"
+  ]
 }
