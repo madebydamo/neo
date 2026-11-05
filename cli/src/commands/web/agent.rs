@@ -178,6 +178,224 @@ pub fn history(raw: &[Value]) -> Vec<Value> {
     out
 }
 
+/// Most messages one history read returns (Hermes' page limit).
+const HISTORY_PAGE: usize = 500;
+
+/// Raw messages in conversation order: by Hermes' row id when every message has
+/// one (a page read from the newest end must still replay oldest first).
+fn chronological(mut raw: Vec<Value>) -> Vec<Value> {
+    if raw.iter().all(|m| m["id"].as_i64().is_some()) {
+        raw.sort_by_key(|m| m["id"].as_i64().unwrap_or_default());
+    }
+    raw
+}
+
+/// Whether `t` is the timestamp suffix of a fresh chat id.
+fn is_stamp(t: &str) -> bool {
+    t.len() >= 9 && t.chars().all(|c| c.is_ascii_digit())
+}
+
+/// The chat context a session id belongs to (best effort, `session_id` is
+/// lossy): `neo-service-pi-hole-1730000000` → `service:pi-hole`.
+pub fn context_of(id: &str) -> String {
+    let mut rest = id.strip_prefix("neo-").unwrap_or(id);
+    if let Some((head, tail)) = rest.rsplit_once('-') {
+        if is_stamp(tail) {
+            rest = head;
+        }
+    }
+    for kind in ["service", "guide"] {
+        if let Some(name) = rest.strip_prefix(kind).and_then(|r| r.strip_prefix('-')) {
+            if !name.is_empty() {
+                return format!("{kind}:{name}");
+            }
+        }
+    }
+    "general".to_string()
+}
+
+/// Whether session `id` is a chat of `context` (its plain id or a fresh one).
+pub fn in_context(id: &str, context: &str) -> bool {
+    let base = session_id(context, false);
+    id == base
+        || id
+            .strip_prefix(&base)
+            .and_then(|r| r.strip_prefix('-'))
+            .is_some_and(is_stamp)
+}
+
+/// Longest title text taken from the first message (before the context prefix).
+const TITLE_CHARS: usize = 60;
+
+/// Chat title from the first message: whitespace collapsed, the reference
+/// block dropped, cut at a word near 60 characters, with the context label in
+/// front ("Pi-hole: why are ads still shown?").
+pub fn chat_title(prefix: Option<&str>, message: &str) -> String {
+    let text = super::agent_refs::strip_block(message);
+    let mut out = String::new();
+    for w in text.split_whitespace() {
+        let len = out.chars().count() + usize::from(!out.is_empty()) + w.chars().count();
+        if len > TITLE_CHARS {
+            if out.is_empty() {
+                out = w.chars().take(TITLE_CHARS).collect();
+            }
+            out.push('…');
+            break;
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(w);
+    }
+    if out.is_empty() {
+        out = "New chat".to_string();
+    }
+    match prefix.map(str::trim).filter(|p| !p.is_empty()) {
+        Some(p) => format!("{p}: {out}"),
+        None => out,
+    }
+}
+
+/// A run's state for the drawer: `status`, whether it ended (`done`), and the
+/// approval prompts still waiting, in the `approval.request` event shape
+/// (`request_id`, `execution_generation`, `command`, `description`, `choices`,
+/// `timeout_s`). `approvals_known`: the list is complete, so a prompt missing
+/// from it has ended.
+pub fn run_view(v: &Value) -> Value {
+    let status = v["status"].as_str().unwrap_or("running").to_string();
+    let done = matches!(
+        status.as_str(),
+        "completed" | "failed" | "cancelled" | "interrupted"
+    );
+    let pick = |p: &Value, id: &str| {
+        let mut a = serde_json::json!({ "request_id": id });
+        for k in [
+            "execution_generation",
+            "command",
+            "description",
+            "choices",
+            "timeout_s",
+        ] {
+            if !p[k].is_null() {
+                a[k] = p[k].clone();
+            }
+        }
+        a
+    };
+    let mut approvals: Vec<Value> = Vec::new();
+    let known = if let Some(list) = v["pending_controls"].as_array() {
+        for p in list.iter().filter(|p| p["kind"] == "approval") {
+            if let Some(id) = p["prompt_id"].as_str().or(p["request_id"].as_str()) {
+                approvals.push(pick(p, id));
+            }
+        }
+        true
+    } else if status == "waiting_for_approval" {
+        match v["approval"]["request_id"].as_str() {
+            Some(id) => {
+                approvals.push(pick(&v["approval"], id));
+                true
+            }
+            None => false,
+        }
+    } else {
+        // A session-stream run drops its prompt from the status once answered.
+        true
+    };
+    let mut out = serde_json::json!({
+        "status": status,
+        "done": done,
+        "approvals": approvals,
+        "approvals_known": known,
+    });
+    if let Some(e) = v["error"].as_str().filter(|e| !e.is_empty()) {
+        out["error"] = Value::from(e);
+    }
+    out
+}
+
+/// One past chat for the drawer's list (`None` for other clients' sessions
+/// and empty ones).
+fn session_entry(s: &Value) -> Option<Value> {
+    let id = s["id"].as_str().filter(|id| valid_session_id(id))?;
+    let count = s["message_count"].as_i64().unwrap_or_default();
+    if count <= 0 || s["archived"].as_bool() == Some(true) {
+        return None;
+    }
+    let last = s["last_active"]
+        .as_f64()
+        .or(s["ended_at"].as_f64())
+        .or(s["started_at"].as_f64())
+        .unwrap_or_default();
+    Some(serde_json::json!({
+        "id": id,
+        "title": s["title"].as_str().unwrap_or_default(),
+        "preview": s["preview"].as_str().unwrap_or_default(),
+        "context": context_of(id),
+        "last_active": last,
+        "message_count": count,
+    }))
+}
+
+/// Why Hermes refused a request: HTTP status (0 = not reachable), its error
+/// `code`, a short text.
+#[derive(Debug)]
+pub struct Refusal {
+    pub status: u16,
+    pub code: Option<String>,
+    pub message: String,
+}
+
+impl Refusal {
+    async fn from(r: reqwest::Response) -> Self {
+        let status = r.status().as_u16();
+        let text = r.text().await.unwrap_or_default();
+        let v: Value = serde_json::from_str(&text).unwrap_or_default();
+        let code = v["error"]["code"]
+            .as_str()
+            .or(v["code"].as_str())
+            .map(str::to_string);
+        let message = v["error"]["message"]
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| text.chars().take(300).collect());
+        Refusal {
+            status,
+            code,
+            message,
+        }
+    }
+
+    fn unreachable(e: reqwest::Error) -> Self {
+        Refusal {
+            status: 0,
+            code: None,
+            message: format!("assistant not reachable: {e}"),
+        }
+    }
+
+    /// The prompt or its run is over (timed out, answered, or the turn ended).
+    pub fn ended(&self) -> bool {
+        self.status == 404
+            || matches!(
+                self.code.as_deref(),
+                Some(
+                    "approval_not_pending"
+                        | "stale_generation"
+                        | "approval_not_active"
+                        | "not_found"
+                )
+            )
+    }
+}
+
+/// A session's replayable history; `truncated` when older messages exist
+/// beyond the page that was read.
+pub struct History {
+    pub messages: Vec<Value>,
+    pub truncated: bool,
+}
+
 impl Gateway {
     fn client() -> reqwest::Client {
         reqwest::Client::new()
@@ -189,39 +407,131 @@ impl Gateway {
             .bearer_auth(&self.token)
     }
 
-    /// Create the session if it does not exist yet (a conflict means it does).
-    pub async fn ensure_session(&self, id: &str, title: &str) -> Result<()> {
-        let r = self
-            .post("/api/sessions")
-            .json(&serde_json::json!({"id": id, "title": title}))
-            .send()
-            .await
-            .context("assistant not reachable")?;
-        let s = r.status();
-        if s.is_success() || s == reqwest::StatusCode::CONFLICT {
-            return Ok(());
-        }
-        Err(anyhow!("assistant refused the chat ({s})"))
+    fn get(&self, path: &str) -> reqwest::RequestBuilder {
+        Self::client()
+            .get(format!("{}{path}", self.base))
+            .bearer_auth(&self.token)
     }
 
-    /// Visible messages of a session (see [`history`]).
-    pub async fn messages(&self, id: &str) -> Result<Vec<Value>> {
-        let r = Self::client()
-            .get(format!(
-                "{}/api/sessions/{id}/messages?limit=200",
-                self.base
+    /// Create the session if it does not exist yet (a conflict means it does).
+    /// Titles are unique in Hermes: on a clash retry with the time, then the
+    /// id's tail, then without a title.
+    pub async fn ensure_session(&self, id: &str, title: Option<&str>) -> Result<()> {
+        let mut titles: Vec<Option<String>> = Vec::new();
+        if let Some(t) = title.map(str::trim).filter(|t| !t.is_empty()) {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or_default();
+            let tail = &id[id.len().saturating_sub(4)..];
+            titles.push(Some(t.to_string()));
+            titles.push(Some(format!(
+                "{t} · {}",
+                crate::utils::locks::local_hhmm(now)
+            )));
+            titles.push(Some(format!("{t} · {tail}")));
+        }
+        titles.push(None);
+        for t in titles {
+            let mut body = serde_json::json!({ "id": id });
+            if let Some(t) = &t {
+                body["title"] = Value::from(t.as_str());
+            }
+            let r = self
+                .post("/api/sessions")
+                .json(&body)
+                .send()
+                .await
+                .context("assistant not reachable")?;
+            let s = r.status();
+            if s.is_success() || s == reqwest::StatusCode::CONFLICT {
+                return Ok(());
+            }
+            let refusal = Refusal::from(r).await;
+            if refusal.code.as_deref() != Some("invalid_title") {
+                return Err(anyhow!(
+                    "assistant refused the chat ({s}): {}",
+                    refusal.message
+                ));
+            }
+        }
+        Err(anyhow!("assistant refused the chat title"))
+    }
+
+    /// The newest page of a session's visible messages (see [`history`]), in
+    /// conversation order. With an explicit limit Hermes returns the oldest
+    /// page unless `order=latest` is asked for.
+    pub async fn messages(&self, id: &str) -> Result<History> {
+        let r = self
+            .get(&format!(
+                "/api/sessions/{id}/messages?order=latest&limit={HISTORY_PAGE}"
             ))
-            .bearer_auth(&self.token)
             .send()
             .await
             .context("assistant not reachable")?;
         if r.status() == reqwest::StatusCode::NOT_FOUND {
-            return Ok(vec![]);
+            return Ok(History {
+                messages: vec![],
+                truncated: false,
+            });
         }
         let v: Value = r.error_for_status()?.json().await?;
-        Ok(history(
-            v["data"].as_array().map(Vec::as_slice).unwrap_or_default(),
-        ))
+        let raw = v["data"].as_array().cloned().unwrap_or_default();
+        let truncated = raw.len() >= HISTORY_PAGE;
+        Ok(History {
+            messages: history(&chronological(raw)),
+            truncated,
+        })
+    }
+
+    /// The chats neo-web started (`neo-…` ids with messages), newest first.
+    pub async fn sessions(&self) -> Result<Vec<Value>> {
+        let v: Value = self
+            .get("/api/sessions?limit=200")
+            .send()
+            .await
+            .context("assistant not reachable")?
+            .error_for_status()?
+            .json()
+            .await?;
+        let mut out: Vec<Value> = v["data"]
+            .as_array()
+            .map(|a| a.iter().filter_map(session_entry).collect())
+            .unwrap_or_default();
+        out.sort_by(|a, b| {
+            b["last_active"]
+                .as_f64()
+                .partial_cmp(&a["last_active"].as_f64())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        Ok(out)
+    }
+
+    pub async fn delete_session(&self, id: &str) -> Result<(), Refusal> {
+        let r = Self::client()
+            .delete(format!("{}/api/sessions/{id}", self.base))
+            .bearer_auth(&self.token)
+            .send()
+            .await
+            .map_err(Refusal::unreachable)?;
+        if r.status().is_success() || r.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(());
+        }
+        Err(Refusal::from(r).await)
+    }
+
+    /// Pollable state of a run ([`run_view`]); `None` once Hermes forgot it.
+    pub async fn run(&self, run_id: &str) -> Result<Option<Value>> {
+        let r = self
+            .get(&format!("/v1/runs/{run_id}"))
+            .send()
+            .await
+            .context("assistant not reachable")?;
+        if r.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        let v: Value = r.error_for_status()?.json().await?;
+        Ok(Some(run_view(&v)))
     }
 
     /// Start one streamed turn; the caller forwards the SSE body.
@@ -262,8 +572,8 @@ impl Gateway {
         choice: &str,
         request_id: Option<&str>,
         generation: Option<i64>,
-    ) -> Result<()> {
-        let mut body = serde_json::json!({"choice": choice});
+    ) -> Result<(), Refusal> {
+        let mut body = serde_json::json!({ "choice": choice });
         if let Some(id) = request_id {
             body["request_id"] = Value::from(id);
         }
@@ -275,16 +585,11 @@ impl Gateway {
             .json(&body)
             .send()
             .await
-            .context("assistant not reachable")?;
-        if !r.status().is_success() {
-            let s = r.status();
-            let text = r.text().await.unwrap_or_default();
-            return Err(anyhow!(
-                "assistant refused the answer ({s}): {}",
-                text.chars().take(300).collect::<String>()
-            ));
+            .map_err(Refusal::unreachable)?;
+        if r.status().is_success() {
+            return Ok(());
         }
-        Ok(())
+        Err(Refusal::from(r).await)
     }
 
     pub async fn stop(&self, run_id: &str) -> Result<()> {
@@ -348,5 +653,123 @@ mod tests {
             .unwrap()
             .contains("5000 characters"));
         assert_eq!(h[3]["content"], "Yes, it is on.");
+    }
+
+    #[test]
+    fn latest_page_replays_oldest_first() {
+        use serde_json::json;
+        // Newest-first rows (as an `order=latest` page could come back) replay in order.
+        let raw = vec![
+            json!({"id": 12, "role": "assistant", "content": "third"}),
+            json!({"id": 11, "role": "user", "content": "second"}),
+            json!({"id": 10, "role": "assistant", "content": "first"}),
+        ];
+        let h = history(&chronological(raw));
+        let texts: Vec<_> = h.iter().map(|m| m["content"].as_str().unwrap()).collect();
+        assert_eq!(texts, ["first", "second", "third"]);
+        // Without ids the order is kept as given.
+        let raw = vec![
+            json!({"role": "user", "content": "a"}),
+            json!({"role": "assistant", "content": "b"}),
+        ];
+        assert_eq!(history(&chronological(raw))[1]["content"], "b");
+    }
+
+    #[test]
+    fn contexts_from_ids() {
+        assert_eq!(context_of("neo-general"), "general");
+        assert_eq!(context_of("neo-general-1730000000"), "general");
+        assert_eq!(
+            context_of("neo-service-pi-hole-1730000000"),
+            "service:pi-hole"
+        );
+        assert_eq!(
+            context_of("neo-guide-adblock-at-home"),
+            "guide:adblock-at-home"
+        );
+        assert!(in_context(
+            "neo-service-pihole-1730000000",
+            "service:pihole"
+        ));
+        assert!(in_context("neo-service-pihole", "service:pihole"));
+        assert!(!in_context(
+            "neo-service-pihole-extra-1730000000",
+            "service:pihole"
+        ));
+        assert!(in_context(&session_id("guide:x", true), "guide:x"));
+    }
+
+    #[test]
+    fn titles_from_first_message() {
+        assert_eq!(
+            chat_title(Some("Pi-hole"), "  why are\n ads   still shown? "),
+            "Pi-hole: why are ads still shown?"
+        );
+        let long = "word ".repeat(30);
+        let t = chat_title(None, &long);
+        assert!(t.ends_with('…'));
+        assert!(t.chars().count() <= TITLE_CHARS + 1);
+        assert_eq!(chat_title(Some(""), ""), "New chat");
+        let block = format!(
+            "is @pihole on?{}\n{{}}\n</neo-references>",
+            super::super::agent_refs::BLOCK_START
+        );
+        assert_eq!(chat_title(None, &block), "is @pihole on?");
+    }
+
+    #[test]
+    fn run_views() {
+        use serde_json::json;
+        let v = run_view(&json!({
+            "status": "waiting_for_approval",
+            "pending_controls": [
+                {"kind": "approval", "prompt_id": "p1", "execution_generation": 3,
+                 "command": "rm -rf /tmp/x", "description": "delete", "choices": ["once", "deny"], "timeout_s": 300},
+                {"kind": "clarify", "prompt_id": "c1"}
+            ]
+        }));
+        assert_eq!(v["done"], false);
+        assert_eq!(v["approvals_known"], true);
+        let a = &v["approvals"][0];
+        assert_eq!(a["request_id"], "p1");
+        assert_eq!(a["execution_generation"], 3);
+        assert_eq!(a["timeout_s"], 300);
+        assert_eq!(v["approvals"].as_array().unwrap().len(), 1);
+
+        let v = run_view(&json!({"status": "waiting_for_approval",
+            "approval": {"request_id": "r9", "command": "ls", "choices": ["once"]}}));
+        assert_eq!(v["approvals"][0]["request_id"], "r9");
+
+        let v = run_view(&json!({"status": "failed", "error": "boom"}));
+        assert_eq!(v["done"], true);
+        assert_eq!(v["error"], "boom");
+        assert_eq!(v["approvals"], json!([]));
+    }
+
+    #[test]
+    fn session_entries_keep_neo_chats() {
+        use serde_json::json;
+        assert!(session_entry(&json!({"id": "api_1", "message_count": 3})).is_none());
+        assert!(session_entry(&json!({"id": "neo-general", "message_count": 0})).is_none());
+        let e = session_entry(
+            &json!({"id": "neo-service-pihole-1730000000", "title": "Pi-hole: x",
+            "message_count": 4, "last_active": 1730000100.5}),
+        )
+        .unwrap();
+        assert_eq!(e["context"], "service:pihole");
+        assert_eq!(e["last_active"], 1730000100.5);
+    }
+
+    #[test]
+    fn ended_refusals() {
+        let r = |status, code: Option<&str>| Refusal {
+            status,
+            code: code.map(str::to_string),
+            message: String::new(),
+        };
+        assert!(r(409, Some("approval_not_pending")).ended());
+        assert!(r(409, Some("stale_generation")).ended());
+        assert!(!r(400, Some("invalid_approval_choice")).ended());
+        assert!(!r(0, None).ended());
     }
 }

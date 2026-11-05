@@ -39,7 +39,7 @@ fn frame(event: &str, data: Value) -> Vec<u8> {
     format!("event: {event}\ndata: {data}\n\n").into_bytes()
 }
 
-const STYLE: &str = "You are answering in the chat panel of the neo web UI. The person may not be technical: use plain words and short numbered steps, one step at a time, and keep tool use to what the question needs. Refer to settings by their label. To point at a setting, write a Markdown link like [Home network address](option:pihole.localIP); for an app [Pi-hole](service:pihole); for a guide [title](guide:<id>). Never ask the user to paste passwords or keys into the chat.";
+const STYLE: &str = "You are answering in the chat panel of the neo web UI. The person may not be technical: use plain words and short numbered steps, one step at a time, and keep tool use to what the question needs. Refer to settings by their label. To point at a setting, write a Markdown link like [Home network address](option:pihole.localIP); for an app [Pi-hole](service:pihole); for a guide [title](guide:<id>). Never show a password, token or key in the chat or in commands you run (write *** instead), never ask the user to paste one into the chat, and never make one up yourself.";
 
 /// How settings changes work, depending on whether the neo tools are connected.
 fn settings_rules() -> &'static str {
@@ -47,7 +47,7 @@ fn settings_rules() -> &'static str {
         .ok()
         .is_some_and(|p| std::path::Path::new(&p).exists());
     if tools {
-        "Read settings with neo_settings_schema / neo_settings_get and change them only with neo_settings_propose, never by editing files. After proposing, say that a card with Save / Save & apply appears here in the chat, include the proposal link from the tool result, and wait for the user."
+        "Read settings with neo_settings_schema / neo_settings_get and change them only with neo_settings_propose, never by editing files. For a secret setting use the op `ask` (the user types or generates it on the card; changes with the same `group` share one input) or `generate`, never a value of your own. After proposing, say that a card with Save / Save & apply appears here in the chat, include the proposal link from the tool result, and wait for the user."
     } else {
         "The neo settings tools are not connected here, so do not look for them (no tool_search or connection setup for them). Read the current settings from the context below or with read-only commands, and never edit settings files yourself: tell the user which setting to change, as an option: link they can click, and that they save it and press Apply at the top. To let you prepare changes yourself, the user can generate the Settings tools token on the Hermes page."
     }
@@ -57,8 +57,13 @@ fn settings_rules() -> &'static str {
 pub struct OpenReq {
     #[serde(default)]
     context: String,
+    /// Kept for old clients: every open without `session_id` is a new chat.
     #[serde(default)]
+    #[allow(dead_code)]
     fresh: bool,
+    /// Reopen this past chat instead of starting a new one.
+    #[serde(default)]
+    session_id: Option<String>,
 }
 
 /// `(kind, name)` of a chat context: `general`, `service:<name>`, `guide:<id>`.
@@ -70,15 +75,58 @@ fn parse_context(ctx: &str) -> Option<(&str, &str)> {
     }
 }
 
-/// Open (or resume) the chat for a context: session id + earlier messages.
+fn not_set_up() -> (Status, Json<Value>) {
+    (
+        Status::NotFound,
+        Json(json!({"error": "The assistant is not set up."})),
+    )
+}
+
+/// Display label and icon of each chat context, keyed by its base session id
+/// (`neo-service-pihole`): apps and guides from the `@` candidates.
+async fn context_labels(config: &AppConfig) -> HashMap<String, (String, Option<String>)> {
+    let mut out = HashMap::new();
+    if let Ok(items) = agent_refs::cached_candidates(config).await {
+        for it in items.iter() {
+            let ctx = match it.kind {
+                "service" => format!("service:{}", it.token),
+                "guide" => it.token.clone(),
+                _ => continue,
+            };
+            out.insert(
+                agent::session_id(&ctx, false),
+                (it.label.clone(), it.icon.clone()),
+            );
+        }
+    }
+    out
+}
+
+/// Start a new chat (an id only: Hermes gets the session with the first
+/// message, so opening the drawer leaves no empty chats) or reopen a past one
+/// with its latest messages.
 #[post("/agent/open", data = "<req>")]
 pub async fn agent_open(req: Json<OpenReq>) -> (Status, Json<Value>) {
     let Some(gw) = agent::gateway() else {
-        return (
-            Status::NotFound,
-            Json(json!({"error": "The assistant is not set up."})),
-        );
+        return not_set_up();
     };
+    if let Some(id) = req.session_id.as_deref() {
+        if !valid_session_id(id) {
+            return (Status::BadRequest, Json(json!({"error": "unknown chat"})));
+        }
+        return match gw.messages(id).await {
+            Ok(h) => (
+                Status::Ok,
+                Json(json!({
+                    "session_id": id,
+                    "context": agent::context_of(id),
+                    "messages": h.messages,
+                    "truncated": h.truncated,
+                })),
+            ),
+            Err(e) => (Status::BadGateway, Json(json!({"error": e.to_string()}))),
+        };
+    }
     let Some((kind, name)) = parse_context(&req.context) else {
         return (
             Status::BadRequest,
@@ -90,26 +138,98 @@ pub async fn agent_open(req: Json<OpenReq>) -> (Status, Json<Value>) {
     } else {
         format!("{kind}:{name}")
     };
-    let id = agent::session_id(&ctx, req.fresh);
-    let mut title = match kind {
-        "service" => format!("Help with {name}"),
-        "guide" => format!("Guide: {name}"),
-        _ => "Neo assistant".to_string(),
-    };
-    // Hermes needs unique session titles: a new chat carries its timestamp.
-    if req.fresh {
-        if let Some(ts) = id.rsplit('-').next() {
-            title = format!("{title} · {ts}");
-        }
-    }
-    if let Err(e) = gw.ensure_session(&id, &title).await {
-        return (Status::BadGateway, Json(json!({"error": e.to_string()})));
-    }
-    let messages = gw.messages(&id).await.unwrap_or_default();
     (
         Status::Ok,
-        Json(json!({"session_id": id, "messages": messages})),
+        Json(json!({
+            "session_id": agent::session_id(&ctx, true),
+            "context": ctx,
+            "messages": [],
+            "truncated": false,
+        })),
     )
+}
+
+/// Past chats started here, newest first, with their context's label and icon.
+/// `here` marks the chats of `context` (the page the drawer was opened from).
+#[get("/agent/sessions?<context>")]
+pub async fn agent_sessions(
+    config: &State<Arc<AppConfig>>,
+    context: Option<String>,
+) -> (Status, Json<Value>) {
+    let Some(gw) = agent::gateway() else {
+        return not_set_up();
+    };
+    let list = match gw.sessions().await {
+        Ok(l) => l,
+        Err(e) => return (Status::BadGateway, Json(json!({"error": e.to_string()}))),
+    };
+    let labels = context_labels(config).await;
+    let here = context.as_deref().filter(|c| parse_context(c).is_some());
+    let items: Vec<Value> = list
+        .into_iter()
+        .map(|mut s| {
+            let id = s["id"].as_str().unwrap_or_default().to_string();
+            let ctx = s["context"].as_str().unwrap_or("general").to_string();
+            let (label, icon) = match labels.get(&agent::session_id(&ctx, false)) {
+                Some((l, i)) => (l.clone(), i.clone()),
+                None if ctx == "general" => ("General".to_string(), None),
+                None => (
+                    ctx.split_once(':')
+                        .map(|(_, n)| n)
+                        .unwrap_or(&ctx)
+                        .to_string(),
+                    None,
+                ),
+            };
+            s["label"] = Value::from(label);
+            s["icon"] = icon.map(Value::from).unwrap_or(Value::Null);
+            s["here"] = Value::from(here.is_some_and(|c| agent::in_context(&id, c)));
+            s
+        })
+        .collect();
+    (Status::Ok, Json(json!({ "items": items })))
+}
+
+#[rocket::delete("/agent/sessions/<id>")]
+pub async fn agent_session_delete(id: &str) -> (Status, Json<Value>) {
+    let Some(gw) = agent::gateway() else {
+        return not_set_up();
+    };
+    if !valid_session_id(id) {
+        return (Status::BadRequest, Json(json!({"error": "unknown chat"})));
+    }
+    match gw.delete_session(id).await {
+        Ok(()) => (Status::Ok, Json(json!({"ok": true}))),
+        Err(r) if r.code.as_deref() == Some("session_active_turn") => (
+            Status::Conflict,
+            Json(json!({"error": "The assistant is still answering in this chat. Stop it first."})),
+        ),
+        Err(r) => (
+            Status::BadGateway,
+            Json(json!({"error": format!("Could not delete the chat: {}", r.message)})),
+        ),
+    }
+}
+
+/// State of a running turn (the drawer polls it after a reload or a broken
+/// stream): `status`, `done`, pending approval prompts.
+#[get("/agent/run/<run_id>")]
+pub async fn agent_run(run_id: &str) -> (Status, Json<Value>) {
+    let Some(gw) = agent::gateway() else {
+        return not_set_up();
+    };
+    if !valid_run_id(run_id) {
+        return (Status::BadRequest, Json(json!({"error": "unknown run"})));
+    }
+    match gw.run(run_id).await {
+        Ok(Some(v)) => (Status::Ok, Json(v)),
+        // Hermes forgets finished runs after a while: it is over either way.
+        Ok(None) => (
+            Status::Ok,
+            Json(json!({"status": "gone", "done": true, "approvals": [], "approvals_known": true})),
+        ),
+        Err(e) => (Status::BadGateway, Json(json!({"error": e.to_string()}))),
+    }
 }
 
 /// Instructions for the first turn of a context (settings snapshot for a
@@ -169,6 +289,19 @@ pub async fn agent_chat(
         }
         let extra = if req.first {
             let (kind, name) = parse_context(&req.context).unwrap_or(("general", ""));
+            // The chat starts with its first message, titled after it.
+            let prefix = match kind {
+                "general" => None,
+                _ => context_labels(config)
+                    .await
+                    .remove(&agent::session_id(&format!("{kind}:{name}"), false))
+                    .map(|(label, _)| label)
+                    .or_else(|| Some(name.to_string())),
+            };
+            let title = agent::chat_title(prefix.as_deref(), message);
+            gw.ensure_session(&req.session_id, Some(&title))
+                .await
+                .map_err(|e| e.to_string())?;
             Some(instructions(config, kind, name).await)
         } else {
             None
@@ -184,19 +317,37 @@ pub async fn agent_chat(
             .map_err(|e| e.to_string())
     }
     .await;
-    Sse(ByteStream! {
-        match start {
-            Ok(mut resp) => {
-                loop {
-                    match resp.chunk().await {
-                        Ok(Some(b)) => yield b.to_vec(),
-                        Ok(None) => break,
-                        Err(e) => {
-                            yield frame("error", json!({"message": format!("connection to the assistant broke: {e}")}));
-                            yield frame("done", json!({}));
-                            break;
-                        }
+    // Hermes interrupts a session turn when its stream reader goes away, so the
+    // upstream is read by a task of its own: a closed tab or a reload leaves the
+    // turn running (the drawer then polls /agent/run/<id>).
+    let mut rx = start.map(|mut resp| {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+        tokio::spawn(async move {
+            loop {
+                match resp.chunk().await {
+                    Ok(Some(b)) => {
+                        // Nobody listening any more: keep draining.
+                        let _ = tx.send(b.to_vec());
                     }
+                    Ok(None) => break,
+                    Err(e) => {
+                        let _ = tx.send(frame(
+                            "error",
+                            json!({"message": format!("connection to the assistant broke: {e}")}),
+                        ));
+                        let _ = tx.send(frame("done", json!({})));
+                        break;
+                    }
+                }
+            }
+        });
+        rx
+    });
+    Sse(ByteStream! {
+        match rx.as_mut() {
+            Ok(rx) => {
+                while let Some(b) = rx.recv().await {
+                    yield b;
                 }
             }
             Err(e) => {
@@ -262,8 +413,34 @@ pub async fn agent_approve(req: Json<ApproveReq>) -> (Status, Json<Value>) {
         .await
     {
         Ok(()) => (Status::Ok, Json(json!({"ok": true}))),
-        Err(e) => (Status::BadGateway, Json(json!({"error": e.to_string()}))),
+        Err(r) => approval_refused(&r),
     }
+}
+
+/// A refused approval answer in plain words; `ended` tells the drawer the
+/// prompt is over (timed out, answered elsewhere, or its turn ended).
+fn approval_refused(r: &agent::Refusal) -> (Status, Json<Value>) {
+    if r.ended() {
+        return (
+            Status::Conflict,
+            Json(json!({
+                "error": "This request already ended (it timed out or was answered). Ask the assistant to try again.",
+                "ended": true,
+            })),
+        );
+    }
+    if r.status == 0 {
+        return (
+            Status::BadGateway,
+            Json(
+                json!({"error": "The assistant is not reachable right now. Try again in a moment."}),
+            ),
+        );
+    }
+    (
+        Status::BadGateway,
+        Json(json!({"error": format!("The assistant did not take the answer: {}", r.message)})),
+    )
 }
 
 #[derive(Deserialize)]
@@ -327,5 +504,23 @@ mod tests {
         );
         assert_eq!(parse_context("guide:../x"), None);
         assert_eq!(parse_context("other:x"), None);
+    }
+
+    #[test]
+    fn approval_refusals_in_plain_words() {
+        let r = |status, code: &str| agent::Refusal {
+            status,
+            code: Some(code.to_string()),
+            message: "raw".to_string(),
+        };
+        let (s, j) = approval_refused(&r(409, "approval_not_pending"));
+        assert_eq!(s, Status::Conflict);
+        assert_eq!(j["ended"], true);
+        assert!(j["error"].as_str().unwrap().contains("already ended"));
+        let (_, j) = approval_refused(&r(409, "stale_generation"));
+        assert_eq!(j["ended"], true);
+        let (s, j) = approval_refused(&r(400, "invalid_params"));
+        assert_eq!(s, Status::BadGateway);
+        assert!(j.get("ended").is_none());
     }
 }
