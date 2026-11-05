@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "neo": {
+      "source": {
+        "source": "github",
+        "repo": "madebydamo/neo"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "neo@neo": true
+  }
+}
