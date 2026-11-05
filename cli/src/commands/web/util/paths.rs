@@ -8,6 +8,23 @@ pub fn config_dir(settings_path: &Path) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
+/// neo-web state directory (version notes, proposals): systemd's `$STATE_DIRECTORY` (neo-web),
+/// else `$XDG_STATE_HOME/neo` or `~/.local/state/neo` (local / dev runs).
+pub fn state_dir() -> Option<PathBuf> {
+    if let Ok(s) = std::env::var("STATE_DIRECTORY") {
+        if let Some(first) = s.split(':').find(|p| !p.is_empty()) {
+            return Some(PathBuf::from(first));
+        }
+    }
+    if let Ok(x) = std::env::var("XDG_STATE_HOME") {
+        if !x.is_empty() {
+            return Some(PathBuf::from(x).join("neo"));
+        }
+    }
+    let home = std::env::var("HOME").ok().filter(|h| !h.is_empty())?;
+    Some(PathBuf::from(home).join(".local/state/neo"))
+}
+
 /// `value` when set and non-empty, else `default`.
 fn non_empty_or(value: Option<String>, default: &str) -> String {
     value

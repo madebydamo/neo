@@ -34,7 +34,8 @@ pub enum Edit {
 }
 
 /// One resolved patch operation on a settings path (`["services","pihole","localIP"]`).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum PatchOp {
     /// Write the value (a full TOML-able JSON value).
     Set {
@@ -382,6 +383,71 @@ mod tests {
         )
         .unwrap();
         assert!(doc["services"].get("pihole").is_none());
+    }
+
+    #[test]
+    fn nested_entry_fields_and_their_secrets() {
+        use crate::utils::secrets::{self, Node};
+        let mut doc: DocumentMut = "[services.x.accounts.tinyauth]\nusername = \"admin\"\n"
+            .parse()
+            .unwrap();
+        let mut tree = secrets::parse(
+            "services:\n  x:\n    accounts:\n      tinyauth:\n        password: \"old\"\n",
+        )
+        .unwrap();
+        let patterns = vec![p("services.x.accounts.*.password")];
+        // A new entry, field by field (agent proposal: set username, ask password).
+        apply_ops(
+            &mut doc,
+            &[
+                PatchOp::Set {
+                    path: p("services.x.accounts.tmr.username"),
+                    value: serde_json::json!("tmr"),
+                },
+                PatchOp::Set {
+                    path: p("services.x.accounts.tmr.password"),
+                    value: serde_json::json!("typed"),
+                },
+            ],
+        )
+        .unwrap();
+        secrets::split_into(&mut doc, &mut tree, &patterns, None);
+        let s = doc.to_string();
+        assert!(s.contains("tmr") && !s.contains("typed"), "{s}");
+        assert_eq!(
+            doc["services"]["x"]["accounts"]["tinyauth"]["username"].as_str(),
+            Some("admin")
+        );
+        let accounts = |t: &secrets::Tree| match t.get("services").and_then(|n| match n {
+            Node::Map(m) => m.get("x"),
+            _ => None,
+        }) {
+            Some(Node::Map(x)) => match x.get("accounts") {
+                Some(Node::Map(a)) => a.clone(),
+                _ => Default::default(),
+            },
+            _ => Default::default(),
+        };
+        let a = accounts(&tree);
+        assert!(
+            matches!(a.get("tmr"), Some(Node::Map(m)) if m.get("password") == Some(&Node::Leaf("typed".into())))
+        );
+        assert!(a.contains_key("tinyauth"));
+
+        // Removing an entry with a secret field clears its secret too (scope = entry).
+        let entry = p("services.x.accounts.tinyauth");
+        apply_ops(
+            &mut doc,
+            &[PatchOp::Unset {
+                path: entry.clone(),
+                secret: true,
+            }],
+        )
+        .unwrap();
+        secrets::split_into(&mut doc, &mut tree, &patterns, Some(&entry));
+        // Emptied maps are pruned when the secrets file is written.
+        let yaml = secrets::emit(&tree);
+        assert!(!yaml.contains("tinyauth") && yaml.contains("tmr"), "{yaml}");
     }
 
     #[test]

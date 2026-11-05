@@ -16,8 +16,9 @@ use serde_json::{json, Value};
 
 use super::proposals::create_proposal;
 use crate::commands::web::proposals::{self, ProposalRequest};
+use crate::commands::web::redact::{redacted_current, redacted_default};
 use crate::commands::web::schema_cache::load_options;
-use crate::commands::web::types::{AppConfig, OptionSchema};
+use crate::commands::web::types::{AppConfig, OptionHelper, OptionSchema, OptionType};
 use crate::commands::web::util::service_name_ok;
 
 const PROTOCOL: &str = "2025-06-18";
@@ -64,7 +65,7 @@ fn tools() -> Value {
     json!([
         {
             "name": "neo_settings_schema",
-            "description": "List the settings of one service (or core) with label, description, type, default and current value. Secrets show only whether they are set.",
+            "description": "List the settings of one service (or core) with label, description, type, default and current value. Secrets (also inside entries) show only <set> or <unset>. Settings with named entries (attrsOf) list their entry names and the fields of an entry.",
             "inputSchema": {
                 "type": "object",
                 "properties": {"service": {"type": "string", "description": "Service name, e.g. pihole, or \"core\"."}},
@@ -73,7 +74,7 @@ fn tools() -> Value {
         },
         {
             "name": "neo_settings_get",
-            "description": "Current values of settings by option path, e.g. services.pihole.localIP or core.timeZone. Secrets show only whether they are set.",
+            "description": "Current values of settings by option path, e.g. services.pihole.localIP or core.timeZone. Secrets (also inside entries) show only <set> or <unset>.",
             "inputSchema": {
                 "type": "object",
                 "properties": {"paths": {"type": "array", "items": {"type": "string"}}},
@@ -82,7 +83,15 @@ fn tools() -> Value {
         },
         {
             "name": "neo_settings_propose",
-            "description": "Suggest a settings change. Writes nothing: the user sees a card in the neo web UI and clicks Save or Save & apply. Never send secret values; use op \"generate\" for secrets with a Generate button, or ask the user to enter them. Returns errors to fix, or the proposal id and a link for the user.",
+            "description": concat!(
+                "Suggest a settings change. Writes nothing: the user sees a card in the neo web UI and clicks Save or Save & apply. ",
+                "Address one entry of a named-entry setting with key and one field inside it with field; never rewrite the whole map to add or change one entry. ",
+                "Never send secret values (also not inside a value): use op generate (the secret's Generate button, field generate=true) or op ask (the card shows a password input; ask changes with the same group share one input). ",
+                "Example, add login tmr to accounts: ",
+                r#"{"op":"set","path":"services.x.accounts","key":"tmr","field":"username","value":"tmr"}, "#,
+                r#"{"op":"ask","path":"services.x.accounts","key":"tmr","field":"password","group":"tmr-password"}. "#,
+                "Returns errors to fix, or the proposal id and a link for the user."
+            ),
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -92,10 +101,12 @@ fn tools() -> Value {
                         "items": {
                             "type": "object",
                             "properties": {
-                                "op": {"type": "string", "enum": ["set", "unset", "add", "remove", "generate"]},
-                                "path": {"type": "string", "description": "Option path, e.g. services.pihole.enabled"},
-                                "key": {"type": "string", "description": "Entry name for named-entry settings (attrsOf)."},
-                                "value": {"description": "New value (set), or the list item (add/remove)."}
+                                "op": {"type": "string", "enum": ["set", "unset", "add", "remove", "generate", "ask"], "description": "set a value, unset (back to the default; with key: remove that entry), add/remove a list item, generate a secret with its Generate button, ask the user for a secret on the card."},
+                                "path": {"type": "string", "description": "Option path, e.g. services.pihole.enabled or services.x.accounts"},
+                                "key": {"type": "string", "description": "Entry name inside a named-entry setting (attrsOf), e.g. tmr. The entry is created when it does not exist."},
+                                "field": {"type": "string", "description": "Field inside the entry, e.g. password (dotted for nested fields). See fields in neo_settings_schema."},
+                                "value": {"description": "New value (set), or the list item (add/remove). Never a secret."},
+                                "group": {"type": "string", "description": "ask only: changes with the same group share one input on the card (the same password for several settings)."}
                             },
                             "required": ["op", "path"]
                         }
@@ -116,27 +127,67 @@ fn tools() -> Value {
     ])
 }
 
-fn redacted(o: &OptionSchema) -> Value {
-    let current = o.current.clone().unwrap_or(Value::Null);
-    if o.secret {
-        let set = !(current.is_null() || current == json!(""));
-        json!(if set { "<set>" } else { "<unset>" })
-    } else {
-        current
+fn can_generate(secret: bool, helper: Option<&OptionHelper>) -> bool {
+    secret && helper.is_some_and(|h| h.kind == "button" && h.inputs.is_empty())
+}
+
+fn strip_null(t: &OptionType) -> &OptionType {
+    match (t.kind.as_str(), t.elem.as_deref()) {
+        ("nullOr", Some(e)) => strip_null(e),
+        _ => t,
     }
 }
 
+/// Fields of an entry (attrsOf of submodule) or of a submodule: the shape
+/// without values, so the assistant can address one with `field`.
+fn entry_fields(t: &OptionType) -> Option<Vec<Value>> {
+    let t = strip_null(t);
+    let t = if t.kind == "attrsOf" {
+        strip_null(t.elem.as_deref()?)
+    } else {
+        t
+    };
+    let fields = t.fields.as_deref().filter(|f| !f.is_empty())?;
+    Some(
+        fields
+            .iter()
+            .map(|f| {
+                json!({
+                    "field": f.name,
+                    "label": f.label,
+                    "type": f.typeLabel,
+                    "secret": f.secret,
+                    "generate": can_generate(f.secret, f.helper.as_ref()),
+                })
+            })
+            .collect(),
+    )
+}
+
 pub(crate) fn describe(prefix: &str, o: &OptionSchema) -> Value {
-    json!({
+    let mut v = json!({
         "path": format!("{prefix}.{}", o.name),
         "label": o.label,
         "description": o.description,
         "type": o.typeLabel,
-        "default": if o.secret { Value::Null } else { o.default.clone() },
-        "current": redacted(o),
+        "default": redacted_default(o),
+        "current": redacted_current(o),
         "secret": o.secret,
-        "generate": o.secret && o.helper.as_ref().is_some_and(|h| h.kind == "button" && h.inputs.is_empty()),
-    })
+        "generate": can_generate(o.secret, o.helper.as_ref()),
+    });
+    if strip_null(&o.r#type).kind == "attrsOf" {
+        let keys: Vec<&String> = o
+            .current
+            .as_ref()
+            .and_then(Value::as_object)
+            .map(|m| m.keys().collect())
+            .unwrap_or_default();
+        v["entries"] = json!(keys);
+    }
+    if let Some(fields) = entry_fields(&o.r#type) {
+        v["fields"] = json!(fields);
+    }
+    v
 }
 
 async fn pane_options(
@@ -262,7 +313,7 @@ pub async fn mcp(
                     "protocolVersion": version,
                     "capabilities": {"tools": {}},
                     "serverInfo": {"name": "neo", "version": env!("CARGO_PKG_VERSION")},
-                    "instructions": "Neo homeserver settings. Read with neo_settings_schema / neo_settings_get; change settings only with neo_settings_propose, which the user then saves or applies in the web UI."
+                    "instructions": "Neo homeserver settings. Read with neo_settings_schema / neo_settings_get; change settings only with neo_settings_propose, which the user then saves or applies in the web UI. Change one entry or field with key / field instead of rewriting a whole map. Never send secrets: use op generate or op ask (the user types it on the card)."
                 }),
             )
         }
@@ -302,6 +353,20 @@ mod tests {
         assert!(same("abc", "abc"));
         assert!(!same("abc", "abd"));
         assert!(!same("abc", "abcd"));
+    }
+
+    #[test]
+    fn describe_redacts_and_shows_entry_shape() {
+        let o = crate::commands::web::redact::tests::accounts();
+        let v = describe("services.x", &o);
+        let text = v.to_string();
+        assert!(!text.contains("thispasswordisfortestingonly"), "{text}");
+        assert_eq!(v["current"]["tinyauth"]["password"], "<set>");
+        assert_eq!(v["entries"], json!(["tinyauth"]));
+        let fields = v["fields"].as_array().unwrap();
+        let pw = fields.iter().find(|f| f["field"] == "password").unwrap();
+        assert_eq!(pw["secret"], true);
+        assert_eq!(pw["generate"], true);
     }
 
     #[test]
