@@ -508,7 +508,7 @@ SWAG lines with secrets are rendered snippets (`lib.neo.secrets.swagSnippet`, in
 `nginx/neo-secrets/`, which SWAG's preStart leaves alone). Hermes' custom provider key goes to the
 env as `NEO_HERMES_LLM_API_KEY`, named by `model.key_env` in config.yaml (upstream resolves it).
 
-Plugins: `docs/PLUGINS.md` → Secrets documents `mkSecretOption` and `neo.core.secrets`. Plugin
+Plugins: `docs/LIB.md` → Secrets documents `mkSecretOption` and `neo.core.secrets`. Plugin
 options declared with plain `mkOption` keep working but stay in `settings.toml` in plain text.
 
 Open: config repo remote + push (open question 1), token expiry warnings, `secrets.yaml` in

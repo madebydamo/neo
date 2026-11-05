@@ -1,6 +1,6 @@
 # AGENTS.md — Neo development guide
 
-Map for humans and coding agents. Deeper docs: [README.md](README.md), [docs/INSTALL.md](docs/INSTALL.md), [docs/RESTORE.md](docs/RESTORE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/CLI.md](docs/CLI.md), [docs/PLUGINS.md](docs/PLUGINS.md).
+Map for humans and coding agents. Deeper docs: [README.md](README.md), [docs/INSTALL.md](docs/INSTALL.md), [docs/RESTORE.md](docs/RESTORE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/CLI.md](docs/CLI.md), [docs/PLUGINS.md](docs/PLUGINS.md), [docs/PLUGIN-DEVELOPMENT.md](docs/PLUGIN-DEVELOPMENT.md), [docs/LIB.md](docs/LIB.md).
 
 ## What this is
 
