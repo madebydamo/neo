@@ -44,6 +44,8 @@
           examples = mkOption {
             type = types.listOf types.str;
             default = [];
+            # Every copy of a plugin defines its categories again; keep one of each.
+            apply = lib.unique;
             description = "Familiar cloud services for this kind of data.";
           };
           rank = mkOption {
