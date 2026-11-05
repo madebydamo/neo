@@ -73,6 +73,12 @@
               '';
               projectUrl = "https://docs.linuxserver.io/images/docker-nginx/";
               githubUrl = "https://github.com/linuxserver/docker-nginx";
+              # Upstream license, linked in the pane. If the image contains closed code or
+              # the app needs a closed server: openSource = false; note = "what is closed";
+              license = {
+                spdx = "GPL-3.0";
+                url = "https://github.com/linuxserver/docker-nginx/blob/master/LICENSE";
+              };
             }
             # Hermes skill toggle. The content is filled in skills.nix.
             // lib.neo.mkSkillOptions {};

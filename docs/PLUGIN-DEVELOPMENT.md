@@ -178,7 +178,7 @@ Work through every item. Each one exists because it is easy to forget.
 - [ ] `// lib.neo.mkReverseProxyOptions { subdomain = name; auth.publicPaths = [ … ]; }` if it has a web UI (or `plugin.name "<short>"` for a shorter subdomain). It must not collide with another service.
 - [ ] `// lib.neo.mkContainerDefinitions { <container> = "<image:tag>"; extraUnits = [ … ]; }` for OCI services, listing every non-docker unit in `extraUnits`; or `// lib.neo.mkSystemdUnits [ … ]` for native services. Every unit the service runs is listed.
 - [ ] `// lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/<name>"` if it stores anything.
-- [ ] `// lib.neo.mkServiceMeta { category; icon; tagline; description; notes; replaces; privacy; projectUrl; githubUrl; releaseUrl; }`.
+- [ ] `// lib.neo.mkServiceMeta { category; icon; tagline; description; notes; replaces; privacy; projectUrl; githubUrl; releaseUrl; license; }`, with `license.openSource = false` and a `note` when anything in the image or a service it needs is closed.
 - [ ] `// lib.neo.mkSkillOptions {}` if you ship a `skills.nix`.
 - [ ] `// lib.neo.mkVpnOptions { … }` if containers may route through the VPN.
 - [ ] Secrets (passwords, tokens, API keys) use `lib.neo.mkSecretOption` (same arguments as `mkOption`, e.g. `type = types.nullOr types.str; default = null; helper = lib.neo.helpers.randomToken;`); never a real secret as a default.
@@ -287,6 +287,10 @@ The examples use a service `myapp`: one container `myapp` on port 8080, a setup 
               projectUrl = "https://myapp.example";
               githubUrl = "https://github.com/example/myapp";
               releaseUrl = "https://github.com/example/myapp/releases";
+              license = {
+                spdx = "AGPL-3.0";
+                url = "https://github.com/example/myapp/blob/main/LICENSE";
+              };
             }
             // lib.neo.mkSkillOptions {};
         };
@@ -554,6 +558,8 @@ Most people who see your service never read Nix. The service card, the option pa
 | `notes` | Collapsed "Good to know" | Operator facts: first login, paths that skip the login page, upgrade cautions |
 | `replaces` | Search, privacy map | Familiar products: `["Google Keep" "Apple Notes"]` |
 | `privacy` | Privacy map | Category ids, see [Privacy map](#privacy-map) |
+| `license` | Pane link, grid badge | `{ spdx = "AGPL-3.0"; url = "<license text>"; }`. Not fully open source (closed enterprise code in the image, a closed service it signs in to): add `openSource = false; note = "<what is closed, and the open alternative>";`. The grid and pane then say "Not fully open source" |
+| `deprecated` | Pane notice, grid badge | `{ reason; instead; alternatives = ["<service>"]; }` when you stop supporting a service: hidden from the grid and privacy map unless enabled; the pane says why and links the alternatives |
 
 Lead with the outcome, not the technology ("Blocks ads on every device in your home", not "DNS sinkhole"). No superlatives, upstream marketing or version numbers. Technical detail goes into `notes`, never `tagline` or `description`.
 
