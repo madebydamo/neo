@@ -40,18 +40,13 @@
     {{/if}}
 
     {{#if meta.deprecated}}
-      <div role="alert" class="mt-2 rounded-box border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-base-content/80 space-y-1">
-        <p><strong class="text-base-content">No longer supported.</strong> {{meta.deprecated.reason}}</p>
-        <p>{{meta.deprecated.instead}}</p>
-        {{#if meta.deprecated.alternatives}}
-          <div class="flex flex-wrap gap-1.5 pt-0.5">
-            {{#each meta.deprecated.alternatives}}
-              <a href="/configuration/option/{{this}}" class="btn btn-xs btn-soft no-underline"
-                 hx-get="/configuration/option/{{this}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true">Open {{this}}</a>
-            {{/each}}
-          </div>
-        {{/if}}
-      </div>
+      <p class="mt-1 text-xs text-base-content/55">
+        <span class="font-medium">Deprecated.</span> {{meta.deprecated.reason}} {{meta.deprecated.instead}}
+        {{#each meta.deprecated.alternatives}}
+          <a href="/configuration/option/{{this}}" class="link link-hover whitespace-nowrap"
+             hx-get="/configuration/option/{{this}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true">Open {{this}} →</a>
+        {{/each}}
+      </p>
     {{/if}}
 
     {{#if meta.license}}{{#unless meta.license.openSource}}
