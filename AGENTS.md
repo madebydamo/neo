@@ -71,6 +71,10 @@ Naming: options camelCase under `neo.services.*`; plain-string descriptions; vol
 
 **Rust:** clap, `anyhow::Result`, `?` + `.context`, `toml_edit::DocumentMut`; no `unwrap` in lib paths.
 
+## Agent skills
+
+`agent/` is a Claude Code plugin (marketplace `.claude-plugin/marketplace.json`) with the skills `neo-plugin` and `neo-core` (`agent/skills/*/SKILL.md`). They repeat the rules that matter most and point at the docs: when you change a rule, helper signature, check or error message they mention, update them in the same commit. `templates/plugin/AGENTS.md` is the short version shipped into every new plugin.
+
 ## Plugins
 
 `core.plugins.<id> = { url; prefix; }` (old configs: a list of URLs, ids from the repo name; migration `014-plugin-tables`). Each id is the flake input `plugin-<id>`, so editing a URL touches one input. Plugins import `inputs.neo.flakeModules.plugin` and define `neoPlugin.modules.<name>`; each module gets a `plugin` argument and names everything with `plugin.name "<service>"`, so an instance with `prefix = "dev"` yields `dev-<service>`. Plugins without `neoPlugin` load once via `nixosModules.default`. Ownership (inventory, removal) keys on the id: declarations are tagged `neo-plugin:<id>#…`. The id/label rules exist three times and must stay equal: `nix/lib/plugin.nix`, `templates/homeserver/modules/_plugins.nix`, `cli/src/utils/plugins.rs` (plus the widget JS). Design: [docs/design/plugin-instances.md](docs/design/plugin-instances.md).

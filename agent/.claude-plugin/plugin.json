@@ -1,0 +1,11 @@
+{
+  "name": "neo",
+  "description": "Skills for building on Neo, the NixOS homeserver: write Neo plugins (neo-plugin) and change Neo itself (neo-core).",
+  "author": {
+    "name": "madebydamo",
+    "url": "https://github.com/madebydamo"
+  },
+  "homepage": "https://github.com/madebydamo/neo",
+  "repository": "https://github.com/madebydamo/neo",
+  "keywords": ["nixos", "homeserver", "nix", "self-hosting"]
+}

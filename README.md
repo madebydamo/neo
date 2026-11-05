@@ -116,7 +116,7 @@ Enable what you want in the web UI.
 - **Monitoring.** Beszel
 - **AI support.** Hermes
 - **Core.** Neo web, SWAG (HTTPS and routing), system and container updaters
-- **Your own.** Neo is fully extendable with your own Nix plugins. Whatever you can imagine. [Plugins](docs/PLUGINS.md).
+- **Your own.** Neo is fully extendable with your own Nix plugins. Whatever you can imagine. [Plugins](docs/PLUGINS.md). Coding agents get the rules as skills: `/plugin install neo --marketplace madebydamo/neo` in Claude Code ([details](docs/PLUGIN-DEVELOPMENT.md#coding-agents)).
 
 ## For contributors
 

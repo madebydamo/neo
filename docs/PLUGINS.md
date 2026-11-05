@@ -147,4 +147,4 @@ Do not delete a plugin from `settings.toml` by hand without also removing its se
 
 ## Write your own
 
-Start with [Plugin development](PLUGIN-DEVELOPMENT.md).
+Start with [Plugin development](PLUGIN-DEVELOPMENT.md). Using a coding agent: install the Neo skills first ([Coding agents](PLUGIN-DEVELOPMENT.md#coding-agents)).

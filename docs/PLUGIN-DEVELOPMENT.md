@@ -6,6 +6,7 @@ Coding agents asked to "turn this project into a Neo plugin": follow the [checkl
 
 ## Contents
 
+- [Coding agents](#coding-agents)
 - [Create a plugin](#create-a-plugin)
 - [How Neo loads a plugin](#how-neo-loads-a-plugin)
 - [Layout rules](#layout-rules)
@@ -19,6 +20,22 @@ Coding agents asked to "turn this project into a Neo plugin": follow the [checkl
 - [Privacy map](#privacy-map)
 - [Verify on the host](#verify-on-the-host)
 - [Real-world plugins](#real-world-plugins)
+
+## Coding agents
+
+Neo ships agent skills: `neo-plugin` (write, port or debug a plugin) and `neo-core` (change Neo itself). They tell the agent the rules, the workflow and the common errors, and point it at the docs of the Neo revision your plugin's `flake.lock` pins, so it never works from a different version.
+
+**Claude Code:**
+
+```
+/plugin install neo --marketplace madebydamo/neo
+```
+
+On older Claude Code: `/plugin marketplace add madebydamo/neo`, then `/plugin install neo@neo`. A new plugin from the template already asks for it: its `.claude/settings.json` lists the marketplace and enables the plugin when you trust the folder.
+
+**Other agents** (Codex, Cursor, …): the skills are plain `SKILL.md` folders in [`agent/skills/`](../agent/skills). Copy them into the agent's skills directory, or point it at them from your `AGENTS.md`.
+
+The template also contains an `AGENTS.md` (and a `CLAUDE.md` that includes it) with the short version of the rules, so an agent opening the plugin knows it is a Neo plugin before any skill loads.
 
 ## Create a plugin
 
