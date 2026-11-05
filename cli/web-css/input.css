@@ -1607,6 +1607,111 @@ a.neo-sem-name:focus-visible {
   background: color-mix(in oklab, var(--color-warning) 8%, transparent);
 }
 .neo-agent-cmd { margin-top: 0.4rem; overflow-x: auto; font-size: 0.75rem; padding: 0.4rem 0.55rem; border-radius: 0.4rem; background: var(--color-base-200); }
+.neo-agent-msg--approval.is-ended { opacity: 0.7; border-color: var(--color-base-300); background: transparent; }
+.neo-agent-approval-timer { font-size: 0.72rem; font-variant-numeric: tabular-nums; color: color-mix(in oklab, var(--color-base-content) 60%, transparent); white-space: nowrap; }
+.neo-agent-approval-timer.is-soon { color: var(--color-warning); font-weight: 600; }
+.neo-agent-approval-msg { margin-top: 0.4rem; font-size: 0.75rem; color: color-mix(in oklab, var(--color-base-content) 65%, transparent); }
+.neo-agent-loading { display: flex; align-items: center; gap: 0.4rem; }
+.neo-agent-end { font-style: italic; }
+
+/* Turn status line between the log and the input. */
+.neo-agent-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  padding: 0.35rem 0.75rem;
+  border-top: 1px solid var(--color-base-300);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
+  background: color-mix(in oklab, var(--color-primary) 6%, var(--color-base-100));
+}
+.neo-agent-status.hidden { display: none; }
+.neo-agent-status-icon {
+  width: 0.8rem;
+  height: 0.8rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  border: 2px solid color-mix(in oklab, var(--color-primary) 30%, transparent);
+  border-top-color: var(--color-primary);
+  animation: neo-agent-spin 0.9s linear infinite;
+}
+.neo-agent-status[data-phase="waiting"] {
+  color: var(--color-base-content);
+  background: color-mix(in oklab, var(--color-warning) 22%, var(--color-base-100));
+  font-weight: 600;
+}
+.neo-agent-status[data-phase="waiting"] .neo-agent-status-icon {
+  animation: neo-agent-pulse 1.4s ease-in-out infinite;
+  border: 0;
+  background: var(--color-warning);
+}
+.neo-agent-status[data-phase="stopping"] .neo-agent-status-icon { border-top-color: var(--color-error); }
+
+/* Header Assistant button: ring while working, warning while it waits for an
+   approval, dot for a reply that came in while the drawer was closed. */
+.neo-agent-launch { position: relative; }
+.neo-agent-launch-dot {
+  display: none;
+  position: absolute;
+  top: 0.2rem;
+  right: 0.2rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-base-100);
+}
+.neo-agent-launch[data-agent-state="unread"] .neo-agent-launch-dot { display: block; }
+.neo-agent-launch[data-agent-state="working"] .neo-agent-launch-dot,
+.neo-agent-launch[data-agent-state="waiting"] .neo-agent-launch-dot {
+  display: block;
+  animation: neo-agent-pulse 1.4s ease-in-out infinite;
+}
+.neo-agent-launch[data-agent-state="working"] { box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--color-primary) 55%, transparent); color: var(--color-primary); }
+.neo-agent-launch[data-agent-state="waiting"] { box-shadow: inset 0 0 0 1.5px var(--color-warning); color: var(--color-warning); background: color-mix(in oklab, var(--color-warning) 12%, transparent); }
+.neo-agent-launch[data-agent-state="waiting"] .neo-agent-launch-dot { background: var(--color-warning); }
+@keyframes neo-agent-spin { to { transform: rotate(360deg); } }
+@keyframes neo-agent-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.75); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .neo-agent-status-icon, .neo-agent-launch-dot { animation: none !important; }
+}
+
+/* Past chats (#neo-agent-history). */
+.neo-agent-hist-head {
+  margin: 0.75rem 0 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
+}
+.neo-agent-hist-list { display: flex; flex-direction: column; gap: 0.15rem; }
+.neo-agent-hist-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.25rem;
+  border-radius: var(--radius-field);
+}
+.neo-agent-hist-row:hover { background: var(--color-base-200); }
+.neo-agent-hist-row.is-current { background: color-mix(in oklab, var(--color-primary) 10%, transparent); }
+.neo-agent-hist-row.is-confirm { background: color-mix(in oklab, var(--color-error) 10%, transparent); padding: 0.4rem 0.5rem; flex-wrap: wrap; }
+.neo-agent-hist-open {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.25rem;
+  text-align: left;
+  cursor: pointer;
+}
+.neo-agent-hist-open:disabled { cursor: not-allowed; opacity: 0.55; }
 /* Make room for the drawer only where the page still fits beside it. */
 @media (min-width: 1600px) {
   body.neo-agent-open .max-w-7xl { margin-right: 27.5rem; }
