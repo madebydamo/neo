@@ -2,7 +2,7 @@
 
 How to write a Neo plugin: a Nix flake that adds services or system configuration to a Neo homeserver. Installing and managing plugins is in [Plugins](PLUGINS.md); every helper and `config.neo` value is in the [`lib.neo` reference](LIB.md).
 
-Coding agents asked to "turn this project into a Neo plugin": follow the [checklist](#turn-your-project-into-a-neo-plugin-checklist) step by step. Plugins follow the same rules as core services in `nix/services/` ([AGENTS.md](../AGENTS.md)).
+Coding agents asked to "turn this project into a Neo plugin": follow the [checklist](#turn-your-project-into-a-neo-plugin-checklist) step by step. Plugins follow the same rules as core services in `nix/services/` ([AGENTS.md](../AGENTS.md)); the reasons behind them are in [Development philosophy](PHILOSOPHY.md).
 
 ## Contents
 
