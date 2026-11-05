@@ -94,6 +94,11 @@
                 openSource = false;
                 note = "The core is MIT licensed, but the official image also contains features under a closed license.";
               };
+              deprecated = {
+                reason = "Parts of its official image are closed source, so Neo no longer maintains it.";
+                instead = "BentoPDF does the same PDF jobs (edit, merge, split, sign) and is fully open source.";
+                alternatives = ["bentopdf"];
+              };
               icon = ./icon.svg;
               tagline = "All-in-one PDF tools on your server";
               description = ''

@@ -27,6 +27,11 @@
                 spdx = "MIT";
                 url = "https://github.com/Nasogaa/immich-drop/blob/master/LICENSE";
               };
+              deprecated = {
+                reason = "Immich now collects uploads from guests itself, so Neo no longer maintains this app.";
+                instead = "In Immich, share an album with a link and turn on Allow public upload: guests add their photos without an account.";
+                alternatives = ["immich"];
+              };
               icon = ./icon.svg;
               tagline = "Let guests add photos to Immich with a link";
               description = ''
