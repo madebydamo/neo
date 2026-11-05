@@ -18,7 +18,27 @@
       if builtins.pathExists ../hardware-configuration.nix
       then [../hardware-configuration.nix]
       else [];
-    pluginModules = map (n: inputs.${n}.nixosModules.default) (builtins.filter (n: lib.hasPrefix "plugin" n) (builtins.attrNames inputs));
+    # One module per core.plugins instance (docs/design/plugin-instances.md).
+    # Plugins with neoPlugin get their prefix; older ones are imported as they are.
+    pluginModules = lib.mapAttrsToList (id: p: let
+      input = "plugin-${id}";
+      flake =
+        inputs.${input}
+        or (throw "Plugin '${id}' (${p.url}) has no flake input ${input}. Regenerate flake.nix (nix run .#write-flake).");
+    in
+      if flake ? neoPlugin
+      then
+        if p.prefix != "" && !(flake.neoPlugin.prefixable or true)
+        then throw "Plugin '${id}' (${p.url}) still has modules that cannot take a prefix. Remove the prefix."
+        else
+          flake.neoPlugin.module {
+            inherit id;
+            inherit (p) url prefix;
+          }
+      else if p.prefix == ""
+      then flake.nixosModules.default
+      else throw "Plugin '${id}' (${p.url}) does not support a prefix. Remove the prefix or update the plugin.")
+    (import ./_plugins.nix {inherit lib;});
   in {
     nixosConfigurations.neo = inputs.nixpkgs.lib.nixosSystem {
       inherit system;

@@ -65,12 +65,15 @@ host_virtfs:
   if settings is not None:
       data = tomllib.loads(settings.read_text())
       plugins = (data.get("core") or {}).get("plugins") or []
+  # [core.plugins.<id>] url = "…" tables, or the old list of URLs.
+  if isinstance(plugins, dict):
+      plugins = [p.get("url") for p in plugins.values() if isinstance(p, dict)]
 
   dirs = []
   for url in plugins:
       if not isinstance(url, str):
           continue
-      base = url.split("#", 1)[0]
+      base = url.split("#", 1)[0].split("?", 1)[0]
       for prefix in ("git+file://", "git+file:", "path:"):
           if base.startswith(prefix):
               base = base[len(prefix):]

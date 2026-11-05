@@ -263,7 +263,7 @@ window.configShell = function configShell() {
 
 /**
  * Alpine state for the Services tab: search + status / category / source filters.
- * Cards (`[data-svc]`) carry data-enabled / data-cat / data-plugin-urls / data-search.
+ * Cards (`[data-svc]`) carry data-enabled / data-cat / data-plugin-ids / data-search.
  * Filters persist per browser tab (sessionStorage) so returning from a service keeps them.
  * Matching itself lives in services_filter.js (NeoServicesFilter), shared with its
  * Node unit tests, so the tab count badges reuse the exact same rules as the cards.
@@ -274,7 +274,7 @@ window.servicesGrid = function servicesGrid() {
     q: '',
     status: 'all', // all | installed | available
     category: 'all',
-    plugin: 'all', // all | core | <plugin url>
+    plugin: 'all', // all | core | <plugin id>
     counts: { all: 0, installed: 0, available: 0 },
 
     init() {
@@ -388,7 +388,7 @@ window.servicesGrid = function servicesGrid() {
       if (url === this.plugin) return true;
       var self = this;
       return Array.prototype.some.call(this.$root.querySelectorAll('[data-svc]'), function (c) {
-        var urls = (c.dataset.pluginUrls || '').split('|').filter(Boolean);
+        var urls = (c.dataset.pluginIds || '').split('|').filter(Boolean);
         var from = url === 'core' ? urls.length === 0 : urls.indexOf(url) !== -1;
         return from && self.cardMatches(c, 'plugin');
       });

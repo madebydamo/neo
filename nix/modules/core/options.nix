@@ -125,10 +125,24 @@
         internal = true;
       };
 
-      # Plugin flake URLs, e.g. github:user/plugin or path:/path/to/plugin.
+      # Plugin instances keyed by id: { url = "github:user/plugin"; prefix = ""; }.
+      # The old list of URLs still evaluates (ids from lib.neo.plugin.normalize).
+      # Each id is the flake input plugin-<id> (templates/homeserver/modules/inputs.nix).
       options.neo.core.plugins = mkOption {
-        type = types.listOf types.str;
-        default = [];
+        type = types.coercedTo (types.listOf types.str) lib.neo.plugin.normalize (types.attrsOf (types.submodule {
+          options = {
+            url = mkOption {
+              type = types.str;
+              description = "Where the plugin comes from, e.g. github:user/plugin or github:user/plugin/branch.";
+            };
+            prefix = mkOption {
+              type = types.strMatching lib.neo.plugin.prefixPattern;
+              default = "";
+              description = "Put in front of the plugin's app names so it can be added twice, e.g. dev turns portrait into dev-portrait. Lowercase letters and digits, starting with a letter. Empty keeps the names.";
+            };
+          };
+        }));
+        default = {};
         description = "Add-ons that bring extra apps or features, each given by its address (e.g. github:user/plugin).";
         rank = 5;
         ui = lib.neo.ui.mkUi {

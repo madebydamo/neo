@@ -1,122 +1,37 @@
-//! Plugin identity, ownership, and settings cleanup when a plugin URL is removed.
+//! Plugin ownership, badges and settings cleanup when a plugin instance is removed.
 //!
-//! Labels are the last path segment of a flake URL and are **not** unique.
-//! Ownership and uninstall always key on the full URL.
+//! Instances are keyed by their `core.plugins` id (crate::utils::plugins).
+//! Ownership comes from extract_plugin_inventory.nix and always keys on the id,
+//! so editing an instance's URL never drops its settings.
 
 use std::collections::{HashMap, HashSet};
 
 use toml_edit::DocumentMut;
 
 use super::types::{PluginInventoryEntry, Service, ServicePlugin};
+pub use crate::utils::plugins::plugin_label;
 
-/// Canonical flake URL so lock originals and settings.toml entries compare equal.
-/// `file:///path` and `git+file:///path` become `git+file:/path`.
-pub fn normalize_plugin_url(url: &str) -> String {
-    let mut s = url.trim();
-    if let Some(i) = s.find('#') {
-        s = &s[..i];
-    }
-    let (base, query) = match s.find('?') {
-        Some(i) => (&s[..i], &s[i..]),
-        None => (s, ""),
-    };
-    let file_rest = base
-        .strip_prefix("git+file://")
-        .or_else(|| base.strip_prefix("git+file:"))
-        .or_else(|| base.strip_prefix("file://"))
-        .or_else(|| base.strip_prefix("file:"));
-    if let Some(rest) = file_rest {
-        let path = rest.trim_start_matches('/');
-        return format!("git+file:/{path}{query}");
-    }
-    format!("{base}{query}")
-}
-
-/// Display label from a flake URL: the repository name for `github:` /
-/// `gitlab:` / `sourcehut:` refs (a trailing `/<branch>` is not the name),
-/// otherwise the last path segment; query/fragment and `.git` stripped.
-/// Labels may overlap; never use this as an identity.
-pub fn plugin_label(url: &str) -> String {
-    let trimmed = url.trim();
-    let path = url_path(url);
-    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
-    let forge = ["github:", "gitlab:", "sourcehut:"]
-        .iter()
-        .any(|p| trimmed.starts_with(p));
-    let name = match segments.as_slice() {
-        [_, repo, ..] if forge => repo,
-        [.., last] => last,
-        [] => trimmed,
-    };
-    name.strip_suffix(".git").unwrap_or(name).to_string()
-}
-
-/// Services whose settings tables should be dropped when the plugin list changes.
+/// Services whose settings tables should be dropped when instances are removed.
 ///
-/// A service is removed only when **every** plugin URL that declares it is in
-/// the removed set. Core services (no plugin owners) stay. A service declared
-/// by two plugins stays if either plugin remains.
+/// A service is removed only when **every** instance that declares it is gone.
+/// Core services (no owners) stay. A service declared by two instances stays if
+/// either remains.
 pub fn services_to_remove(
     owners: &HashMap<String, Vec<String>>,
-    old_plugins: &[String],
-    new_plugins: &[String],
+    old_ids: &[String],
+    new_ids: &[String],
 ) -> Vec<String> {
-    let new_set: HashSet<String> = new_plugins
-        .iter()
-        .map(|u| normalize_plugin_url(u))
-        .collect();
-    let removed: HashSet<String> = old_plugins
-        .iter()
-        .map(|u| normalize_plugin_url(u))
-        .filter(|u| !new_set.contains(u))
-        .collect();
+    let new_set: HashSet<&String> = new_ids.iter().collect();
+    let removed: HashSet<&String> = old_ids.iter().filter(|id| !new_set.contains(id)).collect();
     if removed.is_empty() {
         return Vec::new();
     }
     let mut gone: Vec<String> = owners
         .iter()
-        .filter_map(|(service, urls)| {
-            if urls.is_empty() {
-                return None;
-            }
-            if urls
-                .iter()
-                .all(|u| removed.contains(&normalize_plugin_url(u)))
-            {
-                Some(service.clone())
-            } else {
-                None
-            }
-        })
+        .filter(|(_, ids)| !ids.is_empty() && ids.iter().all(|id| removed.contains(id)))
+        .map(|(service, _)| service.clone())
         .collect();
     gone.sort();
-    gone
-}
-
-/// Read `core.plugins` (list of flake URL strings) from settings.toml.
-pub fn plugins_from_doc(doc: &DocumentMut) -> Vec<String> {
-    doc.get("core")
-        .and_then(|c| c.get("plugins"))
-        .and_then(|p| p.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-/// Drop settings tables for services that only the removed plugin URLs declared.
-/// Returns the service names that were stripped.
-#[cfg(test)]
-pub fn apply_plugin_removal(
-    doc: &mut DocumentMut,
-    new_plugins: &[String],
-    owners: &HashMap<String, Vec<String>>,
-) -> Vec<String> {
-    let old = plugins_from_doc(doc);
-    let gone = services_to_remove(owners, &old, new_plugins);
-    strip_service_tables(doc, &gone);
     gone
 }
 
@@ -137,277 +52,99 @@ pub fn strip_service_tables(doc: &mut DocumentMut, services: &[String]) -> bool 
     changed
 }
 
-/// Human filter/badge text. Duplicate labels get a short URL suffix.
-pub fn display_label(url: &str, label: &str, label_counts: &HashMap<String, usize>) -> String {
-    if label_counts.get(label).copied().unwrap_or(0) <= 1 {
-        return label.to_string();
-    }
-    format!("{label} · {}", url_path(url))
-}
-
-pub fn count_labels<'a, I>(labels: I) -> HashMap<String, usize>
-where
-    I: IntoIterator<Item = &'a str>,
-{
-    let mut counts = HashMap::new();
-    for label in labels {
-        *counts.entry(label.to_string()).or_insert(0) += 1;
-    }
-    counts
-}
-
-/// Badge/filter records for a set of plugin URLs. Labels may overlap; `display` disambiguates.
-pub fn plugin_badges(urls: &[String], all_plugin_urls: &[String]) -> Vec<ServicePlugin> {
-    let labels: Vec<String> = all_plugin_urls.iter().map(|u| plugin_label(u)).collect();
-    let counts = count_labels(labels.iter().map(String::as_str));
-    urls.iter()
-        .map(|url| {
-            let label = plugin_label(url);
+/// Badge/filter records for instance ids (ids are unique, so they are the label).
+pub fn plugin_badges(ids: &[String], inventory: &[PluginInventoryEntry]) -> Vec<ServicePlugin> {
+    ids.iter()
+        .map(|id| {
+            let url = inventory
+                .iter()
+                .find(|p| &p.id == id)
+                .map(|p| p.url.clone())
+                .unwrap_or_default();
             ServicePlugin {
-                url: url.clone(),
-                label: label.clone(),
-                display: display_label(url, &label, &counts),
+                id: id.clone(),
+                url,
+                display: id.clone(),
             }
         })
         .collect()
 }
 
 pub fn plugin_filters(inventory: &[PluginInventoryEntry]) -> Vec<ServicePlugin> {
-    let urls: Vec<String> = inventory.iter().map(|p| p.url.clone()).collect();
-    plugin_badges(&urls, &urls)
+    let ids: Vec<String> = inventory.iter().map(|p| p.id.clone()).collect();
+    plugin_badges(&ids, inventory)
 }
 
 pub fn attach_service_plugin_badges(services: &mut [Service], inventory: &[PluginInventoryEntry]) {
-    let all: Vec<String> = inventory.iter().map(|p| p.url.clone()).collect();
     for svc in services {
-        svc.plugins = plugin_badges(&svc.plugin_urls, &all);
+        svc.plugins = plugin_badges(&svc.plugin_ids, inventory);
     }
-}
-
-fn url_path(url: &str) -> String {
-    let mut s = url.trim();
-    if let Some(i) = s.find(['?', '#']) {
-        s = &s[..i];
-    }
-    s = s.trim_end_matches('/');
-    const PREFIXES: &[&str] = &[
-        "git+file:",
-        "git+https://",
-        "git+http://",
-        "https://",
-        "http://",
-        "path:",
-        "github:",
-        "gitlab:",
-        "sourcehut:",
-    ];
-    for p in PREFIXES {
-        if let Some(rest) = s.strip_prefix(p) {
-            s = rest;
-            break;
-        }
-    }
-    s.trim_start_matches('/').to_string()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn normalize_plugin_url_unifies_file_forms() {
-        assert_eq!(
-            normalize_plugin_url("file:///home/me/high_sea"),
-            "git+file:/home/me/high_sea"
-        );
-        assert_eq!(
-            normalize_plugin_url("git+file:///home/me/high_sea"),
-            "git+file:/home/me/high_sea"
-        );
-        assert_eq!(
-            normalize_plugin_url("git+file:/home/me/high_sea"),
-            "git+file:/home/me/high_sea"
-        );
-        assert_eq!(
-            normalize_plugin_url("github:me/portrait"),
-            "github:me/portrait"
-        );
+    fn ids(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
     }
 
     #[test]
-    fn remove_matches_file_url_aliases() {
+    fn remove_only_services_owned_solely_by_removed_instances() {
         let mut owners = HashMap::new();
-        owners.insert("jellyfin".into(), vec!["file:///p/high_sea".into()]);
-        let old = vec!["git+file:/p/high_sea".into()];
-        let new: Vec<String> = vec![];
-        assert_eq!(services_to_remove(&owners, &old, &new), vec!["jellyfin"]);
-    }
-
-    #[test]
-    fn plugin_label_uses_last_path_segment() {
-        assert_eq!(plugin_label("github:madebydamo/highsea.neo"), "highsea.neo");
-        assert_eq!(
-            plugin_label("git+file:/home/damo/Documents/projects/homeserver/high_sea"),
-            "high_sea"
-        );
-        assert_eq!(plugin_label("path:/opt/plugins/portrait"), "portrait");
-        assert_eq!(
-            plugin_label("git+https://github.com/madebydamo/portrait"),
-            "portrait"
-        );
-    }
-
-    #[test]
-    fn plugin_label_strips_query_and_trailing_slash() {
-        assert_eq!(
-            plugin_label("git+file:/home/me/high_sea?ref=main"),
-            "high_sea"
-        );
-        assert_eq!(plugin_label("path:/opt/plugins/portrait/"), "portrait");
-        assert_eq!(
-            plugin_label("github:madebydamo/highsea.neo?dir=modules"),
-            "highsea.neo"
-        );
-    }
-
-    #[test]
-    fn plugin_label_ignores_forge_branch() {
-        assert_eq!(plugin_label("github:madebydamo/high_sea/prod"), "high_sea");
-        assert_eq!(plugin_label("gitlab:me/portrait/v1.2"), "portrait");
-        assert_eq!(plugin_label("sourcehut:~me/portrait/prod"), "portrait");
-        assert_eq!(
-            plugin_label("git+https://github.com/me/portrait.git?ref=prod"),
-            "portrait"
-        );
-    }
-
-    #[test]
-    fn plugin_label_can_overlap() {
-        assert_eq!(plugin_label("git+file:/a/high_sea"), "high_sea");
-        assert_eq!(plugin_label("github:other/high_sea"), "high_sea");
-        assert_eq!(plugin_label("path:/tmp/high_sea"), "high_sea");
-    }
-
-    #[test]
-    fn plugin_label_falls_back_to_trimmed_url() {
-        assert_eq!(plugin_label("   "), "");
-        assert_eq!(plugin_label("local"), "local");
-    }
-
-    #[test]
-    fn remove_only_services_owned_solely_by_removed_plugins() {
-        let mut owners = HashMap::new();
-        owners.insert("jellyfin".into(), vec!["git+file:/p/high_sea".into()]);
+        owners.insert("jellyfin".into(), ids(&["high-sea"]));
         owners.insert("filebrowser".into(), vec![]); // core
-        let old = vec!["git+file:/p/high_sea".into(), "github:me/portrait".into()];
-        let new = vec!["github:me/portrait".into()];
-        let gone = services_to_remove(&owners, &old, &new);
+        let gone = services_to_remove(
+            &owners,
+            &ids(&["high-sea", "portrait"]),
+            &ids(&["portrait"]),
+        );
         assert_eq!(gone, vec!["jellyfin"]);
     }
 
     #[test]
-    fn overlapping_owners_keep_service_if_one_plugin_remains() {
+    fn removing_one_of_two_instances_keeps_the_others_tables() {
         let mut owners = HashMap::new();
-        owners.insert(
-            "shared".into(),
-            vec![
-                "git+file:/a/high_sea".into(),
-                "github:other/high_sea".into(),
-            ],
+        owners.insert("portrait".into(), ids(&["portrait"]));
+        owners.insert("dev-portrait".into(), ids(&["portrait-dev"]));
+        let gone = services_to_remove(
+            &owners,
+            &ids(&["portrait", "portrait-dev"]),
+            &ids(&["portrait"]),
         );
-        let old = vec![
-            "git+file:/a/high_sea".into(),
-            "github:other/high_sea".into(),
-        ];
-        let new = vec!["github:other/high_sea".into()];
-        let gone = services_to_remove(&owners, &old, &new);
-        assert!(gone.is_empty(), "shared service must stay: {gone:?}");
+        assert_eq!(gone, vec!["dev-portrait"]);
     }
 
     #[test]
-    fn overlapping_owners_strip_when_all_declaring_plugins_go() {
+    fn shared_owner_keeps_service_while_one_instance_remains() {
         let mut owners = HashMap::new();
-        owners.insert(
-            "shared".into(),
-            vec![
-                "git+file:/a/high_sea".into(),
-                "github:other/high_sea".into(),
-            ],
-        );
-        let old = vec![
-            "git+file:/a/high_sea".into(),
-            "github:other/high_sea".into(),
-        ];
-        let new: Vec<String> = vec![];
-        assert_eq!(services_to_remove(&owners, &old, &new), vec!["shared"]);
-    }
-
-    #[test]
-    fn unknown_service_not_in_owners_is_core_and_stays() {
-        let owners = HashMap::new();
-        let old = vec!["git+file:/p/high_sea".into()];
-        let new: Vec<String> = vec![];
-        assert!(services_to_remove(&owners, &old, &new).is_empty());
-    }
-
-    #[test]
-    fn adding_plugins_removes_nothing() {
-        let mut owners = HashMap::new();
-        owners.insert("jellyfin".into(), vec!["git+file:/p/high_sea".into()]);
-        let old: Vec<String> = vec![];
-        let new = vec!["git+file:/p/high_sea".into()];
-        assert!(services_to_remove(&owners, &old, &new).is_empty());
-    }
-
-    #[test]
-    fn display_label_disambiguates_when_labels_overlap() {
-        let counts = count_labels(["high_sea", "high_sea", "portrait"]);
+        owners.insert("shared".into(), ids(&["a", "b"]));
+        assert!(services_to_remove(&owners, &ids(&["a", "b"]), &ids(&["b"])).is_empty());
         assert_eq!(
-            display_label("git+file:/a/high_sea", "high_sea", &counts),
-            "high_sea · a/high_sea"
-        );
-        assert_eq!(
-            display_label("github:me/portrait", "portrait", &counts),
-            "portrait"
+            services_to_remove(&owners, &ids(&["a", "b"]), &[]),
+            vec!["shared"]
         );
     }
 
     #[test]
-    fn plugins_from_doc_reads_core_list() {
-        let raw = r#"
-[core]
-plugins = [
-  "git+file:/p/high_sea",
-  "github:me/portrait",
-]
-"#;
-        let doc: DocumentMut = raw.parse().unwrap();
-        assert_eq!(
-            plugins_from_doc(&doc),
-            vec!["git+file:/p/high_sea", "github:me/portrait"]
-        );
-    }
-
-    #[test]
-    fn apply_plugin_removal_strips_owned_tables_using_current_doc_list() {
-        let raw = r#"
-[core]
-plugins = ["git+file:/p/high_sea", "github:me/portrait"]
-
-[services.jellyfin]
-enabled = true
-
-[services.filebrowser]
-enabled = true
-"#;
-        let mut doc: DocumentMut = raw.parse().unwrap();
+    fn same_ids_remove_nothing() {
         let mut owners = HashMap::new();
-        owners.insert("jellyfin".into(), vec!["git+file:/p/high_sea".into()]);
-        let gone = apply_plugin_removal(&mut doc, &["github:me/portrait".into()], &owners);
-        assert_eq!(gone, vec!["jellyfin"]);
-        let services = doc.get("services").unwrap().as_table().unwrap();
-        assert!(services.get("jellyfin").is_none());
-        assert!(services.get("filebrowser").is_some());
+        owners.insert("jellyfin".into(), ids(&["high-sea"]));
+        assert!(services_to_remove(&owners, &ids(&["high-sea"]), &ids(&["high-sea"])).is_empty());
+        assert!(services_to_remove(&owners, &[], &ids(&["high-sea"])).is_empty());
+    }
+
+    #[test]
+    fn badges_use_the_id_and_carry_the_url() {
+        let inv = vec![PluginInventoryEntry {
+            id: "portrait-dev".into(),
+            url: "github:me/portrait/dev".into(),
+            prefix: "dev".into(),
+            services: ids(&["dev-portrait"]),
+        }];
+        let b = plugin_badges(&ids(&["portrait-dev"]), &inv);
+        assert_eq!(b[0].display, "portrait-dev");
+        assert_eq!(b[0].url, "github:me/portrait/dev");
     }
 
     #[test]
@@ -415,7 +152,6 @@ enabled = true
         let raw = r#"
 [services.jellyfin]
 enabled = true
-token = "secret"
 
 [services.filebrowser]
 enabled = true

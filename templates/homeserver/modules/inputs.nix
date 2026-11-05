@@ -50,7 +50,8 @@
     if useLocal
     then localUrl
     else serverUrl;
-  plugins = core.plugins or [];
+  # { <id> = { url; prefix; }; } — each becomes the input plugin-<id>.
+  plugins = import ./_plugins.nix {inherit lib;};
 in {
   flake-file.inputs =
     {
@@ -58,14 +59,14 @@ in {
       neo.url = neoInput;
       neo.inputs.nixpkgs.follows = "nixpkgs";
     }
-    // lib.listToAttrs (lib.imap0 (i: p: {
-        name = "plugin${toString i}";
-        value = {
-          url = p;
-          inputs.neo.follows = "neo";
-          inputs.nixpkgs.follows = "nixpkgs";
-          inputs.flake-file.follows = "flake-file";
-        };
-      })
-      plugins);
+    // lib.mapAttrs' (id: p: {
+      name = "plugin-${id}";
+      value = {
+        inherit (p) url;
+        inputs.neo.follows = "neo";
+        inputs.nixpkgs.follows = "nixpkgs";
+        inputs.flake-file.follows = "flake-file";
+      };
+    })
+    plugins;
 }

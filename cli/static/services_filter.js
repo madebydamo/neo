@@ -4,13 +4,13 @@
 // (configuration.js: servicesGrid()) and its Node unit tests via require().
 //
 // A "card" is the plain-data shape read off a `[data-svc]` element's dataset;
-// `cardFromDataset` adapts a DOMStringMap (or any {enabled,cat,pluginUrls,search}
+// `cardFromDataset` adapts a DOMStringMap (or any {enabled,cat,pluginIds,search}
 // object) into it.
 (function (root) {
   'use strict';
 
   /**
-   * @param {{enabled: boolean, cat: string, pluginUrls: string[], search: string}} card
+   * @param {{enabled: boolean, cat: string, pluginIds: string[], search: string}} card
    * @param {{q?: string, status?: string, category?: string, plugin?: string}} filters
    * @returns {boolean}
    */
@@ -25,7 +25,7 @@
     if (status === 'available' && card.enabled) return false;
     if (category !== 'all' && card.cat !== category) return false;
     if (plugin !== 'all') {
-      var urls = card.pluginUrls || [];
+      var urls = card.pluginIds || [];
       if (plugin === 'core' ? urls.length !== 0 : urls.indexOf(plugin) === -1) return false;
     }
     if (q) {
@@ -44,7 +44,7 @@
     return {
       enabled: dataset.enabled === 'true',
       cat: dataset.cat,
-      pluginUrls: (dataset.pluginUrls || '').split('|').filter(Boolean),
+      pluginIds: (dataset.pluginIds || '').split('|').filter(Boolean),
       search: dataset.search || '',
     };
   }

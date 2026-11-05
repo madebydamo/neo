@@ -27,9 +27,9 @@ pub struct Service {
     /// Familiar products this service replaces (grid search text).
     #[serde(default)]
     pub replaces: Vec<String>,
-    /// Plugin flake URLs that declare this service (empty = core).
-    #[serde(default, rename = "pluginUrls")]
-    pub plugin_urls: Vec<String>,
+    /// Plugin instance ids that declare this service (empty = core).
+    #[serde(default, rename = "pluginIds")]
+    pub plugin_ids: Vec<String>,
     /// Display badges (filled in Rust after extract; labels may overlap).
     #[serde(default)]
     pub plugins: Vec<ServicePlugin>,
@@ -41,12 +41,11 @@ pub struct Service {
     pub timers: Vec<String>,
 }
 
-/// One plugin (service badge / filter dropdown entry). `url` is the identity; `label`
-/// may collide, `display` disambiguates.
+/// One plugin instance (service badge / filter dropdown entry). `id` is the identity.
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct ServicePlugin {
+    pub id: String,
     pub url: String,
-    pub label: String,
     pub display: String,
 }
 
@@ -63,10 +62,13 @@ pub struct ServiceCategoryGroup {
     pub has_disabled: bool,
 }
 
-/// One configured plugin (from `core.plugins`) plus the services it declares.
+/// One applied plugin instance (input `plugin-<id>`) plus the services it declares.
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct PluginInventoryEntry {
+    pub id: String,
     pub url: String,
+    #[serde(default)]
+    pub prefix: String,
     #[serde(default)]
     pub services: Vec<String>,
 }

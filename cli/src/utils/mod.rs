@@ -6,6 +6,7 @@ pub mod command;
 pub mod generation;
 pub mod locks;
 pub mod ops;
+pub mod plugins;
 pub mod profile;
 pub mod secrets;
 pub mod secrets_store;

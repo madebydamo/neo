@@ -80,7 +80,7 @@
           <option value="all">All sources</option>
           <option value="core" x-show="pluginAvailable('core')" :disabled="!pluginAvailable('core')">Core</option>
           {{#each plugin_filters}}
-          <option value="{{url}}" x-show="pluginAvailable($el.value)" :disabled="!pluginAvailable($el.value)">{{display}}</option>
+          <option value="{{id}}" x-show="pluginAvailable($el.value)" :disabled="!pluginAvailable($el.value)">{{display}}</option>
           {{/each}}
         </select>
       {{/if}}
@@ -118,7 +118,7 @@
               data-svc
               data-enabled="{{#if enabled}}true{{else}}false{{/if}}"
               data-cat="{{category}}"
-              data-plugin-urls="{{#each plugins}}{{url}}{{#unless @last}}|{{/unless}}{{/each}}"
+              data-plugin-ids="{{#each plugins}}{{id}}{{#unless @last}}|{{/unless}}{{/each}}"
               data-search="{{name}} {{category}}{{#each plugins}} {{display}}{{/each}} {{tagline}}{{#each replaces}} {{this}}{{/each}} {{description}}"
               x-show="cardVisible($el)"
               hx-get="/configuration/option/{{name}}"

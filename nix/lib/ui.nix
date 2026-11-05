@@ -13,8 +13,9 @@
 #
 #   exclusiveListPair — attrsOf submodule with exclusive list fields + open mode
 #     (see tinyauth.access). Modes declare which list fields are active per mode.
-#   pluginList — listOf flake URLs with add/remove cards and per-remove uninstall
-#     confirm (core.plugins). Ownership is inferred from option declarations.
+#   pluginList — attrsOf { url; prefix; } plugin instances (core.plugins): add with
+#     an optional prefix, edit address / branch in place, remove with an uninstall
+#     confirm. Ownership is inferred from option declarations (by instance id).
 #   primaryItemList — listOf scalars; first entry is the primary (badge from
 #     entryLabel, e.g. Hermes telegramAllowedUserId "Home channel").
 #   providerAuth — submodule of provider + (API key and/or OAuth) + model

@@ -85,7 +85,7 @@
           - Hermes managed skills: `/neo-<service>` (see workspace AGENTS.md index)
 
           ## Plugins
-          Extra flakes listed under Neo plugins export `nixosModules.default` into the same `neo.services.*` option space. Treat them like built-in services once enabled.
+          Extra flakes listed under Neo plugins (`core.plugins.<id>` with `url` and an optional `prefix`) add services to the same `neo.services.*` option space. Treat them like built-in services once enabled. A plugin added twice has its second copy's services prefixed (`dev-portrait-server`).
           Private plugins: `git+ssh://git@<host>/<owner>/<repo>` (machine git SSH key) or `github:<owner>/<repo>` (needs a `core.git.tokens` entry for github.com).
 
           ## Git identity

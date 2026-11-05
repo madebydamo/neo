@@ -43,7 +43,7 @@
         then ""
         else builtins.head first;
       replaces = safeList (meta.replaces or []);
-      pluginUrls = inventory.owners.${n} or [];
+      pluginIds = inventory.owners.${n} or [];
     })
     names;
 

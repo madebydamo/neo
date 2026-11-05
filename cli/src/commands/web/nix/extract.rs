@@ -44,8 +44,8 @@ struct RawPane {
     appdata_root: Option<String>,
     #[serde(default)]
     error: Option<String>,
-    #[serde(default, rename = "pluginUrls")]
-    plugin_urls: Vec<String>,
+    #[serde(default, rename = "pluginIds")]
+    plugin_ids: Vec<String>,
     #[serde(default, rename = "pluginInventory")]
     plugin_inventory: Vec<crate::commands::web::types::PluginInventoryEntry>,
 }
@@ -249,8 +249,7 @@ impl NixEvaluator {
         if let Some(meta) = meta.as_mut() {
             self.icons.link(&mut meta.icon);
         }
-        let inv_urls: Vec<String> = raw.plugin_inventory.iter().map(|p| p.url.clone()).collect();
-        let plugins = plugin_badges(&raw.plugin_urls, &inv_urls);
+        let plugins = plugin_badges(&raw.plugin_ids, &raw.plugin_inventory);
         let plugin_inventory_json =
             serde_json::to_string(&raw.plugin_inventory).unwrap_or_else(|_| "[]".to_string());
         OptionPaneContext {
@@ -317,7 +316,7 @@ impl NixEvaluator {
         }
     }
 
-    /// Service name → plugin flake URLs that declare it (from the current flake).
+    /// Service name → plugin instance ids that declare it (from the current flake).
     pub async fn extract_plugin_owners(
         &mut self,
     ) -> anyhow::Result<std::collections::HashMap<String, Vec<String>>> {

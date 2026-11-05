@@ -9,10 +9,13 @@ use toml_edit::{DocumentMut, Item, Table};
 use super::json_to_toml_value;
 use super::save::{apply_payload_to_table, finish_save, load_settings_doc, route_secrets};
 use crate::commands::web::locks::{try_lock, Blocked};
-use crate::commands::web::plugins::{plugins_from_doc, services_to_remove, strip_service_tables};
+use crate::commands::web::plugins::{services_to_remove, strip_service_tables};
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::CORE_NESTED_SECTIONS;
 use crate::utils::locks::{LockGuard, LockSpec, OpInfo};
+use crate::utils::plugins::{
+    plugins_are_tables, plugins_from_doc, validate_plugins, write_plugins,
+};
 
 /// A change to settings.toml.
 pub enum Edit {
@@ -121,6 +124,7 @@ async fn save_core_section_inner(
     };
 
     let old_plugins = plugins_from_doc(&doc);
+    let old_plugins_item = doc.get("core").and_then(|c| c.get("plugins")).cloned();
 
     // Remove possible old top-level location (for renames/migrations).
     // For the aggregate "core" we merge deltas instead of replacing/removing.
@@ -138,7 +142,25 @@ async fn save_core_section_inner(
     }
 
     let new_plugins = plugins_from_doc(&doc);
-    if old_plugins != new_plugins {
+    if old_plugins != new_plugins || !plugins_are_tables(&doc) {
+        let errs = validate_plugins(&new_plugins);
+        if !errs.is_empty() {
+            eprintln!("web: refusing plugin save: {}", errs.join("; "));
+            return Status::BadRequest;
+        }
+        // [core.plugins.<id>] tables; the form sends one object, an old config a list.
+        // Rewrite onto the previous tables so unchanged entries keep their place.
+        if let Some(core) = doc.get_mut("core").and_then(|c| c.as_table_mut()) {
+            match old_plugins_item {
+                Some(item) => core.insert("plugins", item),
+                None => core.remove("plugins"),
+            };
+        }
+        write_plugins(&mut doc, &new_plugins);
+    }
+    let old_ids: Vec<String> = old_plugins.iter().map(|p| p.id.clone()).collect();
+    let new_ids: Vec<String> = new_plugins.iter().map(|p| p.id.clone()).collect();
+    if old_ids.iter().any(|id| !new_ids.contains(id)) {
         let owners = {
             let mut ev = config.evaluator.lock().await;
             match ev.extract_plugin_owners().await {
@@ -149,7 +171,7 @@ async fn save_core_section_inner(
                 }
             }
         };
-        let gone = services_to_remove(&owners, &old_plugins, &new_plugins);
+        let gone = services_to_remove(&owners, &old_ids, &new_ids);
         if !gone.is_empty() {
             eprintln!("web: removing plugin config tables: {}", gone.join(", "));
             strip_service_tables(&mut doc, &gone);

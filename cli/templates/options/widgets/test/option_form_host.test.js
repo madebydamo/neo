@@ -143,7 +143,7 @@ test('save() posts exclusiveListPair payload from widget.prepareSave', async () 
   assert.equal('bob' in (posts[0].body.access || {}), false);
 });
 
-test('save() includes empty pluginList when the list was cleared', async () => {
+test('save() includes empty pluginList when every plugin was removed', async () => {
   const posts = [];
   const document = installGlobals({
     fetch: async (url, init) => {
@@ -161,16 +161,16 @@ test('save() includes empty pluginList when the list was cleared', async () => {
   form.optionsByName = {
     plugins: {
       name: 'plugins',
-      type: { kind: 'listOf', elem: { kind: 'str' } },
+      type: { kind: 'attrsOf', elem: { kind: 'submodule' } },
       ui: { widget: 'pluginList' },
     },
   };
-  form.values.plugins = [];
-  form.defaults.plugins = [];
-  form.originals.plugins = ['github:madebydamo/old'];
+  form.values.plugins = {};
+  form.defaults.plugins = {};
+  form.originals.plugins = { old: { url: 'github:madebydamo/old', prefix: '' } };
   await form.save();
   assert.equal(posts.length, 1);
-  assert.deepEqual(posts[0].body.plugins, []);
+  assert.deepEqual(posts[0].body.plugins, {});
 });
 
 test('initForm does not report dirty after providerAuth canonicalizes Nix nulls', () => {

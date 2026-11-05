@@ -40,6 +40,10 @@ function optionForm() {
      */
     uiState: {},
     plDraft: {},
+    plDraftPrefix: {},
+    plError: {},
+    plEdit: {},
+    plPrefixAuto: {},
     _pluginInv: null,
     oauthBusy: {},
     /** Active pane tab: 'settings' | 'status' | 'snapshots'. */

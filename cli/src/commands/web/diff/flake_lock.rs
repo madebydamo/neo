@@ -42,9 +42,12 @@ fn locked<'a>(doc: &'a Value, input: &str) -> Option<&'a Value> {
     input_node(doc, input)?.get("locked")
 }
 
-/// Plugin inputs are keyed `plugin<N>` in the generated flake; name them
-/// after the plugin's source (`original` in the lock) instead.
+/// Plugin inputs are `plugin-<id>`: show the id. Older configs keyed them
+/// `plugin<N>`; name those after the plugin's source (`original` in the lock).
 fn plugin_input_label(doc: &Value, input: &str) -> Option<String> {
+    if let Some(id) = input.strip_prefix("plugin-") {
+        return (!id.is_empty()).then(|| id.to_string());
+    }
     let index = input.strip_prefix("plugin")?;
     if index.is_empty() || !index.bytes().all(|b| b.is_ascii_digit()) {
         return None;
@@ -211,6 +214,19 @@ mod tests {
             names(&plugin_lock("a", git), &plugin_lock("b", git)),
             vec!["portal"]
         );
+    }
+
+    #[test]
+    fn instance_inputs_use_their_id() {
+        let lock = |rev: &str| {
+            format!(
+                r#"{{"root":"root","version":7,"nodes":{{
+  "root":{{"inputs":{{"plugin-portrait-dev":"plugin-portrait-dev"}}}},
+  "plugin-portrait-dev":{{"locked":{{"rev":"{rev}"}},"original":{{"type":"github","owner":"me","repo":"portrait","ref":"dev"}}}}
+}}}}"#
+            )
+        };
+        assert_eq!(names(&lock("a"), &lock("b")), vec!["portrait-dev"]);
     }
 
     #[test]

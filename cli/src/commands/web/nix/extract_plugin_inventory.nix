@@ -1,6 +1,9 @@
-# Infer which neo.services.* options were declared by which *applied* plugin flake.
-# Pair inputs.pluginN with that input's flake.lock original URL — never with live
+# Infer which neo.services.* options were declared by which *applied* plugin instance.
+# Instances are the inputs plugin-<id> (legacy: pluginN, id = input name). Pair each
+# with that input's flake.lock original URL — never with the live URL in
 # config.neo.core.plugins (settings can change on save before write-flake).
+# Instance-aware plugins tag declarations with neo-plugin:<id>#… (lib.neo.plugin);
+# older ones are matched by their store path.
 {neoFlake}: let
   inherit (import ./extract_lib.nix {inherit neoFlake;}) f cfg tryOr;
 
@@ -19,7 +22,7 @@
     else "";
 
   urlFromFlakeNix = name: let
-    parts = builtins.split ''${name}[[:space:]]*=[[:space:]]*\{[[:space:]]*url[[:space:]]*=[[:space:]]*"([^"]+)"'' flakeNixText;
+    parts = builtins.split ''"?${name}"?[[:space:]]*=[[:space:]]*\{[[:space:]]*url[[:space:]]*=[[:space:]]*"([^"]+)"'' flakeNixText;
     cap =
       if builtins.length parts >= 2 && builtins.isList (builtins.elemAt parts 1)
       then builtins.head (builtins.elemAt parts 1)
@@ -110,24 +113,36 @@
     then fromNix
     else fromLock;
 
-  pluginIndex = name:
-    builtins.fromJSON (builtins.substring 6 (builtins.stringLength name) name);
+  # plugin-<id> (instances) and pluginN (configs from before instances).
+  idOf = name: let
+    m = builtins.match "plugin-(.+)" name;
+  in
+    if m != null
+    then builtins.head m
+    else if builtins.match "plugin[0-9]+" name != null
+    then name
+    else null;
 
-  pluginNames = builtins.sort (a: b: pluginIndex a < pluginIndex b) (
-    builtins.filter (n: builtins.match "plugin[0-9]+" n != null) (
-      builtins.attrNames flakeInputs
-    )
+  pluginNames = builtins.sort (a: b: a < b) (
+    builtins.filter (n: idOf n != null) (builtins.attrNames flakeInputs)
   );
+
+  livePlugins =
+    if cfg == null
+    then {}
+    else tryOr {} (f.nixosConfigurations.${cfg}.config.neo.core.plugins or {});
 
   pluginAt = name: let
     inp = flakeInputs.${name} or null;
-    url = urlForInput name;
+    id = idOf name;
     outPath =
       if inp == null
       then ""
       else toString (tryOr "" (inp.outPath or ""));
   in {
-    inherit name url outPath;
+    inherit id outPath;
+    url = urlForInput name;
+    prefix = (livePlugins.${id} or {}).prefix or "";
   };
 
   pluginList = map pluginAt pluginNames;
@@ -150,18 +165,21 @@
 
   ownersOf = name: let
     decls = declsOf name;
-    matches =
+    byTag = builtins.filter (p: builtins.any (d: startsWith "neo-plugin:${p.id}#" d) decls) pluginList;
+    byPath =
       builtins.filter (
         p:
-          p.url
-          != ""
-          && p.outPath
+          p.outPath
           != ""
           && builtins.any (d: startsWith p.outPath d) decls
       )
       pluginList;
   in
-    map (p: p.url) matches;
+    map (p: p.id) (
+      if byTag != []
+      then byTag
+      else byPath
+    );
 
   owners = builtins.listToAttrs (
     builtins.filter (x: x.value != []) (
@@ -173,10 +191,12 @@
     )
   );
 
-  plugins = map (p: {
-    url = p.url;
-    services = builtins.filter (n: builtins.elem p.url (owners.${n} or [])) serviceNames;
-  }) (builtins.filter (p: p.url != "") pluginList);
+  plugins =
+    map (p: {
+      inherit (p) id url prefix;
+      services = builtins.filter (n: builtins.elem p.id (owners.${n} or [])) serviceNames;
+    })
+    pluginList;
 in {
   inherit owners plugins;
 }

@@ -7,370 +7,320 @@ const assert = require('node:assert/strict');
 const { makeForm, createDocument } = require('./test/harness.js');
 
 const inventory = [
-  { url: 'github:madebydamo/neo-foo', services: ['foo', 'foo-worker'] },
-  { url: 'git+file:///opt/bar', services: ['bar'] },
-  { url: 'github:madebydamo/neo-shared', services: ['foo'] },
+  { id: 'neo-foo', url: 'github:madebydamo/neo-foo', prefix: '', services: ['foo', 'foo-worker'] },
+  { id: 'bar', url: 'git+file:///opt/bar', prefix: '', services: ['bar'] },
+  { id: 'neo-shared', url: 'github:madebydamo/neo-shared', prefix: '', services: ['foo'] },
+  { id: 'portrait-dev', url: 'github:me/portrait/dev', prefix: 'dev', services: ['dev-portrait'] },
 ];
 
 function pluginsOption(current) {
   return {
     name: 'plugins',
-    type: { kind: 'listOf', elem: { kind: 'str' } },
-    default: [],
-    current: current || [],
+    type: { kind: 'attrsOf', elem: { kind: 'submodule' } },
+    default: {},
+    current: current || {},
     ui: { widget: 'pluginList', emptyHint: 'No plugins yet.' },
   };
 }
 
 function formWithPlugins(opts) {
   opts = opts || {};
-  const current = opts.current !== undefined ? opts.current : [];
+  const current = opts.current !== undefined ? opts.current : {};
   const option = pluginsOption(current);
-  if (opts.emptyHint === null) {
-    delete option.ui.emptyHint;
-  } else if (opts.emptyHint !== undefined) {
-    option.ui.emptyHint = opts.emptyHint;
-  }
+  if (opts.emptyHint === null) delete option.ui.emptyHint;
   const docOpts = {
     pluginInventory: opts.pluginInventory !== undefined ? opts.pluginInventory : inventory,
     confirm: opts.confirm,
   };
-  if (opts.document) {
-    docOpts.document = opts.document;
-  }
-  const form = makeForm({
-    ...docOpts,
-    options: [option],
-    values: opts.values,
-    originals: opts.originals,
-    defaults: opts.defaults,
-    pluginInv: opts.pluginInv,
-  });
+  if (opts.document) docOpts.document = opts.document;
+  const form = makeForm({ ...docOpts, options: [option] });
   form.initWidgets();
+  // initForm recaptures originals after widget init.
+  form.originals.plugins = form.cloneValue(form.values.plugins);
   return form;
 }
 
-// ── pluginLabel ──────────────────────────────────────────────────────────────
+const one = (url, prefix) => ({ url, prefix: prefix || '' });
 
-test('pluginLabel: github:user/repo → repo', () => {
+// ── URL helpers ──────────────────────────────────────────────────────────────
+
+test('pluginLabel: repository name for forges, last segment otherwise', () => {
   const form = formWithPlugins();
   assert.equal(form.pluginLabel('github:user/repo'), 'repo');
-});
-
-test('pluginLabel: git+https last segment keeps .git', () => {
-  const form = formWithPlugins();
-  assert.equal(form.pluginLabel('git+https://host/a/b.git'), 'b.git');
-});
-
-test('pluginLabel: strips ?rev= and #ref, trailing slashes', () => {
-  const form = formWithPlugins();
-  assert.equal(form.pluginLabel('github:user/repo?rev=abc'), 'repo');
-  assert.equal(form.pluginLabel('github:user/repo#ref'), 'repo');
-  assert.equal(form.pluginLabel('github:user/repo/'), 'repo');
-  assert.equal(form.pluginLabel('github:user/repo/?rev=x#y'), 'repo');
-});
-
-test('pluginLabel: path:/abs/plugin → last segment', () => {
-  const form = formWithPlugins();
-  assert.equal(form.pluginLabel('path:/abs/plugin'), 'plugin');
-});
-
-test('pluginLabel: empty/undefined → empty-ish string', () => {
-  const form = formWithPlugins();
+  assert.equal(form.pluginLabel('github:user/repo/dev'), 'repo');
+  assert.equal(form.pluginLabel('git+https://host/a/b.git?ref=x'), 'b');
+  assert.equal(form.pluginLabel('path:/abs/plugin/'), 'plugin');
   assert.equal(form.pluginLabel(''), '');
-  assert.equal(form.pluginLabel(undefined), '');
-  assert.equal(form.pluginLabel(null), '');
 });
 
-// ── plNormUrl ────────────────────────────────────────────────────────────────
-
-test('plNormUrl: file: / git+file: variants collapse', () => {
+test('plSanitize matches utils::plugins::sanitize_id', () => {
   const form = formWithPlugins();
-  const a = form.plNormUrl('git+file:///opt/x');
-  const b = form.plNormUrl('file:///opt/x');
-  const c = form.plNormUrl('git+file:/opt/x');
-  assert.equal(a, 'git+file:/opt/x');
-  assert.equal(b, a);
-  assert.equal(c, a);
+  assert.equal(form.plSanitize('highsea.neo'), 'highsea-neo');
+  assert.equal(form.plSanitize('bielCrawler'), 'bielcrawler');
+  assert.equal(form.plSanitize('3d'), 'plugin-3d');
+  assert.equal(form.plSanitize('...'), 'plugin');
 });
 
-test('plNormUrl: hash stripped, query kept; file vs git+file equal', () => {
+test('plRefOf / plWithRef: forge path refs, ?ref= elsewhere, none for path:', () => {
   const form = formWithPlugins();
-  assert.equal(form.plNormUrl('git+file:///opt/x#frag'), 'git+file:/opt/x');
-  assert.equal(form.plNormUrl('git+file:///opt/x?rev=1'), 'git+file:/opt/x?rev=1');
-  assert.equal(
-    form.plNormUrl('file:///opt/plugin'),
-    form.plNormUrl('git+file:///opt/plugin')
-  );
+  assert.equal(form.plRefOf('github:me/portrait'), '');
+  assert.equal(form.plRefOf('github:me/portrait/dev'), 'dev');
+  assert.equal(form.plRefOf('github:me/portrait?ref=feature/x'), 'feature/x');
+  assert.equal(form.plRefOf('git+ssh://git@host/me/p?ref=dev'), 'dev');
+  assert.equal(form.plRefOf('git+file:/home/me/p'), '');
+  assert.equal(form.plRefOf('path:/home/me/p'), null);
+
+  assert.equal(form.plWithRef('github:me/portrait', 'dev'), 'github:me/portrait/dev');
+  assert.equal(form.plWithRef('github:me/portrait/dev', ''), 'github:me/portrait');
+  assert.equal(form.plWithRef('github:me/portrait/dev', 'main'), 'github:me/portrait/main');
+  assert.equal(form.plWithRef('github:me/portrait?dir=x', 'feature/y'), 'github:me/portrait?dir=x&ref=feature%2Fy');
+  assert.equal(form.plWithRef('git+file:/home/me/p', 'dev'), 'git+file:/home/me/p?ref=dev');
+  assert.equal(form.plWithRef('git+file:/home/me/p?ref=dev&rev=1', ''), 'git+file:/home/me/p?rev=1');
+  assert.equal(form.plWithRef('path:/home/me/p', 'dev'), 'path:/home/me/p');
+});
+
+test('plRepoKey ignores branches', () => {
+  const form = formWithPlugins();
+  assert.equal(form.plRepoKey('github:Me/Portrait/dev'), form.plRepoKey('github:me/portrait'));
+  assert.equal(form.plRepoKey('git+file:///h/p?ref=x'), form.plRepoKey('git+file:/h/p'));
 });
 
 // ── init ─────────────────────────────────────────────────────────────────────
 
-test('init: missing values become []; plDraft set to empty string', () => {
-  const form = makeForm({
-    pluginInventory: inventory,
-    options: [pluginsOption(['github:a/b'])],
-    values: { plugins: undefined },
+test('init: a legacy list becomes id-keyed entries', () => {
+  const form = formWithPlugins({ current: ['github:a/portrait', 'github:b/highsea.neo', 'path:/x/portrait'] });
+  assert.deepEqual(form.values.plugins, {
+    'portrait-0': one('github:a/portrait'),
+    'highsea-neo': one('github:b/highsea.neo'),
+    'portrait-2': one('path:/x/portrait'),
   });
-  // makeForm may have already filled from option.current; force missing then init
-  delete form.values.plugins;
-  form.plDraft = {};
-  form.initWidgets();
-  assert.deepEqual(form.values.plugins, []);
-  assert.equal(form.plDraft.plugins, '');
 });
 
-test('init: preserves existing plDraft when already set', () => {
-  const form = makeForm({
-    pluginInventory: inventory,
-    options: [pluginsOption([])],
-  });
-  form.plDraft.plugins = 'github:keep/me';
-  form.initWidgets();
-  assert.equal(form.plDraft.plugins, 'github:keep/me');
+test('init: tables keep their order and fill prefix', () => {
+  const form = formWithPlugins({ current: { b: { url: 'u2' }, a: { url: 'u1', prefix: 'x' } } });
+  assert.deepEqual(form.plIds('plugins'), ['b', 'a']);
+  assert.deepEqual(form.values.plugins.b, one('u2'));
 });
 
-// ── addPluginUrl ─────────────────────────────────────────────────────────────
+// ── add ──────────────────────────────────────────────────────────────────────
 
-test('addPluginUrl: empty draft is no-op', () => {
-  const form = formWithPlugins({ current: ['github:a/one'] });
-  form.plDraft.plugins = '   ';
-  form.addPluginUrl('plugins');
-  assert.deepEqual(form.values.plugins, ['github:a/one']);
-  assert.equal(form.plDraft.plugins, '   ');
-});
-
-test('addPluginUrl: trims, appends, clears draft', () => {
-  const form = formWithPlugins({ current: [] });
-  form.plDraft.plugins = '  github:user/new  ';
-  form.addPluginUrl('plugins');
-  assert.deepEqual(form.values.plugins, ['github:user/new']);
-  assert.equal(form.plDraft.plugins, '');
-});
-
-test('addPluginUrl: duplicate by plNormUrl ignored and draft cleared', () => {
-  const form = formWithPlugins({
-    current: ['git+file:///opt/x'],
-  });
-  form.plDraft.plugins = 'file:///opt/x';
-  form.addPluginUrl('plugins');
-  assert.deepEqual(form.values.plugins, ['git+file:///opt/x']);
-  assert.equal(form.plDraft.plugins, '');
-});
-
-// ── prepareSave / collectSave ────────────────────────────────────────────────
-
-test('collectSave: unchanged list omits plugins key', () => {
-  const form = formWithPlugins({
-    current: ['github:a/one'],
-  });
-  assert.equal('plugins' in form.collectSave(), false);
-});
-
-test('collectSave: after add includes plugins array', () => {
-  const form = formWithPlugins({ current: [] });
-  form.plDraft.plugins = 'github:user/new';
-  form.addPluginUrl('plugins');
-  assert.deepEqual(form.collectSave().plugins, ['github:user/new']);
-});
-
-test('collectSave: clearing all plugins saves empty array (vs originals, not defaults)', () => {
-  const form = formWithPlugins({
-    current: ['github:a/one'],
-    defaults: { plugins: [] },
-  });
-  // originals = ['github:a/one']; remove all → must save []
-  form.values.plugins = [];
-  const saved = form.collectSave();
-  assert.ok('plugins' in saved);
-  assert.deepEqual(saved.plugins, []);
-});
-
-test('prepareSave: returns undefined when at original', () => {
-  const form = formWithPlugins({ current: ['github:a/one'] });
-  const w = globalThis.NeoWidgets.get('pluginList');
-  assert.equal(w.prepareSave.call(form, 'plugins'), undefined);
-});
-
-test('prepareSave: non-array values become []', () => {
-  const form = formWithPlugins({ current: ['github:a/one'] });
-  form.values.plugins = null;
-  const w = globalThis.NeoWidgets.get('pluginList');
-  assert.deepEqual(w.prepareSave.call(form, 'plugins'), []);
-});
-
-// ── plServices ───────────────────────────────────────────────────────────────
-
-test('plServices: lookup by normalized URL; unknown → []', () => {
+test('addPluginUrl: id from the repository name, draft cleared', () => {
   const form = formWithPlugins();
-  assert.deepEqual(form.plServices('github:madebydamo/neo-foo'), ['foo', 'foo-worker']);
-  assert.deepEqual(form.plServices('file:///opt/bar'), ['bar']);
-  assert.deepEqual(form.plServices('github:nobody/missing'), []);
+  form.plDraft.plugins = '  github:madebydamo/highsea.neo ';
+  form.addPluginUrl('plugins');
+  assert.deepEqual(form.values.plugins, { 'highsea-neo': one('github:madebydamo/highsea.neo') });
+  assert.equal(form.plDraft.plugins, '');
 });
 
-test('pluginInventory: reads seed when _pluginInv is null', () => {
-  const form = formWithPlugins({ pluginInv: null });
-  assert.equal(form._pluginInv, null);
-  const inv = form.pluginInventory();
-  assert.equal(inv.length, 3);
-  assert.equal(form._pluginInv.length, 3);
+test('addPluginUrl: empty draft is a no-op', () => {
+  const form = formWithPlugins();
+  form.addPluginUrl('plugins');
+  assert.deepEqual(form.values.plugins, {});
+  assert.equal(form.plError.plugins, '');
 });
 
-// ── pluginRemovalPreviewFor — last owner ─────────────────────────────────────
+test('addPluginUrl: same plugin again needs a different prefix', () => {
+  const form = formWithPlugins({ current: { portrait: one('github:me/portrait') } });
+  form.plDraft.plugins = 'github:me/portrait/dev';
+  form.addPluginUrl('plugins');
+  assert.match(form.plError.plugins, /already added/);
+  assert.deepEqual(form.plIds('plugins'), ['portrait']);
 
-test('pluginRemovalPreviewFor: shared service not deleted when co-owner remains', () => {
+  form.plDraftPrefix.plugins = 'dev';
+  form.addPluginUrl('plugins');
+  assert.deepEqual(form.values.plugins['portrait-dev'], one('github:me/portrait/dev', 'dev'));
+});
+
+test('addPluginUrl: rejects prefixes with other characters', () => {
+  const form = formWithPlugins();
+  form.plDraft.plugins = 'github:me/portrait';
+  form.plDraftPrefix.plugins = 'Dev-';
+  form.addPluginUrl('plugins');
+  assert.match(form.plError.plugins, /lowercase/);
+});
+
+test('plSuggestPrefix: branch name when the plugin is already there', () => {
+  const form = formWithPlugins({ current: { portrait: one('github:me/portrait') } });
+  form.plDraft.plugins = 'github:me/portrait/Feature_1';
+  form.plSuggestPrefix('plugins');
+  assert.equal(form.plDraftPrefix.plugins, 'feature1');
+  assert.equal(form.plNeedsPrefix('plugins'), true);
+});
+
+test('plSuggestPrefix: no branch → copy2; new repo → nothing', () => {
+  const form = formWithPlugins({ current: { portrait: one('github:me/portrait') } });
+  form.plDraft.plugins = 'github:me/portrait';
+  form.plSuggestPrefix('plugins');
+  assert.equal(form.plDraftPrefix.plugins, 'copy2');
+
+  const fresh = formWithPlugins();
+  fresh.plDraft.plugins = 'github:me/portrait/dev';
+  fresh.plSuggestPrefix('plugins');
+  assert.equal(fresh.plDraftPrefix.plugins, '');
+});
+
+test('plSuggestPrefix: follows the URL while typing, stops once the user types a prefix', () => {
+  const form = formWithPlugins({ current: { portrait: one('git+file:/p/portrait') } });
+  for (const url of ['git+file:/p/portrait', 'git+file:/p/portrait?ref=fe', 'git+file:/p/portrait?ref=feature']) {
+    form.plDraft.plugins = url;
+    form.plSuggestPrefix('plugins');
+  }
+  assert.equal(form.plDraftPrefix.plugins, 'feature');
+  form.plDraft.plugins = 'git+file:/other';
+  form.plSuggestPrefix('plugins');
+  assert.equal(form.plDraftPrefix.plugins, '');
+
+  form.plDraft.plugins = 'git+file:/p/portrait?ref=x';
+  form.plDraftPrefix.plugins = 'mine';
+  form.plPrefixTyped('plugins');
+  form.plSuggestPrefix('plugins');
+  assert.equal(form.plDraftPrefix.plugins, 'mine');
+});
+
+test('plSanitizePrefix: starts with a letter', () => {
+  const form = formWithPlugins();
+  assert.equal(form.plSanitizePrefix('2nd-Try'), 'ndtry');
+  assert.equal(form.plSanitizePrefix('v2'), 'v2');
+});
+
+test('plNewId: unique ids', () => {
+  const form = formWithPlugins({ current: { portrait: one('github:a/portrait') } });
+  assert.equal(form.plNewId('plugins', 'github:b/portrait', ''), 'portrait-2');
+  assert.equal(form.plNewId('plugins', 'github:b/portrait', 'dev'), 'portrait-dev');
+});
+
+// ── edit ─────────────────────────────────────────────────────────────────────
+
+test('edit: changing the branch rewrites only that url and keeps the id', () => {
   const form = formWithPlugins({
-    current: [
-      'github:madebydamo/neo-foo',
-      'github:madebydamo/neo-shared',
-      'git+file:///opt/bar',
-    ],
+    current: { a: one('github:me/a'), portrait: one('github:me/portrait') },
   });
-  const preview = form.pluginRemovalPreviewFor('plugins', ['github:madebydamo/neo-foo']);
-  assert.equal(preview.length, 1);
-  assert.equal(preview[0].label, 'neo-foo');
-  // foo still owned by neo-shared; foo-worker only by neo-foo → listed
-  assert.deepEqual(preview[0].services, ['foo-worker']);
-  assert.ok(!preview[0].services.includes('foo'));
+  form.startPluginEdit('plugins', 'portrait');
+  assert.equal(form.plEdit.plugins.ref, '');
+  form.plEdit.plugins.ref = 'dev';
+  form.plEditBranchChanged('plugins');
+  assert.equal(form.plEdit.plugins.url, 'github:me/portrait/dev');
+  form.applyPluginEdit('plugins');
+  assert.deepEqual(form.values.plugins, {
+    a: one('github:me/a'),
+    portrait: one('github:me/portrait/dev'),
+  });
+  assert.equal(form.plEdit.plugins, null);
 });
 
-test('pluginRemovalPreviewFor: removing both owners lists shared service', () => {
+test('edit: typing a url updates the branch field', () => {
+  const form = formWithPlugins({ current: { p: one('github:me/p') } });
+  form.startPluginEdit('plugins', 'p');
+  form.plEdit.plugins.url = 'git+file:/x/p?ref=wip';
+  form.plEditUrlChanged('plugins');
+  assert.equal(form.plEdit.plugins.ref, 'wip');
+});
+
+test('edit: empty address or a clash with another instance is refused', () => {
   const form = formWithPlugins({
-    current: [
-      'github:madebydamo/neo-foo',
-      'github:madebydamo/neo-shared',
-    ],
+    current: { p: one('github:me/p'), q: one('github:me/q') },
   });
-  const preview = form.pluginRemovalPreviewFor('plugins', [
-    'github:madebydamo/neo-foo',
-    'github:madebydamo/neo-shared',
-  ]);
-  const byUrl = Object.fromEntries(preview.map((p) => [p.url, p]));
-  assert.ok(byUrl['github:madebydamo/neo-foo'].services.includes('foo'));
-  assert.ok(byUrl['github:madebydamo/neo-shared'].services.includes('foo'));
+  form.startPluginEdit('plugins', 'q');
+  form.plEdit.plugins.url = '';
+  form.applyPluginEdit('plugins');
+  assert.match(form.plError.plugins, /empty/);
+  form.plEdit.plugins.url = 'github:me/p/dev';
+  form.applyPluginEdit('plugins');
+  assert.match(form.plError.plugins, /"p"/);
+  assert.equal(form.values.plugins.q.url, 'github:me/q');
 });
 
-test('pluginRemovalPreviewFor: sole owner lists its service', () => {
+test('edit: cancel keeps the value', () => {
+  const form = formWithPlugins({ current: { p: one('github:me/p') } });
+  form.startPluginEdit('plugins', 'p');
+  form.plEdit.plugins.url = 'github:me/other';
+  form.cancelPluginEdit('plugins');
+  assert.equal(form.values.plugins.p.url, 'github:me/p');
+});
+
+// ── save ─────────────────────────────────────────────────────────────────────
+
+test('prepareSave: undefined when unchanged; empty prefix left out', () => {
+  const w = require('./plugin_list.js');
+  const form = formWithPlugins({ current: { p: one('github:me/p') } });
+  assert.equal(w.prepareSave.call(form, 'plugins'), undefined);
+  form.plDraft.plugins = 'github:me/p/dev';
+  form.plDraftPrefix.plugins = 'dev';
+  form.addPluginUrl('plugins');
+  assert.deepEqual(w.prepareSave.call(form, 'plugins'), {
+    p: { url: 'github:me/p' },
+    'p-dev': { url: 'github:me/p/dev', prefix: 'dev' },
+  });
+});
+
+// ── inventory / remove ───────────────────────────────────────────────────────
+
+test('plServices: by instance id', () => {
+  const form = formWithPlugins();
+  assert.deepEqual(form.plServices('portrait-dev'), ['dev-portrait']);
+  assert.deepEqual(form.plServices('nope'), []);
+});
+
+test('pluginRemovalPreviewFor: shared service kept while a co-owner remains', () => {
   const form = formWithPlugins({
-    current: ['git+file:///opt/bar', 'github:madebydamo/neo-foo'],
+    current: { 'neo-foo': one('github:madebydamo/neo-foo'), 'neo-shared': one('github:madebydamo/neo-shared') },
   });
-  const preview = form.pluginRemovalPreviewFor('plugins', ['git+file:///opt/bar']);
-  assert.deepEqual(preview[0].services, ['bar']);
+  const [row] = form.pluginRemovalPreviewFor('plugins', ['neo-foo']);
+  assert.deepEqual(row.services, ['foo-worker']);
+  const both = form.pluginRemovalPreviewFor('plugins', ['neo-foo', 'neo-shared']);
+  assert.deepEqual(both[0].services, ['foo', 'foo-worker']);
 });
 
-// ── pluginRemovalPreviewFor vs originals ─────────────────────────────────────
-
-test('pluginRemovalPreviewFor: session-added plugin still gets a preview row; services not flagged unless owners in originals-removed', () => {
-  const form = formWithPlugins({
-    current: ['github:madebydamo/neo-shared'],
-  });
-  // Add neo-foo in-session (not in originals), then preview removing it
-  form.values.plugins = [
-    'github:madebydamo/neo-shared',
-    'github:madebydamo/neo-foo',
-  ];
-  const preview = form.pluginRemovalPreviewFor('plugins', ['github:madebydamo/neo-foo']);
-  assert.equal(preview.length, 1);
-  assert.equal(preview[0].url, 'github:madebydamo/neo-foo');
-  assert.equal(preview[0].label, 'neo-foo');
-  // neo-foo was never in originals, so removedNorm does not include it —
-  // foo-worker (sole owner neo-foo) and foo (shared) must not be flagged.
-  assert.deepEqual(preview[0].services, []);
+test('removePlugin: an entry added in this session goes without asking', async () => {
+  const form = formWithPlugins({ confirm: () => { throw new Error('asked'); } });
+  form.plDraft.plugins = 'github:me/p';
+  form.addPluginUrl('plugins');
+  await form.removePlugin('plugins', 'p');
+  assert.deepEqual(form.values.plugins, {});
 });
 
-// ── confirmPluginRemoval with dialog ─────────────────────────────────────────
-
-test('confirmPluginRemoval dialog: confirm removes url; HTML-escapes label/url', async () => {
+test('confirmPluginRemoval dialog: confirm removes; HTML-escaped', async () => {
   const document = createDocument({ pluginInventory: inventory });
   const dlg = document.set('plugin-remove-dialog-plugins');
   const body = document.set('plugin-remove-body-plugins');
   const okBtn = document.set('plugin-remove-confirm-plugins');
   document.set('plugin-remove-cancel-plugins');
+  const form = formWithPlugins({ document, current: { 'portrait-dev': one('github:u/a&b<"x">', 'dev') } });
 
-  const form = formWithPlugins({
-    document,
-    current: ['github:user/a&b<"x">'],
-  });
-
-  const removePromise = form.removePluginUrl('plugins', 0);
+  const p = form.removePlugin('plugins', 'portrait-dev');
   assert.equal(dlg.open, true);
-  assert.match(body.innerHTML, /a&amp;b&lt;&quot;x&quot;&gt;/);
-  assert.match(body.innerHTML, /github:user\/a&amp;b&lt;&quot;x&quot;&gt;/);
-
+  assert.match(body.innerHTML, /github:u\/a&amp;b&lt;&quot;x&quot;&gt;/);
+  assert.match(body.innerHTML, /<li class="font-mono">dev-portrait<\/li>/);
   okBtn.click();
-  await removePromise;
-  assert.deepEqual(form.values.plugins, []);
+  await p;
+  assert.deepEqual(form.values.plugins, {});
 });
 
-test('confirmPluginRemoval dialog: cancel leaves list unchanged', async () => {
+test('confirmPluginRemoval dialog: cancel keeps the entry', async () => {
   const document = createDocument({ pluginInventory: inventory });
   document.set('plugin-remove-dialog-plugins');
   document.set('plugin-remove-body-plugins');
   document.set('plugin-remove-confirm-plugins');
   const cancelBtn = document.set('plugin-remove-cancel-plugins');
-
-  const form = formWithPlugins({
-    document,
-    current: ['github:madebydamo/neo-foo'],
-  });
-
-  const removePromise = form.removePluginUrl('plugins', 0);
-  cancelBtn.click();
-  await removePromise;
-  assert.deepEqual(form.values.plugins, ['github:madebydamo/neo-foo']);
-});
-
-test('confirmPluginRemoval dialog: fills services list in body', async () => {
-  const document = createDocument({ pluginInventory: inventory });
-  const dlg = document.set('plugin-remove-dialog-plugins');
-  const body = document.set('plugin-remove-body-plugins');
-  document.set('plugin-remove-confirm-plugins');
-  const cancelBtn = document.set('plugin-remove-cancel-plugins');
-
-  const form = formWithPlugins({
-    document,
-    current: ['git+file:///opt/bar'],
-  });
-
-  const p = form.removePluginUrl('plugins', 0);
-  assert.equal(dlg.open, true);
-  assert.match(body.innerHTML, /<li class="font-mono">bar<\/li>/);
+  const form = formWithPlugins({ document, current: { bar: one('git+file:///opt/bar') } });
+  const p = form.removePlugin('plugins', 'bar');
   cancelBtn.click();
   await p;
+  assert.deepEqual(Object.keys(form.values.plugins), ['bar']);
 });
 
-// ── confirmPluginRemoval fallback ────────────────────────────────────────────
-
-test('confirmPluginRemoval fallback: window.confirm false keeps item', async () => {
-  const form = formWithPlugins({
-    current: ['github:madebydamo/neo-foo'],
-    confirm: () => false,
-  });
-  // No dialog elements → fallback to window.confirm
-  await form.removePluginUrl('plugins', 0);
-  assert.deepEqual(form.values.plugins, ['github:madebydamo/neo-foo']);
-});
-
-test('confirmPluginRemoval fallback: window.confirm true removes item', async () => {
-  const form = formWithPlugins({
-    current: ['github:madebydamo/neo-foo'],
-    confirm: () => true,
-  });
-  await form.removePluginUrl('plugins', 0);
-  assert.deepEqual(form.values.plugins, []);
+test('confirmPluginRemoval fallback: window.confirm decides', async () => {
+  const keep = formWithPlugins({ current: { bar: one('x') }, confirm: () => false });
+  await keep.removePlugin('plugins', 'bar');
+  assert.deepEqual(Object.keys(keep.values.plugins), ['bar']);
+  const drop = formWithPlugins({ current: { bar: one('x') }, confirm: () => true });
+  await drop.removePlugin('plugins', 'bar');
+  assert.deepEqual(drop.values.plugins, {});
 });
 
 // ── plEmptyHint ──────────────────────────────────────────────────────────────
 
-test('plEmptyHint: uses ui.emptyHint', () => {
-  const form = formWithPlugins({ emptyHint: 'No plugins yet.' });
-  assert.equal(form.plEmptyHint('plugins'), 'No plugins yet.');
-});
-
-test('plEmptyHint: falls back to long default when omitted', () => {
-  const form = formWithPlugins({ emptyHint: null });
-  assert.equal(
-    form.plEmptyHint('plugins'),
-    'No plugins yet. Add a flake URL (github:user/repo, git+file:/path, or path:/path).'
-  );
+test('plEmptyHint: ui.emptyHint, else the default', () => {
+  assert.equal(formWithPlugins().plEmptyHint('plugins'), 'No plugins yet.');
+  assert.match(formWithPlugins({ emptyHint: null }).plEmptyHint('plugins'), /flake URL/);
 });

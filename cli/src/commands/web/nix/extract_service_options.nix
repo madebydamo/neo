@@ -302,7 +302,12 @@
   in
     walkF [] (callGetSubOptions t []);
 
-  getTypeInfo = t: let
+  # coercedTo (old form accepted on read) is edited as its final type.
+  getTypeInfo = t0: let
+    t =
+      if typeNameOf t0 == "coercedTo"
+      then tryOr t0 (t0.nestedTypes.finalType or t0)
+      else t0;
     n = typeNameOf t;
     nested = tryOr {} (t.nestedTypes or {});
     elemT = tryOr null (nested.elemType or null);
@@ -928,7 +933,7 @@
     raw;
 
   inventory = import ./extract_plugin_inventory.nix {inherit neoFlake;};
-  servicePluginUrls =
+  servicePluginIds =
     if service != null
     then inventory.owners.${service} or []
     else [];
@@ -977,6 +982,6 @@ in {
   containers = containers;
   appdata = appdata;
   appdataRoot = appdataRoot;
-  pluginUrls = servicePluginUrls;
+  pluginIds = servicePluginIds;
   pluginInventory = inventory.plugins;
 }

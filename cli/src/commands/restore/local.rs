@@ -57,24 +57,19 @@ fn git(repo: &Path) -> Command {
 
 /// `git+file:` / `path:` plugins that do not exist on this machine.
 pub(crate) fn missing_local_plugins(doc: &DocumentMut) -> Vec<String> {
-    let Some(list) = doc
-        .get("core")
-        .and_then(|c| c.get("plugins"))
-        .and_then(|p| p.as_array())
-    else {
-        return Vec::new();
-    };
-    list.iter()
-        .filter_map(|v| v.as_str())
+    crate::utils::plugins::plugins_from_doc(doc)
+        .into_iter()
+        .map(|p| p.url)
         .filter_map(|url| {
-            let base = url.split(['?', '#']).next().unwrap_or(url);
-            ["git+file://", "git+file:", "path:"]
+            let base = url.split(['?', '#']).next().unwrap_or(&url);
+            let dir = ["git+file://", "git+file:", "path:"]
                 .iter()
                 .find_map(|p| base.strip_prefix(p))
-                .map(|p| (url, p.to_string()))
+                .map(str::to_string)?;
+            Some((url, dir))
         })
         .filter(|(_, p)| !Path::new(p).exists())
-        .map(|(u, _)| u.to_string())
+        .map(|(u, _)| u)
         .collect()
 }
 

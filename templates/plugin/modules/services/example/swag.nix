@@ -1,17 +1,19 @@
-# Example reverse proxy for SWAG: https://<subdomain>.<domain> → http://example:<port>.
+# Example reverse proxy for SWAG: https://<subdomain>.<domain> → http://<name>:<port>.
 # mkSubdomainProxyConf adds tinyauth, publicPaths bypasses, ingress and geo rules.
 # proxy.conf already sets Upgrade/Connection and proxy timeouts. Do not re-set them.
 {...}: {
-  flake.modules.nixos.example-swag = {
+  neoPlugin.modules.example-swag = {
     config,
     lib,
+    plugin,
     ...
   }: let
-    cfg = config.neo.services.example;
+    name = plugin.name "example";
+    cfg = config.neo.services.${name};
   in {
-    config.neo.services.example.proxyConf = lib.mkDefault (lib.neo.mkSubdomainProxyConf {
+    config.neo.services.${name}.proxyConf = lib.mkDefault (lib.neo.mkSubdomainProxyConf {
       inherit config cfg;
-      upstream = "example";
+      upstream = name;
       port = cfg.port;
     });
   };

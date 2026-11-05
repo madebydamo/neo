@@ -6,7 +6,7 @@ const { serviceMatches, cardFromDataset } = require('./services_filter.js');
 
 function card(overrides) {
   return Object.assign(
-    { enabled: false, cat: 'media', pluginUrls: [], search: 'jellyfin media stream video' },
+    { enabled: false, cat: 'media', pluginIds: [], search: 'jellyfin media stream video' },
     overrides
   );
 }
@@ -34,12 +34,12 @@ test('category filter restricts to the matching category', () => {
 });
 
 test('plugin filter: "core" matches cards with no plugin urls', () => {
-  assert.equal(serviceMatches(card({ pluginUrls: [] }), { plugin: 'core' }), true);
-  assert.equal(serviceMatches(card({ pluginUrls: ['github:foo/bar'] }), { plugin: 'core' }), false);
+  assert.equal(serviceMatches(card({ pluginIds: [] }), { plugin: 'core' }), true);
+  assert.equal(serviceMatches(card({ pluginIds: ['github:foo/bar'] }), { plugin: 'core' }), false);
 });
 
 test('plugin filter: a plugin url only matches cards carrying it', () => {
-  const c = card({ pluginUrls: ['github:foo/bar', 'github:foo/baz'] });
+  const c = card({ pluginIds: ['github:foo/bar', 'github:foo/baz'] });
   assert.equal(serviceMatches(c, { plugin: 'github:foo/bar' }), true);
   assert.equal(serviceMatches(c, { plugin: 'github:other/one' }), false);
 });
@@ -53,7 +53,7 @@ test('search matches on the precomputed data-search haystack, case-insensitively
 });
 
 test('all filters combine (AND)', () => {
-  const c = card({ enabled: true, cat: 'media', pluginUrls: [], search: 'jellyfin media' });
+  const c = card({ enabled: true, cat: 'media', pluginIds: [], search: 'jellyfin media' });
   assert.equal(
     serviceMatches(c, { status: 'installed', category: 'media', plugin: 'core', q: 'jelly' }),
     true
@@ -68,19 +68,19 @@ test('cardFromDataset adapts a DOMStringMap-like object', () => {
   const c = cardFromDataset({
     enabled: 'true',
     cat: 'media',
-    pluginUrls: 'github:a/b|github:c/d',
+    pluginIds: 'github:a/b|github:c/d',
     search: 'jellyfin media',
   });
   assert.deepEqual(c, {
     enabled: true,
     cat: 'media',
-    pluginUrls: ['github:a/b', 'github:c/d'],
+    pluginIds: ['github:a/b', 'github:c/d'],
     search: 'jellyfin media',
   });
 });
 
 test('cardFromDataset defaults missing fields safely', () => {
   const c = cardFromDataset({});
-  assert.deepEqual(c, { enabled: false, cat: undefined, pluginUrls: [], search: '' });
+  assert.deepEqual(c, { enabled: false, cat: undefined, pluginIds: [], search: '' });
   assert.equal(serviceMatches(c, {}), true);
 });

@@ -116,6 +116,7 @@ const CUSTOM_MIGRATIONS: &[(&str, MigrationFn)] = &[
     ),
     ("012-neo-two-themes", migrate_012_neo_two_themes),
     ("013-backup-keeps-ssh-key", migrate_013_backup_keeps_ssh_key),
+    ("014-plugin-tables", migrate_014_plugin_tables),
 ];
 
 /// Delete retired [neo-service] and [nixos] tables.
@@ -441,6 +442,17 @@ fn migrate_011_drop_bootstrap_method(doc: &mut DocumentMut) {
     }
 }
 
+/// `core.plugins` went from a list of URLs to `[core.plugins.<id>]` tables
+/// (docs/design/plugin-instances.md). Ids are the ones the list form already
+/// gets in Nix, so the flake inputs `plugin-<id>` stay the same.
+fn migrate_014_plugin_tables(doc: &mut DocumentMut) {
+    if crate::utils::plugins::plugins_are_tables(doc) {
+        return;
+    }
+    let entries = crate::utils::plugins::plugins_from_doc(doc);
+    crate::utils::plugins::write_plugins(doc, &entries);
+}
+
 /// The backup's default SSH key became the host key (escrowed, so it survives a
 /// restore). Configured backups keep the homeserver key their remote trusts.
 fn migrate_013_backup_keeps_ssh_key(doc: &mut DocumentMut) {
@@ -753,16 +765,10 @@ repoUrl = "https://example.test/cfg.git"
         );
         assert!(updater.get("garbageCollectOlderThen").is_none());
 
-        let plugins = doc
-            .get("core")
-            .and_then(|c| c.get("plugins"))
-            .and_then(|p| p.as_array())
-            .expect("core.plugins");
+        // Carried over by 003, then turned into tables by 014.
+        let plugins = crate::utils::plugins::plugins_from_doc(&doc);
         assert_eq!(
-            plugins
-                .iter()
-                .filter_map(|v| v.as_str())
-                .collect::<Vec<_>>(),
+            plugins.iter().map(|p| p.url.as_str()).collect::<Vec<_>>(),
             vec!["github:example/plugin"]
         );
 
@@ -1175,5 +1181,26 @@ garbageCollectOlderThen = "7d"
             Some("60d")
         );
         assert!(updater.get("garbageCollectOlderThen").is_none());
+    }
+
+    #[test]
+    fn migration_014_turns_the_plugin_list_into_tables() {
+        let raw = r#"
+[core]
+hostname = "x"
+plugins = ["github:madebydamo/highsea.neo", "git+file:/home/me/portrait"]
+"#;
+        let mut doc: DocumentMut = raw.parse().unwrap();
+        assert!(apply_migrations(&mut doc));
+        let out = doc.to_string();
+        assert!(
+            out.contains("[core.plugins.highsea-neo]\nurl = \"github:madebydamo/highsea.neo\""),
+            "{out}"
+        );
+        assert!(
+            out.contains("[core.plugins.portrait]\nurl = \"git+file:/home/me/portrait\""),
+            "{out}"
+        );
+        assert!(!apply_migrations(&mut doc));
     }
 }

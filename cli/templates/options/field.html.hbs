@@ -37,9 +37,11 @@
           {{/if}}{{/if}}
         {{else}}{{#if (eq ui.widget "proxyRouteList")}}
           {{> options/widgets/proxy_route_list}}
+        {{else}}{{#if (eq ui.widget "pluginList")}}
+          {{> options/widgets/plugin_list}}
         {{else}}
           {{> options/attrs_of}}
-        {{/if}}{{/if}}
+        {{/if}}{{/if}}{{/if}}
       </div>
     </div>
   {{else}}

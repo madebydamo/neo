@@ -1,47 +1,116 @@
-{{! pluginList: listOf flake URLs with cards, add/remove, and per-remove uninstall confirm.
-    Driven by option.ui (emptyHint). Inventory comes from #plugin-inventory-seed.
+{{! pluginList: core.plugins instances { <id>: { url, prefix } } as cards with
+    add (optional prefix), in-place edit of address / branch, and remove with an
+    uninstall confirm. Inventory comes from #plugin-inventory-seed.
     Logic: plugin_list.js (NeoWidgets.register('pluginList')). See nix/lib/ui.nix. }}
 <div class="mt-2 space-y-3">
-  <template x-for="(url, idx) in (values['{{name}}'] || [])" :key="idx">
+  <template x-for="id in plIds('{{name}}')" :key="id">
     <div class="rounded-xl border border-base-300 bg-base-100/70 p-3 sm:p-4 space-y-2 shadow-sm">
       <div class="flex items-center justify-between gap-2 min-w-0">
-        <div class="font-mono text-sm font-medium truncate" x-text="pluginLabel(url)" :title="url"></div>
-        <button type="button"
-                class="btn btn-ghost btn-xs text-error shrink-0"
-                @click="removePluginUrl('{{name}}', idx)"
-                title="Remove this plugin">
-          Remove
-        </button>
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="font-mono text-sm font-medium truncate" x-text="id" :title="plEntry('{{name}}', id).url"></div>
+          <span class="badge badge-sm badge-outline font-mono shrink-0"
+                x-show="plEntry('{{name}}', id).prefix"
+                :title="'Its apps are named ' + plEntry('{{name}}', id).prefix + '-…'"
+                x-text="'prefix: ' + plEntry('{{name}}', id).prefix"></span>
+        </div>
+        <div class="flex gap-1 shrink-0" x-show="plEdit['{{name}}']?.id !== id">
+          <button type="button"
+                  class="btn btn-ghost btn-xs"
+                  @click="startPluginEdit('{{name}}', id)"
+                  title="Change the address or branch">
+            Edit
+          </button>
+          <button type="button"
+                  class="btn btn-ghost btn-xs text-error"
+                  @click="removePlugin('{{name}}', id)"
+                  title="Remove this plugin">
+            Remove
+          </button>
+        </div>
       </div>
-      <div class="font-mono text-xs break-all text-base-content/70" x-text="url"></div>
+
+      <div class="font-mono text-xs break-all text-base-content/70"
+           x-show="plEdit['{{name}}']?.id !== id"
+           x-text="plEntry('{{name}}', id).url"></div>
+
+      <template x-if="plEdit['{{name}}']?.id === id">
+        <div class="space-y-2">
+          <label class="block">
+            <span class="text-xs text-base-content/60">Address</span>
+            <input type="text"
+                   class="input input-primary input-sm w-full font-mono"
+                   x-model="plEdit['{{name}}'].url"
+                   @input="plEditUrlChanged('{{name}}')"
+                   @keydown.enter.prevent="applyPluginEdit('{{name}}')"
+                   @keydown.escape.prevent="cancelPluginEdit('{{name}}')"
+                   spellcheck="false">
+          </label>
+          <label class="block" x-show="plEdit['{{name}}'].ref !== null">
+            <span class="text-xs text-base-content/60">Branch (empty: the default branch)</span>
+            <input type="text"
+                   class="input input-sm w-full font-mono"
+                   x-model="plEdit['{{name}}'].ref"
+                   @input="plEditBranchChanged('{{name}}')"
+                   @keydown.enter.prevent="applyPluginEdit('{{name}}')"
+                   @keydown.escape.prevent="cancelPluginEdit('{{name}}')"
+                   placeholder="main"
+                   spellcheck="false">
+          </label>
+          <p class="text-[11px] text-base-content/50" x-show="plEntry('{{name}}', id).prefix">
+            The prefix cannot be changed: it is part of every app name. Remove the plugin and add it again to change it.
+          </p>
+          <div class="flex gap-2">
+            <button type="button" class="btn btn-primary btn-xs" @click="applyPluginEdit('{{name}}')">Done</button>
+            <button type="button" class="btn btn-ghost btn-xs" @click="cancelPluginEdit('{{name}}')">Cancel</button>
+          </div>
+        </div>
+      </template>
+
       <div class="flex flex-wrap gap-1"
-           x-show="plServices(url).length > 0">
-        <template x-for="svc in plServices(url)" :key="svc">
+           x-show="plServices(id).length > 0">
+        <template x-for="svc in plServices(id)" :key="svc">
           <span class="badge badge-ghost badge-sm font-mono" x-text="svc"></span>
         </template>
       </div>
       <p class="text-[11px] text-base-content/45"
-         x-show="plServices(url).length === 0">
+         x-show="plServices(id).length === 0">
         No services attributed to this plugin in the current eval. Apply the plugin first so Neo can see what it adds.
       </p>
     </div>
   </template>
 
   <p class="text-xs text-base-content/50"
-     x-show="(values['{{name}}'] || []).length === 0"
+     x-show="plIds('{{name}}').length === 0"
      x-text="plEmptyHint('{{name}}')"></p>
 
   <div class="flex flex-col sm:flex-row gap-2">
     <input type="text"
            class="input input-primary input-sm flex-1 font-mono"
            x-model="plDraft['{{name}}']"
+           @input="plError['{{name}}'] = ''; plSuggestPrefix('{{name}}')"
            placeholder="github:user/plugin  ·  git+file:/path  ·  path:/path"
+           spellcheck="false"
+           @keydown.enter.prevent="addPluginUrl('{{name}}')">
+    <input type="text"
+           class="input input-sm sm:w-36 font-mono"
+           :class="plNeedsPrefix('{{name}}') ? 'input-primary' : ''"
+           x-model="plDraftPrefix['{{name}}']"
+           @input="plPrefixTyped('{{name}}')"
+           placeholder="prefix (optional)"
+           title="Put in front of the plugin's app names, so the same plugin can be added twice (dev → dev-portrait)"
            spellcheck="false"
            @keydown.enter.prevent="addPluginUrl('{{name}}')">
     <button type="button"
             class="btn btn-outline btn-sm shrink-0"
             @click="addPluginUrl('{{name}}')">+ Add plugin</button>
   </div>
+  <p class="text-[11px] text-base-content/60"
+     x-show="plNeedsPrefix('{{name}}') && !plError['{{name}}']">
+    This plugin is already added. The copy needs its own prefix, so its apps get their own names (for example
+    <span class="font-mono" x-text="(plDraftPrefix['{{name}}'] || 'dev') + '-…'"></span>).
+    Only plugins that support prefixes can be added twice.
+  </p>
+  <p class="text-xs text-error" x-show="plError['{{name}}']" x-text="plError['{{name}}']"></p>
 
   <dialog id="plugin-remove-dialog-{{name}}" class="modal">
     <div class="modal-box max-w-lg">

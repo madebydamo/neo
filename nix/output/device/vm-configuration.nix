@@ -30,13 +30,14 @@
         else if lib.hasPrefix "/" url
         then url
         else "";
-      dir = lib.head (lib.splitString "#" base);
+      # Neither the flake output (#…) nor the query (?ref=…) is part of the directory.
+      dir = lib.head (builtins.split "[?#]" base);
     in
       if dir == ""
       then null
       else dir;
     pluginDirs = lib.unique (lib.sort builtins.lessThan (
-      lib.filter (d: d != null) (map localDir (config.neo.core.plugins or []))
+      lib.filter (d: d != null) (map (p: localDir p.url) (lib.attrValues (config.neo.core.plugins or {})))
     ));
     # A checkout inside another share is already visible there.
     shareRoots =
