@@ -5,7 +5,8 @@
   configServices = neoConfig.services or {};
   names = builtins.attrNames configServices;
 
-  raw =
+  # Deprecated services stay listed only while they are enabled.
+  raw = builtins.filter (s: s.enabled || !s.deprecated) (
     map (n: let
       svc = configServices.${n};
       meta = svc.meta or {};
@@ -43,9 +44,13 @@
         then ""
         else builtins.head first;
       replaces = safeList (meta.replaces or []);
+      # { spdx, url, openSource, note } or null; the card flags openSource = false.
+      license = meta.license or null;
+      deprecated = (meta.deprecated or null) != null;
       pluginIds = inventory.owners.${n} or [];
     })
-    names;
+    names
+  );
 
   # Preferred category order for the services grid UI.
   categoryOrder = [

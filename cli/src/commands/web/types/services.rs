@@ -27,6 +27,12 @@ pub struct Service {
     /// Familiar products this service replaces (grid search text).
     #[serde(default)]
     pub replaces: Vec<String>,
+    /// Upstream license; the card flags services that are not fully open source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<super::pane::ServiceLicense>,
+    /// No longer supported (only listed while enabled).
+    #[serde(default)]
+    pub deprecated: bool,
     /// Plugin instance ids that declare this service (empty = core).
     #[serde(default, rename = "pluginIds")]
     pub plugin_ids: Vec<String>,

@@ -24,6 +24,13 @@
         iframeCompatible ? true,
         # Suggested values: Core, Network, Security, Media, Files, Monitoring, Utilities, AI, Other
         category ? "Other",
+        # Upstream license, linked from the pane: { spdx; url; openSource ? true; note ? ""; }.
+        # openSource = false labels the service "Not fully open source" (open-core,
+        # closed parts in the image, a closed service it depends on); `note` says what.
+        license ? null,
+        # No longer supported: { reason; instead; alternatives ? []; }. Hidden from the
+        # services grid and the privacy map unless it is enabled.
+        deprecated ? null,
       } @ args:
         with lib; {
           meta = mkOption {
@@ -103,6 +110,53 @@
                   type = types.bool;
                   default = iframeCompatible;
                   description = "Whether this service can be loaded inside an iframe in the neo navigator UI.";
+                };
+                license = mkOption {
+                  type = types.nullOr (types.submodule {
+                    options = {
+                      spdx = mkOption {
+                        type = types.str;
+                        description = "SPDX license id or expression, e.g. AGPL-3.0-only or MIT OR Apache-2.0.";
+                      };
+                      url = mkOption {
+                        type = types.str;
+                        description = "Link to the license text.";
+                      };
+                      openSource = mkOption {
+                        type = types.bool;
+                        default = true;
+                        description = "False when the service is not fully open source (open-core, closed parts in the image, or a closed service it relies on).";
+                      };
+                      note = mkOption {
+                        type = types.str;
+                        default = "";
+                        description = "What is not open source, and the open alternative if there is one.";
+                      };
+                    };
+                  });
+                  default = license;
+                  description = "License of the upstream project.";
+                };
+                deprecated = mkOption {
+                  type = types.nullOr (types.submodule {
+                    options = {
+                      reason = mkOption {
+                        type = types.str;
+                        description = "Why Neo no longer supports it, in one plain sentence.";
+                      };
+                      instead = mkOption {
+                        type = types.str;
+                        description = "What to use instead, in one or two plain sentences.";
+                      };
+                      alternatives = mkOption {
+                        type = types.listOf types.str;
+                        default = [];
+                        description = "Services that replace it, linked from the notice.";
+                      };
+                    };
+                  });
+                  default = deprecated;
+                  description = "Set when Neo no longer supports this service. Hidden from the services grid unless enabled.";
                 };
                 category = mkOption {
                   type = types.str;

@@ -22,8 +22,13 @@
     replaces = tryOr [] (meta.replaces or []);
   };
 
+  # Deprecated services are not suggested unless already enabled.
+  listed = n:
+    tryOr false (services.${n}.enabled or false)
+    || tryOr null ((services.${n}.meta or {}).deprecated or null) == null;
+
   servicesFor = id:
-    map serviceCard (builtins.filter (n: builtins.elem id (tryOr [] ((services.${n}.meta or {}).privacy or [])))
+    map serviceCard (builtins.filter (n: listed n && builtins.elem id (tryOr [] ((services.${n}.meta or {}).privacy or [])))
       (builtins.attrNames services));
 
   guidesFor = id:

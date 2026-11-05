@@ -26,6 +26,35 @@ pub struct ServiceMeta {
     pub releaseUrl: Option<String>,
     #[serde(default)]
     pub screenshots: Vec<ServiceScreenshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<ServiceLicense>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deprecated: Option<ServiceDeprecation>,
+}
+
+/// Upstream license (`mkServiceMeta.license`), linked in the pane.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ServiceLicense {
+    pub spdx: String,
+    pub url: String,
+    /// False labels the service "Not fully open source".
+    #[serde(default = "default_true", rename = "openSource")]
+    pub open_source: bool,
+    #[serde(default)]
+    pub note: String,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Set when Neo no longer supports the service (`mkServiceMeta.deprecated`).
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ServiceDeprecation {
+    pub reason: String,
+    pub instead: String,
+    #[serde(default)]
+    pub alternatives: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

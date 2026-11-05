@@ -39,6 +39,28 @@
       <p class="mt-0.5 text-sm sm:text-base font-medium text-base-content/85">{{meta.tagline}}</p>
     {{/if}}
 
+    {{#if meta.deprecated}}
+      <div role="alert" class="alert alert-warning alert-soft mt-2 py-2 text-sm flex-col items-start gap-1">
+        <span><strong>No longer supported.</strong> {{meta.deprecated.reason}}</span>
+        <span>{{meta.deprecated.instead}}</span>
+        {{#if meta.deprecated.alternatives}}
+          <span class="flex flex-wrap gap-1.5 mt-0.5">
+            {{#each meta.deprecated.alternatives}}
+              <a href="/configuration/option/{{this}}" class="btn btn-xs btn-soft no-underline"
+                 hx-get="/configuration/option/{{this}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true">Open {{this}}</a>
+            {{/each}}
+          </span>
+        {{/if}}
+      </div>
+    {{/if}}
+
+    {{#if meta.license}}{{#unless meta.license.openSource}}
+      <div role="note" class="alert alert-warning alert-soft mt-2 py-2 text-sm flex-col items-start gap-0.5">
+        <strong>Not fully open source</strong>
+        {{#if meta.license.note}}<span>{{meta.license.note}}</span>{{/if}}
+      </div>
+    {{/unless}}{{/if}}
+
     {{#if meta.description}}
       <div x-data="{ open: false, long: false }"
            x-init="$nextTick(() => { long = $refs.desc.scrollHeight > $refs.desc.clientHeight + 2 })"
@@ -71,7 +93,7 @@
 
     {{> pane/guides}}
 
-    {{#if (or meta.projectUrl meta.githubUrl meta.releaseUrl)}}
+    {{#if (or meta.projectUrl meta.githubUrl meta.releaseUrl meta.license)}}
       <div class="mt-2 flex flex-wrap gap-1.5">
         {{#if meta.projectUrl}}
           <a href="{{meta.projectUrl}}" target="_blank" rel="noopener" class="btn btn-xs btn-soft no-underline">Website ↗</a>
@@ -81,6 +103,10 @@
         {{/if}}
         {{#if meta.releaseUrl}}
           <a href="{{meta.releaseUrl}}" target="_blank" rel="noopener" class="btn btn-xs btn-soft no-underline">Releases ↗</a>
+        {{/if}}
+        {{#if meta.license}}
+          <a href="{{meta.license.url}}" target="_blank" rel="noopener" class="btn btn-xs btn-soft no-underline"
+             title="License of {{service}}">License: {{meta.license.spdx}} ↗</a>
         {{/if}}
       </div>
     {{/if}}
