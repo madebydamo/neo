@@ -1,6 +1,6 @@
 # Plugin instances: stable ids, editing, and prefixed services
 
-Status: accepted, in progress
+Status: implemented
 
 ## Problems today
 
@@ -106,12 +106,12 @@ Edge case: the same legacy plugin imported twice without a prefix fails with the
 
 ### What authors write
 
-Neo ships a flake-parts module `inputs.neo.flakeModules.plugin` that the plugin template imports. It adds an option `neo.plugin.modules.<name>`: NixOS modules that receive one more argument, `plugin`:
+Neo ships a flake-parts module `inputs.neo.flakeModules.plugin` that the plugin template imports. It adds an option `neoPlugin.modules.<name>`: NixOS modules that receive one more argument, `plugin`:
 
 ```nix
 # modules/services/example/default.nix
 {...}: {
-  neo.plugin.modules.example = {config, lib, plugin, ...}: let
+  neoPlugin.modules.example = {config, lib, plugin, ...}: let
     name = plugin.name "example";            # "example" or "dev-example"
     cfg = config.neo.services.${name};
     appdata = "${config.neo.core.volumes.appdata}/${name}";
@@ -155,11 +155,11 @@ The per-instance `key` keeps two instances from being deduplicated. The `_file` 
 The flake module also exports:
 
 ```nix
-flake.neoPlugin = { module = instance: lib.neo.plugin.instantiate instance config.neo.plugin.modules; };
+flake.neoPlugin = { module = instance: lib.neo.plugin.instantiate instance config.neoPlugin.modules; prefixable = …; };
 flake.nixosModules.default = flake.neoPlugin.module { id = "default"; prefix = ""; url = ""; };  # older Neo hosts
 ```
 
-Plugins that keep using `flake.modules.nixos.*` stay legacy: one instance, no prefix. Both kinds can be mixed in one plugin while porting, but only `neo.plugin.modules` get the `plugin` argument, so a plugin is prefix-safe only when everything has moved.
+Plugins that keep using `flake.modules.nixos.*` stay legacy: one instance, no prefix. Both kinds can be mixed in one plugin while porting, but only `neoPlugin.modules` get the `plugin` argument, so a plugin is prefix-safe (`neoPlugin.prefixable`) only when everything has moved.
 
 ### lib.neo helpers
 
@@ -172,11 +172,11 @@ Most helpers take names from their arguments, so they work once the author passe
 
 ### Catching missed literals
 
-A plugin that forgets `plugin.name` in one place still evaluates in some cases. For example, two identical `volumes` lists merge silently. Neo adds `lib.neo.plugin.mkInstanceCheck` for the plugin template's `checks`:
+A plugin that forgets `plugin.name` in one place still evaluates in some cases. For example, two identical `volumes` lists merge silently. `flakeModules.plugin` adds the check `neo-plugin-instances` to every prefix-safe plugin:
 
-1. It evaluates a stub host with the plugin once (prefix `""`) and once twice (prefixes `a` and `b`), with every plugin service enabled.
-2. It fails if the second evaluation errors, or if any of these sets did not exactly double: `virtualisation.oci-containers.containers`, `systemd.services`, `systemd.timers`, `users.users`, `neo.services`, `neo.guides`.
-3. On failure it lists the names that were not prefixed.
+1. It evaluates Neo with the plugin once (no prefix) and twice (prefixes `neoa` and `neob`), with every plugin service enabled.
+2. It fails if the second evaluation errors, or if a name in `neo.services`, `virtualisation.oci-containers.containers`, `systemd.services`, `systemd.timers`, `users.users` or `users.groups` carries neither prefix, or is not created once per copy. The prefix may sit inside a name (`docker-neoa-example`).
+3. On failure it lists those names.
 
 `nix flake check` in the plugin template runs it, so authors find leaks without a VM.
 
@@ -197,7 +197,7 @@ The `pluginList` widget (`cli/templates/options/widgets/plugin_list.*`) changes 
 ```
 
 - **Add**: URL field, then a small form with id (pre-filled) and prefix (empty). If the URL's repository is already installed, the form says so, pre-fills a prefix suggestion (the branch name if the URL has one) and requires a non-empty prefix when the existing instance has none.
-- **Edit**: the card becomes a URL field plus a **Branch** field. The branch field reads the ref out of the URL and writes it back in the right form for the scheme: `github:o/r/<ref>`, `gitlab:o/r/<ref>`, `?ref=<ref>` for `git+…`. Not shown for `path:`. A single `with_ref`/`ref_of` pair in Rust (`plugins.rs`) and in the widget JS keeps both sides in sync, with tests on every scheme. Saving an edit keeps the id, so only the `url` line changes.
+- **Edit**: the card becomes a URL field plus a **Branch** field. The branch field reads the ref out of the URL and writes it back in the right form for the scheme: `github:o/r/<ref>`, `gitlab:o/r/<ref>`, `?ref=<ref>` for `git+…`. Not shown for `path:`. The widget JS does this (`plRefOf` / `plWithRef`, tested per scheme); the server only stores the URL. Saving an edit keeps the id, so only the `url` line changes.
 - **Prefix** is shown, not editable, after the plugin has been saved (see below).
 - **Update this plugin** (optional extra): runs `nix flake update plugin-<id>` instead of updating every input. This is possible now that input names are stable.
 - **Remove** stays as it is, but the "tables to delete" list now comes from instance ownership (section 5). That also removes the prefixed tables of exactly that instance.
@@ -234,16 +234,22 @@ Rust (`plugins.rs`, `settings/edit.rs`): `plugins_from_doc` returns `Vec<PluginE
 | `cli/src/commands/web/proposals.rs` | `core.plugins` stays refused for the assistant. Check the new path shape (`core.plugins.<id>.url`). |
 | `cli/src/commands/web/util/validate.rs` | Validate id, prefix and the uniqueness rules. |
 | `nix/output/templates-check.nix` | Cover the attrs form, the list fallback and an instance-aware plugin with two prefixes. |
-| `docs/PLUGINS.md` | Install/edit/branch/prefix for users. `neo.plugin.modules`, `plugin.name`, the check and the "no path imports" rule for authors. "Make your plugin prefix-safe" checklist. |
+| `docs/PLUGINS.md` | Install/edit/branch/prefix for users. `neoPlugin.modules`, `plugin.name`, the check and the "no path imports" rule for authors. "Make your plugin prefix-safe" checklist. |
 | `AGENTS.md` | One paragraph on plugin instances. Update the `pluginList` widget row. |
 
 ## 7. Order of work
 
 1. **Stable ids + edit** (no plugin changes needed): settings model with list fallback, migration, `inputs.nix`/`nixos.nix`, inventory by id, Rust ownership by id, widget Edit + Branch field, flake-lock diff labels. This alone fixes the branch-switch commit size.
-2. **Instance API in Neo**: `nix/lib/plugin.nix` (`instantiate`, `withPluginArg`, `mkInstanceCheck`), `flakeModules.plugin`, `nixos.nix` choosing `neoPlugin` vs legacy, prefix field and rules in the form, assertions.
-3. **Template + docs**: port `templates/plugin` to `neo.plugin.modules` + `plugin.name`, add the instance check to its `checks`, rewrite the author half of `docs/PLUGINS.md`.
+2. **Instance API in Neo**: `nix/lib/plugin.nix` (`instantiate`, `withPluginArg`), `flakeModules.plugin` (with the instance check), `nixos.nix` choosing `neoPlugin` vs legacy, prefix field and rules in the form, assertions.
+3. **Template + docs**: port `templates/plugin` to `neoPlugin.modules` + `plugin.name`, add the instance check to its `checks`, rewrite the author half of `docs/PLUGINS.md`.
 4. **Port real plugins**: `portrait` first (small, the branch use case), then `highsea.neo` (many cross-service hostnames, a good test for the check).
 5. **VM acceptance**: `portrait` (no prefix) + `portrait` on `dev` with prefix `dev`. Expect `docker-portrait` and `docker-dev-portrait` active, `https://portrait.<domain>` and `https://dev-portrait.<domain>` serving different revisions, an edit to the dev branch changing only its input, and Remove of the dev instance stripping only `[services.dev-portrait]`.
+
+## Found while testing
+
+- The SWAG check allowed only `[a-z]+` subdomains, which rejects `dev-portrait`. Nothing downstream needs that (tinyauth's env names come from the service name), so it now takes DNS labels: `[a-z]([a-z0-9-]*[a-z0-9])?`.
+- Copies of a VPN-routed service share gluetun's namespace, so their ports clash. Plugins make such ports settings (portrait: `port`).
+- Portrait's image unit removed every `portrait-server:*` image but the current one, which could delete the other copy's freshly loaded image. Each copy now loads the image as `<name>:<hash>` (nix2container `copyTo`) and cleans up only its own tags; retagging the shared name was not enough, as two branches with the same server code share a hash.
 
 ## Decisions
 

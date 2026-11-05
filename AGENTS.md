@@ -71,6 +71,10 @@ Naming: options camelCase under `neo.services.*`; plain-string descriptions; vol
 
 **Rust:** clap, `anyhow::Result`, `?` + `.context`, `toml_edit::DocumentMut`; no `unwrap` in lib paths.
 
+## Plugins
+
+`core.plugins.<id> = { url; prefix; }` (old configs: a list of URLs, ids from the repo name; migration `014-plugin-tables`). Each id is the flake input `plugin-<id>`, so editing a URL touches one input. Plugins import `inputs.neo.flakeModules.plugin` and define `neoPlugin.modules.<name>`; each module gets a `plugin` argument and names everything with `plugin.name "<service>"`, so an instance with `prefix = "dev"` yields `dev-<service>`. Plugins without `neoPlugin` load once via `nixosModules.default`. Ownership (inventory, removal) keys on the id: declarations are tagged `neo-plugin:<id>#…`. The id/label rules exist three times and must stay equal: `nix/lib/plugin.nix`, `templates/homeserver/modules/_plugins.nix`, `cli/src/utils/plugins.rs` (plus the widget JS). Design: [docs/design/plugin-instances.md](docs/design/plugin-instances.md).
+
 ## Disko, boot, restore
 
 `nix/modules/disko/`: the main disk is EF02 (1M) + ESP (`/boot`) + ZFS `zroot` (`root` → `/`, `neo` → `/var/neo`, snapshotted). GRUB: UEFI removable path from `core/base.nix`; `boot-install.sh` (grub `extraInstallCommands`) adds the BIOS install when the EF02 partition exists, a NixOS firmware entry and `startup.nsh`. It must never fail a switch: log and go on. Disks partitioned before EF02 existed stay UEFI-only, so never put the main disk into `boot.loader.grub.devices`. Boot changes need `just test-disko-boot`.
@@ -162,7 +166,7 @@ Extract prunes orphan keys from `current`; the form re-syncs when the source lis
 | Widget | Use |
 |--------|-----|
 | `exclusiveListPair` | attrsOf submodule with exclusive list fields + open mode (e.g. tinyauth `access` allow/block) |
-| `pluginList` | listOf flake URLs with add/remove cards and per-remove uninstall confirm (`core.plugins`) |
+| `pluginList` | `core.plugins` instances `{ <id> = { url; prefix; }; }`: cards with add (optional prefix, suggested from the branch when the plugin is already there), in-place edit of address / branch, and remove with uninstall confirm |
 | `primaryItemList` | listOf scalars; first entry is the primary (badge from `entryLabel`, e.g. Hermes `telegramAllowedUserId` home channel) |
 | `providerAuth` | submodule of provider + API key and/or OAuth login + model (Hermes `llm`). Catalog rows declare `hasApiKey` / `hasOauth` / `oauthFlow` / `needsBaseUrl`; child option descriptions render as ⓘ on each input; `ui.oauth.script` runs status/login/refresh |
 | `proxyRouteList` | attrsOf str of public domain → plain `http://` upstream (SWAG `proxyPass`). Route cards `https://domain → TLS at SWAG → upstream` with add/remove, inline checks (hostname only, `http://host[:port]`, duplicates = error; `https://`, path, loopback = warning; no port = hint) and one-click fixes. Errors block save through the optional widget `validate(name) → string[]` hook |

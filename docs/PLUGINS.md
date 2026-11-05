@@ -13,6 +13,8 @@ The first half of this page is for people who **use** plugins. The second half i
 - [Private plugins](#private-plugins)
 - [Local plugins](#local-plugins)
 - [After installing](#after-installing)
+- [Change the address or branch](#change-the-address-or-branch)
+- [Add the same plugin twice](#add-the-same-plugin-twice)
 - [Updating plugins](#updating-plugins)
 - [Removing a plugin](#removing-a-plugin)
 
@@ -21,6 +23,7 @@ The first half of this page is for people who **use** plugins. The second half i
 - [Create a plugin](#create-a-plugin)
 - [How Neo loads a plugin](#how-neo-loads-a-plugin)
 - [Layout rules](#layout-rules)
+- [Prefixes: add a plugin twice](#prefixes-add-a-plugin-twice)
 - [Development loop](#development-loop)
 - [Turn your project into a Neo plugin (checklist)](#turn-your-project-into-a-neo-plugin-checklist)
 - [Service files in detail](#service-files-in-detail)
@@ -45,25 +48,27 @@ Know a good plugin? Open an issue or PR on Neo to get it listed.
 
 1. Open the Neo web UI.
 2. Go to **Settings → System**. The **Plugins** list is in the General section.
-3. Type the flake URL into the field and click **+ Add plugin**:
+3. Type the flake URL into the field and click **+ Add plugin**. Leave the prefix field empty:
 
    ```text
    github:madebydamo/highsea.neo
    ```
+
+   A branch goes at the end for `github:` / `gitlab:` URLs (`github:madebydamo/portrait/dev`) and as `?ref=dev` for `git+…` URLs.
 
 4. Click **Save**, then **Activate** in the top bar. Neo fetches the plugin and rebuilds the system.
 5. Open the **Services** tab. The plugin's services are listed next to the built-in ones. Enable the ones you want, Save, Activate.
 
 After the first activation, the plugin card lists the services it adds. Before that it says "No services attributed to this plugin in the current eval".
 
-Plugins are stored in `settings.toml` as a list, so you can also edit them there:
+Plugins are stored in `settings.toml`, one table per plugin, so you can also edit them there. The name after `core.plugins.` is the plugin's id; Neo picks it from the repository name when you add it in the web UI.
 
 ```toml
-[core]
-plugins = [
-  "github:madebydamo/highsea.neo",
-]
+[core.plugins.highsea-neo]
+url = "github:madebydamo/highsea.neo"
 ```
+
+Configs from before Neo had ids (`plugins = [ "github:…", … ]`) still work. `neo update` turns the list into tables once.
 
 ## Private plugins
 
@@ -112,22 +117,48 @@ You can install several plugins. Their order does not matter.
 
 ## After installing
 
-- Plugin services show a badge on the **Services** grid. The source filter offers **All sources**, **Core**, and one entry per plugin. Plugins are named after their repository; when two share a name, Neo shows enough of the URL to tell them apart.
+- Plugin services show a badge with the plugin's id on the **Services** grid. The source filter offers **All sources**, **Core**, and one entry per plugin.
 - Their options open in the same form as built-in services, including HTTPS, login, "Reachable from", the AI assistant and container images.
 - HTTPS and login behave like the rest of Neo when the plugin uses Neo's reverse-proxy helpers (all listed plugins do).
 
+## Change the address or branch
+
+Click **Edit** on the plugin card. Change the **Address**, or type another **Branch** (empty means the repository's default branch), click **Done**, then **Save** and **Activate**.
+
+The plugin keeps its id, so only its `url` line in `settings.toml` and its own entry in `flake.lock` change, and its settings stay. If the new branch no longer has a service you had set up, the build fails on the leftover `[services.<name>]` table: delete that table, or switch back.
+
+## Add the same plugin twice
+
+To run, for example, a `dev` branch next to `main`, add the plugin again with a **prefix**:
+
+1. Type the second URL (`github:madebydamo/portrait/dev`). Neo notices the plugin is already there and fills the prefix field with the branch name.
+2. Click **+ Add plugin**, **Save**, **Activate**.
+
+```toml
+[core.plugins.portrait]
+url = "github:madebydamo/portrait"
+
+[core.plugins.portrait-dev]
+url = "github:madebydamo/portrait/dev"
+prefix = "dev"
+```
+
+Every app of the second copy gets the prefix in front of its name: `dev-portrait-server` in the Services grid and `settings.toml`, its own containers, data folder and the subdomain `dev-portrait`. The prefix uses lowercase letters and digits and starts with a letter. It cannot be changed later, because it is part of every name: remove the copy and add it again instead.
+
+Only plugins written for this can be added twice (see [Prefixes](#prefixes-add-a-plugin-twice)). Others fail to build with "does not support a prefix"; they still work once without a prefix.
+
 ## Updating plugins
 
-Plugins are flake inputs of your config, pinned in its `flake.lock`. **Update** in the top bar (or `neo update` on the command line) refreshes all inputs, Neo and plugins alike. Then **Activate**. The scheduled system updater does the same when it is enabled.
+Plugins are flake inputs of your config (`plugin-<id>`), pinned in its `flake.lock`. **Update** in the top bar (or `neo update` on the command line) refreshes all inputs, Neo and plugins alike. Then **Activate**. The scheduled system updater does the same when it is enabled.
 
 ## Removing a plugin
 
 1. Go to **Settings → System → Plugins**.
-2. Click **Remove** on the plugin card. URLs cannot be edited in place: remove the entry and add a new one to change it.
-3. Neo shows the `[services.<name>]` tables it will delete from `settings.toml` because only this plugin declared them. Confirm with **Remove plugin**. Appdata directories are kept.
+2. Click **Remove** on the plugin card.
+3. Neo shows the `[services.<name>]` tables it will delete from `settings.toml` because only this plugin declared them. For a prefixed copy that is only its own `dev-…` tables. Confirm with **Remove plugin**. Appdata directories are kept.
 4. **Save**, then **Activate**.
 
-Do not delete a plugin URL from `settings.toml` by hand without also removing its service tables. Leftover keys for options that no longer exist make Nix evaluation fail. The web UI does both in one save.
+Do not delete a plugin from `settings.toml` by hand without also removing its service tables. Leftover keys for options that no longer exist make Nix evaluation fail. The web UI does both in one save.
 
 ---
 
@@ -150,25 +181,25 @@ The template contains:
 | File | Role |
 |------|------|
 | `flake.nix` | Generated by flake-file. **Do not edit**; run `nix run .#write-flake` after changing `modules/inputs.nix` |
-| `modules/imports.nix` | Imports `flake-file.flakeModules.dendritic` |
+| `modules/imports.nix` | Imports `flake-file.flakeModules.dendritic` and `neo.flakeModules.plugin` |
 | `modules/inputs.nix` | Flake inputs (`nixpkgs`, `neo`, plus yours) as `flake-file.inputs` |
-| `modules/nixos.nix` | Exports every `flake.modules.nixos.*` as `nixosModules.default`; sets `systems` and the formatter |
+| `modules/nixos.nix` | Sets `systems` and the formatter. `neo.flakeModules.plugin` exports every `neoPlugin.modules.*` |
 | `modules/services/example/option.nix` | Options: `enabled`, reverse proxy, containers, appdata, metadata, Hermes skill |
 | `modules/services/example/default.nix` | Implementation: `mkEnsureDirs` for appdata, an OCI container on `internal`, `PUID`/`PGID` from `neo.core.uid`/`gid`, `TZ` from `neo.core.timeZone` |
 | `modules/services/example/swag.nix` | Reverse proxy vhost via `lib.neo.mkSubdomainProxyConf` |
 | `modules/services/example/skills.nix` | Hermes skill via `lib.neo.mkServiceSkill` |
 | `modules/services/example/icon.svg` | Service icon, referenced as `icon = ./icon.svg` |
 
-Rename `example` (directory, option path `neo.services.example`, module names, container name, subdomain) to your service and replace the internals.
+Rename `example` (directory, module names and the `plugin.name "example"` calls) to your service and replace the internals. Everything else follows from `name`.
 
 ## How Neo loads a plugin
 
 You do not write this wiring; it explains what your plugin can rely on.
 
-1. **Inputs.** The homeserver config (`templates/homeserver/modules/inputs.nix`) turns each entry of `core.plugins` into an input `plugin0`, `plugin1`, … with:
+1. **Inputs.** The homeserver config (`templates/homeserver/modules/inputs.nix`) turns each entry `core.plugins.<id>` into an input `plugin-<id>` with:
 
    ```nix
-   plugin0 = {
+   plugin-portrait = {
      url = "<your URL>";
      inputs.neo.follows = "neo";
      inputs.nixpkgs.follows = "nixpkgs";
@@ -178,9 +209,9 @@ You do not write this wiring; it explains what your plugin can rely on.
 
    So your plugin always builds against the host's Neo and nixpkgs (currently `nixos-26.05`), not the ones in your own `flake.lock`. Keep your plugin's inputs named `neo`, `nixpkgs` and `flake-file`. Other inputs you add (for example `declarr`, `nix2container`) are locked in the host's `flake.lock` as transitive inputs; give them `inputs.nixpkgs.follows = "nixpkgs"` when they accept it.
 
-2. **Modules.** `templates/homeserver/modules/nixos.nix` imports `inputs.pluginN.nixosModules.default` for every input whose name starts with `plugin`, next to Neo's own modules, into both `nixosConfigurations.neo` and `nixosConfigurations.vm`.
+2. **Modules.** `templates/homeserver/modules/nixos.nix` imports, for every entry, `inputs.plugin-<id>.neoPlugin.module { id; url; prefix; }` next to Neo's own modules, into both `nixosConfigurations.neo` and `nixosConfigurations.vm`. A plugin without `neoPlugin` (written before prefixes existed) is imported through its `nixosModules.default`, without a prefix.
 
-3. **Export.** The plugin's `modules/nixos.nix` collects every `flake.modules.nixos.<name>` you define and exports them as `nixosModules.default`.
+3. **Export.** `inputs.neo.flakeModules.plugin` (imported in `modules/imports.nix`) collects every `neoPlugin.modules.<name>` you define. `neoPlugin.module` wraps each one so it gets the `plugin` argument of that copy. It also exports `nixosModules.default` for older Neo hosts, and the check `neo-plugin-instances`. Modules still under `flake.modules.nixos.*` are imported as they are, and then the plugin cannot take a prefix.
 
 4. **`lib`.** The host passes `specialArgs.lib = inputs.neo.lib`: nixpkgs' `lib` extended with `lib.neo`. Inside every NixOS module, `lib.neo.*` is available. In the outer flake-parts function (the `{inputs, ...}:` at the top of a file), `lib` is plain nixpkgs lib; use `inputs.neo.lib.neo` there if you need it.
 
@@ -188,8 +219,9 @@ You do not write this wiring; it explains what your plugin can rely on.
 
 ## Layout rules
 
-- **Dendritic layout.** `import-tree` loads every `.nix` file under `modules/` as a flake-parts module. Each file defines one or more `flake.modules.nixos.<unique-name>` entries. Names must be unique across Neo and all plugins: use `<service>`, `<service>-option`, `<service>-swag`, `<service>-skills`.
-- **No sibling imports.** Never write `imports = [ ./option.nix ];`. Every file is already imported. Share values through options (`config.neo.services.<name>.*`) instead.
+- **Dendritic layout.** `import-tree` loads every `.nix` file under `modules/` as a flake-parts module. Each file defines one or more `neoPlugin.modules.<unique-name>` entries. Names must be unique within the plugin: use `<service>`, `<service>-option`, `<service>-swag`, `<service>-skills`.
+- **No sibling imports.** Never write `imports = [ ./option.nix ];`. Every file is already imported, and a file imported by path is loaded only once even when the plugin is added twice. Share values through options (`config.neo.services.<name>.*`) instead.
+- **Names through `plugin.name`.** Every name your modules put into the system comes from `plugin.name "<service>"` (see [Prefixes](#prefixes-add-a-plugin-twice)).
 - **Flakes only see git-tracked files.** `git add` every new file before building, including icons and scripts. An untracked file is silently missing.
 - **Files and directories whose name starts with `_`** are skipped by `import-tree`. Put non-module Nix files (data, helper functions you `import`) there, or outside `modules/`.
 - **Option names** are camelCase under `neo.services.<name>` (like the built-in services), with plain-string descriptions. The service name itself may contain `-` (`portrait-server`).
@@ -206,11 +238,45 @@ A file looks like this:
 }
 ```
 
+## Prefixes: add a plugin twice
+
+An operator can add your plugin twice, for example `main` and a `dev` branch, with a prefix on the second copy ([Add the same plugin twice](#add-the-same-plugin-twice)). The NixOS module system has no namespaces, so this only works if your modules never write a service name as a literal. Each module gets a `plugin` argument for its copy:
+
+| Attribute | Value |
+|-----------|-------|
+| `plugin.name "x"` | `x`, or `<prefix>-x` |
+| `plugin.prefix` | `""` or the prefix, e.g. `dev` |
+| `plugin.label` | `""` or ` (dev)`, for human titles |
+| `plugin.id` | The operator's id for this copy (`portrait-dev`) |
+| `plugin.url` | The flake URL of this copy |
+
+```nix
+{...}: {
+  neoPlugin.modules.myapp = {config, lib, plugin, ...}: let
+    name = plugin.name "myapp";          # "myapp" or "dev-myapp"
+    cfg = config.neo.services.${name};
+  in {
+    config = lib.mkIf cfg.enabled {
+      virtualisation.oci-containers.containers.${name} = { … };
+      systemd.services."docker-${name}".preStart = …;
+    };
+  };
+}
+```
+
+Name with `plugin.name`: the `neo.services` key, containers and sidecars (`"${name}-db"`), systemd units, appdata, the default subdomain, users and groups, secret templates, guide ids and `service:` links, and the hostnames your containers use to reach each other (`http://${plugin.name "prowlarr"}:9696`). Names of Neo core services (`swag`, `tinyauth`) stay as they are.
+
+Ports two copies would share must be settings, so the operator can give the second copy another one: host ports, and container ports of services that can run behind the VPN (all VPN-routed containers share gluetun's network namespace). Ports on the `internal` Docker network do not clash; each copy has its own container.
+
+`nix flake check` runs `neo-plugin-instances`: it evaluates Neo with your plugin once, then twice with the prefixes `neoa` and `neob`, and fails with the list of containers, units, users and services that are the same in every copy.
+
+**Porting an existing plugin:** import `inputs.neo.flakeModules.plugin` in `modules/imports.nix`, drop your own `nixosModules.default` from `modules/nixos.nix`, rename `flake.modules.nixos.<x>` to `neoPlugin.modules.<x>`, add `plugin` to each module's arguments and replace the literals with `name`. Existing installs keep working: with an empty prefix every name is what it was. A plugin that keeps any `flake.modules.nixos.*` module still loads, once, without a prefix.
+
 ## Development loop
 
 **In a Neo checkout with the QEMU VM** (fastest):
 
-1. In the Neo repo's `settings.toml`, add your plugin: `plugins = [ "git+file:/home/you/projects/my-plugin" ]`.
+1. In the Neo repo's `settings.toml`, add your plugin: `[core.plugins.my-plugin]` with `url = "git+file:/home/you/projects/my-plugin"`. Add a second table with `prefix = "dev"` to try it twice.
 2. Enable your service: `[services.myapp] enabled = true`.
 3. `git add` new files in the plugin.
 4. `just launch` (rebuilds the config from scratch, so the plugin is re-locked every time), then run the [checks](#verify-on-the-host) with `just exec '…'`.
@@ -220,7 +286,7 @@ A file looks like this:
 1. Put the plugin on the server (or push it to a forge) and add it under **Settings → System → Plugins**.
 2. After changing the plugin, commit or `git add`, then **Update** (or `neo update`) so the lock picks up the new revision, then **Activate**.
 
-`neo build` builds without switching, which is a quick way to see evaluation errors.
+`neo build` builds without switching, which is a quick way to see evaluation errors. `nix flake check` in the plugin runs `neo-plugin-instances`, which evaluates Neo with your plugin once and twice and lists names that miss `plugin.name`.
 
 ## Turn your project into a Neo plugin (checklist)
 
@@ -231,14 +297,16 @@ Work through every item. Each one exists because it is easy to forget.
 - [ ] Started from `nix flake init -t github:madebydamo/neo#plugin`; inputs `neo`, `nixpkgs`, `flake-file` kept.
 - [ ] Extra inputs added in `modules/inputs.nix` (`flake-file.inputs.<name>`), with `inputs.nixpkgs.follows = "nixpkgs"` where possible; `nix run .#write-flake` re-run; `flake.lock` updated.
 - [ ] Packages you build live in `perSystem.packages` and are reached from NixOS modules with `withSystem pkgs.stdenv.hostPlatform.system ({config, ...}: config.packages.<name>)`, or built directly in the module from `pkgs`.
+- [ ] `modules/imports.nix` imports `inputs.neo.flakeModules.plugin`; modules are `neoPlugin.modules.<name>`, not `flake.modules.nixos.<name>`.
 - [ ] Every new file is `git add`ed. No `imports = [ ./sibling.nix ]`. Module names are unique.
+- [ ] Every module takes `plugin` and names the service, containers, units, appdata, subdomain, secrets and the hostnames of its own containers with `plugin.name "…"`. `nix flake check` passes (`neo-plugin-instances`).
 
 **`option.nix`** ([details](#optionnix))
 
-- [ ] `options.neo.services.<name> = mkOption { type = types.submodule {...}; default = {}; }`.
+- [ ] `options.neo.services.${name} = mkOption { type = types.submodule {...}; default = {}; }` with `name = plugin.name "<service>"`.
 - [ ] `enabled = mkEnableOption "…" {rank = 0;}` (Neo's `mkEnableOption` takes a second attrset argument).
 - [ ] Service-specific options at ranks 10–89; internal ports as `internal = true`.
-- [ ] `// lib.neo.mkReverseProxyOptions { subdomain = "…"; auth.publicPaths = [ … ]; }` if it has a web UI. Subdomain is **lowercase a-z only** (no digits, no dashes) and must not collide with another service.
+- [ ] `// lib.neo.mkReverseProxyOptions { subdomain = name; auth.publicPaths = [ … ]; }` if it has a web UI (or `plugin.name "<short>"` for a shorter subdomain). It must not collide with another service.
 - [ ] `// lib.neo.mkContainerDefinitions { <container> = "<image:tag>"; extraUnits = [ … ]; }` for OCI services, listing every non-docker unit in `extraUnits`; or `// lib.neo.mkSystemdUnits [ … ]` for native services. Every unit the service runs is listed.
 - [ ] `// lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/<name>"` if it stores anything.
 - [ ] `// lib.neo.mkServiceMeta { category; icon; description; projectUrl; githubUrl; releaseUrl; }`.
@@ -288,14 +356,16 @@ The examples use a service `myapp`: one container `myapp` on port 8080, a setup 
 ```nix
 # modules/services/myapp/option.nix
 {...}: {
-  flake.modules.nixos.myapp-option = {config, lib, ...}:
+  neoPlugin.modules.myapp-option = {config, lib, plugin, ...}:
     with lib;
-    with {inherit (lib.neo) mkOption mkEnableOption;}; {
-      options.neo.services.myapp = mkOption {
+    with {inherit (lib.neo) mkOption mkEnableOption;}; let
+      name = plugin.name "myapp";
+    in {
+      options.neo.services.${name} = mkOption {
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "MyApp notes server" {rank = 0;};
+              enabled = mkEnableOption "MyApp notes server${plugin.label}" {rank = 0;};
 
               port = mkOption {
                 type = types.port;
@@ -322,14 +392,14 @@ The examples use a service `myapp`: one container `myapp` on port 8080, a setup 
               };
             }
             // lib.neo.mkReverseProxyOptions {
-              subdomain = "myapp";
+              subdomain = name;
               auth.publicPaths = ["^/api/health$" "^/api/"];
             }
             // lib.neo.mkContainerDefinitions {
-              myapp = "ghcr.io/example/myapp:1.4";
-              extraUnits = ["myapp-setup"];
+              ${name} = "ghcr.io/example/myapp:1.4";
+              extraUnits = ["${name}-setup"];
             }
-            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/myapp"
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/${name}"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = ./icon.svg;
@@ -351,6 +421,7 @@ The examples use a service `myapp`: one container `myapp` on port 8080, a setup 
 
 Notes:
 
+- `name` is `myapp`, or `dev-myapp` when an operator adds the plugin a second time with the prefix `dev`. Use it for every name the plugin puts into the system, never the literal (see [Prefixes](#prefixes-add-a-plugin-twice)).
 - `with {inherit (lib.neo) mkOption mkEnableOption;}` swaps in Neo's wrappers, which accept `rank`, `helper` and `ui`. `lib.mkOption { … } // { rank = 10; }` is equivalent.
 - `mkReverseProxyOptions` adds `subdomain` (100), `ingress` (105), `auth` (120), `customDomains` (130) and the internal `proxyConf`. `auth.enabled` defaults to true. Pass `auth.enabled = false` for a public site, or `auth.available = false` for apps that must never sit behind tinyauth (the auth option is then hidden).
 - `mkContainerDefinitions` adds `containers.<name>` image options (rank 300, Advanced group) and the internal `systemdUnits` (`docker-<name>` for each container, plus `extraUnits` and `timerUnits`). Do not also call `mkSystemdUnits`.
@@ -362,26 +433,27 @@ Notes:
 ```nix
 # modules/services/myapp/default.nix
 {...}: {
-  flake.modules.nixos.myapp = {config, lib, pkgs, ...}: let
-    cfg = config.neo.services.myapp;
-    appdata = "${config.neo.core.volumes.appdata}/myapp";
+  neoPlugin.modules.myapp = {config, lib, pkgs, plugin, ...}: let
+    name = plugin.name "myapp";
+    cfg = config.neo.services.${name};
+    appdata = "${config.neo.core.volumes.appdata}/${name}";
     domain = config.neo.services.swag.domain;
   in {
     config = lib.mkIf cfg.enabled {
       assertions = [
         {
           assertion = cfg.adminPassword != null && cfg.adminPassword != "";
-          message = "neo.services.myapp: set adminPassword (use the Generate helper).";
+          message = "neo.services.${name}: set adminPassword (use the Generate helper).";
         }
       ];
 
-      systemd.services.docker-myapp.preStart = lib.neo.mkEnsureDirs config [
+      systemd.services."docker-${name}".preStart = lib.neo.mkEnsureDirs config [
         appdata
         "${appdata}/data"
       ];
 
-      virtualisation.oci-containers.containers.myapp = {
-        image = cfg.containers.myapp;
+      virtualisation.oci-containers.containers.${name} = {
+        image = cfg.containers.${name};
         autoStart = true;
         environment = {
           PUID = toString config.neo.core.uid;
@@ -398,20 +470,20 @@ Notes:
       };
 
       # Secrets reach the container through a rendered env file, never `environment`.
-      neo.core.secrets.containerEnv.myapp = {
+      neo.core.secrets.containerEnv.${name} = {
         MYAPP_ADMIN_PASSWORD = cfg.adminPassword;
       };
 
       # Post-start configuration. Also listed in extraUnits (option.nix).
-      systemd.services.myapp-setup = lib.neo.mkSetupService {
+      systemd.services."${name}-setup" = lib.neo.mkSetupService {
         inherit pkgs;
-        name = "myapp-setup";
-        description = "Configure MyApp after first start";
-        containers = ["myapp"];
+        name = "${name}-setup";
+        description = "Configure MyApp${plugin.label} after first start";
+        containers = [name];
         retryInterval = 15;
         path = [config.virtualisation.docker.package];
         script = ''
-          docker exec myapp myapp-cli set-admin --password-env MYAPP_ADMIN_PASSWORD
+          docker exec ${name} myapp-cli set-admin --password-env MYAPP_ADMIN_PASSWORD
         '';
       };
     };
@@ -421,7 +493,7 @@ Notes:
 
 Notes:
 
-- **Network.** The `internal` Docker network is created by SWAG. Containers reach each other, and SWAG reaches them, by container name. Container names are global Docker names: prefix sidecars with the service (`myapp-db`, `myapp-redis`).
+- **Network.** The `internal` Docker network is created by SWAG. Containers reach each other, and SWAG reaches them, by container name. Container names are global Docker names: name sidecars after the service (`"${name}-db"`, `"${name}-redis"`).
 - **Ownership.** `mkEnsureDirs` creates missing directories owned by `neo.core.uid:gid` (the `homeserver` user). Pass `{ dirPath; user; group; mode; }` for images that run as a fixed uid (for example postgres `999`).
 - **Appdata.** Everything mutable lives under `${appdata}`. That is what **Clear appdata** removes and what snapshots and backups cover. Do not write to `/var/lib/<name>`.
 - **Ports.** Do not publish web UI ports (`ports = [ … ]`): that bypasses SWAG, tinyauth, ingress and the NixOS firewall (Docker publishes ports through its own iptables rules). Publish only protocol ports clients need directly, like Syncthing's `22000`.
@@ -435,12 +507,13 @@ Notes:
 ```nix
 # modules/services/myapp/swag.nix
 {...}: {
-  flake.modules.nixos.myapp-swag = {config, lib, ...}: let
-    cfg = config.neo.services.myapp;
+  neoPlugin.modules.myapp-swag = {config, lib, plugin, ...}: let
+    name = plugin.name "myapp";
+    cfg = config.neo.services.${name};
   in {
-    config.neo.services.myapp.proxyConf = lib.mkDefault (lib.neo.mkSubdomainProxyConf {
+    config.neo.services.${name}.proxyConf = lib.mkDefault (lib.neo.mkSubdomainProxyConf {
       inherit config cfg;
-      upstream = "myapp";
+      upstream = name;
       port = cfg.port;
     });
   };
@@ -452,7 +525,7 @@ SWAG writes each enabled service's `proxyConf` to `proxy-confs/<subdomain>.subdo
 If you need more than one `location`, write the block yourself. Keep the includes:
 
 ```nix
-config.neo.services.myapp.proxyConf = lib.mkDefault ''
+config.neo.services.${name}.proxyConf = lib.mkDefault ''
   server {
     include /config/nginx/listen-https.conf;
     http2 on;
@@ -464,7 +537,7 @@ config.neo.services.myapp.proxyConf = lib.mkDefault ''
     location / {
       include /config/nginx/proxy.conf;
       include /config/nginx/resolver.conf;
-      set $upstream_app myapp;
+      set $upstream_app ${name};
       set $upstream_port ${toString cfg.port};
       set $upstream_proto http;
       proxy_pass $upstream_proto://$upstream_app:$upstream_port;
@@ -497,12 +570,13 @@ Hermes, Neo's AI assistant, gets one skill per enabled service that sets `skill.
 ```nix
 # modules/services/myapp/skills.nix
 {...}: {
-  flake.modules.nixos.myapp-skills = {config, lib, ...}: let
-    cfg = config.neo.services.myapp;
+  neoPlugin.modules.myapp-skills = {config, lib, plugin, ...}: let
+    name = plugin.name "myapp";
+    cfg = config.neo.services.${name};
     domain = config.neo.services.swag.domain or null;
   in {
-    config.neo.services.myapp.skill.conf = lib.neo.mkServiceSkill {
-      service = "myapp";
+    config.neo.services.${name}.skill.conf = lib.neo.mkServiceSkill {
+      service = name;
       inherit cfg domain;
       description = "MyApp notes server";
       tags = ["neo" "myapp" "notes"];
@@ -511,11 +585,11 @@ Hermes, Neo's AI assistant, gets one skill per enabled service that sets `skill.
         Questions about notes stored in MyApp.
 
         ## Procedures
-        1. systemctl status docker-myapp myapp-setup
-        2. docker logs myapp --tail 100
+        1. systemctl status docker-${name} ${name}-setup
+        2. docker logs ${name} --tail 100
 
         ## Credentials
-        - Admin password: setting `services.myapp.adminPassword`
+        - Admin password: setting `services.${name}.adminPassword`
       '';
     };
   };
@@ -569,7 +643,7 @@ Build the site as a derivation and serve it with the host nginx on loopback, the
 
 ### Image built by the plugin
 
-See portrait: build an OCI image with `nix2container` in `perSystem.packages`, load it with a oneshot unit before `docker-<name>`, set `mkContainerDefinitions { <name> = image.imageRefUnsafe; extraUnits = ["<name>-image"]; }`.
+See [portrait](https://github.com/madebydamo/portrait): build an OCI image with `nix2container` in `perSystem.packages`, load it with a oneshot unit `"${name}-image"` before `docker-${name}`, straight under the copy's own name (`${image.copyTo}/bin/copy-to docker-daemon:${name}:${image.imageTag}`), so each copy of the plugin cleans up only its own images. Then `mkContainerDefinitions { ${name} = "${name}:${builtins.unsafeDiscardStringContext image.imageTag}"; extraUnits = ["${name}-image"]; }`.
 
 ### Host packages or extra inputs
 
@@ -577,7 +651,7 @@ Use your plugin's inputs inside a NixOS module through the flake-parts arguments
 
 ```nix
 {inputs, ...}: {
-  flake.modules.nixos.myapp = {pkgs, ...}: let
+  neoPlugin.modules.myapp = {pkgs, ...}: let
     myPkg = inputs.mytool.packages.${pkgs.stdenv.hostPlatform.system}.default;
   in {
     # …
@@ -587,7 +661,7 @@ Use your plugin's inputs inside a NixOS module through the flake-parts arguments
 
 ### System-level additions
 
-A plugin does not have to define a service. Any `flake.modules.nixos.<name>` is imported, so disks, packages or kernel tweaks are plain NixOS config. It will not show on the Services grid.
+A plugin does not have to define a service. Any `neoPlugin.modules.<name>` is imported, so disks, packages or kernel tweaks are plain NixOS config. It will not show on the Services grid. A module that is not named per instance (a shared package, a kernel setting) is imported once per copy of the plugin, so keep it to definitions that merge (no option declarations), or the plugin can only be added once.
 
 ## Verify on the host
 
