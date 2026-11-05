@@ -310,8 +310,8 @@ token** (the token itself only in `hermes.env` and a neo-web key file).
 
 | Tool | Effect |
 |---|---|
-| `neo_settings_get(paths)` | current values + defaults + descriptions for option paths (`services.pihole.localIP`); secrets come back as `"<set>"` / `"<unset>"`, never the value |
-| `neo_settings_schema(service)` | the option tree of one service (types, choices, labels), from the same extract the form uses |
+| `neo_settings_get(paths)` | current values + defaults + descriptions for option paths (`services.pihole.localIP`); secrets come back as `"<set>"` / `"<unset>"`, never the value, also inside entries (`accounts.tinyauth.password`; `web/redact.rs` walks the option type) |
+| `neo_settings_schema(service)` | the option tree of one service (types, choices, labels), from the same extract the form uses; named-entry settings also list their `entries` and the entry `fields` (name, label, type, secret, generate) |
 | `neo_settings_propose(summary, changes)` | create a proposal, **writes nothing**; returns `proposal_id` and a validation result |
 | `neo_settings_status(proposal_id)` | `pending` / `saved` / `applied` / `rejected` / `stale`, plus activation result once applied |
 
@@ -324,21 +324,33 @@ token** (the token itself only in `hermes.env` and a neo-web key file).
     { "op": "set",   "path": "services.pihole.enabled", "value": true },
     { "op": "set",   "path": "services.pihole.localIP", "value": "192.168.1.10" },
     { "op": "unset", "path": "services.pihole.upstream" },
-    { "op": "generate", "path": "services.pihole.webPassword" }
+    { "op": "generate", "path": "services.pihole.webPassword" },
+    { "op": "set", "path": "services.x.accounts", "key": "tmr", "field": "username", "value": "tmr" },
+    { "op": "ask", "path": "services.x.accounts", "key": "tmr", "field": "password", "group": "tmr-password" }
   ]
 }
 ```
 
-- `set` / `unset` (back to the default) / `add` / `remove` (list items, attrsOf
-  keys).
-- `generate` fills a secret with the option's own `helper` (e.g.
-  `randomToken`) at save time, so Hermes never sees or invents a secret value.
-  A `set` on a secret path is refused; secrets the user must supply (an API
-  key) are entered in the card.
+- `set` / `unset` (back to the default; with `key` the entry is removed) /
+  `add` / `remove` (list items).
+- `key` names one entry of an attrsOf option (created when missing), `field`
+  a field inside it (dotted for nested submodules). Changing one entry never
+  rewrites the whole map; a whole-entry `set` that would drop a set secret
+  field is refused with a hint to set fields one by one.
+- `generate` fills a secret with its own `helper` (e.g. `randomToken`, also a
+  field's Generate button) at save time, so Hermes never sees or invents a
+  secret value. A value at a secret position (top-level or nested) is refused.
+- `ask` puts a password input on the card (show/hide, Generate in the
+  browser); `ask` changes with the same `group` share one input. The value is
+  sent with the Save / Save & apply click and goes straight into the patch: it
+  is never stored in the proposal, logged or returned to the agent.
 
 ### Proposal
 
-Stored by neo web in memory (lost on a neo-web restart), expires after a day. On `propose`, neo:
+Stored by neo web in `$STATE_DIRECTORY/proposals.json` (written atomically,
+no secret values: `ask` keeps the target path and input name, `generate` the
+script path), so a card survives the neo-web restart that Save & apply causes;
+expires after a day. On `propose`, neo:
 
 1. validates every path and value against the option schema (exists, type,
    enum/`ui.choices`, not `internal`) and rejects with a plain error the agent
@@ -353,8 +365,12 @@ Stored by neo web in memory (lost on a neo-web restart), expires after a day. On
 The chat drawer embeds `GET /proposals/<id>/card` (htmx, server-rendered) for
 each proposal link in a reply; the same card is the page `/proposals/<id>`:
 
-- the summary, then one row per change: service icon, option **label**, old →
-  new value, secrets as "will be generated" / "you enter it here" (input field);
+- the summary, then one row per change: an action badge (New / Set / Change /
+  Remove / Reset), the **label** down to the entry and field (`Accounts › tmr ›
+  Password`), old → new value of that entry or field (never the whole map),
+  secrets as "set" / "not set" / "will be generated" / "you enter it below"
+  (input field); a whole-map `set` lists the entries it adds and changes, and
+  warns for each one it removes;
 - validation state, and any other unsaved changes already pending (the user
   sees that Apply activates those too, as today);
 - buttons: **Save & apply**, **Save** (pending, apply later from the action
