@@ -65,6 +65,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/paperless"
             // lib.neo.mkServiceMeta {
               category = "Files";
+              license = {
+                spdx = "GPL-3.0";
+                url = "https://github.com/paperless-ngx/paperless-ngx/blob/dev/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Scan letters and find them again in seconds";
               description = ''

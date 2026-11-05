@@ -78,6 +78,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/dufs"
             // lib.neo.mkServiceMeta {
               category = "Files";
+              license = {
+                spdx = "MIT OR Apache-2.0";
+                url = "https://github.com/sigoden/dufs/blob/main/LICENSE-APACHE";
+              };
               icon = ./icon.png;
               tagline = "Share folders and use them as a network drive";
               description = ''

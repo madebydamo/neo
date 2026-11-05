@@ -173,6 +173,10 @@
             // lib.neo.mkSystemdTimers ["backup"]
             // lib.neo.mkServiceMeta {
               category = "Files";
+              license = {
+                spdx = "MIT";
+                url = "https://github.com/madebydamo/neo/blob/master/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Copies your data to another computer or disk every night";
               description = ''

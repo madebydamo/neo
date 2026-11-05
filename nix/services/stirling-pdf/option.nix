@@ -88,6 +88,12 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/stirling-pdf"
             // lib.neo.mkServiceMeta {
               category = "Files";
+              license = {
+                spdx = "MIT";
+                url = "https://github.com/Stirling-Tools/Stirling-PDF/blob/main/LICENSE";
+                openSource = false;
+                note = "The core is MIT licensed, but the official image also contains features under a closed license.";
+              };
               icon = ./icon.svg;
               tagline = "All-in-one PDF tools on your server";
               description = ''

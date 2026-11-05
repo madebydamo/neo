@@ -46,6 +46,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/mealie"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
+              license = {
+                spdx = "AGPL-3.0";
+                url = "https://github.com/mealie-recipes/mealie/blob/mealie-next/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Recipes, meal plans and shopping lists";
               description = ''

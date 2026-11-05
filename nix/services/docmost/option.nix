@@ -141,6 +141,12 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/docmost"
             // lib.neo.mkServiceMeta {
               category = "Files";
+              license = {
+                spdx = "AGPL-3.0";
+                url = "https://github.com/docmost/docmost/blob/main/LICENSE";
+                openSource = false;
+                note = "The core is AGPL licensed, but the official image also contains enterprise code from a private repository, so part of what runs is closed source.";
+              };
               icon = ./icon.png;
               tagline = "A shared wiki for notes and how-tos, like Notion";
               description = ''

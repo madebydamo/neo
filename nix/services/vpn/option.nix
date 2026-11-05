@@ -79,6 +79,10 @@
             // lib.neo.mkSystemdUnits ["docker-vpn"]
             // lib.neo.mkServiceMeta {
               category = "Network";
+              license = {
+                spdx = "MIT";
+                url = "https://github.com/passteque/gluetun/blob/master/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Send app traffic through your VPN provider";
               description = ''

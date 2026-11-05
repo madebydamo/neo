@@ -56,6 +56,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/webtop"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
+              license = {
+                spdx = "GPL-3.0";
+                url = "https://github.com/linuxserver/docker-webtop/blob/master/LICENSE";
+              };
               icon = ./icon.png;
               tagline = "A full Linux desktop in your browser";
               description = ''

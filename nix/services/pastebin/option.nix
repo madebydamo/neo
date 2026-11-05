@@ -30,6 +30,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/pastebin"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
+              license = {
+                spdx = "LGPL-3.0";
+                url = "https://github.com/wantguns/bin/blob/master/copying";
+              };
               icon = ./icon.png;
               tagline = "Share text snippets and files with a link";
               description = ''

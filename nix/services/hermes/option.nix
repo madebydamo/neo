@@ -258,6 +258,10 @@
             // lib.neo.mkAppdata config.neo.services.hermes.stateDir
             // lib.neo.mkServiceMeta {
               category = "AI";
+              license = {
+                spdx = "MIT";
+                url = "https://github.com/NousResearch/hermes-agent/blob/main/LICENSE";
+              };
               icon = ./icon.png;
               tagline = "A personal AI assistant that lives on your server";
               description = ''

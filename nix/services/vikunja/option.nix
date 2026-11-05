@@ -51,6 +51,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/vikunja"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
+              license = {
+                spdx = "AGPL-3.0";
+                url = "https://github.com/go-vikunja/vikunja/blob/main/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "To-do lists and projects, like Todoist";
               description = ''

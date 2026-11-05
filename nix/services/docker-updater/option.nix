@@ -33,6 +33,10 @@
             // lib.neo.mkAppdata (lib.neo.mkUpdaterPaths config.neo.core.volumes.appdata).dockerHistoryDir
             // lib.neo.mkServiceMeta {
               category = "Core";
+              license = {
+                spdx = "MIT";
+                url = "https://github.com/madebydamo/neo/blob/master/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Keeps your apps up to date";
               description = ''

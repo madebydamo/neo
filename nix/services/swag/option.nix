@@ -215,6 +215,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/swag"
             // lib.neo.mkServiceMeta {
               category = "Core";
+              license = {
+                spdx = "GPL-3.0";
+                url = "https://github.com/linuxserver/docker-swag/blob/master/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Secure web addresses (HTTPS) for all your apps";
               description = ''

@@ -165,6 +165,12 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/authentik"
             // lib.neo.mkServiceMeta {
               category = "Security";
+              license = {
+                spdx = "MIT";
+                url = "https://github.com/goauthentik/authentik/blob/main/LICENSE";
+                openSource = false;
+                note = "The core is MIT licensed, but the official image also contains enterprise features under a closed license, locked without a paid key.";
+              };
               icon = ./icon.svg;
               tagline = "One account for all your apps, with advanced login rules";
               description = ''

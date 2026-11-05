@@ -121,6 +121,12 @@
             // lib.neo.mkSystemdUnits tailscaleUnits
             // lib.neo.mkServiceMeta {
               category = "Network";
+              license = {
+                spdx = "BSD-3-Clause";
+                url = "https://github.com/tailscale/tailscale/blob/main/LICENSE";
+                openSource = false;
+                note = "The app is open source, but by default it signs in to Tailscale's own coordination service, which is closed. Set Login server to your own Headscale server to keep everything open source.";
+              };
               icon = ./icon.svg;
               tagline = "Reach your apps from anywhere, privately";
               description = ''

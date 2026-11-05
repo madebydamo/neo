@@ -351,6 +351,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/tinyauth"
             // lib.neo.mkServiceMeta {
               category = "Security";
+              license = {
+                spdx = "AGPL-3.0";
+                url = "https://github.com/tinyauthapp/tinyauth/blob/main/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "The login page in front of your apps";
               description = ''

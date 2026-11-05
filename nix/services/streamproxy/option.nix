@@ -124,6 +124,10 @@
               ]
               // lib.neo.mkServiceMeta {
                 category = "Core";
+                license = {
+                  spdx = "MIT";
+                  url = "https://github.com/madebydamo/neo/blob/master/LICENSE";
+                };
                 icon = ./icon.svg;
                 tagline = "Lets several homeservers share one public address";
                 description = ''

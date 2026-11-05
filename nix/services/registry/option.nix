@@ -51,6 +51,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/registry"
             // lib.neo.mkServiceMeta {
               category = "Files";
+              license = {
+                spdx = "Apache-2.0";
+                url = "https://github.com/distribution/distribution/blob/main/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Store your own app images";
               description = ''

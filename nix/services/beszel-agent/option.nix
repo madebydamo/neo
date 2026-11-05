@@ -43,6 +43,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/beszel-agent"
             // lib.neo.mkServiceMeta {
               category = "Monitoring";
+              license = {
+                spdx = "MIT";
+                url = "https://github.com/henrygd/beszel/blob/main/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Reports this server's health to Beszel";
               description = ''

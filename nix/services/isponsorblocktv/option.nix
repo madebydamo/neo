@@ -23,6 +23,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/isponsorblocktv"
             // lib.neo.mkServiceMeta {
               category = "Media";
+              license = {
+                spdx = "GPL-3.0";
+                url = "https://github.com/dmunozv04/iSponsorBlockTV/blob/main/LICENSE.md";
+              };
               icon = ./icon.png;
               tagline = "Skips sponsor segments in YouTube on your TV";
               description = ''

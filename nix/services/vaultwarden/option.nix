@@ -43,6 +43,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/vaultwarden"
             // lib.neo.mkServiceMeta {
               category = "Security";
+              license = {
+                spdx = "AGPL-3.0";
+                url = "https://github.com/dani-garcia/vaultwarden/blob/main/LICENSE.txt";
+              };
               icon = ./icon.svg;
               tagline = "A password manager for the whole family";
               description = ''

@@ -131,6 +131,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/karakeep"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
+              license = {
+                spdx = "AGPL-3.0";
+                url = "https://github.com/karakeep-app/karakeep/blob/main/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Save links, notes and pictures to read later";
               description = ''

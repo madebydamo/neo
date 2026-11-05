@@ -80,6 +80,10 @@
             ]
             // lib.neo.mkServiceMeta {
               category = "Network";
+              license = {
+                spdx = "Apache-2.0";
+                url = "https://github.com/rathole-org/rathole/blob/main/LICENSE";
+              };
               icon = ./icon.png;
               tagline = "Makes your apps reachable from the internet without opening your router";
               description = ''

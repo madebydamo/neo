@@ -94,6 +94,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/nextcloud"
             // lib.neo.mkServiceMeta {
               category = "Files";
+              license = {
+                spdx = "AGPL-3.0";
+                url = "https://github.com/nextcloud/server/blob/master/COPYING";
+              };
               icon = ./icon.svg;
               tagline = "Your own cloud for files, calendars and contacts";
               description = ''

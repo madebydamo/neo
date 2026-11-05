@@ -32,6 +32,10 @@
             // lib.neo.mkSystemdUnits ["chronyd"]
             // lib.neo.mkServiceMeta {
               category = "Network";
+              license = {
+                spdx = "GPL-2.0";
+                url = "https://github.com/mlichvar/chrony/blob/master/COPYING";
+              };
               icon = ./icon.svg;
               tagline = "Keeps the clocks in your home exact";
               description = ''

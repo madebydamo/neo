@@ -46,6 +46,10 @@
             }
             // lib.neo.mkServiceMeta {
               category = "Files";
+              license = {
+                spdx = "AGPL-3.0";
+                url = "https://github.com/alam00000/bentopdf/blob/main/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Edit, merge and sign PDFs right in your browser";
               description = ''

@@ -82,6 +82,10 @@
             ]
             // lib.neo.mkServiceMeta {
               category = "Core";
+              license = {
+                spdx = "MIT";
+                url = "https://github.com/madebydamo/neo/blob/master/LICENSE";
+              };
               icon = ../../../cli/static/neo-icon.png;
               tagline = "Set up and manage your homeserver";
               description = ''

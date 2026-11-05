@@ -73,6 +73,12 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/activepieces"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
+              license = {
+                spdx = "MIT";
+                url = "https://github.com/activepieces/activepieces/blob/main/LICENSE";
+                openSource = false;
+                note = "The app is MIT licensed, but the official image also contains paid enterprise features under a closed license (locked without a key) and a Redis 7.4 build, which is not open source.";
+              };
               icon = ./icon.svg;
               tagline = "Automate tasks between your apps, like Zapier";
               description = ''

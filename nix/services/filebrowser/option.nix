@@ -35,6 +35,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/filebrowser"
             // lib.neo.mkServiceMeta {
               category = "Files";
+              license = {
+                spdx = "Apache-2.0";
+                url = "https://github.com/filebrowser/filebrowser/blob/master/LICENSE";
+              };
               icon = ./icon.png;
               tagline = "Manage the files on your server from the browser";
               description = ''

@@ -58,6 +58,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/rustical"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
+              license = {
+                spdx = "AGPL-3.0";
+                url = "https://github.com/lennart-k/rustical/blob/main/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Calendars, to-dos and contacts that stay at home";
               description = ''

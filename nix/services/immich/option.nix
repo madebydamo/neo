@@ -31,6 +31,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/immich"
             // lib.neo.mkServiceMeta {
               category = "Media";
+              license = {
+                spdx = "AGPL-3.0";
+                url = "https://github.com/immich-app/immich/blob/main/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Your own Google Photos";
               description = ''

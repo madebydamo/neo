@@ -35,6 +35,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/changedetection"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
+              license = {
+                spdx = "Apache-2.0";
+                url = "https://github.com/dgtlmoon/changedetection.io/blob/master/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Get a message when a website changes";
               description = ''

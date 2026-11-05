@@ -34,6 +34,10 @@
             }
             // lib.neo.mkServiceMeta {
               category = "Utilities";
+              license = {
+                spdx = "MIT";
+                url = "https://github.com/Ivan-Malinovski/calino/blob/main/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Your calendars and contacts in the browser";
               description = ''

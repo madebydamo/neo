@@ -104,6 +104,10 @@
             // lib.neo.mkSystemdTimers icalUnits
             // lib.neo.mkServiceMeta {
               category = "Utilities";
+              license = {
+                spdx = "BSD-3-Clause";
+                url = "https://github.com/pimutils/vdirsyncer/blob/main/LICENSE";
+              };
               iframeCompatible = false;
               icon = ./icon.svg;
               tagline = "Adds public calendars like school holidays to your calendar";

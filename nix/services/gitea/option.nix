@@ -104,6 +104,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/gitea"
             // lib.neo.mkServiceMeta {
               category = "Files";
+              license = {
+                spdx = "MIT";
+                url = "https://github.com/go-gitea/gitea/blob/main/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Your own GitHub for code and configuration";
               description = ''

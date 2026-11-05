@@ -32,6 +32,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/searxng"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
+              license = {
+                spdx = "AGPL-3.0";
+                url = "https://github.com/searxng/searxng/blob/master/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Private web search that doesn't track you";
               description = ''

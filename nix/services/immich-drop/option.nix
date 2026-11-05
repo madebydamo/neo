@@ -23,6 +23,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/immich-drop"
             // lib.neo.mkServiceMeta {
               category = "Media";
+              license = {
+                spdx = "MIT";
+                url = "https://github.com/Nasogaa/immich-drop/blob/master/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Let guests add photos to Immich with a link";
               description = ''

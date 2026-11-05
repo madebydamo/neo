@@ -62,6 +62,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/dawarich"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
+              license = {
+                spdx = "AGPL-3.0";
+                url = "https://github.com/Freika/dawarich/blob/master/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Your own location history, like Google Timeline";
               description = ''

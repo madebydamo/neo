@@ -54,6 +54,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/pihole"
             // lib.neo.mkServiceMeta {
               category = "Network";
+              license = {
+                spdx = "EUPL-1.2";
+                url = "https://github.com/pi-hole/pi-hole/blob/master/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Blocks ads for every device at home";
               description = ''

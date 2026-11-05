@@ -51,6 +51,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/firefox"
             // lib.neo.mkServiceMeta {
               category = "Utilities";
+              license = {
+                spdx = "MPL-2.0";
+                url = "https://www.mozilla.org/en-US/MPL/2.0/";
+              };
               icon = ./icon.png;
               tagline = "A Firefox browser that runs on your server";
               description = ''

@@ -23,6 +23,10 @@
             }
             // lib.neo.mkServiceMeta {
               category = "Files";
+              license = {
+                spdx = "MPL-2.0";
+                url = "https://github.com/CollaboraOnline/online/blob/main/COPYING";
+              };
               icon = ./icon.svg;
               tagline = "Edit office documents together in Nextcloud";
               description = ''

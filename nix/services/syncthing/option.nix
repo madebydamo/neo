@@ -24,6 +24,10 @@
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/syncthing"
             // lib.neo.mkServiceMeta {
               category = "Files";
+              license = {
+                spdx = "MPL-2.0";
+                url = "https://github.com/syncthing/syncthing/blob/main/LICENSE";
+              };
               icon = ./icon.svg;
               tagline = "Keep folders in sync between your devices";
               description = ''
