@@ -18,6 +18,7 @@ use serde_json::{json, Value};
 
 use super::guides::{option_url, Guide};
 use super::nix::{OptionIndex, OptionIndexEntry};
+use super::redact;
 use super::routes::privacy::PrivacyCategory;
 use super::types::{AppConfig, OptionSchema, Service};
 use super::util::service_name_ok;
@@ -245,15 +246,10 @@ fn compact(v: &Value) -> Value {
     json!(format!("{cut}… (truncated)"))
 }
 
-/// Current value with secrets redacted (same rule as the settings tools).
+/// Current value with secrets redacted, also nested ones (same rule as the
+/// settings tools).
 fn redacted_current(o: &OptionSchema) -> Value {
-    let current = o.current.clone().unwrap_or(Value::Null);
-    if o.secret {
-        let set = !(current.is_null() || current == json!(""));
-        json!(if set { "<set>" } else { "<unset>" })
-    } else {
-        compact(&current)
-    }
+    compact(&redact::redacted_current(o))
 }
 
 fn advanced(o: &OptionSchema) -> bool {
@@ -277,7 +273,7 @@ pub fn option_context(root: &str, o: &OptionSchema) -> Value {
         "label": o.label,
         "description": o.description,
         "type": o.typeLabel,
-        "default": if o.secret { Value::Null } else { compact(&o.default) },
+        "default": compact(&redact::redacted_default(o)),
         "current": redacted_current(o),
         "secret": o.secret,
         "link": format!("option:{path}"),

@@ -24,6 +24,7 @@ mod ops;
 mod plugins;
 mod power;
 mod proposals;
+mod redact;
 mod resources;
 mod routes;
 mod schema_cache;
