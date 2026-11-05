@@ -232,8 +232,8 @@ A file looks like this:
 ```nix
 # modules/services/myapp/default.nix
 {inputs, withSystem, ...}: {          # flake-parts arguments (your plugin's inputs)
-  flake.modules.nixos.myapp = {config, lib, pkgs, ...}: {
-    # a normal NixOS module; lib.neo is available here
+  neoPlugin.modules.myapp = {config, lib, pkgs, plugin, ...}: {
+    # a normal NixOS module; lib.neo and `plugin` are available here
   };
 }
 ```
@@ -365,7 +365,7 @@ The examples use a service `myapp`: one container `myapp` on port 8080, a setup 
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "MyApp notes server${plugin.label}" {rank = 0;};
+              enabled = mkEnableOption "Notes that stay on your own server${plugin.label}" {rank = 0;};
 
               port = mkOption {
                 type = types.port;
@@ -403,9 +403,17 @@ The examples use a service `myapp`: one container `myapp` on port 8080, a setup 
             // lib.neo.mkServiceMeta {
               category = "Utilities";
               icon = ./icon.svg;
+              tagline = "Your own notes app${plugin.label}";
               description = ''
-                MyApp is a notes server. Its data lives in Neo appdata.
+                Write and organise notes from any browser or phone.
+                Like Google Keep, but the notes stay on your server.
               '';
+              notes = ''
+                The admin account is created on first start with the admin password above.
+                The mobile app talks to /api/, which skips the login page.
+              '';
+              replaces = ["Google Keep" "Apple Notes"];
+              privacy = ["notes"];
               projectUrl = "https://myapp.example";
               githubUrl = "https://github.com/example/myapp";
               releaseUrl = "https://github.com/example/myapp/releases";
@@ -733,7 +741,7 @@ Merge these with `//` into `neo.services.<name>`'s `options`.
 | `mkSystemdUnits` | List of unit names without `.service` | Internal `systemdUnits`. For services without containers |
 | `mkSystemdTimers` | List of unit names | Internal `systemdTimers`: the target arms `<unit>.timer` instead of starting the job. Units must also be in `systemdUnits` |
 | `mkAppdata` | Absolute path, usually `"${config.neo.core.volumes.appdata}/<name>"` | Internal `appdata` used by Clear appdata, snapshots and skills |
-| `mkServiceMeta` | `{ icon ? null, description ? "", projectUrl ? null, githubUrl ? null, releaseUrl ? null, screenshots ? [], rank ? null, iframeCompatible ? true, category ? "Other" }`. `icon` is a URL string or a path (`./icon.svg`, png, webp, ico); paths are served at `/service-icons/…`. `screenshots` is a list of `{ url, caption ? null }` | Internal `meta`, shown on the Services grid, navigator and option pane. `rank` sorts the grid; set `iframeCompatible = false` for apps that refuse to load in the navigator iframe |
+| `mkServiceMeta` | `{ icon ? null, tagline ? "", description ? "", notes ? "", replaces ? [], privacy ? [], projectUrl ? null, githubUrl ? null, releaseUrl ? null, screenshots ? [], rank ? null, iframeCompatible ? true, category ? "Other" }`. `icon` is a URL string or a path (`./icon.svg`, png, webp, ico); paths are served at `/service-icons/…`. `screenshots` is a list of `{ url, caption ? null }`. `tagline` is one line for the grid card (empty: first line of `description`), `notes` the collapsed "Good to know" for operators, `replaces` familiar products (`["Google Photos"]`), `privacy` privacy map category ids | Internal `meta`, shown on the Services grid, navigator and option pane. `rank` sorts the grid; set `iframeCompatible = false` for apps that refuse to load in the navigator iframe |
 | `mkSkillOptions` | `{ enabled ? true }` | `skill.enabled` (200, AI assistant group) and internal `skill.conf`, set by `skills.nix` |
 | `mkAdditionalMountPoints` | `{ rank ? 20, description ? … }` | `additionalMountPoints`: list of `{ localPath, containerPath }` for extra bind mounts |
 | `mkSshConnectionOptions` | `{ rankBase ? 10, defaultSshKey ? "/home/homeserver/.ssh/id_ed25519", hostDescription, userDescription, sshKeyDescription, extraOptionsDescription }` (descriptions have defaults) | `host`, `user`, `sshKey`, `extraOptions` at ranks `rankBase` … `rankBase + 30` |
@@ -756,7 +764,7 @@ On an encrypted config, a secret option evaluates to a placeholder (`@NEO_SECRET
 - **SWAG lines with a secret** (an `Authorization` header, for example): `let snip = lib.neo.secrets.swagSnippet config "myapp-auth" "proxy_set_header Authorization \"Bearer ${cfg.token}\";"; in` put `${snip.include}` in the proxy conf and set `neo.core.secrets.templates = snip.templates;`.
 - A required-secret assertion (`cfg.secret != null && cfg.secret != ""`) works unchanged: a placeholder is never empty.
 
-The build fails if a placeholder would end up in a container or unit `environment` or in `/etc` text.
+The build fails if a placeholder would end up in a container or unit `environment` or in `/etc` text. Rendered files live under `lib.neo.secretsDir` (`/run/neo-secrets`); use the `.path` of a template rather than building paths yourself.
 
 ### Containers and units
 
@@ -840,7 +848,7 @@ systemd.services.docker-myapp.preStart = lib.concatStringsSep "\n" [
 | `label` | Display name (default: humanized option name) |
 | `summary = true` | Show the value as a chip on the collapsed group header |
 | `choiceLabels` | Display names for enum / choice values, e.g. `{ web = "Internet"; }` |
-| `visibleWhen` | `"enabled"` hides the field while that sibling bool is false; `"type=entra"` hides it unless the sibling equals the value |
+| `visibleWhen` | `"enabled"` hides the field while that sibling bool is false (or that sibling string is empty); `"type=entra"` hides it unless the sibling equals the value; `"format=files,encrypted"` unless it equals one of them. Works inside attrsOf entries too |
 | `choices` | On a `listOf str`: a list (`["a" "b"]`) for a checkbox grid, or a provider name. Provider today: `"authApps"` (enabled services with tinyauth auth) |
 | `keysFrom` | From `ui.mkKeysFrom` |
 | `widget` | `exclusiveListPair`, `pluginList`, `primaryItemList`, `providerAuth`, `proxyRouteList` (see [AGENTS.md](../AGENTS.md#uiwidget-composite-editors)) |
@@ -905,14 +913,14 @@ Never hand-roll sudo path lists or per-service SSH/git config. Host services tha
 | `privateHostnameDnsActive` | `config` | bool: service names resolve to a private address (Pi-hole with `localIP`, or split DNS) |
 | `piholeDnsPublishPorts` | `{ splitDnsActive, localIP }` | Docker port specs for Pi-hole; **internal** |
 | `mkUpdaterPaths` | appdata path | `{ stateDir, dockerHistoryDir, systemHistoryDir, dockerLast, systemLast }`; **internal** |
-| `hermesProviderEnvVars`, `hermesProviderIds`, `hermesProviderCatalog`, `hermesProviderById`, `mkHermesLlmEnv { provider ? null, apiKey ? null }`, `mkNeoHermesAuth pkgs script` | | Hermes LLM provider catalog and helpers; **internal** |
+| `hermesProviderEnvVars`, `hermesProviderIds`, `hermesProviderCatalog`, `hermesProviderById`, `mkHermesLlmEnv { provider ? null, apiKey ? null }`, `mkNeoHermesAuth pkgs script`, `hermesCustomKeyEnv` | | Hermes LLM provider catalog and helpers; **internal** |
 
 ## Real-world plugins
 
 | Plugin | Patterns worth copying |
 |--------|------------------------|
 | [highsea.neo](https://github.com/madebydamo/highsea.neo) | Many services in one plugin; every service has `option`/`default`/`swag`/`skills`; an extra flake input (`declarr`) used as a host package through `inputs.declarr.packages.${pkgs.stdenv.hostPlatform.system}`; one service reading other services' options (`config.neo.services.sonarr.apiKey or …`) to wire them together; a native service declared with `mkSystemdUnits`; Jellyfin with `/dev/dri` and the media volume |
-| [portrait](https://github.com/madebydamo/portrait) | Rust server and OCI image built by the plugin (`nix2container`, `perSystem.packages`), pulled into NixOS modules with `withSystem`; a oneshot that loads the image before `docker-portrait-server`, listed in `extraUnits`; `mkVpnOptions` for outbound traffic; `auth.enabled = false` for a public site; secrets as `nullOr str` options filtered out of `environment` when unset |
+| [portrait](https://github.com/madebydamo/portrait) | Rust server and OCI image built by the plugin (`nix2container`, `perSystem.packages`), pulled into NixOS modules with `withSystem`; a oneshot that loads the image before `docker-portrait-server`, listed in `extraUnits`; `mkVpnOptions` for outbound traffic; `auth.enabled = false` for a public site |
 | Neo's own `nix/services/` | `vikunja` (native module in appdata), `paperless` (database sidecars, secrets with assertions), `syncthing` (setup unit, protocol ports), `nextcloud` / `collabora` (setup units), `backup` (timer units) |
 
 ## See also
