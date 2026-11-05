@@ -18,8 +18,9 @@
           })
           appServices;
         subdomains = map (c: c.subdomain) subdomainClaims;
-        # Subdomains must be unique DNS labels of lowercase a-z only.
-        invalidSubdomains = filter (s: builtins.match "[a-z]+" s == null) subdomains;
+        # Subdomains must be unique lowercase DNS labels: a-z, digits and inner
+        # hyphens (a prefixed plugin copy is dev-portrait).
+        invalidSubdomains = filter (s: builtins.match "[a-z]([a-z0-9-]*[a-z0-9])?" s == null) subdomains;
         invalidSubdomainMessage =
           concatMapStringsSep "\n" (
             s: let
@@ -223,7 +224,7 @@
             {
               assertion = invalidSubdomains == [];
               message = ''
-                neo.services.swag: every service subdomain must consist of lowercase a-z only (no digits, hyphens, or uppercase).
+                neo.services.swag: every service subdomain must be lowercase a-z, digits and hyphens, start with a letter and not end with a hyphen.
                 Invalid subdomains:
                 ${invalidSubdomainMessage}
               '';
