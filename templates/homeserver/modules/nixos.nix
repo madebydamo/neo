@@ -20,11 +20,11 @@
       else [];
     # One module per core.plugins instance (docs/design/plugin-instances.md).
     # Plugins with neoPlugin get their prefix; older ones are imported as they are.
+    # A plugin saved in settings.toml has no input until the next write-flake, which
+    # every activate and build runs first. Until then it is simply not loaded, so the
+    # web UI, which evaluates this flake right after a save, keeps working.
     pluginModules = lib.mapAttrsToList (id: p: let
-      input = "plugin-${id}";
-      flake =
-        inputs.${input}
-        or (throw "Plugin '${id}' (${p.url}) has no flake input ${input}. Regenerate flake.nix (nix run .#write-flake).");
+      flake = inputs."plugin-${id}";
     in
       if flake ? neoPlugin
       then
@@ -38,7 +38,7 @@
       else if p.prefix == ""
       then flake.nixosModules.default
       else throw "Plugin '${id}' (${p.url}) does not support a prefix. Remove the prefix or update the plugin.")
-    (import ./_plugins.nix {inherit lib;});
+    (lib.filterAttrs (id: _: inputs ? "plugin-${id}") (import ./_plugins.nix {inherit lib;}));
   in {
     nixosConfigurations.neo = inputs.nixpkgs.lib.nixosSystem {
       inherit system;

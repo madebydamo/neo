@@ -102,6 +102,8 @@ in
 
 Edge case: the same legacy plugin imported twice without a prefix fails with the usual "option declared more than once". The form catches this first: it allows only one prefix-less instance per URL (ignoring the ref).
 
+An instance without an input is skipped, not an error. Saving a plugin writes `settings.toml` right away, the web UI evaluates the flake straight after, and the input only appears at the next write-flake (every activate and update runs it first). Until then the plugin is not loaded.
+
 ## 3. Plugin side: the `plugin` argument
 
 ### What authors write
