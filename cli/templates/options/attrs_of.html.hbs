@@ -165,10 +165,18 @@
                 {{/if}}
 
                 {{#if (eq type.kind "nullOr")}}
-                  <div class="flex gap-2 items-center">
-                    <input type="text" class="input input-sm flex-1 font-mono"
+                  <div class="flex gap-2 items-center"{{#if secret}} x-data="{ reveal: false }"{{/if}}>
+                    <input {{#if secret}}:type="reveal ? 'text' : 'password'" autocomplete="off"{{else}}type="text"{{/if}} class="input input-sm flex-1 font-mono"
                            x-model="values['{{../name}}'][key]['{{name}}']"
-                           placeholder="{{defaultDisplay}}">
+                           placeholder="{{defaultDisplay}}"
+                           aria-label="{{label}}">
+                    {{#if secret}}
+                      <button type="button" class="btn btn-ghost btn-sm shrink-0"
+                              @click="reveal = !reveal"
+                              :aria-pressed="reveal"
+                              x-text="reveal ? 'Hide' : 'Show'"
+                              aria-label="Show or hide {{label}}"></button>
+                    {{/if}}
                     <template x-if="resolveHelper('{{../name}}', { field: '{{name}}' })">
                       <button type="button" class="btn btn-soft btn-primary btn-sm shrink-0"
                               @click="runHelper('{{../name}}', { key: key, field: '{{name}}' })"
@@ -181,10 +189,18 @@
                 {{/if}}
 
                 {{#if (or (eq type.kind "str") (or (eq type.kind "path") (eq type.kind "strMatching")))}}
-                  <div class="flex gap-2 items-center">
-                    <input type="{{#if secret}}password{{else}}text{{/if}}"{{#if secret}} autocomplete="off"{{/if}} class="input input-sm flex-1 font-mono"
+                  <div class="flex gap-2 items-center"{{#if secret}} x-data="{ reveal: false }"{{/if}}>
+                    <input {{#if secret}}:type="reveal ? 'text' : 'password'" autocomplete="off"{{else}}type="text"{{/if}} class="input input-sm flex-1 font-mono"
                            x-model="values['{{../name}}'][key]['{{name}}']"
-                           placeholder="{{defaultDisplay}}">
+                           placeholder="{{defaultDisplay}}"
+                           aria-label="{{label}}">
+                    {{#if secret}}
+                      <button type="button" class="btn btn-ghost btn-sm shrink-0"
+                              @click="reveal = !reveal"
+                              :aria-pressed="reveal"
+                              x-text="reveal ? 'Hide' : 'Show'"
+                              aria-label="Show or hide {{label}}"></button>
+                    {{/if}}
                     <template x-if="resolveHelper('{{../name}}', { field: '{{name}}' })">
                       <button type="button" class="btn btn-soft btn-primary btn-sm shrink-0"
                               @click="runHelper('{{../name}}', { key: key, field: '{{name}}' })"
@@ -219,7 +235,7 @@
 {{else}}
   <div class="space-y-1.5">
     <template x-for="(val, key) in (values['{{name}}'] || {})" :key="key">
-      <div class="flex gap-2 items-center">
+      <div class="flex gap-2 items-center"{{#if secret}} x-data="{ reveal: false }"{{/if}}>
         <input class="input input-sm w-28 sm:w-40 font-mono"
                :value="key"
                @change="renameAttrKey('{{name}}', key, $event.target.value)"
@@ -241,7 +257,14 @@
                        x-model="values['{{name}}'][key]">
               </label>
             {{else}}
-              <input class="input input-sm flex-1 font-mono" x-model="values['{{name}}'][key]">
+              <input {{#if secret}}:type="reveal ? 'text' : 'password'" autocomplete="off"{{/if}} class="input input-sm flex-1 font-mono" x-model="values['{{name}}'][key]" aria-label="{{label}}">
+              {{#if secret}}
+                <button type="button" class="btn btn-ghost btn-sm shrink-0"
+                        @click="reveal = !reveal"
+                        :aria-pressed="reveal"
+                        x-text="reveal ? 'Hide' : 'Show'"
+                        aria-label="Show or hide {{label}}"></button>
+              {{/if}}
             {{/if}}
           {{/if}}
         {{/if}}

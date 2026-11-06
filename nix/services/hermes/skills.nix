@@ -70,7 +70,10 @@
              read with `neo_settings_schema` / `neo_settings_get`, change only with
              `neo_settings_propose`, then ask the user to review the card (link in
              the reply) and wait for `neo_settings_status` = saved / applied. Never
-             send secret values (use op `generate`). Do not edit settings.toml.
+             send secret values: use op `copy` / `move` when another setting has the
+             value (a rename is a move, you never see the value), `generate` or `ask`.
+             Do not edit settings.toml, decrypt or edit the secrets files, or read
+             secrets out of containers; if the tools cannot do it, say so.
           1. Prefer Neo web UI (`neo` service / `https://neo.<domain>`).
           2. Or edit settings and run `neo activate` (server profile uses `/etc/neo/settings.toml` when present).
           3. Use `neo --dry-run activate` when unsure.
@@ -227,7 +230,7 @@
           2. One step at a time, in plain words. Ask only what you cannot find out yourself (router model, phone type).
           3. ${
             if toolsOn
-            then ''Settings: propose them with neo_settings_propose and wait until neo_settings_status is saved or applied. Never send secret values; use op "generate" where the setting has a Generate button.''
+            then ''Settings: propose them with neo_settings_propose and wait until neo_settings_status is saved or applied. Never send secret values; use op "copy" or "move" when another setting has the value, "generate" where the setting has a Generate button, otherwise "ask".''
             else ''Settings: the neo settings tools are not connected, so do not search for them. Tell the user which setting to change (as an option: link) and to save it and press Apply; never edit settings files yourself.''
           }
           4. After each "Check" block, run its neo-check command (when there is one) and tell the user the result.
