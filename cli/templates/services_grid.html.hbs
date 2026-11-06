@@ -161,9 +161,6 @@
           {{#if deprecated}}
             <span class="badge badge-ghost badge-xs mt-1.5 mr-1 text-base-content/55" title="Neo no longer supports this app. Open it to see what to use instead.">Deprecated</span>
           {{/if}}
-          {{#if license}}{{#unless license.openSource}}
-            <span class="badge badge-soft badge-warning badge-xs mt-1.5" title="{{license.note}}">Not fully open source</span>
-          {{/unless}}{{/if}}
           {{#if plugins}}
             <span class="flex flex-wrap gap-1 mt-1.5 min-w-0 overflow-hidden">
               {{#each plugins}}

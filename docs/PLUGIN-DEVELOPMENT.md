@@ -558,7 +558,7 @@ Most people who see your service never read Nix. The service card, the option pa
 | `notes` | Collapsed "Good to know" | Operator facts: first login, paths that skip the login page, upgrade cautions |
 | `replaces` | Search, privacy map | Familiar products: `["Google Keep" "Apple Notes"]` |
 | `privacy` | Privacy map | Category ids, see [Privacy map](#privacy-map) |
-| `license` | Pane link, grid badge | `{ spdx = "AGPL-3.0"; url = "<license text>"; }`. Not fully open source (closed enterprise code in the image, a closed service it signs in to): add `openSource = false; note = "<what is closed, and the open alternative>";`. The grid and pane then say "Not fully open source" |
+| `license` | Pane link and notice | `{ spdx = "AGPL-3.0"; url = "<license text>"; }`. Not fully open source (closed enterprise code in the image, a closed service it signs in to): add `openSource = false; note = "<what is closed, and the open alternative>";`. The pane then says "Not fully open source" |
 | `deprecated` | Pane notice, grid badge | `{ reason; instead; alternatives = ["<service>"]; }` when you stop supporting a service: hidden from the grid and privacy map unless enabled; the pane says why and links the alternatives |
 
 Lead with the outcome, not the technology ("Blocks ads on every device in your home", not "DNS sinkhole"). No superlatives, upstream marketing or version numbers. Technical detail goes into `notes`, never `tagline` or `description`.

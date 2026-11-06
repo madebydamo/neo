@@ -44,8 +44,6 @@
         then ""
         else builtins.head first;
       replaces = safeList (meta.replaces or []);
-      # { spdx, url, openSource, note } or null; the card flags openSource = false.
-      license = meta.license or null;
       deprecated = (meta.deprecated or null) != null;
       pluginIds = inventory.owners.${n} or [];
     })
