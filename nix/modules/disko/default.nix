@@ -180,6 +180,11 @@
     boot.zfs = lib.mkIf cfg.enabled {
       forceImportRoot = lib.mkDefault false;
       forceImportAll = lib.mkDefault false;
+      # Nothing here unlocks at import. The default loads every encrypted
+      # dataset's key in the initrd, and one key it can't reach (the backup
+      # store's is rendered at activation) fails the import of the whole pool:
+      # the machine stops in emergency mode, even after the store is disabled.
+      requestEncryptionCredentials = lib.mkDefault false;
     };
 
     environment.systemPackages = lib.mkIf cfg.enabled [pkgs.zfs];
