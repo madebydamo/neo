@@ -72,7 +72,7 @@
                   title="Services">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5" aria-hidden="true"><path fill-rule="evenodd" d="M2.5 5.25A.75.75 0 013.25 4.5h13.5a.75.75 0 010 1.5H3.25a.75.75 0 01-.75-.75zm0 4.75a.75.75 0 01.75-.75h13.5a.75.75 0 010 1.5H3.25A.75.75 0 012.5 10zm.75 4a.75.75 0 000 1.5h13.5a.75.75 0 000-1.5H3.25z" clip-rule="evenodd"/></svg>
           </button>
-          <div class="min-w-0 flex-1 flex items-center">
+          <div class="min-w-0 flex-1 basis-0 flex items-center">
             <div class="neo-url-pill is-empty min-w-0 max-w-full md:max-w-xl flex items-center gap-1.5 h-7 px-2.5 rounded-field bg-base-200 text-base-content/70">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5 shrink-0 opacity-50" aria-hidden="true"><path fill-rule="evenodd" d="M10 1.5a4 4 0 00-4 4V8H5a1.5 1.5 0 00-1.5 1.5v7A1.5 1.5 0 005 18h10a1.5 1.5 0 001.5-1.5v-7A1.5 1.5 0 0015 8h-1V5.5a4 4 0 00-4-4zm2.5 6.5V5.5a2.5 2.5 0 00-5 0V8h5z" clip-rule="evenodd"/></svg>
               {{!-- readonly (not disabled) so it stays focusable/tappable; neo.js selects
@@ -83,7 +83,18 @@
                      aria-label="Current service URL — tap to select and copy" />
             </div>
           </div>
-          <div class="flex items-center gap-0.5 flex-shrink-0">
+          {{!-- Neo settings shortcut: the neo house icon, centred between the URL and the
+               buttons (both halves are flex-1 basis-0, so it stays in the middle). Opens the
+               same view as the neo sidebar entry; on the settings it returns to their start. --}}
+          <button type="button"
+                  id="neo-settings-tab"
+                  class="neo-settings-tab btn btn-ghost btn-sm btn-square flex-shrink-0"
+                  onclick="openNeoSettings(event)"
+                  title="Neo settings (shift/cmd-click: new tab)"
+                  aria-label="Open neo settings">
+            <img src="/static/neo-icon.png" class="w-8 h-8 object-contain" alt="" aria-hidden="true">
+          </button>
+          <div class="flex-1 basis-0 flex items-center justify-end gap-0.5 min-w-0">
             <button onclick="reloadFrame()" class="btn btn-ghost btn-sm btn-square" title="Soft reload current app" aria-label="Reload">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 11-2.2-5.3M19.5 4.5v4h-4"/></svg>
             </button>
