@@ -30,7 +30,7 @@ Work in a checkout of `github:madebydamo/neo` (`git clone https://github.com/mad
 | New composite editor | `AGENTS.md` → Adding a new special UI | Widget partial + JS + `*.test.js`, `just test-widgets`, document it in AGENTS.md |
 | Settings write path | `settings::edit::apply_edit` | One write path for form, proposals and CLI; never a second one |
 | Secrets | `docs/design/secrets.md`, `nix/modules/core/secrets.nix` | Never a secret in `environment`, `/etc`, scripts or eval-time hashes |
-| Backup / restore | `docs/design/backup-restore.md`, `nix/services/backup`, `cli/src/commands/restore/` | Change the backup and restore sides together; update `docs/RESTORE.md` |
+| Backup / restore | `docs/design/backup-restore.md`, `nix/services/backup`, `nix/services/backup-store`, `cli/src/commands/restore/`, `cli/src/bin/neo-store-gate.rs` | Change the backup and restore sides together; a new remote command needs a gate rule; update `docs/RESTORE.md` |
 | Disko / boot loader | `nix/modules/disko/`, `core/base.nix` | `just test-disko-boot` (`just launch` never tests the boot loader); boot scripts must never fail a switch |
 | Plugin interface | `nix/lib/plugin.nix`, `nix/output/plugin-flake-module.nix`, `templates/plugin` | The id/label rules exist in three places plus widget JS; keep them equal. Update `docs/PLUGIN-DEVELOPMENT.md` and the `neo-plugin` skill |
 | Guide | `nix/guides/<id>/`, `AGENTS.md` → Guides | One outcome, real settings links, non-technical reader |

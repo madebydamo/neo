@@ -36,7 +36,7 @@ nix run github:madebydamo/neo#neo -- restore --from-backup user@backup.example.c
   --host root@NEW --disk /dev/disk/by-id/nvme-… --key ~/.ssh/<admin-key> --reboot
 ```
 
-`neo backup extract-config user@backup.example.com:myhome` only copies the repo out (push it somewhere first).
+`neo backup extract-config user@backup.example.com:myhome` only copies the repo out (push it somewhere first). For a [backup store](INSTALL.md#backup-store) the location is `https://<name in the store>@backup.example.com/<folder>`; your key must be in that server's list on the store.
 
 `--check` prints the plan and changes nothing. The checklist below still applies: DNS, local plugins (refused when missing), the provider's boot order. A cutover from a machine that still runs is not automatic: stop the old one (step 6, "Old machine still running") and let its last backup run first, or use `--data-from` with a final copy.
 

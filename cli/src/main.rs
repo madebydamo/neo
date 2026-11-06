@@ -203,7 +203,7 @@ enum BackupAction {
     /// Copy the config repository out of a backup (encrypted or plain files),
     /// e.g. when the server and its repo are gone.
     ExtractConfig {
-        /// user@host:folder, ssh://user@host:port/folder, or a local folder.
+        /// user@host:folder, ssh://user@host:port/folder, https://name@store/folder, or a local folder.
         backup: String,
         /// Where to put the repository.
         #[arg(long, default_value = "neo-config")]

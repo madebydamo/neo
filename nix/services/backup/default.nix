@@ -12,8 +12,30 @@
       disko = config.neo.disko;
       root = config.neo.core.volumes.root;
 
+      isStore = cfg.target == "store";
+      # https://host[:port]: SSH inside a WebSocket (services.backup-store).
+      storeAuthority = head (splitString "/" (removePrefix "https://" cfg.storeUrl));
+      storeHost = head (splitString ":" storeAuthority);
+      storeTunnel = pkgs.writeShellScript "neo-backup-store-tunnel" ''
+        exec ${getExe pkgs.websocat} --binary -E - ${escapeShellArg "wss://${storeAuthority}/"}
+      '';
+      storeOptions = [
+        "-o"
+        "ProxyCommand=${storeTunnel}"
+        "-o"
+        "ServerAliveInterval=30"
+        # The store is authenticated by its TLS certificate on first contact.
+        "-o"
+        "StrictHostKeyChecking=accept-new"
+        "-o"
+        "UserKnownHostsFile=/var/lib/neo-backup/known_hosts"
+      ];
+
+      # ssh takes the first value of an option, so extraOptions win.
       sshCommand = concatStringsSep " " (
-        ["${pkgs.openssh}/bin/ssh" "-i" (escapeShellArg cfg.sshKey) "-o" "BatchMode=yes"] ++ cfg.extraOptions
+        ["${pkgs.openssh}/bin/ssh" "-i" (escapeShellArg cfg.sshKey) "-o" "BatchMode=yes"]
+        ++ cfg.extraOptions
+        ++ optionals isStore storeOptions
       );
 
       # Admin keys that open neo-backup.age (encrypted format), with the host
@@ -39,7 +61,11 @@
         after = ["network-online.target"];
         wants = ["network-online.target"];
         environment = {
-          NEO_TARGET = cfg.target;
+          # A store is SSH with another way in.
+          NEO_TARGET =
+            if isStore
+            then "ssh"
+            else cfg.target;
           NEO_FORMAT = cfg.format;
           NEO_SOURCE_DIR = toString cfg.sourceDir;
           NEO_ROOT = root;
@@ -52,7 +78,10 @@
           NEO_DEST = cfg.remotePath;
           NEO_DEST_DATASET = cfg.dataset;
           NEO_KEEP = toString cfg.keep;
-          NEO_SSH_DEST = "${cfg.user}@${cfg.host}";
+          NEO_SSH_DEST =
+            if isStore
+            then "backup-${cfg.storeClient}@${storeHost}"
+            else "${cfg.user}@${cfg.host}";
           NEO_SSH = sshCommand;
           NEO_EXCLUDES = concatStringsSep "\n" cfg.excludedDirs;
           NEO_LOG = cfg.logFile;
@@ -70,6 +99,9 @@
           # restic's metadata cache (encrypted like the repository).
           CacheDirectory = "neo-backup";
           CacheDirectoryMode = "0700";
+          # The store's SSH host key, once seen.
+          StateDirectory = "neo-backup";
+          StateDirectoryMode = "0700";
         };
       };
     in {
@@ -88,13 +120,22 @@
             message = "neo.services.backup: set the backup server (host).";
           }
           {
+            assertion = !isStore || hasPrefix "https://" cfg.storeUrl;
+            message = "neo.services.backup: storeUrl must start with https:// (the store is only reachable over HTTPS).";
+          }
+          {
             assertion = cfg.target != "disk" || cfg.format == "zfs" || hasPrefix "/" cfg.remotePath;
             message = "neo.services.backup: on a disk, the backup folder must be an absolute path (where the disk is mounted).";
           }
         ];
         warnings =
           optional (cfg.format == "encrypted" && adminKeys == []) ''
-            neo.services.backup: the encrypted backup can only be opened with this server's own key, because System → SSH has no ssh-ed25519 key. Add yours, or a lost server means a lost backup.'';
+            neo.services.backup: the encrypted backup can only be opened with this server's own key, because System → SSH has no ssh-ed25519 key. Add yours, or a lost server means a lost backup.''
+          ++ optional (let
+            store = config.neo.services.backup-store;
+          in
+            isStore && store.enabled && storeHost == "${toString store.subdomain}.${toString config.neo.services.swag.domain}") ''
+            neo.services.backup: the backup goes to this server's own backup store: if this server is lost, so is the backup.'';
 
         systemd.services =
           {backup = unit "backup";}

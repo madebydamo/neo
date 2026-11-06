@@ -2,7 +2,7 @@
 //! same keys the backup service writes with (nix/services/backup, design
 //! docs/design/backup-restore.md §2), used here in the other direction.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -112,7 +112,14 @@ impl Source {
                 }
             }
             "disk" => Location::Disk,
-            other => bail!("services.backup.target = {other:?} is not ssh or disk"),
+            "store" => {
+                let url = get("storeUrl")
+                    .filter(|u| !u.is_empty())
+                    .context("services.backup.storeUrl is not set")?;
+                let client = get("storeClient").unwrap_or_else(|| hostname(doc));
+                store_location(&url, &client)?
+            }
+            other => bail!("services.backup.target = {other:?} is not ssh, disk or store"),
         };
         let root = volumes_root(doc);
         let source_dir = get("sourceDir").unwrap_or_else(|| root.clone());
@@ -136,10 +143,22 @@ impl Source {
     }
 
     /// A backup named on the command line (`--from-backup`): `user@host:folder`
-    /// (relative to the home folder), `ssh://user@host[:port]/abs/folder`, or a
-    /// local folder. The format is found with [`detect`].
+    /// (relative to the home folder), `ssh://user@host[:port]/abs/folder`,
+    /// `https://client@store[:port]/folder` (a backup store), or a local
+    /// folder. The format is found with [`detect`].
     pub fn from_location(spec: &str) -> Result<Source> {
-        let (location, remote_path) = if let Some(rest) = spec.strip_prefix("ssh://") {
+        let (location, remote_path) = if let Some(rest) = spec.strip_prefix("https://") {
+            let (auth, path) = rest.split_once('/').unwrap_or((rest, ""));
+            let (client, host) = auth.split_once('@').with_context(|| {
+                format!("{spec}: name the server in the store: https://<name>@store/folder")
+            })?;
+            (
+                store_location(&format!("https://{host}"), client)?,
+                path.to_string(),
+            )
+        } else if spec.starts_with("http://") {
+            bail!("{spec}: a backup store is only reachable over https://");
+        } else if let Some(rest) = spec.strip_prefix("ssh://") {
             let (auth, path) = rest.split_once('/').unwrap_or((rest, ""));
             let (dest, options) = match auth.rsplit_once(':') {
                 Some((d, p)) if !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()) => {
@@ -160,7 +179,7 @@ impl Source {
                 path.to_string(),
             )
         } else {
-            bail!("{spec}: give the backup as user@host:folder, ssh://user@host:port/folder or a local folder");
+            bail!("{spec}: give the backup as user@host:folder, ssh://user@host:port/folder, https://name@store/folder or a local folder");
         };
         let remote_path = match remote_path.trim_end_matches('/') {
             "" if remote_path.starts_with('/') => "/".to_string(),
@@ -192,6 +211,28 @@ impl Source {
     }
 }
 
+/// A backup store: SSH to the client's account, inside a WebSocket on `url`
+/// (nix/services/backup-store).
+fn store_location(url: &str, client: &str) -> Result<Location> {
+    let authority = url
+        .strip_prefix("https://")
+        .with_context(|| format!("{url}: a backup store is only reachable over https://"))?
+        .trim_end_matches('/');
+    let host = authority.split(':').next().unwrap_or_default();
+    if host.is_empty() || client.is_empty() || authority.contains('/') {
+        bail!("{url} is not a backup store address like https://backup.example.com");
+    }
+    Ok(Location::Ssh {
+        dest: format!("backup-{client}@{host}"),
+        options: vec![
+            "-o".into(),
+            format!("ProxyCommand=websocat --binary -E - wss://{authority}/"),
+            "-o".into(),
+            "ServerAliveInterval=30".into(),
+        ],
+    })
+}
+
 fn folder_or_home(p: &str) -> &str {
     if p.is_empty() {
         "the home folder"
@@ -213,7 +254,13 @@ fn join_remote(dir: &str, path: &str) -> String {
 /// or a `neo` folder with DATA (plain files; the location may also be that
 /// folder itself). ZFS backups need the config repo.
 pub fn detect(access: &Access, mut source: Source) -> Result<Source> {
-    if access.exists(&source, &join_remote(&source.remote_path, HEADER))? {
+    let header = access
+        .exists(&source, &join_remote(&source.remote_path, HEADER))
+        .map_err(|e| {
+            // A backup store's ZFS account has no files, so it refuses sftp.
+            anyhow!("{e:#}. A ZFS backup needs the config repo: neo restore <repo>")
+        })?;
+    if header {
         source.format = Format::Encrypted;
         return Ok(source);
     }
@@ -931,6 +978,41 @@ mod tests {
         assert_eq!(join_remote(&s.remote_path, HEADER), "neo-backup.age");
         assert_eq!(Source::from_location("/").unwrap().location, Location::Disk);
         assert!(Source::from_location("justaname").is_err());
+    }
+
+    #[test]
+    fn store() {
+        let d = doc("[core]\nhostname = \"myhome\"\n[services.backup]\nenabled = true\ntarget = \"store\"\nformat = \"encrypted\"\nstoreUrl = \"https://backup.example.com/\"\n");
+        let s = Source::from_settings(&d).unwrap().unwrap();
+        let Location::Ssh { dest, options } = &s.location else {
+            panic!();
+        };
+        assert_eq!(dest, "backup-myhome@backup.example.com");
+        assert_eq!(
+            options[1],
+            "ProxyCommand=websocat --binary -E - wss://backup.example.com/"
+        );
+
+        let s = Source::from_location("https://myhome@backup.example.com:8443/dev/").unwrap();
+        let Location::Ssh { dest, options } = &s.location else {
+            panic!();
+        };
+        assert_eq!(dest, "backup-myhome@backup.example.com");
+        assert!(options[1].ends_with("wss://backup.example.com:8443/"));
+        assert_eq!(s.remote_path, "dev");
+        assert_eq!(
+            join_remote(
+                &Source::from_location("https://m@b.example")
+                    .unwrap()
+                    .remote_path,
+                HEADER
+            ),
+            HEADER
+        );
+
+        assert!(Source::from_location("https://b.example/dev").is_err());
+        assert!(Source::from_location("http://m@b.example/dev").is_err());
+        assert!(store_location("http://b.example", "m").is_err());
     }
 
     #[test]

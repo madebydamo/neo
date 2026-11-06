@@ -436,7 +436,7 @@ The **backup** service copies all Neo data (`/var/neo`: every service's appdata 
 
 | Setting | Values |
 |---------|--------|
-| **Back up to** (`target`) | `ssh`: another computer you can log in to · `disk`: a disk attached to this server |
+| **Back up to** (`target`) | `ssh`: another computer you can log in to · `disk`: a disk attached to this server · `store`: a [Neo backup store](#backup-store), only needs HTTPS |
 | **Backup format** (`format`) | `files`: a plain copy with rsync, any filesystem · `encrypted`: encrypted on this server before it leaves (restic), keeps versions, any computer with SFTP or any disk · `zfs`: ZFS snapshots with `zfs send`, faster and keeps versions, needs ZFS on both sides and the Disko layout here |
 | `host`, `user`, `extraOptions` | the SSH login (`ssh` only), e.g. `extraOptions = ["-p", "23"]` |
 | **Backup folder** (`remotePath`) | `files`/`encrypted`: a folder; on another computer relative to the user's home, on a disk the absolute path below its mount point |
@@ -458,6 +458,42 @@ dataset = "tank/backup/myhome"
 - `disk`: the disk must be mounted (`files`) or its pool importable (`zfs`). A `files` backup refuses to write onto the system disk, so an unplugged disk doesn't fill `/`.
 - Run one now: `sudo systemctl start backup`, log: `journalctl -u backup`.
 
+### Backup store
+
+The **backup-store** service lets another server keep its backups on this one, reachable only over HTTPS (SSH inside a WebSocket, through SWAG). All three formats work, and `neo restore` reads from it too.
+
+On the store, list each server. The key is that server's own (**System → SSH** there); add yours as well if you want to restore without the server:
+
+```toml
+[services.backup-store]
+enabled = true
+storage = "dataset"            # or "folder" (no ZFS snapshot backups)
+dataset = "tank/backup-store"  # default: on the main pool, with a build warning
+path = "/mnt/backups"          # must be outside the data volume
+encrypted = true               # dataset only, new datasets only
+encryptionKey = "…"            # keep a copy elsewhere
+
+[services.backup-store.clients.myhome]
+format = "encrypted"
+publicKeys = ["ssh-ed25519 AAAA…"]
+```
+
+On the other server:
+
+```toml
+[services.backup]
+enabled = true
+target = "store"
+storeUrl = "https://backup.example.com"
+storeClient = "myhome"         # default: its hostname
+format = "encrypted"
+# format = "zfs": dataset = "tank/backup-store/myhome/neo"
+```
+
+- Each server has its own private space and can only run backup commands. **Encrypted** is the format to use when you don't trust the store's owner: **Encrypt the stored backups** only protects against a stolen disk.
+- Plain files show the store's account as owner; the real owners are kept in extended attributes and come back with a restore.
+- The stored backups are not in this server's own backup. A dataset on its main disk is erased when this server is restored.
+
 ### Encrypted backups
 
 With **Backup format** `encrypted` the backup computer or disk only stores encrypted data. The key sits next to the backup as `neo-backup.age`, readable only with this server's host key or one of the ed25519 keys in **System → SSH**, the same keys that open your encrypted secrets. Nothing to write down, and nothing extra to keep safe.
@@ -467,6 +503,7 @@ With **Backup format** `encrypted` the backup computer or disk only stores encry
   ```bash
   neo restore --from-backup user@backup.example.com:myhome --host root@NEW --key ~/.ssh/id_ed25519
   # or only take the repo out:  neo backup extract-config user@backup.example.com:myhome
+  # from a backup store:         --from-backup https://myhome@backup.example.com/myhome
   ```
 
   For this you must be able to log in to the backup computer yourself: add your own public key there too, not only the server's.

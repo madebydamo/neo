@@ -19,9 +19,11 @@ ZFS the live folder is copied (as before).
 
 | Setting | Values | Meaning |
 |---------|--------|---------|
-| `target` | `ssh` (default), `disk` | another computer over SSH, or a disk attached to this server |
+| `target` | `ssh` (default), `disk`, `store` | another computer over SSH, a disk attached to this server, or a Neo backup store over HTTPS (§6) |
 | `format` | `files` (default), `encrypted`, `zfs` | plain copy with rsync (any filesystem), restic repository encrypted on this server (§3), or `zfs send` (ZFS on both sides, Disko here) |
-| `host`, `user`, `sshKey`, `extraOptions` | | SSH login, `target = ssh` only |
+| `host`, `user` | | SSH login, `target = ssh` only |
+| `sshKey`, `extraOptions` | | SSH key and options, `target = ssh` or `store` |
+| `storeUrl`, `storeClient` | | `target = store`: the store's `https://` address, and this server's name there (default: hostname) |
 | `remotePath` | path | `files`/`encrypted`: folder. Relative paths are in the SSH user's home; on a disk it must be absolute (the disk's mount point and a folder) |
 | `dataset` | `pool/path` | `format = zfs`: dataset that receives the snapshots, e.g. `tank/backup/myhome` |
 | `keep` | int, default 14 | `zfs`/`encrypted`: backups kept at the destination |
@@ -227,3 +229,83 @@ their appdata when the folder still belongs to the old uid, so the copy does not
 - Encryption of the ZFS format (§3, "Not yet"); use `encrypted`, or an encrypted remote dataset.
 - `git+file:` plugins that live in DATA: restore refuses and names them; put them into git.
 - Restores of single services from the remote backup (local ZFS snapshots cover that).
+
+## 6. Backup store
+
+The **backup-store** service (`nix/services/backup-store`) keeps other servers' backups, and is
+reachable only over HTTPS. On the client it is `target = "store"`.
+
+### SSH inside HTTPS
+
+```
+backup.sh / neo restore → ssh ProxyCommand: websocat → https://<sub>.<domain> → SWAG
+  → backup-store-tunnel (websocat, unprivileged) → backup-store-sshd (127.0.0.1) → neo-store-gate
+```
+
+Why not one HTTP server per format: restic's rest-server, WebDAV and a streaming endpoint would be
+three servers plus new backup and restore code for each, and WebDAV loses owners and hardlinks.
+With a tunnel the three formats keep the code paths of §2 and §3, in both directions: `backup.sh`
+sees `NEO_TARGET=ssh` with a different ssh command line, and `neo restore` a `Location::Ssh` with a
+`ProxyCommand`. The cost is double encryption (TLS around SSH).
+
+There is no tinyauth (`auth.available = false`) and no token: the SSH key is the login, and a token
+would be one more thing a restore without the config repo doesn't have. All connections reach sshd
+from loopback, so `PerSourcePenalties` is off and addresses in its log say nothing.
+
+The client's first contact is authenticated by the store's TLS certificate, then the SSH host key
+(the store's own `core.secrets.identityFile`, so it survives a reinstall) is pinned in
+`/var/lib/neo-backup/known_hosts`. A store that moves to another host key needs that line removed.
+
+### Accounts and confinement
+
+`clients.<name> = { format; publicKeys; }` makes one account `backup-<name>`, home
+`<path>/<name>` (0700). Every key is `restrict,command="neo-store-gate <format> <dataset>"`.
+
+- **`neo-store-gate`** (`cli/src/bin/neo-store-gate.rs`) splits `SSH_ORIGINAL_COMMAND` without a
+  shell and only runs what `backup.sh` and `neo restore` send: per format, an allowlist of commands,
+  flags and paths inside the home or the account's datasets.
+- **The sshd unit's mount namespace** is the second wall, inherited by sessions:
+  `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, the store the only writable path, the Neo data
+  volume and `/var/lib` inaccessible. That covers what an allowlist can't: symlinks made over SFTP and
+  arguments of allowed programs. World-readable system files (`/etc`, `/nix/store`) stay readable
+  over SFTP; they hold no secrets. The store's root is 0755 (rsync opens every parent folder), so a
+  client can list the other clients' names, not their content.
+
+| Format | Allowed | Notes |
+|--------|---------|-------|
+| `files` | `rsync --server`, sftp, `chmod u+w`, `test -d` | the gate adds `--fake-super`: owners, modes and devices are stored in `user.rsync.%stat` xattrs (the account isn't root), and a restore through rsync brings them back. The folder itself shows the account as owner, and symlinks as small files |
+| `encrypted` | sftp, `rm -rf …/restic-*` | |
+| `zfs` | `zfs list/recv/create/destroy/send/get` in fixed forms | `zfs allow` on `<dataset>/<client>`; `recv` only below it with fixed `-o`, always `-u`; `destroy` only `@neo-backup-*` snapshots |
+
+A ZFS client's `dataset` setting is `<store dataset>/<client>/neo`, the path the gate checks.
+
+### Storage
+
+`storage = "dataset"` (every format) or `"folder"` (`files`/`encrypted`, any filesystem). Both are
+outside `volumes.root` by assertion, also `sourceDir`, so this server's own backup never includes
+them, and `zroot/neo` snapshots don't either. A dataset on the main pool or a folder on the system
+disk works with a build warning: `neo restore` of this server erases the disk. A declared mount for
+the folder is required (`RequiresMountsFor`), so an unplugged disk fails the unit instead of filling
+`/`. A pool other than Disko's is imported through `boot.zfs.extraPools`.
+
+**Encryption at rest** (`encrypted`, dataset only): `encryption=aes-256-gcm`, `keyformat=passphrase`,
+key from `encryptionKey` (a secret, rendered to a root-only file). `backup-store-setup` loads it at
+boot, and on every run with the key loaded `zfs change-key` re-wraps the dataset to the current
+value, so changing the setting is safe. Client datasets and received streams inherit the encryption.
+This protects a stolen disk, not against the store: non-raw `zfs send` and `files` are readable while
+the key is loaded. Clients that don't trust the store use `format = "encrypted"`, or wait for §3
+"Not yet". ZFS can't encrypt an existing dataset, so the setup refuses instead of carrying on without.
+
+The key only exists after activation, so nothing may try to load it at pool import: NixOS's default
+`boot.zfs.requestEncryptionCredentials = true` fails the import of the whole pool and the machine
+stops in emergency mode, also with the store disabled while the dataset still exists. Disko sets it
+to false; without Disko the store's assertion asks for it.
+
+Removing a client removes its account and keeps its data.
+
+### Restore
+
+The store is a normal source: from the settings (`target = "store"`), or
+`neo restore --from-backup https://<client>@<store>/<folder>` / `neo backup extract-config` the same
+way (`user` is derived as `backup-<client>`). The admin key must be in the client's `publicKeys`.
+`websocat` is in the `neo` package's restore tools. A store itself has no backup of what it holds.

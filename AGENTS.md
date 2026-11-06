@@ -85,6 +85,8 @@ Naming: options camelCase under `neo.services.*`; plain-string descriptions; vol
 
 Backup (`nix/services/backup`, script `backup.sh`) and `neo restore` (`cli/src/commands/restore/`: `local.rs` on the installer, `remote.rs` = nixos-anywhere kexec + run local there, `backup.rs` reads the same backup settings) share one destination model: `target` ssh|disk × `format` files|encrypted|zfs, snapshots named `neo-backup-*`. `encrypted` is restic plus `neo-backup.age` (the data key, age-encrypted to the host key and the ssh-ed25519 `authorizedKeys`, like `secrets.sops.yaml`), so `neo restore --from-backup` / `neo backup extract-config` get the config repo out with an admin key alone; `neo backup rotate-key` starts `backup-rotate-key.service`. Change both sides together. Design: [docs/design/backup-restore.md](docs/design/backup-restore.md); runbook: [docs/RESTORE.md](docs/RESTORE.md).
 
+Backup store (`nix/services/backup-store`, `target = store` on the client): SSH inside a WebSocket on HTTPS (websocat ProxyCommand → SWAG → websocat → own sshd on loopback), so all formats use the `ssh` paths above. Each client is an account whose key is forced to `neo-store-gate` (`cli/src/bin/neo-store-gate.rs`): an allowlist of what `backup.sh` and `neo restore` send, so **a new remote command in either needs a gate rule**. Storage stays outside `volumes.root`, by assertion.
+
 ## Guides
 
 Outcome-focused how-tos ("Block ads for the whole home") on the web UI's **Guides** tab, linked from every service they use. Declare one per directory, `nix/guides/<id>/default.nix` (core) or in a plugin:
