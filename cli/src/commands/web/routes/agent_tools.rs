@@ -86,10 +86,15 @@ fn tools() -> Value {
             "description": concat!(
                 "Suggest a settings change. Writes nothing: the user sees a card in the neo web UI and clicks Save or Save & apply. ",
                 "Address one entry of a named-entry setting with key and one field inside it with field; never rewrite the whole map to add or change one entry. ",
-                "Never send secret values (also not inside a value): use op generate (the secret's Generate button, field generate=true) or op ask (the card shows a password input; ask changes with the same group share one input). ",
+                "Never send secret values (also not inside a value): use op copy or move when another setting already has the value, op generate (the secret's Generate button, field generate=true) or op ask (the card shows a password input; ask changes with the same group share one input). ",
+                "copy and move take from {path, key?, field?} and work on a whole setting, one entry or one field, secrets included: the server reads the value when the user saves and you never see it, so this is how to copy accounts between services, rename an entry (move inside one setting) or move a secret. Secrets can only go to secret settings. ",
                 "Example, add login tmr to accounts: ",
                 r#"{"op":"set","path":"services.x.accounts","key":"tmr","field":"username","value":"tmr"}, "#,
                 r#"{"op":"ask","path":"services.x.accounts","key":"tmr","field":"password","group":"tmr-password"}. "#,
+                "Example, copy an account with its password to another service: ",
+                r#"{"op":"copy","path":"services.b.accounts","key":"tinyauth","from":{"path":"services.a.accounts","key":"tinyauth"}}. "#,
+                "Example, rename an entry: ",
+                r#"{"op":"move","path":"services.x.accounts","key":"new","from":{"path":"services.x.accounts","key":"old"}}. "#,
                 "Returns errors to fix, or the proposal id and a link for the user."
             ),
             "inputSchema": {
@@ -101,12 +106,18 @@ fn tools() -> Value {
                         "items": {
                             "type": "object",
                             "properties": {
-                                "op": {"type": "string", "enum": ["set", "unset", "add", "remove", "generate", "ask"], "description": "set a value, unset (back to the default; with key: remove that entry), add/remove a list item, generate a secret with its Generate button, ask the user for a secret on the card."},
+                                "op": {"type": "string", "enum": ["set", "unset", "add", "remove", "generate", "ask", "copy", "move"], "description": "set a value, unset (back to the default; with key: remove that entry), add/remove a list item, generate a secret with its Generate button, ask the user for a secret on the card, copy or move the value of another setting (from), secrets included."},
                                 "path": {"type": "string", "description": "Option path, e.g. services.pihole.enabled or services.x.accounts"},
                                 "key": {"type": "string", "description": "Entry name inside a named-entry setting (attrsOf), e.g. tmr. The entry is created when it does not exist."},
                                 "field": {"type": "string", "description": "Field inside the entry, e.g. password (dotted for nested fields). See fields in neo_settings_schema."},
                                 "value": {"description": "New value (set), or the list item (add/remove). Never a secret."},
-                                "group": {"type": "string", "description": "ask only: changes with the same group share one input on the card (the same password for several settings)."}
+                                "group": {"type": "string", "description": "ask only: changes with the same group share one input on the card (the same password for several settings)."},
+                                "from": {
+                                    "type": "object",
+                                    "description": "copy and move only: the setting to read. path, plus key and field like the target.",
+                                    "properties": {"path": {"type": "string"}, "key": {"type": "string"}, "field": {"type": "string"}},
+                                    "required": ["path"]
+                                }
                             },
                             "required": ["op", "path"]
                         }
@@ -313,7 +324,7 @@ pub async fn mcp(
                     "protocolVersion": version,
                     "capabilities": {"tools": {}},
                     "serverInfo": {"name": "neo", "version": env!("CARGO_PKG_VERSION")},
-                    "instructions": "Neo homeserver settings. Read with neo_settings_schema / neo_settings_get; change settings only with neo_settings_propose, which the user then saves or applies in the web UI. Change one entry or field with key / field instead of rewriting a whole map. Never send secrets: use op generate or op ask (the user types it on the card)."
+                    "instructions": "Neo homeserver settings. Read with neo_settings_schema / neo_settings_get; change settings only with neo_settings_propose, which the user then saves or applies in the web UI. Change one entry or field with key / field instead of rewriting a whole map. Never send secrets: use op copy or move (from another setting, you never see the value), generate, or ask (the user types it on the card). Never read or edit the secrets files or read secrets out of containers."
                 }),
             )
         }

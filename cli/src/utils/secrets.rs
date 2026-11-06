@@ -332,7 +332,7 @@ pub fn parse(text: &str) -> Result<Tree> {
     Ok(tree)
 }
 
-fn lookup<'a>(tree: &'a Tree, path: &[String]) -> Option<&'a Node> {
+pub fn lookup<'a>(tree: &'a Tree, path: &[String]) -> Option<&'a Node> {
     let (first, rest) = path.split_first()?;
     let node = tree.get(first)?;
     if rest.is_empty() {

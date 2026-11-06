@@ -7,9 +7,11 @@
 //! field inside that (`field`, dotted). Secret values never travel through the
 //! assistant: `generate` runs the field's Generate script on save, `ask` puts a
 //! password input on the card whose value comes with the Save click and goes
-//! straight into the patch. Proposals hold no secret values and are kept in a
-//! JSON file in neo-web's state directory, so a card survives the restart that
-//! Save & apply causes.
+//! straight into the patch, and `copy` / `move` name another setting (`from`)
+//! whose saved value is read on save, so the assistant can reorganise settings
+//! with secrets inside without seeing them. Proposals hold no secret values and
+//! are kept in a JSON file in neo-web's state directory, so a card survives the
+//! restart that Save & apply causes.
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -21,13 +23,16 @@ use serde_json::Value;
 
 use crate::commands::web::helper_exec::{parse_helper_value, run_helper_script};
 use crate::commands::web::redact::{
-    dropped_secrets, has_secret, is_set, redact_value, secret_in, Field, SET, UNSET,
+    dropped_secrets, has_secret, is_set, redact_value, secret_in, secret_leak, Field, SET, UNSET,
 };
-use crate::commands::web::schema_cache::load_options;
+use crate::commands::web::schema_cache::{has_placeholder, load_options};
 use crate::commands::web::settings::edit::PatchOp;
 use crate::commands::web::settings::save::load_settings_doc;
+use crate::commands::web::settings::toml_item_to_json;
 use crate::commands::web::types::{AppConfig, OptionHelper, OptionSchema, OptionType};
 use crate::commands::web::util::{service_name_ok, state_dir};
+use crate::utils::secrets::{self, Backend, Node, Tree};
+use crate::utils::secrets_store;
 
 /// Proposals expire after a day (seconds).
 const TTL: u64 = 24 * 3600;
@@ -63,6 +68,28 @@ pub enum ChangeOp {
     Remove,
     Generate,
     Ask,
+    Copy,
+    Move,
+}
+
+/// The setting a `copy` / `move` reads: an option, one entry, or a field.
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct SourceRef {
+    pub path: String,
+    #[serde(default)]
+    pub key: Option<String>,
+    #[serde(default)]
+    pub field: Option<String>,
+}
+
+impl SourceRef {
+    fn dotted(&self) -> String {
+        std::iter::once(self.path.as_str())
+            .chain(self.key.as_deref())
+            .chain(self.field.as_deref())
+            .collect::<Vec<_>>()
+            .join(".")
+    }
 }
 
 /// One change as the assistant sends it.
@@ -82,6 +109,9 @@ pub struct ChangeRequest {
     /// `ask` changes with the same group share one input on the card.
     #[serde(default)]
     pub group: Option<String>,
+    /// What `copy` / `move` read.
+    #[serde(default)]
+    pub from: Option<SourceRef>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -147,15 +177,27 @@ enum Planned {
         path: Vec<String>,
         input: String,
     },
+    /// Value of another setting, secrets included, read when the user saves.
+    Copy {
+        from: SourceRef,
+        from_path: Vec<String>,
+        to: Vec<String>,
+        /// A move: the source goes away.
+        remove_source: bool,
+        /// The source has secrets inside.
+        secret: bool,
+    },
 }
 
 impl Planned {
-    fn path(&self) -> &[String] {
+    /// Settings this change depends on.
+    fn paths(&self) -> Vec<&[String]> {
         match self {
             Planned::Patch(PatchOp::Set { path, .. })
             | Planned::Patch(PatchOp::Unset { path, .. })
             | Planned::Generate { path, .. }
-            | Planned::Ask { path, .. } => path,
+            | Planned::Ask { path, .. } => vec![path],
+            Planned::Copy { from_path, to, .. } => vec![to, from_path],
         }
     }
 }
@@ -212,7 +254,18 @@ fn write_store(store: &HashMap<String, Proposal>) -> anyhow::Result<()> {
     let list: Vec<&Proposal> = store.values().collect();
     let body = serde_json::to_string(&list).context("serialize proposals")?;
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, body).with_context(|| format!("write {}", tmp.display()))?;
+    {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp)
+            .and_then(|mut f| f.write_all(body.as_bytes()))
+            .with_context(|| format!("write {}", tmp.display()))?;
+    }
     std::fs::rename(&tmp, &path).with_context(|| format!("replace {}", path.display()))?;
     Ok(())
 }
@@ -617,25 +670,132 @@ fn key_diff(current: &Value, new: &Value) -> (Vec<String>, Vec<String>, Vec<Stri
     (added, changed, removed)
 }
 
-/// Text of the touched settings in settings.toml, to notice edits made
-/// between proposing and saving.
+/// Hash of the touched settings in settings.toml, to notice edits made between
+/// proposing and saving. Only a hash: without a secrets file these settings
+/// hold secret values, and proposals are written to disk.
 fn fingerprint(config: &AppConfig, planned: &[Planned]) -> String {
-    let Ok(doc) = load_settings_doc(&config.settings_path) else {
-        return String::new();
-    };
-    let mut out = String::new();
-    for p in planned {
-        let path = p.path();
+    load_settings_doc(&config.settings_path)
+        .map(|doc| fingerprint_of(&doc, planned))
+        .unwrap_or_default()
+}
+
+fn fingerprint_of(doc: &toml_edit::DocumentMut, planned: &[Planned]) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for path in planned.iter().flat_map(Planned::paths) {
         let mut item = Some(doc.as_item());
         for seg in path {
             item = item.and_then(|i| i.get(seg));
         }
-        out.push_str(&path.join("."));
-        out.push('=');
-        out.push_str(&item.map(|i| i.to_string()).unwrap_or_default());
-        out.push('\n');
+        path.hash(&mut hasher);
+        item.map(|i| i.to_string()).hash(&mut hasher);
+    }
+    format!("{:016x}", hasher.finish())
+}
+
+/// Saved value at `path`: settings.toml with the secrets file laid over it.
+/// `None` when neither has one (the setting is on its default).
+fn saved_value(doc: &toml_edit::DocumentMut, tree: &Tree, path: &[String]) -> Option<Value> {
+    fn overlay(base: Option<Value>, node: Option<&Node>) -> Option<Value> {
+        match node {
+            None => base,
+            Some(Node::Leaf(s)) => Some(Value::String(s.clone())),
+            Some(Node::Map(m)) => {
+                let mut obj = match base {
+                    Some(Value::Object(o)) => o,
+                    _ => serde_json::Map::new(),
+                };
+                for (k, n) in m {
+                    if let Some(v) = overlay(obj.remove(k), Some(n)) {
+                        obj.insert(k.clone(), v);
+                    }
+                }
+                (!obj.is_empty()).then_some(Value::Object(obj))
+            }
+        }
+    }
+    let mut item = Some(doc.as_item());
+    for seg in path {
+        item = item.and_then(|i| i.get(seg));
+    }
+    overlay(
+        item.and_then(toml_item_to_json),
+        secrets::lookup(tree, path),
+    )
+}
+
+/// Secret paths stored at or below `path` that `value` (now written there)
+/// no longer has: they leave the secrets file.
+fn stale_secrets(keys: &Tree, path: &[String], value: &Value) -> Vec<Vec<String>> {
+    fn walk(node: &Node, at: &mut Vec<String>, value: Option<&Value>, out: &mut Vec<Vec<String>>) {
+        match node {
+            Node::Leaf(_) if value.is_none() => out.push(at.clone()),
+            Node::Leaf(_) => {}
+            Node::Map(m) => {
+                for (k, n) in m {
+                    at.push(k.clone());
+                    walk(n, at, value.and_then(|v| v.get(k)), out);
+                    at.pop();
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    if let Some(node) = secrets::lookup(keys, path) {
+        walk(node, &mut path.to_vec(), Some(value), &mut out);
     }
     out
+}
+
+/// `v` without nulls (settings.toml has none; evaluated values do).
+fn without_nulls(v: &Value) -> Value {
+    match v {
+        Value::Object(m) => Value::Object(
+            m.iter()
+                .filter(|(_, x)| !x.is_null())
+                .map(|(k, x)| (k.clone(), without_nulls(x)))
+                .collect(),
+        ),
+        Value::Array(a) => Value::Array(a.iter().map(without_nulls).collect()),
+        other => other.clone(),
+    }
+}
+
+/// The secrets file with its key structure: an encrypted file has encrypted
+/// values here, which is enough to see what exists without decrypting.
+fn secret_keys(config: &AppConfig) -> anyhow::Result<Tree> {
+    match secrets::backend_for(&config.settings_path) {
+        Backend::Inline => Ok(Tree::new()),
+        Backend::Plain(path) | Backend::Sops(path) => secrets::read_plain(&path),
+    }
+}
+
+/// The setting a copy or move reads, as found when proposing.
+#[derive(Debug)]
+struct Source {
+    pane: String,
+    from: SourceRef,
+    tg: Target,
+    /// Saved value (encrypted values or secrets inside), else the evaluated one.
+    value: Value,
+}
+
+impl Source {
+    fn label(&self, pane: &str) -> String {
+        if self.pane == pane {
+            self.tg.label()
+        } else {
+            format!("{} › {}", self.pane, self.tg.label())
+        }
+    }
+
+    fn shown(&self) -> Value {
+        redact_value(&self.tg.t, self.tg.secret, &self.value)
+    }
+
+    fn has_secret(&self) -> bool {
+        has_secret(&self.tg.t, self.tg.secret)
+    }
 }
 
 /// Example of setting one field of an entry, for error messages.
@@ -661,6 +821,7 @@ fn plan_change(
     pane: &str,
     o: &OptionSchema,
     path: Vec<String>,
+    source: Option<&Source>,
     plan: &mut Plan,
 ) -> Result<(), String> {
     let Plan {
@@ -688,7 +849,7 @@ fn plan_change(
             what
         };
         at(format!(
-            "{what} is a secret; never send it. Use op ask (the user types or generates it on the card) or generate."
+            "{what} is a secret; never send it. Use op copy or move when another setting already has the value, ask (the user types or generates it on the card) or generate."
         ))
     };
 
@@ -731,7 +892,88 @@ fn plan_change(
         .to_string();
     };
 
+    if ch.from.is_some() && !matches!(ch.op, ChangeOp::Copy | ChangeOp::Move) {
+        return Err(at("from only works with op copy or move".into()));
+    }
+    let mut source_view = None;
     match ch.op {
+        ChangeOp::Copy | ChangeOp::Move => {
+            let Some(src) = source else {
+                return Err(at(
+                    "copy and move need from: the path (and key, field) of the setting to read"
+                        .into(),
+                ));
+            };
+            let from = src.from.dotted();
+            if src.tg.new_entry || !is_set(&src.value) {
+                return Err(at(format!("{from} has no value to copy")));
+            }
+            if tg.path.starts_with(&src.tg.path) || src.tg.path.starts_with(&tg.path) {
+                return Err(at(format!(
+                    "{from} and the target overlap; name two separate settings or entries"
+                )));
+            }
+            if let Some(sub) = secret_leak(&src.tg.t, src.tg.secret, &tg.t, tg.secret, &src.value) {
+                let what = if sub.is_empty() {
+                    from.clone()
+                } else {
+                    format!("{from}.{sub}")
+                };
+                return Err(at(format!(
+                    "{what} is a secret and the target is not, so it would become readable; secrets can only go to secret settings"
+                )));
+            }
+            let shown = without_nulls(&src.shown());
+            type_check(&tg.t, &shown).map_err(|e| {
+                let w = inside("");
+                at(if w.is_empty() { e } else { format!("{w}: {e}") })
+            })?;
+            let moving = ch.op == ChangeOp::Move;
+            set_action(&mut view);
+            view.new = display(&shown);
+            view.secret = view.secret || src.has_secret();
+            view.notes.push(format!(
+                "{} {}",
+                if moving { "Moved from" } else { "Copied from" },
+                src.label(pane)
+            ));
+            let dropped = dropped_secrets(&tg.t, tg.secret, &tg.current, &shown);
+            view.warnings
+                .extend(dropped.iter().map(|d| format!("Removes {}", inside(d))));
+            if tg.secret && was_set {
+                view.warnings.push("Replaces the current secret".into());
+            }
+            if strip_null(&tg.t).kind == "attrsOf" {
+                let cur = redact_value(&tg.t, tg.secret, &tg.current);
+                let (added, changed, removed) = key_diff(&cur, &shown);
+                view.notes
+                    .extend(added.iter().map(|k| format!("Adds entry {k}")));
+                view.notes
+                    .extend(changed.iter().map(|k| format!("Changes entry {k}")));
+                view.warnings
+                    .extend(removed.iter().map(|k| format!("Removes entry {k}")));
+            }
+            if moving {
+                source_view = Some(ChangeView {
+                    service: src.pane.clone(),
+                    label: src.tg.label(),
+                    path: from,
+                    action: "remove".into(),
+                    old: display(&shown),
+                    new: format!("moved to {}", view.label),
+                    secret: src.has_secret(),
+                    warnings: vec![],
+                    notes: vec![],
+                });
+            }
+            planned.push(Planned::Copy {
+                from: src.from.clone(),
+                from_path: src.tg.path.clone(),
+                to: tg.path.clone(),
+                remove_source: moving,
+                secret: src.has_secret(),
+            });
+        }
         ChangeOp::Generate => {
             let h = tg
                 .helper
@@ -908,7 +1150,49 @@ fn plan_change(
         }
     }
     views.push(view);
+    views.extend(source_view);
     Ok(())
+}
+
+/// Options of a pane, read once per proposal.
+async fn load_pane_once(
+    config: &AppConfig,
+    panes: &mut HashMap<(bool, String), Vec<OptionSchema>>,
+    is_core: bool,
+    pane: &str,
+) -> Result<(), String> {
+    if let Entry::Vacant(e) = panes.entry((is_core, pane.to_string())) {
+        e.insert(load_options(config, is_core, pane).await?);
+    }
+    Ok(())
+}
+
+/// Find what a copy or move reads. The options are already in `panes`.
+fn find_source(
+    panes: &HashMap<(bool, String), Vec<OptionSchema>>,
+    doc: &toml_edit::DocumentMut,
+    keys: &Tree,
+    from: &SourceRef,
+) -> Result<Source, String> {
+    let (is_core, pane, name, prefix) = locate(&from.path)?;
+    let at = |m: String| format!("from {}: {m}", from.path);
+    let opts = panes
+        .get(&(is_core, pane.clone()))
+        .ok_or_else(|| at("could not read settings".into()))?;
+    let o = opts
+        .iter()
+        .find(|o| o.name == name)
+        .ok_or_else(|| at("no such setting".into()))?;
+    let mut path = prefix;
+    path.extend(name.split('.').map(str::to_string));
+    let tg = resolve(o, path, from.key.as_deref(), from.field.as_deref()).map_err(at)?;
+    let value = saved_value(doc, keys, &tg.path).unwrap_or_else(|| without_nulls(&tg.current));
+    Ok(Source {
+        pane,
+        from: from.clone(),
+        tg,
+        value,
+    })
 }
 
 /// Check `req` against the option schemas and store it as a pending proposal.
@@ -920,12 +1204,32 @@ pub async fn create(config: &AppConfig, req: ProposalRequest) -> Result<Proposal
         errors.push("a proposal needs at least one change".to_string());
     }
     let mut panes: HashMap<(bool, String), Vec<OptionSchema>> = HashMap::new();
+    // What copies and moves read: only touched when a change has `from`.
+    let saved = if req.changes.iter().any(|c| c.from.is_some()) {
+        match (
+            load_settings_doc(&config.settings_path),
+            secret_keys(config),
+        ) {
+            (Ok(doc), Ok(keys)) => Some((doc, keys)),
+            _ => {
+                errors.push("could not read the saved settings".to_string());
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     for (index, ch) in req.changes.iter().enumerate() {
-        if refused(&ch.path) {
+        let from_refused = ch.from.as_ref().is_some_and(|f| refused(&f.path));
+        if refused(&ch.path) || from_refused {
             errors.push(format!(
                 "{}: the assistant may not change this setting; ask the user to change it in the web UI",
-                ch.path
+                if from_refused {
+                    ch.from.as_ref().map_or("", |f| f.path.as_str())
+                } else {
+                    ch.path.as_str()
+                }
             ));
             continue;
         }
@@ -936,15 +1240,31 @@ pub async fn create(config: &AppConfig, req: ProposalRequest) -> Result<Proposal
                 continue;
             }
         };
-        let opts = match panes.entry((is_core, pane.clone())) {
-            Entry::Occupied(e) => e.into_mut(),
-            Entry::Vacant(e) => match load_options(config, is_core, &pane).await {
-                Ok(o) => e.insert(o),
+        if let Err(e) = load_pane_once(config, &mut panes, is_core, &pane).await {
+            errors.push(format!("{}: could not read settings ({e})", ch.path));
+            continue;
+        }
+        let mut source = None;
+        if let (Some(from), Some((doc, keys))) = (ch.from.as_ref(), saved.as_ref()) {
+            let found = match locate(&from.path) {
+                Ok((from_core, from_pane, ..)) => {
+                    load_pane_once(config, &mut panes, from_core, &from_pane)
+                        .await
+                        .map_err(|e| format!("from {}: could not read settings ({e})", from.path))
+                }
+                Err(e) => Err(e),
+            }
+            .and_then(|()| find_source(&panes, doc, keys, from));
+            match found {
+                Ok(s) => source = Some(s),
                 Err(e) => {
-                    errors.push(format!("{}: could not read settings ({e})", ch.path));
+                    errors.push(e);
                     continue;
                 }
-            },
+            }
+        }
+        let Some(opts) = panes.get(&(is_core, pane.clone())) else {
+            continue;
         };
         let Some(o) = opts.iter().find(|o| o.name == name) else {
             errors.push(format!("{}: no such setting", ch.path));
@@ -952,7 +1272,7 @@ pub async fn create(config: &AppConfig, req: ProposalRequest) -> Result<Proposal
         };
         let mut path: Vec<String> = prefix;
         path.extend(name.split('.').map(str::to_string));
-        if let Err(e) = plan_change(ch, index, &pane, o, path, &mut plan) {
+        if let Err(e) = plan_change(ch, index, &pane, o, path, source.as_ref(), &mut plan) {
             errors.push(e);
         }
     }
@@ -990,7 +1310,7 @@ pub async fn create(config: &AppConfig, req: ProposalRequest) -> Result<Proposal
 /// Patch ops for saving `p` now with the values the user entered on the card
 /// (`asked`, by input name): refuses when an asked secret is empty (the card
 /// stays pending) or when the touched settings changed since proposing
-/// (stale); fills generated secrets.
+/// (stale); fills generated secrets and reads what copies and moves carry.
 pub async fn ops_for_save(
     config: &AppConfig,
     p: &Proposal,
@@ -1009,6 +1329,20 @@ pub async fn ops_for_save(
     }
     let failed = || (Status::Failed, "Could not generate a secret".to_string());
     let mut ops = Vec::new();
+    let mut stale = Vec::new();
+    let copies: Vec<&Vec<String>> = p
+        .planned
+        .iter()
+        .filter_map(|i| match i {
+            Planned::Copy { from_path, .. } => Some(from_path),
+            _ => None,
+        })
+        .collect();
+    let saved = if copies.is_empty() {
+        None
+    } else {
+        Some(read_saved(config, &copies)?)
+    };
     for item in &p.planned {
         match item {
             Planned::Patch(op) => ops.push(op.clone()),
@@ -1032,9 +1366,122 @@ pub async fn ops_for_save(
                     value: Value::String(value),
                 });
             }
+            Planned::Copy {
+                from,
+                from_path,
+                to,
+                remove_source,
+                secret,
+            } => {
+                let Some(saved) = saved.as_ref() else {
+                    continue;
+                };
+                let value = copied_value(config, saved, from, from_path).await?;
+                let leaves = stale_secrets(&saved.keys, to, &value);
+                stale.extend(leaves.into_iter().map(|leaf| (leaf, ops.len())));
+                ops.push(PatchOp::Set {
+                    path: to.clone(),
+                    value,
+                });
+                if *remove_source {
+                    ops.push(PatchOp::Unset {
+                        path: from_path.clone(),
+                        secret: *secret,
+                    });
+                }
+            }
         }
     }
+    let unsets = stale_unsets(stale, &ops);
+    ops.extend(unsets);
     Ok(ops)
+}
+
+/// Unset ops for secrets a copy left out, `(leaf, index of the copy's op)`,
+/// except those a later change of the proposal fills again.
+fn stale_unsets(stale: Vec<(Vec<String>, usize)>, ops: &[PatchOp]) -> Vec<PatchOp> {
+    stale
+        .into_iter()
+        .filter(|(leaf, copy)| {
+            !ops[copy + 1..].iter().any(
+                |o| matches!(o, PatchOp::Set { path, .. } if leaf.starts_with(path.as_slice())),
+            )
+        })
+        .map(|(path, _)| PatchOp::Unset { path, secret: true })
+        .collect()
+}
+
+/// Saved settings for the copies of one save.
+struct Saved {
+    doc: toml_edit::DocumentMut,
+    /// Secrets file, decrypted only when a copy needs a secret from it.
+    tree: Tree,
+    keys: Tree,
+}
+
+fn read_saved(config: &AppConfig, copies: &[&Vec<String>]) -> Result<Saved, (Status, String)> {
+    let unreadable = || {
+        (
+            Status::Failed,
+            "Could not read the saved settings. Nothing was changed.".to_string(),
+        )
+    };
+    let doc = load_settings_doc(&config.settings_path).map_err(|_| unreadable())?;
+    let keys = secret_keys(config).map_err(|e| {
+        eprintln!("web: proposal cannot read the secrets file: {e:#}");
+        unreadable()
+    })?;
+    let needs_secret = copies
+        .iter()
+        .any(|path| secrets::lookup(&keys, path).is_some());
+    let tree = match secrets::backend_for(&config.settings_path) {
+        Backend::Sops(path) if needs_secret => secrets_store::decrypt(&path).map_err(|e| {
+            eprintln!("web: proposal cannot decrypt the secrets: {e:#}");
+            unreadable()
+        })?,
+        _ => keys.clone(),
+    };
+    Ok(Saved { doc, tree, keys })
+}
+
+/// What a copy writes: the saved value, or the evaluated one when the source
+/// is on its default. Never an encrypted placeholder.
+async fn copied_value(
+    config: &AppConfig,
+    saved: &Saved,
+    from: &SourceRef,
+    from_path: &[String],
+) -> Result<Value, (Status, String)> {
+    let dotted = from.dotted();
+    let value = match saved_value(&saved.doc, &saved.tree, from_path) {
+        Some(v) => Some(v),
+        None => {
+            let (is_core, pane, name, prefix) =
+                locate(&from.path).map_err(|e| (Status::Stale, e))?;
+            let opts = load_options(config, is_core, &pane)
+                .await
+                .map_err(|e| (Status::Failed, e))?;
+            opts.iter().find(|o| o.name == name).and_then(|o| {
+                let mut path = prefix;
+                path.extend(name.split('.').map(str::to_string));
+                let tg = resolve(o, path, from.key.as_deref(), from.field.as_deref()).ok()?;
+                (!tg.new_entry && is_set(&tg.current)).then_some(tg.current)
+            })
+        }
+    };
+    let Some(value) = value.map(|v| without_nulls(&v)) else {
+        return Err((
+            Status::Stale,
+            format!("{dotted} has no value any more. Ask the assistant to suggest this again."),
+        ));
+    };
+    if has_placeholder(&value) {
+        return Err((
+            Status::Failed,
+            format!("Could not read the secrets of {dotted}. Nothing was changed."),
+        ));
+    }
+    Ok(value)
 }
 
 #[cfg(test)]
@@ -1060,7 +1507,15 @@ mod tests {
         let o = accounts();
         let mut plan = Plan::default();
         for (i, c) in changes.into_iter().enumerate() {
-            plan_change(&change(c), i, "x", &o, p("services.x.accounts"), &mut plan)?;
+            plan_change(
+                &change(c),
+                i,
+                "x",
+                &o,
+                p("services.x.accounts"),
+                None,
+                &mut plan,
+            )?;
         }
         Ok(plan)
     }
@@ -1237,6 +1692,274 @@ mod tests {
             json!({"op":"set","path":"services.x.accounts","key":"tmr","field":"nope","value":1})
         ])
         .is_err());
+    }
+
+    /// Plan a copy/move on `accounts` of service `x` from `accounts` of `y`
+    /// (`entry` there), as read from the saved settings.
+    fn plan_from(c: Value, pane: &str, entry: &str) -> Result<Plan, String> {
+        let o = accounts();
+        let prefix = format!("services.{pane}.accounts");
+        let tg = resolve(&o, p(&prefix), Some(entry), None)?;
+        let value = tg.current.clone();
+        let src = Source {
+            pane: pane.to_string(),
+            from: SourceRef {
+                path: prefix,
+                key: Some(entry.to_string()),
+                field: None,
+            },
+            tg,
+            value,
+        };
+        let mut plan = Plan::default();
+        plan_change(
+            &change(c),
+            0,
+            "x",
+            &o,
+            p("services.x.accounts"),
+            Some(&src),
+            &mut plan,
+        )?;
+        Ok(plan)
+    }
+
+    #[test]
+    fn copy_an_entry_keeps_secrets_off_the_card() {
+        let c = json!({"op":"copy","path":"services.x.accounts","key":"biel","from":{"path":"services.y.accounts","key":"tinyauth"}});
+        let Plan { views, planned, .. } = plan_from(c, "y", "tinyauth").unwrap();
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].label, "Accounts › biel");
+        assert_eq!(views[0].action, "add");
+        assert!(views[0].secret);
+        assert!(views[0].new.contains("username: admin"), "{}", views[0].new);
+        assert!(views[0].new.contains("password: set"), "{}", views[0].new);
+        assert_eq!(views[0].notes, vec!["Copied from y › Accounts › tinyauth"]);
+        match &planned[0] {
+            Planned::Copy {
+                from_path,
+                to,
+                remove_source,
+                secret,
+                ..
+            } => {
+                assert_eq!(from_path, &p("services.y.accounts.tinyauth"));
+                assert_eq!(to, &p("services.x.accounts.biel"));
+                assert!(!remove_source);
+                assert!(secret);
+            }
+            other => panic!("{other:?}"),
+        }
+        // Nothing the assistant gets back or the store keeps has the value.
+        let text = serde_json::to_string(&(&views, &planned)).unwrap();
+        assert!(!text.contains("thispassword"), "{text}");
+    }
+
+    #[test]
+    fn rename_is_a_move_inside_one_setting() {
+        let c = json!({"op":"move","path":"services.x.accounts","key":"main","from":{"path":"services.x.accounts","key":"tinyauth"}});
+        let Plan { views, planned, .. } = plan_from(c, "x", "tinyauth").unwrap();
+        assert_eq!(views[0].action, "add");
+        assert_eq!(views[0].notes, vec!["Moved from Accounts › tinyauth"]);
+        assert_eq!(views[1].action, "remove");
+        assert_eq!(views[1].label, "Accounts › tinyauth");
+        assert_eq!(views[1].new, "moved to Accounts › main");
+        assert!(matches!(
+            &planned[0],
+            Planned::Copy {
+                remove_source: true,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn copy_refusals() {
+        // Onto itself or inside itself.
+        let c = json!({"op":"copy","path":"services.x.accounts","key":"tinyauth","from":{"path":"services.x.accounts","key":"tinyauth"}});
+        assert!(plan_from(c, "x", "tinyauth")
+            .unwrap_err()
+            .contains("overlap"));
+        // Nothing there.
+        let c = json!({"op":"copy","path":"services.x.accounts","key":"b","from":{"path":"services.y.accounts","key":"nope"}});
+        assert!(plan_from(c, "y", "nope").unwrap_err().contains("no value"));
+        // Without a source, and from on another op.
+        let e = plan(vec![
+            json!({"op":"copy","path":"services.x.accounts","key":"b"}),
+        ])
+        .unwrap_err();
+        assert!(e.contains("need from"), "{e}");
+        let e = plan(vec![json!({"op":"set","path":"services.x.accounts","key":"b","field":"notes","value":"n","from":{"path":"services.y.accounts"}})]).unwrap_err();
+        assert!(e.contains("from only works"), "{e}");
+        // A whole entry into a text field: the password would become readable.
+        let c = json!({"op":"copy","path":"services.x.accounts","key":"b","field":"notes","from":{"path":"services.y.accounts","key":"tinyauth"}});
+        let e = plan_from(c, "y", "tinyauth").unwrap_err();
+        assert!(e.contains("is a secret and the target is not"), "{e}");
+        assert!(!e.contains("thispassword"), "{e}");
+    }
+
+    #[test]
+    fn a_secret_field_can_be_copied_on_its_own() {
+        let o = accounts();
+        let tg = resolve(
+            &o,
+            p("services.y.accounts"),
+            Some("tinyauth"),
+            Some("password"),
+        )
+        .unwrap();
+        let src = Source {
+            pane: "y".into(),
+            from: SourceRef {
+                path: "services.y.accounts".into(),
+                key: Some("tinyauth".into()),
+                field: Some("password".into()),
+            },
+            value: tg.current.clone(),
+            tg,
+        };
+        let mut plan = Plan::default();
+        let to = |field: &str| {
+            change(
+                json!({"op":"copy","path":"services.x.accounts","key":"b","field":field,"from":{"path":"services.y.accounts","key":"tinyauth","field":"password"}}),
+            )
+        };
+        plan_change(
+            &to("password"),
+            0,
+            "x",
+            &o,
+            p("services.x.accounts"),
+            Some(&src),
+            &mut plan,
+        )
+        .unwrap();
+        assert_eq!(plan.views[0].new, "set");
+        assert!(plan.views[0].secret);
+        // Into a plain field it would be readable with neo_settings_get.
+        let e = plan_change(
+            &to("notes"),
+            1,
+            "x",
+            &o,
+            p("services.x.accounts"),
+            Some(&src),
+            &mut plan,
+        )
+        .unwrap_err();
+        assert!(e.contains("is a secret and the target is not"), "{e}");
+    }
+
+    #[test]
+    fn saved_value_lays_secrets_over_settings() {
+        let doc: toml_edit::DocumentMut =
+            "[services.y.accounts.tinyauth]\nusername = \"admin\"\nport = 8\n"
+                .parse()
+                .unwrap();
+        let tree = secrets::parse("services:\n  y:\n    accounts:\n      tinyauth:\n        password: \"pw\"\n      only:\n        password: \"s\"\n").unwrap();
+        let v = saved_value(&doc, &tree, &p("services.y.accounts.tinyauth")).unwrap();
+        assert_eq!(v, json!({"username": "admin", "port": 8, "password": "pw"}));
+        // Only in the secrets file, only in settings, and nowhere.
+        assert_eq!(
+            saved_value(&doc, &tree, &p("services.y.accounts.only.password")),
+            Some(json!("s"))
+        );
+        assert_eq!(
+            saved_value(&doc, &tree, &p("services.y.accounts.tinyauth.username")),
+            Some(json!("admin"))
+        );
+        assert_eq!(saved_value(&doc, &tree, &p("services.y.nope")), None);
+    }
+
+    #[test]
+    fn stored_proposals_never_hold_inline_secrets() {
+        // Without a secrets file the source of a copy holds the plain value.
+        let doc: toml_edit::DocumentMut = "[services.y.accounts.a]\npassword = \"thispassword\"\n"
+            .parse()
+            .unwrap();
+        let copy = Planned::Copy {
+            from: SourceRef {
+                path: "services.y.accounts".into(),
+                key: Some("a".into()),
+                field: None,
+            },
+            from_path: p("services.y.accounts.a"),
+            to: p("services.x.accounts.a"),
+            remove_source: false,
+            secret: true,
+        };
+        let planned = vec![copy];
+        let fp = fingerprint_of(&doc, &planned);
+        assert!(!fp.contains("thispassword"), "{fp}");
+        assert!(!serde_json::to_string(&planned)
+            .unwrap()
+            .contains("thispassword"));
+        // It still notices a change, also of the source only.
+        assert_eq!(fp, fingerprint_of(&doc, &planned));
+        let changed: toml_edit::DocumentMut = "[services.y.accounts.a]\npassword = \"other\"\n"
+            .parse()
+            .unwrap();
+        assert_ne!(fp, fingerprint_of(&changed, &planned));
+    }
+
+    #[test]
+    fn stale_secrets_stay_cleared_unless_refilled_later() {
+        let set = |path: &str| PatchOp::Set {
+            path: p(path),
+            value: json!("v"),
+        };
+        let leaf = p("services.x.a.totpSecret");
+        // The copy's own write covers the leaf and must not keep it alive.
+        let ops = vec![set("services.x.a")];
+        assert_eq!(
+            stale_unsets(vec![(leaf.clone(), 0)], &ops),
+            vec![PatchOp::Unset {
+                path: leaf.clone(),
+                secret: true
+            }]
+        );
+        // A later ask or generate for it keeps the new value.
+        let ops = vec![set("services.x.a"), set("services.x.a.totpSecret")];
+        assert!(stale_unsets(vec![(leaf.clone(), 0)], &ops).is_empty());
+        // An earlier write is replaced by the copy anyway.
+        let ops = vec![set("services.x.a.totpSecret"), set("services.x.a")];
+        assert_eq!(stale_unsets(vec![(leaf, 1)], &ops).len(), 1);
+    }
+
+    #[test]
+    fn copying_over_an_entry_clears_secrets_the_source_lacks() {
+        use crate::commands::web::settings::edit::apply_ops;
+        let keys = secrets::parse(
+            "services:\n  x:\n    a:\n      password: \"old\"\n      totpSecret: \"old\"\n",
+        )
+        .unwrap();
+        let to = p("services.x.a");
+        let value = json!({"username": "u", "password": "new"});
+        let stale = stale_secrets(&keys, &to, &value);
+        assert_eq!(stale, vec![p("services.x.a.totpSecret")]);
+        // End to end on the document and secrets tree, like save_patch_inner.
+        let mut doc: toml_edit::DocumentMut = "[services.y.a]\nusername = \"u\"\n".parse().unwrap();
+        let mut tree = keys.clone();
+        let patterns = vec![p("services.*.a.password"), p("services.*.a.totpSecret")];
+        let mut ops = vec![PatchOp::Set {
+            path: to.clone(),
+            value,
+        }];
+        ops.extend(stale.iter().map(|s| PatchOp::Unset {
+            path: s.clone(),
+            secret: true,
+        }));
+        apply_ops(&mut doc, &ops).unwrap();
+        secrets::split_into(&mut doc, &mut tree, &patterns, None);
+        for s in &stale {
+            secrets::split_into(&mut doc, &mut tree, &patterns, Some(s));
+        }
+        assert!(!doc.to_string().contains("new"));
+        let yaml = secrets::emit(&tree);
+        assert!(
+            yaml.contains("new") && !yaml.contains("totpSecret"),
+            "{yaml}"
+        );
     }
 
     #[test]

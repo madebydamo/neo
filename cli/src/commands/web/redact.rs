@@ -136,7 +136,9 @@ pub fn redacted_default(o: &OptionSchema) -> Value {
 }
 
 fn join(at: &str, k: &str) -> String {
-    if at.is_empty() {
+    if k.is_empty() {
+        at.to_string()
+    } else if at.is_empty() {
         k.to_string()
     } else {
         format!("{at}.{k}")
@@ -186,6 +188,76 @@ pub fn has_secret(t: &OptionType, secret: bool) -> bool {
             .unwrap_or_default()
             .iter()
             .any(|f| has_secret(&f.r#type, f.secret))
+}
+
+/// Dotted position of the first secret in `v` that would land on a non-secret
+/// place of the `dst` type: copying it there would show it in plain settings.
+pub fn secret_leak(
+    src: &OptionType,
+    src_secret: bool,
+    dst: &OptionType,
+    dst_secret: bool,
+    v: &Value,
+) -> Option<String> {
+    fn unwrap(t: &OptionType) -> &OptionType {
+        match (t.kind.as_str(), t.elem.as_deref()) {
+            ("nullOr", Some(e)) => unwrap(e),
+            _ => t,
+        }
+    }
+    fn part(fields: &[OptionSchema], k: &str) -> Option<(OptionType, bool)> {
+        match field(fields, k) {
+            Field::One(f) => Some((f.r#type.clone(), f.secret)),
+            Field::Group(g) => Some((g, false)),
+            Field::Unknown => None,
+        }
+    }
+    fn rec(
+        s: &OptionType,
+        ss: bool,
+        d: &OptionType,
+        ds: bool,
+        v: &Value,
+        at: &str,
+    ) -> Option<String> {
+        if ds {
+            return None;
+        }
+        if ss {
+            return is_set(v).then(|| at.to_string());
+        }
+        if matches!(v, Value::String(x) if is_placeholder(x)) {
+            return Some(at.to_string());
+        }
+        let (s, d) = (unwrap(s), unwrap(d));
+        if s.kind != d.kind {
+            return secret_in(s, false, v).map(|sub| join(at, &sub));
+        }
+        match (s.kind.as_str(), v, s.elem.as_deref(), d.elem.as_deref()) {
+            ("attrsOf", Value::Object(m), Some(se), Some(de)) => m
+                .iter()
+                .find_map(|(k, x)| rec(se, false, de, false, x, &join(at, k))),
+            ("listOf", Value::Array(a), Some(se), Some(de)) => a
+                .iter()
+                .enumerate()
+                .find_map(|(i, x)| rec(se, false, de, false, x, &join(at, &(i + 1).to_string()))),
+            ("submodule", Value::Object(m), _, _) => {
+                let sf = s.fields.as_deref().unwrap_or_default();
+                let df = d.fields.as_deref().unwrap_or_default();
+                m.iter().find_map(|(k, x)| {
+                    let (st, sec) = part(sf, k)?;
+                    let here = join(at, k);
+                    match part(df, k) {
+                        Some((dt, dsec)) => rec(&st, sec, &dt, dsec, x, &here),
+                        None if sec => is_set(x).then_some(here),
+                        None => secret_in(&st, false, x).map(|sub| join(&here, &sub)),
+                    }
+                })
+            }
+            _ => None,
+        }
+    }
+    rec(src, src_secret, dst, dst_secret, v, "")
 }
 
 /// Secrets that are set in `current` but missing from `new` (dotted, relative):
@@ -333,6 +405,41 @@ pub mod tests {
         let s: OptionType =
             serde_json::from_value(json!({"kind": "listOf", "elem": {"kind": "str"}})).unwrap();
         assert!(!has_secret(&s, false));
+    }
+
+    #[test]
+    fn secrets_only_land_on_secrets() {
+        let o = accounts();
+        let cur = o.current.clone().unwrap();
+        let entry = o.r#type.elem.as_deref().unwrap();
+        // Same shape: fine, whole option or one entry.
+        assert_eq!(secret_leak(&o.r#type, false, &o.r#type, false, &cur), None);
+        assert_eq!(
+            secret_leak(entry, false, entry, false, &cur["tinyauth"]),
+            None
+        );
+        // A secret into a plain text setting is a leak, at any depth.
+        let text: OptionType = serde_json::from_value(json!({"kind": "str"})).unwrap();
+        assert_eq!(
+            secret_leak(&text, true, &text, false, &json!("pw")).as_deref(),
+            Some("")
+        );
+        assert_eq!(
+            secret_leak(&text, true, &text, true, &json!("pw")),
+            None,
+            "secret to secret"
+        );
+        let leak = secret_leak(entry, false, &text, false, &cur["tinyauth"]).unwrap();
+        assert!(leak == "password" || leak == "oauth.clientSecret", "{leak}");
+        // The same field name without the secret flag on the target.
+        let mut plain = entry.clone();
+        for f in plain.fields.as_mut().unwrap() {
+            f.secret = false;
+        }
+        let leak = secret_leak(entry, false, &plain, false, &cur["tinyauth"]).unwrap();
+        assert!(leak == "password" || leak == "oauth.clientSecret", "{leak}");
+        // A plain value may go into a secret.
+        assert_eq!(secret_leak(&text, false, &text, true, &json!("x")), None);
     }
 
     #[test]

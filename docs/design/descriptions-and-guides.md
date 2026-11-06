@@ -340,6 +340,15 @@ token** (the token itself only in `hermes.env` and a neo-web key file).
 - `generate` fills a secret with its own `helper` (e.g. `randomToken`, also a
   field's Generate button) at save time, so Hermes never sees or invents a
   secret value. A value at a secret position (top-level or nested) is refused.
+- `copy` / `move` carry a value from another setting (`from: {path, key?,
+  field?}`): a whole option, one entry or one field, secrets included. Renaming
+  an entry is a `move` inside one option. The proposal stores only the two
+  paths; neo reads the saved value (settings.toml with the secrets file laid
+  over it, decrypting if needed) when the user saves, so the agent never sees
+  it and the card shows `set`. A secret may only land on a secret position
+  (`redact::secret_leak`), otherwise it could be read back with
+  `neo_settings_get`. `REFUSED` applies to the source as well. Secrets the
+  target had and the source lacks leave the secrets file.
 - `ask` puts a password input on the card (show/hide, Generate in the
   browser); `ask` changes with the same `group` share one input. The value is
   sent with the Save / Save & apply click and goes straight into the patch: it
@@ -349,7 +358,7 @@ token** (the token itself only in `hermes.env` and a neo-web key file).
 
 Stored by neo web in `$STATE_DIRECTORY/proposals.json` (written atomically,
 no secret values: `ask` keeps the target path and input name, `generate` the
-script path), so a card survives the neo-web restart that Save & apply causes;
+script path, `copy` / `move` the two setting paths), so a card survives the neo-web restart that Save & apply causes;
 expires after a day. On `propose`, neo:
 
 1. validates every path and value against the option schema (exists, type,

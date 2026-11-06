@@ -54,6 +54,41 @@ pub fn json_to_toml_item(v: &serde_json::Value) -> Option<Item> {
     }
 }
 
+/// A settings.toml item as JSON (`None` for an empty item).
+pub fn toml_item_to_json(item: &Item) -> Option<serde_json::Value> {
+    fn table<'a>(
+        entries: impl Iterator<Item = (&'a str, Option<serde_json::Value>)>,
+    ) -> serde_json::Value {
+        serde_json::Value::Object(
+            entries
+                .filter_map(|(k, v)| v.map(|v| (k.to_string(), v)))
+                .collect(),
+        )
+    }
+    fn value(v: &Value) -> serde_json::Value {
+        match v {
+            Value::String(s) => s.value().clone().into(),
+            Value::Integer(i) => (*i.value()).into(),
+            Value::Float(f) => (*f.value()).into(),
+            Value::Boolean(b) => (*b.value()).into(),
+            Value::Datetime(d) => d.value().to_string().into(),
+            Value::Array(a) => a.iter().map(value).collect::<Vec<_>>().into(),
+            Value::InlineTable(t) => table(t.iter().map(|(k, v)| (k, Some(value(v))))),
+        }
+    }
+    match item {
+        Item::None => None,
+        Item::Value(v) => Some(value(v)),
+        Item::Table(t) => Some(table(t.iter().map(|(k, i)| (k, toml_item_to_json(i))))),
+        Item::ArrayOfTables(a) => Some(
+            a.iter()
+                .map(|t| table(t.iter().map(|(k, i)| (k, toml_item_to_json(i)))))
+                .collect::<Vec<_>>()
+                .into(),
+        ),
+    }
+}
+
 pub fn insert_dotted(table: &mut Table, dotted_key: &str, value: Value) {
     let parts: Vec<&str> = dotted_key.split('.').collect();
     if parts.is_empty() {

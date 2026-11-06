@@ -70,7 +70,7 @@ fn secret_value<'a>(tree: &'a Tree, s: &str) -> Option<&'a str> {
     }
 }
 
-fn has_placeholder(v: &serde_json::Value) -> bool {
+pub(crate) fn has_placeholder(v: &serde_json::Value) -> bool {
     match v {
         serde_json::Value::String(s) => secrets::is_placeholder(s),
         serde_json::Value::Array(a) => a.iter().any(has_placeholder),

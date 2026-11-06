@@ -4,5 +4,5 @@ mod json_to_toml;
 pub mod restore;
 pub mod save;
 
-pub use json_to_toml::{insert_dotted, json_to_toml_item, json_to_toml_value};
+pub use json_to_toml::{insert_dotted, json_to_toml_item, json_to_toml_value, toml_item_to_json};
 pub use restore::discard_pending_changes;
