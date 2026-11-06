@@ -1649,36 +1649,51 @@ a.neo-sem-name:focus-visible {
 }
 .neo-agent-status[data-phase="stopping"] .neo-agent-status-icon { border-top-color: var(--color-error); }
 
-/* Header Assistant button: ring while working, warning while it waits for an
-   approval, dot for a reply that came in while the drawer was closed. */
-.neo-agent-launch { position: relative; }
+/* Header Assistant button: same soft pill and spinner as the status button
+   next to it while working, warning pill while it waits for an approval, small
+   dot on the icon for a reply that came in while the drawer was closed. */
+.neo-agent-launch-icon { position: relative; display: inline-flex; width: 1rem; height: 1rem; }
 .neo-agent-launch-dot {
   display: none;
   position: absolute;
-  top: 0.2rem;
-  right: 0.2rem;
-  width: 0.55rem;
-  height: 0.55rem;
+  top: -0.125rem;
+  right: -0.1875rem;
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: 9999px;
-  background: var(--color-primary);
-  box-shadow: 0 0 0 2px var(--color-base-100);
+  background: var(--color-info);
+  box-shadow: 0 0 0 1.5px var(--color-base-100);
 }
-.neo-agent-launch[data-agent-state="unread"] .neo-agent-launch-dot { display: block; }
-.neo-agent-launch[data-agent-state="working"] .neo-agent-launch-dot,
+.neo-agent-launch[data-agent-state="unread"] .neo-agent-launch-dot,
+.neo-agent-launch[data-agent-state="waiting"] .neo-agent-launch-dot { display: block; }
+.neo-agent-launch[data-agent-state="working"] {
+  color: var(--color-info);
+  background: color-mix(in oklab, var(--color-info) 10%, transparent);
+}
+.neo-agent-launch[data-agent-state="working"] .neo-agent-launch-icon svg { visibility: hidden; }
+.neo-agent-launch[data-agent-state="working"] .neo-agent-launch-icon::after {
+  content: "";
+  position: absolute;
+  inset: 0.0625rem;
+  border-radius: 9999px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: neo-agent-spin 0.8s linear infinite;
+}
+.neo-agent-launch[data-agent-state="waiting"] {
+  background: color-mix(in oklab, var(--color-warning) 18%, transparent);
+}
 .neo-agent-launch[data-agent-state="waiting"] .neo-agent-launch-dot {
-  display: block;
+  background: var(--color-warning);
   animation: neo-agent-pulse 1.4s ease-in-out infinite;
 }
-.neo-agent-launch[data-agent-state="working"] { box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--color-primary) 55%, transparent); color: var(--color-primary); }
-.neo-agent-launch[data-agent-state="waiting"] { box-shadow: inset 0 0 0 1.5px var(--color-warning); color: var(--color-warning); background: color-mix(in oklab, var(--color-warning) 12%, transparent); }
-.neo-agent-launch[data-agent-state="waiting"] .neo-agent-launch-dot { background: var(--color-warning); }
 @keyframes neo-agent-spin { to { transform: rotate(360deg); } }
 @keyframes neo-agent-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.45; transform: scale(0.75); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .neo-agent-status-icon, .neo-agent-launch-dot { animation: none !important; }
+  .neo-agent-status-icon, .neo-agent-launch-dot, .neo-agent-launch-icon::after { animation: none !important; }
 }
 
 /* Past chats (#neo-agent-history). */
