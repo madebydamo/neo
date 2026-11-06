@@ -178,6 +178,7 @@ A plugin that forgets `plugin.name` in one place still evaluates in some cases. 
 2. It fails if the second evaluation errors, or if a name in `neo.services`, `virtualisation.oci-containers.containers`, `systemd.services`, `systemd.timers`, `users.users` or `users.groups` carries neither prefix, or is not created once per copy. The prefix may sit inside a name (`docker-neoa-example`).
    It also fails when a container's image is Nix-built (tag of 32 Nix-hash characters) and its name carries neither prefix. Registry images are not checked.
 3. On failure it lists those names.
+4. Modules named in `neoPlugin.checkExclude` are left out of these evaluations, for modules that bring parts meant to exist once per machine. A name that is not in `neoPlugin.modules` fails the check. Hosts still import them.
 
 `nix flake check` in the plugin template runs it, so authors find leaks without a VM.
 

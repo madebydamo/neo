@@ -28,6 +28,12 @@ in {
       imports = [(neoLib.neo.plugin.instantiate instance config.neoPlugin.modules)] ++ legacy;
     };
     prefixable = legacy == [];
+    excluded = config.neoPlugin.checkExclude;
+    unknownExcluded = lib.subtractLists (lib.attrNames config.neoPlugin.modules) excluded;
+    # What the check evaluates; hosts always get every module.
+    checkedModule = instance: {
+      imports = [(neoLib.neo.plugin.instantiate instance (removeAttrs config.neoPlugin.modules excluded))] ++ legacy;
+    };
 
     nixpkgs = inputs.nixpkgs or neoNixpkgs;
     evalWith = instances: enable:
@@ -36,7 +42,7 @@ in {
         specialArgs.lib = neoLib;
         modules =
           neoModules
-          ++ map module instances
+          ++ map checkedModule instances
           ++ [
             {
               neo.services =
@@ -93,7 +99,8 @@ in {
         lib.optional (sharedImages != [])
         "images: ${lib.concatMapStringsSep ", " (n: "${n} uses ${containers.${n}.image}") sharedImages} (the same image name in every copy; load the image as \"\${name}:<tag>\")";
       problems =
-        imageProblems
+        lib.optional (unknownExcluded != []) "checkExclude: ${toString unknownExcluded} (not in neoPlugin.modules)"
+        ++ imageProblems
         ++ lib.concatLists (lib.mapAttrsToList (what: get: let
           baseNames = lib.attrNames (get base);
           own = lib.subtractLists baseNames (lib.attrNames (get single));
@@ -121,6 +128,11 @@ in {
       type = lib.types.lazyAttrsOf lib.types.raw;
       default = {};
       description = "NixOS modules of this plugin. Each gets a `plugin` argument; name every service, container, unit and directory with `plugin.name \"<service>\"`.";
+    };
+    options.neoPlugin.checkExclude = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [];
+      description = "Names in neoPlugin.modules that neo-plugin-instances leaves out, for a module that brings parts meant to exist once per machine. Hosts still import it.";
     };
     config = {
       flake = {

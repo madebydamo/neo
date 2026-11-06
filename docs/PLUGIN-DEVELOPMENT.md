@@ -139,6 +139,8 @@ Ports two copies would share must be settings, so the operator can give the seco
 
 `nix flake check` runs `neo-plugin-instances`: it evaluates Neo with your plugin once, then twice with the prefixes `neoa` and `neob`, and fails with the list of containers, units, users and services that are the same in every copy. It also fails when a container runs an image the plugin builds itself (tagged with a Nix hash) under a name without the prefix: copies sharing an image name remove each other's image when they clean up old builds. Images pulled from a registry may be shared.
 
+A module that brings parts meant to exist once per machine (say, a library's module that adds one shared site, whatever the number of copies) cannot pass this check. List it in `neoPlugin.checkExclude = ["<module name>"];`: the check leaves it out and still covers every other module; hosts import it as usual. You then answer for its names yourself, so test it with two copies. The option exists since Neo's `checkExclude` change and a host builds against its own Neo, so set it only where declared: `{lib, options, ...}: { neoPlugin = lib.optionalAttrs (options.neoPlugin ? checkExclude) { checkExclude = [ … ]; }; }`.
+
 **Porting an existing plugin:** import `inputs.neo.flakeModules.plugin` in `modules/imports.nix`, drop your own `nixosModules.default` from `modules/nixos.nix`, rename `flake.modules.nixos.<x>` to `neoPlugin.modules.<x>`, add `plugin` to each module's arguments and replace the literals with `name`. Existing installs keep working: with an empty prefix every name is what it was. A plugin that keeps any `flake.modules.nixos.*` module still loads, once, without a prefix.
 
 ## Development loop
