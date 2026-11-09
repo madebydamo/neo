@@ -18,8 +18,7 @@ use super::super::locks::{lock_attr, LockMode, Scope};
 use super::super::types::AppConfig;
 use super::super::units::{
     broadcast_unit_update, end_clear_appdata, schedule_unit_refresh_burst, start_units_best_effort,
-    systemctl_action_blocking, unit_active_state_async, units_currently_running,
-    wait_units_stopped,
+    systemctl, units_currently_running, wait_units_stopped, UnitAction,
 };
 use super::super::util::{
     escape_attr, escape_html, proc, rsync_bin, status_err, status_ok, status_pulling,
@@ -342,10 +341,9 @@ async fn restore_inner(
         .collect();
     let to_restart = units_currently_running(&units).await;
     let target_was_active = match &job.group_unit {
-        Some(t) => matches!(
-            unit_active_state_async(t).await.as_str(),
-            "active" | "activating" | "reloading"
-        ),
+        Some(t) => !units_currently_running(std::slice::from_ref(t))
+            .await
+            .is_empty(),
         None => false,
     };
 
@@ -360,12 +358,12 @@ async fn restore_inner(
 
     push("stopping service…");
     if let Some(t) = &job.group_unit {
-        if let Err(e) = systemctl_action_blocking("stop", t).await {
+        if let Err(e) = systemctl(UnitAction::Stop, t).await {
             eprintln!("web: snapshot restore stop {t}: {e}");
         }
     }
     for u in &units {
-        if let Err(e) = systemctl_action_blocking("stop", u).await {
+        if let Err(e) = systemctl(UnitAction::Stop, u).await {
             eprintln!("web: snapshot restore stop {u}: {e}");
         }
         broadcast_unit_update(u, config);
@@ -376,7 +374,7 @@ async fn restore_inner(
         let group = job.group_unit.clone();
         async move {
             if let (Some(t), true) = (group, target_was_active) {
-                if let Err(e) = systemctl_action_blocking("start", &t).await {
+                if let Err(e) = systemctl(UnitAction::Start, &t).await {
                     eprintln!("web: snapshot restore start {t}: {e}");
                 }
             }

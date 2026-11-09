@@ -41,25 +41,19 @@ pub fn end_pull(config: &AppConfig, unit: &str) {
     config.pulls_in_flight.end(unit);
 }
 
-/// Normalize systemctl is-active stdout into a state string.
-fn parse_active_state_stdout(stdout: &[u8]) -> String {
-    let s = String::from_utf8_lossy(stdout).trim().to_string();
-    if s.is_empty() {
-        "unknown".into()
-    } else {
-        s
-    }
-}
-
-pub async fn unit_active_state_async(unit: &str) -> String {
-    match proc::sudo()
-        .args(["systemctl", "is-active", unit])
+/// `systemctl <action> <unit>`, waiting for the job. Stopping a unit that is not
+/// loaded is fine.
+pub async fn systemctl(action: UnitAction, unit: &str) -> Result<(), String> {
+    let what = format!("systemctl {} {unit}", action.as_str());
+    let out = proc::sudo()
+        .args(["systemctl", action.as_str(), unit, "--no-ask-password"])
         .output()
         .await
-    {
-        Ok(o) => parse_active_state_stdout(&o.stdout),
-        Err(_) => "unknown".into(),
+        .map_err(|e| format!("{what}: {e}"))?;
+    if action == UnitAction::Stop && String::from_utf8_lossy(&out.stderr).contains("not loaded") {
+        return Ok(());
     }
+    proc::check(out, &what).map(|_| ())
 }
 
 const UPDATE_OUT_CLASSES: &str =

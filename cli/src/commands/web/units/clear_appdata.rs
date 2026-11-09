@@ -10,8 +10,9 @@ use super::super::util::{
     escape_attr, escape_html, proc, status_err, status_ok, status_pulling, status_slot_oob,
 };
 use super::control::{
-    broadcast_unit_update, schedule_unit_refresh_burst, unit_active_state_async, unit_name_valid,
+    broadcast_unit_update, schedule_unit_refresh_burst, systemctl, unit_name_valid, UnitAction,
 };
+use super::status::query_unit_states;
 
 /// Mark service as clearing appdata. Returns false if already in flight.
 pub fn try_begin_clear_appdata(config: &AppConfig, service: &str) -> bool {
@@ -143,14 +144,12 @@ fn unit_was_running(state: &str) -> bool {
 
 /// Snapshot units that are currently running (should be restarted after clear).
 pub async fn units_currently_running(units: &[String]) -> Vec<String> {
-    let mut running = Vec::new();
-    for u in units {
-        let state = unit_active_state_async(u).await;
-        if unit_was_running(&state) {
-            running.push(u.clone());
-        }
-    }
-    running
+    let states = query_unit_states(units).await;
+    units
+        .iter()
+        .filter(|u| states.get(*u).is_some_and(|s| unit_was_running(&s.active)))
+        .cloned()
+        .collect()
 }
 
 pub async fn wait_units_stopped(units: &[String], timeout: Duration) -> Result<(), String> {
@@ -159,13 +158,12 @@ pub async fn wait_units_stopped(units: &[String], timeout: Duration) -> Result<(
     }
     let deadline = Instant::now() + timeout;
     loop {
-        let mut pending = Vec::new();
-        for u in units {
-            let state = unit_active_state_async(u).await;
-            if !unit_is_stopped(&state) {
-                pending.push(format!("{}={}", u, state));
-            }
-        }
+        let states = query_unit_states(units).await;
+        let pending: Vec<String> = states
+            .iter()
+            .filter(|(_, s)| !unit_is_stopped(&s.active))
+            .map(|(u, s)| format!("{u}={}", s.active))
+            .collect();
         if pending.is_empty() {
             return Ok(());
         }
@@ -181,33 +179,10 @@ pub async fn wait_units_stopped(units: &[String], timeout: Duration) -> Result<(
 
 pub async fn start_units_best_effort(units: &[String], config: &Arc<AppConfig>) {
     for u in units {
-        if let Err(e) = systemctl_action_blocking("start", u).await {
+        if let Err(e) = systemctl(UnitAction::Start, u).await {
             eprintln!("web: clear-appdata start {}: {}", u, e);
         }
         broadcast_unit_update(u, config);
-    }
-}
-
-pub async fn systemctl_action_blocking(action: &str, unit: &str) -> Result<(), String> {
-    let out = proc::sudo()
-        .args(["systemctl", action, unit, "--no-ask-password"])
-        .output()
-        .await
-        .map_err(|e| format!("systemctl {} {}: {}", action, unit, e))?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        let err = String::from_utf8_lossy(&out.stderr);
-        // stop of an already-inactive unit is fine
-        if action == "stop" && err.contains("not loaded") {
-            return Ok(());
-        }
-        Err(format!(
-            "systemctl {} {} failed: {}",
-            action,
-            unit,
-            err.trim()
-        ))
     }
 }
 
@@ -263,7 +238,7 @@ pub async fn run_clear_appdata(
     }
 
     for u in &units {
-        if let Err(e) = systemctl_action_blocking("stop", u).await {
+        if let Err(e) = systemctl(UnitAction::Stop, u).await {
             // Continue stopping others; wait_units_stopped surfaces stuck units.
             eprintln!("web: clear-appdata stop {}: {}", u, e);
         }
