@@ -1,6 +1,7 @@
 //! List and switch NixOS system generations (profile under `/nix/var/nix/profiles/system`).
 //! Activation commits record generation in the commit message (`(generation N)`).
 
+use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -97,7 +98,7 @@ fn parse_list_generations_line(line: &str) -> Option<SystemGeneration> {
     })
 }
 
-fn run_list_generations(sudo_cmd: Option<&str>) -> Result<String, String> {
+fn run_list_generations(sudo_cmd: Option<&str>) -> Result<String> {
     let mut cmd = if let Some(sudo) = sudo_cmd {
         let mut c = Command::new(sudo);
         c.args([
@@ -113,21 +114,7 @@ fn run_list_generations(sudo_cmd: Option<&str>) -> Result<String, String> {
         c.args(["--list-generations", "--profile", SYSTEM_PROFILE]);
         c
     };
-    let o = cmd
-        .output()
-        .map_err(|e| format!("spawn nix-env --list-generations: {e}"))?;
-    if !o.status.success() {
-        let err = String::from_utf8_lossy(&o.stderr);
-        return Err(if err.trim().is_empty() {
-            format!(
-                "nix-env --list-generations failed (exit {:?})",
-                o.status.code()
-            )
-        } else {
-            err.trim().to_string()
-        });
-    }
-    Ok(String::from_utf8_lossy(&o.stdout).into_owned())
+    super::command::stdout_checked(&mut cmd, "nix-env --list-generations")
 }
 
 /// List system profile generations via `nix-env --list-generations` (correct dates).
@@ -150,7 +137,7 @@ pub fn list_system_generations(sudo_cmd: &str) -> GenerationsList {
             return GenerationsList {
                 generations: vec![],
                 unavailable: true,
-                message: Some(format!("Could not list generations: {e}")),
+                message: Some(format!("Could not list generations: {e:#}")),
             };
         }
     };
@@ -389,23 +376,17 @@ fn parse_journal_boot(line: &str) -> Option<(i64, String)> {
 ///
 /// **Must not run inside the neo-web process** for live `switch`: the activation
 /// stops `neo-web.service`. Web UI triggers this via `systemd-run` oneshot.
-pub fn switch_system_generation(
-    n: u64,
-    mode: GenerationMode,
-    sudo_cmd: &str,
-) -> Result<(), String> {
+pub fn switch_system_generation(n: u64, mode: GenerationMode, sudo_cmd: &str) -> Result<()> {
     let link = PathBuf::from(format!("/nix/var/nix/profiles/system-{}-link", n));
     if !link.exists() && !link.is_symlink() {
-        return Err(format!("generation {} not found ({})", n, link.display()));
+        bail!("generation {} not found ({})", n, link.display());
     }
 
     // Check before touching the profile: a failure must not leave it moved
     // to a generation whose bootloader entry / activation never ran.
     let stc = link.join("bin/switch-to-configuration");
     if !stc.exists() {
-        return Err(format!(
-            "switch-to-configuration missing for generation {n} (store path gone?)"
-        ));
+        bail!("switch-to-configuration missing for generation {n} (store path gone?)");
     }
 
     // Point the system profile at this generation (boot default + current pointer).
@@ -419,13 +400,13 @@ pub fn switch_system_generation(
             &n.to_string(),
         ])
         .status()
-        .map_err(|e| format!("spawn nix-env: {e}"))?;
+        .context("spawn nix-env")?;
     if !status.success() {
-        return Err(format!(
+        bail!(
             "nix-env --switch-generation {} failed (exit {:?})",
             n,
             status.code()
-        ));
+        );
     }
 
     let action = mode.as_str();
@@ -434,13 +415,13 @@ pub fn switch_system_generation(
     let status = Command::new(sudo_cmd)
         .args(["-n", stc_s.as_ref(), action])
         .status()
-        .map_err(|e| format!("spawn switch-to-configuration: {e}"))?;
+        .context("spawn switch-to-configuration")?;
     if !status.success() {
-        return Err(format!(
+        bail!(
             "switch-to-configuration {} failed (exit {:?})",
             action,
             status.code()
-        ));
+        );
     }
     Ok(())
 }
@@ -491,9 +472,9 @@ pub fn record_generation_in_commit(
     config_path: &str,
     activation_branch: &str,
     has_activation_commit: bool,
-) -> Result<u64, String> {
+) -> Result<u64> {
     let Some(gen) = current_generation_number() else {
-        return Err("could not resolve current system generation".to_string());
+        bail!("could not resolve current system generation");
     };
     let msg = activation_commit_message(activation_branch, Some(gen));
     let mut cmd = Command::new("git");
@@ -504,12 +485,12 @@ pub fn record_generation_in_commit(
         // Same config re-activated, tree unchanged — still record gen on a new history node.
         cmd.args(["--allow-empty", "-m", &msg]);
     }
-    let status = cmd.status().map_err(|e| format!("git commit: {e}"))?;
+    let status = cmd.status().context("git commit")?;
     if !status.success() {
-        return Err(format!(
+        bail!(
             "git commit failed while recording generation (exit {:?})",
             status.code()
-        ));
+        );
     }
     Ok(gen)
 }

@@ -72,8 +72,8 @@ fn run_generation_op(n: u64, mode: GenerationMode, dry_run: bool, sudo_cmd: &str
             Ok(())
         }
         Err(e) => {
-            track("failed", "switch-failed", Some(&e));
-            Err(anyhow::anyhow!(e)).with_context(|| format!("generation {mode_s} {n}"))
+            track("failed", "switch-failed", Some(&format!("{e:#}")));
+            Err(e).with_context(|| format!("generation {mode_s} {n}"))
         }
     }
 }

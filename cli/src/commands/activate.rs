@@ -283,7 +283,7 @@ fn record_gen_after_activate(
             );
         }
         Err(e) => {
-            eprintln!("warning: could not record generation in commit: {e}");
+            eprintln!("warning: could not record generation in commit: {e:#}");
         }
     }
 }

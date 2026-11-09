@@ -57,7 +57,7 @@ pub async fn versioning_gen_boot(n: u64) -> Result<RawHtml<String>, Blocked> {
     let lock = power_lock("generation", &format!("Boot into generation {n}"))?;
     let sudo = sudo_cmd();
     let res = tokio::task::spawn_blocking(move || {
-        switch_system_generation(n, GenerationMode::Boot, &sudo)
+        switch_system_generation(n, GenerationMode::Boot, &sudo).map_err(|e| format!("{e:#}"))
     })
     .await
     .unwrap_or_else(|e| Err(e.to_string()));

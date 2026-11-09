@@ -448,7 +448,7 @@ pub async fn restore(ds: &str, snap: &str, gen: Option<u64>) -> String {
     if let Some(n) = gen {
         let sudo = sudo_cmd();
         let res = tokio::task::spawn_blocking(move || {
-            switch_system_generation(n, GenerationMode::Boot, &sudo)
+            switch_system_generation(n, GenerationMode::Boot, &sudo).map_err(|e| format!("{e:#}"))
         })
         .await
         .unwrap_or_else(|e| Err(e.to_string()));
