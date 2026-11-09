@@ -44,10 +44,9 @@ async fn unit_action_response(
         }
     };
     let oob = unit_controls_oob_fragment(unit, config).await;
-    let _ = config.unit_updates.send(out.clone());
-    let _ = config.unit_updates.send(oob.clone());
+    let html = config.broadcast_all(&[&out, &oob]);
     schedule_unit_refresh_burst(unit.to_string(), Arc::clone(config));
-    Ok(RawHtml(format!("{out}{oob}")))
+    Ok(html)
 }
 
 #[post("/unit/restart/<unit>")]
@@ -96,8 +95,7 @@ pub async fn container_update(
     let (inner, _) = status_pulling("starting pull…");
     let out = update_out_oob(&unit, &inner, "starting docker pull");
     let ctl = unit_controls_oob_fragment(&unit, config).await;
-    let _ = config.unit_updates.send(out.clone());
-    let _ = config.unit_updates.send(ctl.clone());
+    let html = config.broadcast_all(&[&out, &ctl]);
 
     let cfg = Arc::clone(config);
     tokio::spawn(async move {
@@ -105,7 +103,7 @@ pub async fn container_update(
         run_container_pull(unit, cname, cfg).await;
     });
 
-    Ok(RawHtml(format!("{out}{ctl}")))
+    Ok(html)
 }
 
 /// Clear a service's appdata: stop its units and target, rm -rf the declared path,
@@ -137,8 +135,7 @@ pub async fn clear_appdata(
     let (inner, _) = status_pulling("starting…");
     let out = clear_appdata_out_oob(service, &inner, "starting clear appdata");
     let btn = clear_appdata_btn_oob(service, &appdata, true);
-    let _ = config.unit_updates.send(out.clone());
-    let _ = config.unit_updates.send(btn.clone());
+    let html = config.broadcast_all(&[&out, &btn]);
 
     let job = ClearJob {
         service: service.to_string(),
@@ -148,7 +145,7 @@ pub async fn clear_appdata(
     };
     tokio::spawn(run_clear_appdata(job, lock, Arc::clone(config)));
 
-    Ok(RawHtml(format!("{out}{btn}")))
+    Ok(html)
 }
 
 /// SSE endpoint for live journalctl follow in the logs dialog.

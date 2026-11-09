@@ -163,9 +163,9 @@ async fn finish_clear_appdata(
     title: String,
 ) {
     let frag = clear_appdata_out_oob(service, &inner, &title);
-    let _ = config.unit_updates.send(frag);
+    config.broadcast(frag);
     let btn = clear_appdata_btn_oob(service, appdata, false);
-    let _ = config.unit_updates.send(btn);
+    config.broadcast(btn);
     end_clear_appdata(config, service);
     for u in units {
         broadcast_unit_update(u, config).await;
@@ -190,9 +190,9 @@ pub async fn run_clear_appdata(job: ClearJob, mut lock: LockGuard, config: Arc<A
         Err(e) => status_err(&e),
     };
     let frag = clear_appdata_out_oob(&job.service, &inner, &title);
-    let _ = config.unit_updates.send(frag);
+    config.broadcast(frag);
     let btn = clear_appdata_btn_oob(&job.service, &job.appdata, false);
-    let _ = config.unit_updates.send(btn);
+    config.broadcast(btn);
     end_clear_appdata(&config, &job.service);
     for u in &job.units {
         broadcast_unit_update(u, &config).await;
@@ -208,7 +208,7 @@ async fn clear_inner(
     let push = |msg: &str| {
         let (inner, title) = status_pulling(msg);
         let frag = clear_appdata_out_oob(&job.service, &inner, &title);
-        let _ = config.unit_updates.send(frag);
+        config.broadcast(frag);
     };
 
     let units: Vec<String> = job

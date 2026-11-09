@@ -116,14 +116,10 @@ pub async fn service_snapshot_restore(
     let card = render_service_snapshots(service, &appdata, true, true).await;
     let (inner, title) = status_pulling("starting restore…");
     let out = snapshot_out_oob(service, &inner, &title);
-    let _ = config.unit_updates.send(card.clone());
-    let _ = config.unit_updates.send(out.clone());
+    let html = config.broadcast_all(&[&card, &out]);
 
-    let cfg = Arc::clone(config);
-    tokio::spawn(async move {
-        run_restore(job, lock, cfg).await;
-    });
-    Ok(RawHtml(format!("{card}{out}")))
+    tokio::spawn(run_restore(job, lock, Arc::clone(config)));
+    Ok(html)
 }
 
 /// Comment editor body (`comment` field; empty clears the comment).

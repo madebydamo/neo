@@ -105,9 +105,7 @@ pub fn start_action_bar_watcher(config: Arc<AppConfig>) {
                 .unwrap_or_default();
             if sig != last {
                 last = sig;
-                let _ = config
-                    .unit_updates
-                    .send(action_bar_oob_async(&config).await);
+                config.broadcast(action_bar_oob_async(&config).await);
             }
             tokio::time::sleep(Duration::from_millis(750)).await;
         }

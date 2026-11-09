@@ -130,7 +130,7 @@ pub fn start_lock_watcher(config: Arc<AppConfig>) {
         loop {
             let json = holders_json(&holders().await);
             if json != last {
-                let _ = config.unit_updates.send(element(&json, true));
+                config.broadcast(element(&json, true));
                 last = json;
             }
             tokio::time::sleep(Duration::from_millis(1000)).await;

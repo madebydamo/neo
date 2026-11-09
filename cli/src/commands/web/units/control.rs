@@ -64,7 +64,7 @@ pub fn update_out_oob(unit: &str, inner: &str, title: &str) -> String {
 }
 
 pub fn broadcast_update_out(unit: &str, inner: &str, title: &str, config: &AppConfig) {
-    let _ = config.unit_updates.send(update_out_oob(unit, inner, title));
+    config.broadcast(update_out_oob(unit, inner, title));
 }
 
 /// Inline icons for the unit control buttons (currentColor, 16px).
@@ -163,9 +163,7 @@ pub fn unit_controls_oob_fragment_with_state(unit: &str, st: &UnitStatus, pullin
 
 /// Broadcast an OOB swap fragment for a unit's controls to all connected WS clients.
 pub async fn broadcast_unit_update(unit: &str, config: &AppConfig) {
-    let _ = config
-        .unit_updates
-        .send(unit_controls_oob_fragment(unit, config).await);
+    config.broadcast(unit_controls_oob_fragment(unit, config).await);
 }
 
 /// After a non-blocking systemctl action, ActiveState may lag for a few seconds.

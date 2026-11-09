@@ -277,16 +277,12 @@ pub async fn run_restore(job: RestoreJob, mut lock: LockGuard, config: Arc<AppCo
         Ok(msg) => status_ok(msg),
         Err(e) => status_err(e),
     };
-    let _ = config
-        .unit_updates
-        .send(snapshot_out_oob(&job.service, &inner, &title));
+    config.broadcast(snapshot_out_oob(&job.service, &inner, &title));
     end_clear_appdata(&config, &job.service);
     let card = render_service_snapshots(&job.service, &job.appdata, false, true).await;
-    let _ = config.unit_updates.send(card);
+    config.broadcast(card);
     // The card re-render clears the status slot; push the result again after it.
-    let _ = config
-        .unit_updates
-        .send(snapshot_out_oob(&job.service, &inner, &title));
+    config.broadcast(snapshot_out_oob(&job.service, &inner, &title));
     for u in &job.units {
         broadcast_unit_update(u, &config).await;
         schedule_unit_refresh_burst(u.clone(), Arc::clone(&config));
@@ -300,9 +296,7 @@ async fn restore_inner(
 ) -> Result<String, String> {
     let push = |msg: &str| {
         let (inner, title) = status_pulling(msg);
-        let _ = config
-            .unit_updates
-            .send(snapshot_out_oob(&job.service, &inner, &title));
+        config.broadcast(snapshot_out_oob(&job.service, &inner, &title));
     };
 
     let loc = locate_appdata(&job.appdata).ok_or("appdata is not on a ZFS dataset")?;

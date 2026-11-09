@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+use rocket::response::content::RawHtml;
 use tokio::sync::Mutex as AsyncMutex;
 
 use super::super::resources::ResourceSampler;
@@ -40,6 +41,19 @@ impl AppConfig {
             .parent()
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| PathBuf::from("."))
+    }
+
+    /// Push an OOB fragment to every `/ws/status` client (none connected is fine).
+    pub fn broadcast(&self, fragment: String) {
+        let _ = self.unit_updates.send(fragment);
+    }
+
+    /// Push `fragments` and answer the request with the same HTML.
+    pub fn broadcast_all(&self, fragments: &[&str]) -> RawHtml<String> {
+        for f in fragments {
+            self.broadcast(f.to_string());
+        }
+        RawHtml(fragments.concat())
     }
 
     pub fn secrets_store(&self) -> Store {
