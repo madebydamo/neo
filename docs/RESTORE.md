@@ -40,6 +40,8 @@ nix run github:madebydamo/neo#neo -- restore --from-backup user@backup.example.c
 
 The repo argument can be a git URL, a checkout on this computer (its last commit; you get a warning about uncommitted changes), a bare repo, or a saved copy of the files without `.git`, which is restored as one new commit. With `--host`, it only has to exist on the computer you run this from.
 
+With `--host`, every other option reaches the target: `--key` and `--backup-key` are copied into the installer's RAM and deleted when the restore ends (or right after `--check`), and `--disk`, `--data`, `--from-backup`, `--target`, `--config`, `--keep-hardware` and `--no-install` apply there. `--data-from` and `--target` are paths on the target. A backup disk attached to the target is reached with `--data-from`, not `--from-backup`.
+
 `--check` prints the plan and changes nothing. The checklist below still applies: DNS, local plugins (refused when missing), the provider's boot order. A cutover from a machine that still runs is not automatic: stop the old one (step 6, "Old machine still running") and let its last backup run first, or use `--data-from` with a final copy.
 
 The rest of this page is the manual procedure from the real move, kept because it explains each step and helps when something fails halfway.

@@ -28,6 +28,7 @@ pub(crate) mod local;
 pub(crate) mod remote;
 
 const DEFAULT_CONFIG_PATH: &str = "/var/neo/DATA/AppData/configuration";
+pub(crate) const DEFAULT_TARGET: &str = "/mnt";
 
 /// What the data of the restored machine comes from.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
@@ -81,7 +82,7 @@ pub struct RestoreArgs {
     #[arg(long)]
     pub reboot: bool,
     /// Root of the target system.
-    #[arg(long, default_value = "/mnt")]
+    #[arg(long, default_value = DEFAULT_TARGET)]
     pub target: PathBuf,
     /// nixosConfigurations entry to install.
     #[arg(long, default_value = "neo")]
@@ -95,7 +96,7 @@ pub struct RestoreArgs {
     /// Remote of the restored repo ("" for none; default: the repo URL).
     #[arg(long, hide = true)]
     pub origin: Option<String>,
-    /// Delete --key when done.
+    /// Delete --key and --backup-key when done.
     #[arg(long, hide = true)]
     pub shred_key: bool,
 }

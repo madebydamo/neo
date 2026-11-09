@@ -628,7 +628,7 @@ pub(crate) fn remote_url(repo: &Path) -> String {
 
 fn finish(args: &RestoreArgs) -> Result<()> {
     if args.shred_key {
-        if let Some(k) = &args.key {
+        for k in args.key.iter().chain(&args.backup_key) {
             let _ = fs::remove_file(k);
         }
     }

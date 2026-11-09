@@ -12,9 +12,9 @@ use std::process::{Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use super::backup::{self, Access, Location, Source};
+use super::backup::{self, Access, Source};
 use super::local::{commit_uncommitted, default_origin, remote_url, stage_repo, WORK_DIR};
-use super::{DataSource, RestoreArgs};
+use super::{DataSource, RestoreArgs, DEFAULT_TARGET};
 use crate::utils::command::{confirm, shell_quote, stdout_checked};
 use crate::utils::execute_command;
 use crate::utils::fsutil::TempDir;
@@ -33,6 +33,83 @@ pub(crate) fn split_port(host: &str) -> (String, Option<String>) {
     (host.to_string(), None)
 }
 const RESULT_MARK: &str = "NEO-RESTORE-RESULT=";
+/// The keys in the installer's work folder.
+const ADMIN_KEY: &str = "admin-key";
+const BACKUP_KEY: &str = "backup-key";
+
+impl RestoreArgs {
+    /// `neo restore` arguments for the target (not yet shell-quoted), the same for
+    /// its preflight and its run. `run` adds what only applies to the run. A new
+    /// field fails to compile here until it is forwarded or marked client-only.
+    fn forwarded_argv(&self, origin: &str) -> Vec<String> {
+        let RestoreArgs {
+            // Replaced: copied into the installer's work folder.
+            repo: _,
+            key: _,
+            // Client-only.
+            host: _,
+            neo: _,
+            // Added per stage: --check for the preflight; --yes, --shred-key and
+            // --reboot for the run.
+            check: _,
+            yes: _,
+            reboot: _,
+            shred_key: _,
+            // Passed on as the resolved `origin` argument.
+            origin: _,
+            from_backup,
+            disk,
+            data,
+            data_from,
+            backup_key,
+            keep_hardware,
+            target,
+            config,
+            no_install,
+        } = self;
+        let mut argv: Vec<String> = vec![
+            "restore".into(),
+            format!("{WORK_DIR}/repo"),
+            "--origin".into(),
+            origin.into(),
+            "--key".into(),
+            format!("{WORK_DIR}/{ADMIN_KEY}"),
+            "--config".into(),
+            config.clone(),
+        ];
+        let mut opt = |flag: &str, value: Option<String>| {
+            if let Some(v) = value {
+                argv.extend([flag.to_string(), v]);
+            }
+        };
+        opt("--disk", disk.clone());
+        opt(
+            "--data-from",
+            data_from.as_ref().map(|p| p.display().to_string()),
+        );
+        opt("--from-backup", from_backup.clone());
+        opt(
+            "--backup-key",
+            backup_key
+                .as_ref()
+                .map(|_| format!("{WORK_DIR}/{BACKUP_KEY}")),
+        );
+        opt(
+            "--target",
+            (target.as_os_str() != DEFAULT_TARGET).then(|| target.display().to_string()),
+        );
+        if *data == DataSource::None {
+            argv.extend(["--data".to_string(), "none".to_string()]);
+        }
+        if *keep_hardware {
+            argv.push("--keep-hardware".into());
+        }
+        if *no_install {
+            argv.push("--no-install".into());
+        }
+        argv
+    }
+}
 
 /// A NixOS installer: root on tmpfs (or the ISO's overlay) and nixos-install.
 const INSTALLER_TEST: &str = "test -e /etc/NIXOS && command -v nixos-install >/dev/null && case $(findmnt -no FSTYPE /) in tmpfs|overlay|rootfs) true;; *) false;; esac";
@@ -232,7 +309,7 @@ impl Target {
         if !tar.wait()?.success() || !unpack.success() {
             bail!("copying the repo to {host} failed");
         }
-        self.copy_private_file(&self.key, "admin-key")
+        self.copy_private_file(&self.key, ADMIN_KEY)
             .with_context(|| format!("copying the key to {host} failed"))
     }
 
@@ -248,6 +325,15 @@ impl Target {
             bail!("writing {name} failed");
         }
         Ok(())
+    }
+
+    /// Keys out of the installer's RAM when no restore follows. A started
+    /// restore removes them itself (--shred-key).
+    fn remove_keys(&self) {
+        self.ssh_ok(
+            true,
+            &format!("rm -f {WORK_DIR}/{ADMIN_KEY} {WORK_DIR}/{BACKUP_KEY}"),
+        );
     }
 
     /// Every locked input (nixpkgs, neo, plugins) into the installer's store:
@@ -335,6 +421,10 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
         .clone()
         .or_else(default_key)
         .context("pass --key with an admin ssh-ed25519 private key")?;
+    // Unreadable keys must show now, not after the kexec stopped the running system.
+    for k in std::iter::once(&key).chain(&args.backup_key) {
+        fs::File::open(k).with_context(|| format!("open {}", k.display()))?;
+    }
     let target = Target::new(host, key.clone());
     let host = target.host.as_str();
 
@@ -344,11 +434,10 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
     let local = tmp.join("config");
     let from_backup = match &args.from_backup {
         Some(spec) => {
-            let source = Source::from_location(spec)?;
-            if source.location == Location::Disk {
-                bail!("with --host, --from-backup takes user@host:folder or ssh://…; for a disk attached to the new machine run neo restore on it");
+            if spec.starts_with('/') || spec.starts_with('.') {
+                bail!("with --host, --from-backup takes user@host:folder, ssh://… or https://…; for a disk attached to the new machine use --data-from or run neo restore on it");
             }
-            Some((spec, source))
+            Some((spec, Source::from_location(spec)?))
         }
         None => None,
     };
@@ -384,43 +473,27 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
 
     target.ensure_installer(args.yes)?;
     target.copy_repo_and_key(tmp.path())?;
+    if let Some(k) = &args.backup_key {
+        target
+            .copy_private_file(k, BACKUP_KEY)
+            .with_context(|| format!("copying --backup-key to {host} failed"))?;
+    }
     let neo = target.neo(args, &local)?;
     target.copy_inputs(&local)?;
     // The clone holds the config: gone before the long part starts.
     drop(tmp);
 
-    let mut cmd = vec![
-        neo.clone(),
-        "restore".into(),
-        format!("{WORK_DIR}/repo"),
-        "--origin".into(),
-        shell_quote(&origin),
-        "--key".into(),
-        format!("{WORK_DIR}/admin-key"),
-        "--config".into(),
-        shell_quote(&args.config),
-    ];
-    if let Some(d) = &args.disk {
-        cmd.extend(["--disk".into(), shell_quote(d)]);
-    }
-    if args.data == DataSource::None {
-        cmd.extend(["--data".into(), "none".into()]);
-    }
-    if let Some(p) = &args.data_from {
-        cmd.extend(["--data-from".into(), shell_quote(&p.display().to_string())]);
-    }
-    if let Some((spec, _)) = &from_backup {
-        cmd.extend(["--from-backup".into(), shell_quote(spec)]);
-    }
-    if args.keep_hardware {
-        cmd.push("--keep-hardware".into());
-    }
-    if args.no_install {
-        cmd.push("--no-install".into());
-    }
+    let cmd = format!(
+        "{neo} {}",
+        args.forwarded_argv(&origin)
+            .iter()
+            .map(|a| shell_quote(a))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
 
     // Plan first (no changes), then the run after a yes here.
-    let check = format!("{} --check", cmd.join(" "));
+    let check = format!("{cmd} --check");
     println!("Checking on {host} …");
     if !target
         .ssh(
@@ -430,21 +503,19 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
         .status()?
         .success()
     {
+        target.remove_keys();
         bail!("the preflight on {host} failed (see above); nothing was changed");
     }
     if args.check {
+        target.remove_keys();
         return Ok(());
     }
     if !args.yes {
         confirm("Restore with this plan?")?;
     }
-    cmd.extend(["--yes".into(), "--shred-key".into()]);
-    if args.reboot {
-        cmd.push("--reboot".into());
-    }
+    let reboot = if args.reboot { " --reboot" } else { "" };
     let start = format!(
-        "systemctl reset-failed {UNIT} 2>/dev/null; systemd-run --unit={UNIT} -p LimitNOFILE=1048576 -p WorkingDirectory=/root -E HOME=/root -E PATH=/run/current-system/sw/bin {}",
-        cmd.join(" ")
+        "systemctl reset-failed {UNIT} 2>/dev/null; systemd-run --unit={UNIT} -p LimitNOFILE=1048576 -p WorkingDirectory=/root -E HOME=/root -E PATH=/run/current-system/sw/bin {cmd} --yes --shred-key{reboot}"
     );
     execute_command(&mut target.ssh(true, &start))?;
     println!("Restore runs on {host} as unit {UNIT}; it keeps going if this connection drops (ssh root@… journalctl -fu {UNIT}).");
@@ -454,6 +525,119 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The target's clap parses what the client sends.
+    fn parse(argv: &[String]) -> RestoreArgs {
+        use clap::{Args, FromArgMatches};
+        let cmd = RestoreArgs::augment_args(clap::Command::new("neo"));
+        let m = cmd
+            .try_get_matches_from(
+                std::iter::once("neo").chain(argv[1..].iter().map(String::as_str)),
+            )
+            .unwrap();
+        RestoreArgs::from_arg_matches(&m).unwrap()
+    }
+
+    fn all_set() -> RestoreArgs {
+        RestoreArgs {
+            repo: Some("/home/me/config".into()),
+            from_backup: Some("me@backup:it's here".into()),
+            host: Some("root@box".into()),
+            disk: Some("/dev/disk/by-id/a b".into()),
+            key: Some("/home/me/.ssh/admin".into()),
+            data: DataSource::None,
+            data_from: Some("/mnt/old disk".into()),
+            backup_key: Some("/home/me/.ssh/backup".into()),
+            keep_hardware: true,
+            check: true,
+            yes: true,
+            reboot: true,
+            target: "/mnt2".into(),
+            config: "other".into(),
+            no_install: true,
+            neo: Some("github:me/neo".into()),
+            origin: Some("ignored".into()),
+            shred_key: true,
+        }
+    }
+
+    #[test]
+    fn every_flag_reaches_the_target() {
+        let args = all_set();
+        let got = parse(&args.forwarded_argv("git@github.com:me/c.git"));
+        assert_eq!(got.repo.as_deref(), Some("/root/neo-restore/repo"));
+        assert_eq!(got.origin.as_deref(), Some("git@github.com:me/c.git"));
+        assert_eq!(got.key, Some("/root/neo-restore/admin-key".into()));
+        assert_eq!(got.backup_key, Some("/root/neo-restore/backup-key".into()));
+        assert_eq!(got.from_backup, args.from_backup);
+        assert_eq!(got.disk, args.disk);
+        assert_eq!(got.data, args.data);
+        assert_eq!(got.data_from, args.data_from);
+        assert_eq!(got.target, args.target);
+        assert_eq!(got.config, args.config);
+        assert!(got.keep_hardware && got.no_install);
+        // Client-only or added per stage.
+        assert!(got.host.is_none() && got.neo.is_none());
+        assert!(!got.check && !got.yes && !got.reboot && !got.shred_key);
+    }
+
+    #[test]
+    fn defaults_stay_off_the_command_line() {
+        let args = parse(&["neo".to_string(), "/repo".to_string()]);
+        let argv = args.forwarded_argv("");
+        assert!(!argv.iter().any(|a| a == "--target"), "{argv:?}");
+        assert!(!argv.iter().any(|a| a == "--backup-key"), "{argv:?}");
+        assert!(!argv.iter().any(|a| a == "--data"), "{argv:?}");
+        // An empty origin still arrives, as "no remote".
+        assert_eq!(parse(&argv).origin.as_deref(), Some(""));
+    }
+
+    /// Names every flag so a new one needs a decision here too (the exhaustive
+    /// pattern in forwarded_argv covers the code, this the clap declaration).
+    #[test]
+    fn flags_are_forwarded_or_client_only() {
+        use clap::Args;
+        const FORWARDED: &[&str] = &[
+            "from_backup",
+            "disk",
+            "data",
+            "data_from",
+            "backup_key",
+            "keep_hardware",
+            "target",
+            "config",
+            "no_install",
+        ];
+        const REPLACED: &[&str] = &["repo", "key", "origin"];
+        const BY_STAGE: &[&str] = &["check", "yes", "reboot", "shred_key"];
+        const CLIENT_ONLY: &[&str] = &["host", "neo"];
+        let cmd = RestoreArgs::augment_args(clap::Command::new("neo"));
+        for arg in cmd.get_arguments() {
+            let id = arg.get_id().as_str();
+            assert!(
+                [FORWARDED, REPLACED, BY_STAGE, CLIENT_ONLY]
+                    .iter()
+                    .any(|l| l.contains(&id)),
+                "--{id}: forward it in forwarded_argv or list it as client-only"
+            );
+        }
+    }
+
+    #[test]
+    fn the_shell_on_the_target_keeps_arguments_whole() {
+        let argv = all_set().forwarded_argv("it's");
+        let line = argv
+            .iter()
+            .map(|a| shell_quote(a))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let out = Command::new("sh")
+            .args(["-c", &format!("printf '%s\\n' {line}")])
+            .output()
+            .unwrap();
+        let got: Vec<&str> = std::str::from_utf8(&out.stdout).unwrap().lines().collect();
+        assert_eq!(got, argv);
+    }
 
     #[test]
     fn ssh_options_carry_port_and_key() {
