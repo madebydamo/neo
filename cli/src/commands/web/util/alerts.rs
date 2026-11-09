@@ -1,3 +1,5 @@
+use rocket::response::content::RawHtml;
+
 use super::super::locks::{system_lock_attr, LockMode};
 use super::escape::escape_html;
 
@@ -26,6 +28,22 @@ pub fn alert_html(kind: AlertKind, msg: &str) -> String {
         kind.class(),
         escape_html(msg)
     )
+}
+
+/// Small inline error text (a button row's status), escaped.
+pub fn err_span(msg: &str) -> RawHtml<String> {
+    RawHtml(format!(
+        r#"<span class="text-error text-xs">{}</span>"#,
+        escape_html(msg)
+    ))
+}
+
+/// Error text filling a dialog body, escaped.
+pub fn err_div(msg: &str) -> RawHtml<String> {
+    RawHtml(format!(
+        r#"<div class="text-error text-sm">{}</div>"#,
+        escape_html(msg)
+    ))
 }
 
 /// Shared Revert / Apply button row for the changes dialog.

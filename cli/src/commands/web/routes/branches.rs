@@ -17,7 +17,9 @@ use crate::commands::web::trigger::{
     is_activation_in_progress, trigger_activation, trigger_generation_switch,
 };
 use crate::commands::web::types::AppConfig;
-use crate::commands::web::util::{branch_ok, escape_html, generation_ok, proc, rev_ok, sudo_cmd};
+use crate::commands::web::util::{
+    branch_ok, err_div, err_span, generation_ok, proc, rev_ok, sudo_cmd,
+};
 use crate::commands::web::version_tree;
 use crate::commands::web::version_tree::notes::NoteTarget;
 use crate::utils::locks::{LockSpec, OpInfo};
@@ -107,16 +109,13 @@ pub async fn versioning_services(config: &State<Arc<AppConfig>>, rev: &str) -> R
 #[get("/versioning/diff?<a>&<b>")]
 pub async fn versioning_diff(config: &State<Arc<AppConfig>>, a: &str, b: &str) -> RawHtml<String> {
     if !rev_ok(a) || !rev_ok(b) {
-        return RawHtml(r#"<div class="text-error text-sm">invalid revision</div>"#.to_string());
+        return err_div("invalid revision");
     }
     let dir = config.config_dir();
     let (a, b) = (a.to_string(), b.to_string());
     match proc::blocking(move || diff_html(&dir, &a, &b)).await {
         Ok(html) => html,
-        Err(e) => RawHtml(format!(
-            r#"<div class="text-error text-sm">{}</div>"#,
-            escape_html(&e)
-        )),
+        Err(e) => err_div(&e),
     }
 }
 
@@ -124,12 +123,7 @@ fn diff_html(dir: &Path, a: &str, b: &str) -> RawHtml<String> {
     let revs = resolve_rev(dir, a).and_then(|ra| Ok((ra, resolve_rev(dir, b)?)));
     let (ra, rb) = match revs {
         Ok(r) => r,
-        Err(e) => {
-            return RawHtml(format!(
-                r#"<div class="text-error text-sm">{}</div>"#,
-                escape_html(&e)
-            ))
-        }
+        Err(e) => return err_div(&e),
     };
     let range = DiffRange::Revs { from: &ra, to: &rb };
     match collect_changes(dir, range) {
@@ -149,10 +143,7 @@ fn diff_html(dir: &Path, a: &str, b: &str) -> RawHtml<String> {
                 },
             ))
         }
-        Err(e) => RawHtml(format!(
-            r#"<div class="text-error text-sm">{}</div>"#,
-            escape_html(&format!("{e:#}"))
-        )),
+        Err(e) => err_div(&format!("{e:#}")),
     }
 }
 
@@ -163,9 +154,7 @@ pub async fn versioning_activate(
     rev: &str,
 ) -> Result<RawHtml<String>, Blocked> {
     if !rev_ok(rev) {
-        return Ok(RawHtml(
-            r#"<span class="text-error text-xs">invalid rev</span>"#.to_string(),
-        ));
+        return Ok(err_span("invalid rev"));
     }
     let (cfg, rev) = (Arc::clone(config), rev.to_string());
     proc::blocking(move || activate_rev(&cfg, &rev))
@@ -180,42 +169,22 @@ fn activate_rev(config: &AppConfig, rev: &str) -> Result<RawHtml<String>, Blocke
         OpInfo::new("activation", "Version restore"),
     )?;
     if is_activation_in_progress() {
-        return Ok(RawHtml(
-            "<span class=\"text-error text-xs\">activation already in progress</span>".to_string(),
-        ));
+        return Ok(err_span("activation already in progress"));
     }
     let dir = config.config_dir();
     if is_worktree_dirty(&dir) {
-        return Ok(RawHtml(
-            "<span class=\"text-error text-xs\">working tree dirty — cannot activate from history</span>"
-                .to_string(),
+        return Ok(err_span(
+            "working tree dirty — cannot activate from history",
         ));
     }
     let branch = match activation_branch_for_rev(&dir, rev) {
         Ok(Some(b)) if branch_ok(&b) => b,
-        Ok(None) => {
-            return Ok(RawHtml(
-                r#"<span class="text-error text-xs">activate only allowed on activation branch tips</span>"#
-                    .to_string(),
-            ));
-        }
-        Ok(Some(_)) => {
-            return Ok(RawHtml(
-                r#"<span class="text-error text-xs">branch name not allowed</span>"#.to_string(),
-            ));
-        }
-        Err(e) => {
-            return Ok(RawHtml(format!(
-                r#"<span class="text-error text-xs">{}</span>"#,
-                escape_html(&e)
-            )));
-        }
+        Ok(None) => return Ok(err_span("activate only allowed on activation branch tips")),
+        Ok(Some(_)) => return Ok(err_span("branch name not allowed")),
+        Err(e) => return Ok(err_span(&e)),
     };
     if let Err(e) = git_cmd(dir.to_str().unwrap_or("."), &["switch", &branch]) {
-        return Ok(RawHtml(format!(
-            r#"<span class="text-error text-xs">checkout failed: {}</span>"#,
-            escape_html(&e.to_string())
-        )));
+        return Ok(err_span(&format!("checkout failed: {e:#}")));
     }
     refresh_after_settings_change(config);
     drop(lock);
@@ -226,9 +195,7 @@ fn activate_rev(config: &AppConfig, rev: &str) -> Result<RawHtml<String>, Blocke
 #[post("/versioning/generations/<n>/switch")]
 pub async fn versioning_gen_switch(n: u64) -> Result<RawHtml<String>, Blocked> {
     if !generation_ok(n) {
-        return Ok(RawHtml(
-            r#"<span class="text-error text-xs">invalid generation</span>"#.to_string(),
-        ));
+        return Ok(err_span("invalid generation"));
     }
     // Detached oneshot: switch-to-configuration stops neo-web; must not run in-process.
     proc::blocking(move || trigger_generation_switch(n, GenerationMode::Switch))

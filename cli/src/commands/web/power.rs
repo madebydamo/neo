@@ -84,7 +84,15 @@ pub fn going_down_html(action: PowerAction, msg: &str) -> String {
         ),
     };
     format!(
-        r#"<div {attr}><div role="alert" class="alert alert-warning text-sm"><span class="loading loading-spinner loading-sm"></span><span data-neo-await-boot-msg>{}</span><span data-neo-await-boot-elapsed class="ml-auto tabular-nums opacity-70"></span></div><p class="text-xs opacity-70 mt-2">{hint}</p></div>"#,
+        r#"<div {attr}>{}<p class="text-xs opacity-70 mt-2">{hint}</p></div>"#,
+        await_boot_alert(msg)
+    )
+}
+
+/// The alert `static/reboot_watch.js` updates (`data-neo-await-boot-*`).
+pub fn await_boot_alert(msg: &str) -> String {
+    format!(
+        r#"<div role="alert" class="alert alert-warning text-sm"><span class="loading loading-spinner loading-sm"></span><span data-neo-await-boot-msg>{}</span><span data-neo-await-boot-elapsed class="ml-auto tabular-nums opacity-70"></span></div>"#,
         escape_html(msg)
     )
 }

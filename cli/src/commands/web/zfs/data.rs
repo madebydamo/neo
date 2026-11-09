@@ -402,9 +402,9 @@ pub async fn restore_scheduled() -> bool {
 
 fn rebooting_card(msg: &str) -> String {
     format!(
-        r#"<div id="{CARD_ID}" {} class="rounded-box border border-base-300 bg-base-100 p-4 space-y-2"><div role="alert" class="alert alert-warning text-sm"><span class="loading loading-spinner loading-sm"></span><span data-neo-await-boot-msg>{}</span><span data-neo-await-boot-elapsed class="ml-auto tabular-nums opacity-70"></span></div><p class="text-xs opacity-70">This page reloads once the server is back. Check the result banner in this tab afterwards.</p></div>"#,
+        r#"<div id="{CARD_ID}" {} class="rounded-box border border-base-300 bg-base-100 p-4 space-y-2">{}<p class="text-xs opacity-70">This page reloads once the server is back. Check the result banner in this tab afterwards.</p></div>"#,
         power::await_boot_attr(),
-        escape_html(msg)
+        power::await_boot_alert(msg)
     )
 }
 

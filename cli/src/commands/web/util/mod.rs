@@ -9,7 +9,7 @@ pub mod proc;
 pub mod state_file;
 mod validate;
 
-pub use alerts::{alert_html, changes_actions_row, AlertKind};
+pub use alerts::{alert_html, changes_actions_row, err_div, err_span, AlertKind};
 pub use escape::{escape_attr, escape_html, escape_nix_string};
 pub use htmx::Htmx;
 pub use inflight::InFlightSet;
