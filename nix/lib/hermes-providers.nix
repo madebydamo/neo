@@ -312,10 +312,8 @@ in
   assert builtins.length (lib.attrNames envVars) > 20; {
     libExtensions.hermesProviders = {
       neo = rec {
-        hermesProviderEnvVars = envVars;
         hermesProviderIds = lib.sort (a: b: a < b) (lib.attrNames envVars);
         hermesProviderCatalog = lib.sort (a: b: a.id < b.id) catalog;
-        hermesProviderById = catalogById;
 
         # Provider "custom" has no env var of its own: config.yaml names this one
         # as model.key_env (Hermes resolves it from the env / $HERMES_HOME/.env),

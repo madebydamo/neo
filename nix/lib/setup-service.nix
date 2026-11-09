@@ -45,8 +45,6 @@
 in {
   libExtensions.setup-service = {
     neo = {
-      setupUnitMarker = marker;
-
       # True when a NixOS systemd.services.<name> value was built by mkSetupService.
       isSetupService = unit: ((unit.unitConfig or {}).${marker} or null) == "yes";
 

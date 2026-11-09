@@ -96,45 +96,34 @@ in {
           rank = argset.rank or 300;
           containers = removeAttrs argset ["extraUnits" "rank" "timerUnits"];
           dockerUnits = map (n: "docker-${n}") (attrNames containers);
-        in {
-          containers =
-            mkOption {
-              type = types.submodule {
-                options =
-                  mapAttrs (
-                    name: image:
-                      mkOption {
-                        type = types.str;
-                        default = image;
-                        # Docker image ("repo:tag") for container ${name}; read by the updater and web UI.
-                        description = "Which version of the app to run (image name and tag). Change only if you need a specific version.";
-                      }
-                  )
-                  containers;
+        in
+          {
+            containers =
+              mkOption {
+                type = types.submodule {
+                  options =
+                    mapAttrs (
+                      name: image:
+                        mkOption {
+                          type = types.str;
+                          default = image;
+                          # Docker image ("repo:tag") for container ${name}; read by the updater and web UI.
+                          description = "Which version of the app to run (image name and tag). Change only if you need a specific version.";
+                        }
+                    )
+                    containers;
+                };
+                default = {};
+                # Docker image overrides for this service's declared containers.
+                description = "Which version of each part of this app runs.";
+              }
+              // {
+                inherit rank;
+                ui = neoUi.mkUi {group = neoUi.groups.advanced;};
               };
-              default = {};
-              # Docker image overrides for this service's declared containers.
-              description = "Which version of each part of this app runs.";
-            }
-            // {
-              inherit rank;
-              ui = neoUi.mkUi {group = neoUi.groups.advanced;};
-            };
-
-          systemdUnits = mkOption {
-            type = types.listOf types.str;
-            default = dockerUnits ++ extraUnits ++ timerUnits;
-            internal = true;
-            description = "Systemd unit names (without .service) for this service's containers and extras; used by neo web UI.";
-          };
-
-          systemdTimers = mkOption {
-            type = types.listOf types.str;
-            default = timerUnits;
-            internal = true;
-            description = "Timer-backed units. The service target arms the matching .timer and does not start or restart the job.";
-          };
-        };
+          }
+          // mkSystemdUnits (dockerUnits ++ extraUnits ++ timerUnits)
+          // mkSystemdTimers timerUnits;
 
       # Environment most images (LinuxServer and others) read for file ownership
       # and the operator's time zone. Merge with `//`.
@@ -259,12 +248,6 @@ in {
               else []
           ) (config.neo.services or {})
         );
-
-      getEnabledServiceUnits = config:
-        lib.mapAttrsToList (sname: svc: {
-          service = sname;
-          units = svc.systemdUnits or [];
-        }) (lib.filterAttrs (n: v: v.enabled or false) (config.neo.services or {}));
     };
   };
 }

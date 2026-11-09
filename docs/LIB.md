@@ -92,9 +92,7 @@ The build fails if a placeholder would end up in a container or unit `environmen
 | `linuxserverEnv` | `config` | `{ PUID; PGID; TZ; }` from `neo.core.uid`, `gid` and `timeZone`; merge into a container's `environment` with `//` |
 | `mkSetupService` | `{ pkgs, name, description, script, containers ? [], attachTo ? containers, after ? [], wants ? [], requires ? [], bindsTo ? [], partOf ? [], before ? [], wantedBy ? [], path ? [], environment ? {}, retryInterval ? 60, maxAttempts ? null, blocking ? false, serviceConfig ? {}, unitConfig ? {} }` | A `systemd.services.<name>` value. `After`/`Requires` on `docker-<c>` for each of `containers`; `docker-<c>` of `attachTo` wants it. `script` is one attempt under `bash -e`, retried every `retryInterval` s until exit 0 (`null` = one attempt, then `Restart=on-failure`); `maxAttempts` gives up. `RemainAfterExit` always; `Type=simple`, or `oneshot` with `blocking = true` |
 | `isSetupService` | A `systemd.services` value | bool; **internal** |
-| `setupUnitMarker` | | `"X-Neo-Setup"`, the unit key that marks setup units; **internal** |
 | `getAllContainers` | `config` | List of `{ service, container, image, unit }` for enabled services whose `docker-<c>` is in `systemdUnits`; **internal** (docker updater) |
-| `getEnabledServiceUnits` | `config` | List of `{ service, units }`; **internal** |
 | `planServiceTargets` | `{ services, exclude ? [ "dnsmasq" "neo-web" "neo-bootstrap" "swag-patcher" "nginx" ] }` | `neo-<service>.target` plan; **internal** |
 
 List every setup unit in the service's `systemdUnits` (`extraUnits` or `mkSystemdUnits`). An assertion fails evaluation for setup units that are not listed in an enabled service's `systemdUnits`, so define them inside `mkIf cfg.enabled`.
@@ -237,4 +235,4 @@ Never hand-roll sudo path lists or per-service SSH/git config. Host services tha
 | `mkUpdaterPaths` | appdata path | `{ stateDir, dockerHistoryDir, systemHistoryDir, dockerLast, systemLast }`; **internal** |
 | `mkUpdaterHistoryDirs` | `config`, list of paths | Activation script creating update history directories (`0775`, `homeserver`); **internal** |
 | `updaterRunPrelude` | directory | Shell lines starting an update run: `run_id`, `started_at`, `hist`, `log_file`, output teed to the log; **internal** |
-| `hermesProviderEnvVars`, `hermesProviderIds`, `hermesProviderCatalog`, `hermesProviderById`, `mkHermesLlmEnv { provider ? null, apiKey ? null }`, `mkNeoHermesAuth pkgs script`, `hermesCustomKeyEnv` | | Hermes LLM provider catalog and helpers; **internal** |
+| `hermesProviderIds`, `hermesProviderCatalog`, `mkHermesLlmEnv { provider ? null, apiKey ? null }`, `mkNeoHermesAuth pkgs script`, `hermesCustomKeyEnv` | | Hermes LLM provider catalog and helpers; **internal** |
