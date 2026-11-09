@@ -19,6 +19,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use super::fsutil::TempDir;
 use super::{git_cmd, run_nix};
 
 /// Verbatim copy of the files the last template provided (git-ignored).
@@ -87,22 +88,13 @@ pub fn stage(config_path: &str, report: &Report) -> Result<()> {
 
 /// Instantiate `template` into a scratch directory and apply it to `config_path`.
 pub fn install(config_path: &str, template: &str, nix_cmd: &str) -> Result<Report> {
-    let scratch = std::env::temp_dir().join(format!(
-        "neo-template-{}-{}",
-        std::process::id(),
-        super::get_timestamp()
-    ));
-    if scratch.exists() {
-        fs::remove_dir_all(&scratch).context("clear template scratch dir")?;
-    }
-    fs::create_dir_all(&scratch).context("create template scratch dir")?;
+    let scratch = TempDir::new("neo-template")?;
     let result = run_nix(
-        &scratch.to_string_lossy(),
+        &scratch.path().to_string_lossy(),
         nix_cmd,
         &["flake", "init", "-t", template],
     )
-    .and_then(|_| apply(Path::new(config_path), &scratch));
-    let _ = fs::remove_dir_all(&scratch);
+    .and_then(|_| apply(Path::new(config_path), scratch.path()));
     result
 }
 
@@ -269,42 +261,33 @@ fn ignore_pristine(dir: &Path) -> Result<bool> {
 
 /// Clean three-way merge of `cur` (local) and `new` over `base`, or `None` on conflict.
 fn merge(cur: &[u8], base: &[u8], new: &[u8]) -> Result<Option<Vec<u8>>> {
-    let tmp = std::env::temp_dir().join(format!(
-        "neo-merge-{}-{}",
-        std::process::id(),
-        super::get_timestamp()
-    ));
-    fs::create_dir_all(&tmp)?;
+    let tmp = TempDir::new("neo-merge")?;
     let paths = [tmp.join("local"), tmp.join("base"), tmp.join("template")];
-    let result = (|| {
-        for (p, text) in paths.iter().zip([cur, base, new]) {
-            fs::write(p, text)?;
-        }
-        let out = Command::new("git")
-            .args([
-                "merge-file",
-                "-p",
-                "-L",
-                "local",
-                "-L",
-                "base",
-                "-L",
-                "template",
-            ])
-            .args(&paths)
-            .output()
-            .context("run git merge-file")?;
-        match out.status.code() {
-            Some(0) => Ok(Some(out.stdout)),
-            Some(n) if n > 0 => Ok(None),
-            _ => bail!(
-                "git merge-file failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            ),
-        }
-    })();
-    let _ = fs::remove_dir_all(&tmp);
-    result
+    for (p, text) in paths.iter().zip([cur, base, new]) {
+        fs::write(p, text)?;
+    }
+    let out = Command::new("git")
+        .args([
+            "merge-file",
+            "-p",
+            "-L",
+            "local",
+            "-L",
+            "base",
+            "-L",
+            "template",
+        ])
+        .args(&paths)
+        .output()
+        .context("run git merge-file")?;
+    match out.status.code() {
+        Some(0) => Ok(Some(out.stdout)),
+        Some(n) if n > 0 => Ok(None),
+        _ => bail!(
+            "git merge-file failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+    }
 }
 
 /// Relative paths of all files under `root` (skipping `.git` and `result`).

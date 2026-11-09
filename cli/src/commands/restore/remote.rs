@@ -17,6 +17,7 @@ use super::local::{commit_uncommitted, remote_url, WORK_DIR};
 use super::RestoreArgs;
 use crate::utils::command::{shell_quote, stdout_checked};
 use crate::utils::execute_command;
+use crate::utils::fsutil::TempDir;
 
 const UNIT: &str = "neo-restore";
 
@@ -112,8 +113,7 @@ fn confirm(question: &str) -> Result<()> {
 fn kexec(host: &str) -> Result<()> {
     // nixos-anywhere wants a system to install even for the kexec phase alone:
     // hand it a placeholder store path.
-    let tmp = env::temp_dir().join(format!("neo-restore-fake-{}", std::process::id()));
-    fs::create_dir_all(&tmp)?;
+    let tmp = TempDir::new("neo-restore-fake")?;
     fs::write(tmp.join("system"), "x86_64-linux")?;
     let out = stdout_checked(
         Command::new("nix")
@@ -123,12 +123,11 @@ fn kexec(host: &str) -> Result<()> {
                 "store",
                 "add-path",
             ])
-            .arg(&tmp)
+            .arg(tmp.path())
             .args(["--name", "neo-restore-placeholder"]),
         "nix store add-path",
-    );
-    let _ = fs::remove_dir_all(&tmp);
-    let p = out?.trim().to_string();
+    )?;
+    let p = out.trim().to_string();
     let mut anywhere = Command::new("nixos-anywhere");
     anywhere.args([
         "--phases",
@@ -232,10 +231,8 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
 
     // Clone on the client: it has the credentials for a private repo. Without
     // a repo, take it out of the backup here (the admin key opens it).
-    let tmp = env::temp_dir().join(format!("neo-restore-{}", std::process::id()));
+    let tmp = TempDir::new("neo-restore")?;
     let local = tmp.join("config");
-    fs::create_dir_all(&tmp)?;
-    fs::set_permissions(&tmp, std::os::unix::fs::PermissionsExt::from_mode(0o700))?;
     let from_backup = match &args.from_backup {
         Some(spec) => {
             let source = Source::from_location(spec)?;
@@ -307,7 +304,7 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
     println!("Copying the config repo and your key into the installer's RAM …");
     let mut tar = Command::new("tar")
         .arg("-C")
-        .arg(&tmp)
+        .arg(tmp.path())
         .args(["-cf", "-", "config"])
         .stdout(Stdio::piped())
         .spawn()
@@ -356,7 +353,8 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
     if !archived.success() {
         println!("! Copying the inputs failed; the target fetches them itself");
     }
-    let _ = fs::remove_dir_all(&tmp);
+    // The clone holds the config: gone before the long part starts.
+    drop(tmp);
 
     let mut cmd = vec![
         neo.clone(),

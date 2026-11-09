@@ -2,9 +2,7 @@
 //! backup from elsewhere (docs/design/backup-restore.md §3).
 
 use anyhow::{bail, Context, Result};
-use std::env;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use toml_edit::DocumentMut;
@@ -13,6 +11,7 @@ use crate::commands::restore::backup::{self, Access, Source};
 use crate::commands::restore::local::{commit_uncommitted, remote_url};
 use crate::commands::restore::remote::default_key;
 use crate::utils::execute_command;
+use crate::utils::fsutil::TempDir;
 
 const ROTATE_UNIT: &str = "backup-rotate-key.service";
 
@@ -78,23 +77,16 @@ pub fn extract_config(
         return Ok(());
     }
     let key = key.or_else(default_key);
-    let work = env::temp_dir().join(format!("neo-backup-{}", std::process::id()));
-    fs::create_dir_all(&work)?;
-    fs::set_permissions(&work, fs::Permissions::from_mode(0o700))?;
+    let work = TempDir::new("neo-backup")?;
     let access = Access {
         identities: backup_key.into_iter().chain(key).collect(),
         known_hosts: work.join("known_hosts"),
-        work: work.clone(),
+        work: work.path().to_path_buf(),
     };
-    let result = (|| {
-        let source = backup::detect(&access, Source::from_location(spec)?)?;
-        println!("Reading the {} …", source.describe());
-        let rel = backup::extract_config(&access, &source, out)?;
-        commit_uncommitted(out)?;
-        Ok::<_, anyhow::Error>(rel)
-    })();
-    let _ = fs::remove_dir_all(&work);
-    let rel = result?;
+    let source = backup::detect(&access, Source::from_location(spec)?)?;
+    println!("Reading the {} …", source.describe());
+    let rel = backup::extract_config(&access, &source, out)?;
+    commit_uncommitted(out)?;
     println!(
         "✓ Config repo ({rel} in the backup) is at {}",
         out.display()

@@ -9,12 +9,12 @@
 
 use anyhow::{bail, Context, Result};
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use toml_edit::{value, DocumentMut, Item, Table};
 
 use super::command::{check_output, output_checked, output_with_stdin};
+use super::fsutil::{write_private, TempDir};
 use super::secrets::{self, Backend, Node, Tree};
 use super::{git_cmd, sort_document_alphabetically};
 
@@ -189,27 +189,10 @@ pub fn decrypt(path: &Path) -> Result<Tree> {
 /// Decrypt secrets.sops.yaml content (e.g. an older version from git) through
 /// a private temp file, the same way as [`decrypt`].
 pub fn decrypt_text(text: &str) -> Result<Tree> {
-    use std::os::unix::fs::OpenOptionsExt;
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let tmp = std::env::temp_dir().join(format!(
-        "neo-decrypt-{}-{nanos}.{}",
-        std::process::id(),
-        secrets::SOPS_FILE
-    ));
-    let written = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(&tmp)
-        .and_then(|mut f| f.write_all(text.as_bytes()));
-    let out = written
-        .with_context(|| format!("write {}", tmp.display()))
-        .and_then(|()| decrypt(&tmp));
-    let _ = fs::remove_file(&tmp);
-    out
+    let dir = TempDir::new("neo-decrypt")?;
+    let tmp = dir.join(secrets::SOPS_FILE);
+    write_private(&tmp, text.as_bytes())?;
+    decrypt(&tmp)
 }
 
 /// Decrypt with sops directly, using `key` (an ssh-ed25519 private key) or

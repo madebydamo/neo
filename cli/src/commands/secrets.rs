@@ -13,6 +13,7 @@ use std::process::Command;
 
 use crate::commands::web::nix::registry::{EXTRACT_LIB, EXTRACT_SECRET_PATHS};
 use crate::utils::command::output_checked;
+use crate::utils::fsutil::TempDir;
 use crate::utils::secrets::{self, Backend};
 use crate::utils::secrets_store::{Store, IDENTITY_FILE};
 
@@ -22,8 +23,7 @@ pub fn secret_paths(config_path: &str, nix_cmd: &str) -> Result<Vec<Vec<String>>
     struct RawPaths {
         paths: Vec<Vec<String>>,
     }
-    let dir = std::env::temp_dir().join(format!("neo-secret-paths-{}", std::process::id()));
-    fs::create_dir_all(&dir).context("temp dir for the secret path extractor")?;
+    let dir = TempDir::new("neo-secret-paths")?;
     fs::write(dir.join(EXTRACT_LIB.0), EXTRACT_LIB.1)?;
     let extractor = dir.join(EXTRACT_SECRET_PATHS.file_name);
     fs::write(&extractor, EXTRACT_SECRET_PATHS.content)?;
@@ -38,10 +38,9 @@ pub fn secret_paths(config_path: &str, nix_cmd: &str) -> Result<Vec<Vec<String>>
             .args(["--extra-experimental-features", "nix-command flakes"])
             .args(["eval", "--json", "--impure", "--expr", &expr]),
         "nix eval of secret paths",
-    );
-    let _ = fs::remove_dir_all(&dir);
+    )?;
     let raw: RawPaths =
-        serde_json::from_slice(&out?.stdout).context("parse secret paths from nix eval")?;
+        serde_json::from_slice(&out.stdout).context("parse secret paths from nix eval")?;
     if raw.paths.is_empty() {
         bail!("no secret settings found in the config flake (evaluation problem?)");
     }
