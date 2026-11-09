@@ -75,11 +75,33 @@ fn parse_context(ctx: &str) -> Option<(&str, &str)> {
     }
 }
 
-fn not_set_up() -> (Status, Json<Value>) {
-    (
-        Status::NotFound,
-        Json(json!({"error": "The assistant is not set up."})),
-    )
+/// An error for the drawer: a status and `{"error": …}` (plus `ended` on approvals).
+pub struct ApiError(Status, Value);
+
+impl ApiError {
+    fn new(status: Status, msg: impl Into<String>) -> Self {
+        ApiError(status, json!({ "error": msg.into() }))
+    }
+
+    fn bad_request(msg: &str) -> Self {
+        Self::new(Status::BadRequest, msg)
+    }
+
+    fn upstream(msg: impl ToString) -> Self {
+        Self::new(Status::BadGateway, msg.to_string())
+    }
+}
+
+impl<'r> Responder<'r, 'static> for ApiError {
+    fn respond_to(self, req: &'r Request<'_>) -> rocket::response::Result<'static> {
+        (self.0, Json(self.1)).respond_to(req)
+    }
+}
+
+type ApiResult = Result<Json<Value>, ApiError>;
+
+fn gateway() -> Result<agent::Gateway, ApiError> {
+    agent::gateway().ok_or_else(|| ApiError::new(Status::NotFound, "The assistant is not set up."))
 }
 
 /// Display label and icon of each chat context, keyed by its base session id
@@ -106,63 +128,41 @@ async fn context_labels(config: &AppConfig) -> HashMap<String, (String, Option<S
 /// message, so opening the drawer leaves no empty chats) or reopen a past one
 /// with its latest messages.
 #[post("/agent/open", data = "<req>")]
-pub async fn agent_open(req: Json<OpenReq>) -> (Status, Json<Value>) {
-    let Some(gw) = agent::gateway() else {
-        return not_set_up();
-    };
+pub async fn agent_open(req: Json<OpenReq>) -> ApiResult {
+    let gw = gateway()?;
     if let Some(id) = req.session_id.as_deref() {
         if !valid_session_id(id) {
-            return (Status::BadRequest, Json(json!({"error": "unknown chat"})));
+            return Err(ApiError::bad_request("unknown chat"));
         }
-        return match gw.messages(id).await {
-            Ok(h) => (
-                Status::Ok,
-                Json(json!({
-                    "session_id": id,
-                    "context": agent::context_of(id),
-                    "messages": h.messages,
-                    "truncated": h.truncated,
-                })),
-            ),
-            Err(e) => (Status::BadGateway, Json(json!({"error": e.to_string()}))),
-        };
+        let h = gw.messages(id).await.map_err(ApiError::upstream)?;
+        return Ok(Json(json!({
+            "session_id": id,
+            "context": agent::context_of(id),
+            "messages": h.messages,
+            "truncated": h.truncated,
+        })));
     }
-    let Some((kind, name)) = parse_context(&req.context) else {
-        return (
-            Status::BadRequest,
-            Json(json!({"error": "unknown chat context"})),
-        );
-    };
+    let (kind, name) =
+        parse_context(&req.context).ok_or_else(|| ApiError::bad_request("unknown chat context"))?;
     let ctx = if kind == "general" {
         "general".to_string()
     } else {
         format!("{kind}:{name}")
     };
-    (
-        Status::Ok,
-        Json(json!({
-            "session_id": agent::session_id(&ctx, true),
-            "context": ctx,
-            "messages": [],
-            "truncated": false,
-        })),
-    )
+    Ok(Json(json!({
+        "session_id": agent::session_id(&ctx, true),
+        "context": ctx,
+        "messages": [],
+        "truncated": false,
+    })))
 }
 
 /// Past chats started here, newest first, with their context's label and icon.
 /// `here` marks the chats of `context` (the page the drawer was opened from).
 #[get("/agent/sessions?<context>")]
-pub async fn agent_sessions(
-    config: &State<Arc<AppConfig>>,
-    context: Option<String>,
-) -> (Status, Json<Value>) {
-    let Some(gw) = agent::gateway() else {
-        return not_set_up();
-    };
-    let list = match gw.sessions().await {
-        Ok(l) => l,
-        Err(e) => return (Status::BadGateway, Json(json!({"error": e.to_string()}))),
-    };
+pub async fn agent_sessions(config: &State<Arc<AppConfig>>, context: Option<String>) -> ApiResult {
+    let gw = gateway()?;
+    let list = gw.sessions().await.map_err(ApiError::upstream)?;
     let labels = context_labels(config).await;
     let here = context.as_deref().filter(|c| parse_context(c).is_some());
     let items: Vec<Value> = list
@@ -187,49 +187,45 @@ pub async fn agent_sessions(
             s
         })
         .collect();
-    (Status::Ok, Json(json!({ "items": items })))
+    Ok(Json(json!({ "items": items })))
 }
 
 #[rocket::delete("/agent/sessions/<id>")]
-pub async fn agent_session_delete(id: &str) -> (Status, Json<Value>) {
-    let Some(gw) = agent::gateway() else {
-        return not_set_up();
-    };
+pub async fn agent_session_delete(id: &str) -> ApiResult {
+    let gw = gateway()?;
     if !valid_session_id(id) {
-        return (Status::BadRequest, Json(json!({"error": "unknown chat"})));
+        return Err(ApiError::bad_request("unknown chat"));
     }
     match gw.delete_session(id).await {
-        Ok(()) => (Status::Ok, Json(json!({"ok": true}))),
-        Err(r) if r.code.as_deref() == Some("session_active_turn") => (
+        Ok(()) => Ok(Json(json!({"ok": true}))),
+        Err(r) if r.code.as_deref() == Some("session_active_turn") => Err(ApiError::new(
             Status::Conflict,
-            Json(json!({"error": "The assistant is still answering in this chat. Stop it first."})),
-        ),
-        Err(r) => (
-            Status::BadGateway,
-            Json(json!({"error": format!("Could not delete the chat: {}", r.message)})),
-        ),
+            "The assistant is still answering in this chat. Stop it first.",
+        )),
+        Err(r) => Err(ApiError::upstream(format!(
+            "Could not delete the chat: {}",
+            r.message
+        ))),
     }
 }
 
 /// State of a running turn (the drawer polls it after a reload or a broken
 /// stream): `status`, `done`, pending approval prompts.
 #[get("/agent/run/<run_id>")]
-pub async fn agent_run(run_id: &str) -> (Status, Json<Value>) {
-    let Some(gw) = agent::gateway() else {
-        return not_set_up();
-    };
+pub async fn agent_run(run_id: &str) -> ApiResult {
+    let gw = gateway()?;
     if !valid_run_id(run_id) {
-        return (Status::BadRequest, Json(json!({"error": "unknown run"})));
+        return Err(ApiError::bad_request("unknown run"));
     }
-    match gw.run(run_id).await {
-        Ok(Some(v)) => (Status::Ok, Json(v)),
-        // Hermes forgets finished runs after a while: it is over either way.
-        Ok(None) => (
-            Status::Ok,
-            Json(json!({"status": "gone", "done": true, "approvals": [], "approvals_known": true})),
-        ),
-        Err(e) => (Status::BadGateway, Json(json!({"error": e.to_string()}))),
-    }
+    Ok(Json(
+        match gw.run(run_id).await.map_err(ApiError::upstream)? {
+            Some(v) => v,
+            // Hermes forgets finished runs after a while: it is over either way.
+            None => {
+                json!({"status": "gone", "done": true, "approvals": [], "approvals_known": true})
+            }
+        },
+    ))
 }
 
 /// Instructions for the first turn of a context (settings snapshot for a
@@ -360,17 +356,12 @@ pub async fn agent_chat(
 
 /// Candidates for the drawer's `@` popup (matched on the client).
 #[get("/agent/refs")]
-pub async fn agent_ref_list(config: &State<Arc<AppConfig>>) -> (Status, Json<Value>) {
-    if !agent::available() {
-        return (
-            Status::NotFound,
-            Json(json!({"error": "The assistant is not set up."})),
-        );
-    }
-    match agent_refs::cached_candidates(config).await {
-        Ok(items) => (Status::Ok, Json(json!({"items": items.as_ref()}))),
-        Err(e) => (Status::InternalServerError, Json(json!({"error": e}))),
-    }
+pub async fn agent_ref_list(config: &State<Arc<AppConfig>>) -> ApiResult {
+    gateway()?;
+    let items = agent_refs::cached_candidates(config)
+        .await
+        .map_err(|e| ApiError::new(Status::InternalServerError, e))?;
+    Ok(Json(json!({"items": items.as_ref()})))
 }
 
 #[derive(Deserialize)]
@@ -384,13 +375,8 @@ pub struct ApproveReq {
 }
 
 #[post("/agent/approve", data = "<req>")]
-pub async fn agent_approve(req: Json<ApproveReq>) -> (Status, Json<Value>) {
-    let Some(gw) = agent::gateway() else {
-        return (
-            Status::NotFound,
-            Json(json!({"error": "The assistant is not set up."})),
-        );
-    };
+pub async fn agent_approve(req: Json<ApproveReq>) -> ApiResult {
+    let gw = gateway()?;
     if !valid_run_id(&req.run_id)
         || !matches!(req.choice.as_str(), "once" | "session" | "always" | "deny")
         || req.request_id.as_deref().is_some_and(|r| {
@@ -401,46 +387,40 @@ pub async fn agent_approve(req: Json<ApproveReq>) -> (Status, Json<Value>) {
                     .all(|c| c.is_ascii_alphanumeric() || "-_:.".contains(c))
         })
     {
-        return (Status::BadRequest, Json(json!({"error": "bad approval"})));
+        return Err(ApiError::bad_request("bad approval"));
     }
-    match gw
-        .approve(
-            &req.run_id,
-            &req.choice,
-            req.request_id.as_deref(),
-            req.execution_generation,
-        )
-        .await
-    {
-        Ok(()) => (Status::Ok, Json(json!({"ok": true}))),
-        Err(r) => approval_refused(&r),
-    }
+    gw.approve(
+        &req.run_id,
+        &req.choice,
+        req.request_id.as_deref(),
+        req.execution_generation,
+    )
+    .await
+    .map_err(|r| approval_refused(&r))?;
+    Ok(Json(json!({"ok": true})))
 }
 
 /// A refused approval answer in plain words; `ended` tells the drawer the
 /// prompt is over (timed out, answered elsewhere, or its turn ended).
-fn approval_refused(r: &agent::Refusal) -> (Status, Json<Value>) {
+fn approval_refused(r: &agent::Refusal) -> ApiError {
     if r.ended() {
-        return (
+        return ApiError(
             Status::Conflict,
-            Json(json!({
+            json!({
                 "error": "This request already ended (it timed out or was answered). Ask the assistant to try again.",
                 "ended": true,
-            })),
+            }),
         );
     }
     if r.status == 0 {
-        return (
-            Status::BadGateway,
-            Json(
-                json!({"error": "The assistant is not reachable right now. Try again in a moment."}),
-            ),
+        return ApiError::upstream(
+            "The assistant is not reachable right now. Try again in a moment.",
         );
     }
-    (
-        Status::BadGateway,
-        Json(json!({"error": format!("The assistant did not take the answer: {}", r.message)})),
-    )
+    ApiError::upstream(format!(
+        "The assistant did not take the answer: {}",
+        r.message
+    ))
 }
 
 #[derive(Deserialize)]
@@ -513,13 +493,13 @@ mod tests {
             code: Some(code.to_string()),
             message: "raw".to_string(),
         };
-        let (s, j) = approval_refused(&r(409, "approval_not_pending"));
+        let ApiError(s, j) = approval_refused(&r(409, "approval_not_pending"));
         assert_eq!(s, Status::Conflict);
         assert_eq!(j["ended"], true);
         assert!(j["error"].as_str().unwrap().contains("already ended"));
-        let (_, j) = approval_refused(&r(409, "stale_generation"));
+        let ApiError(_, j) = approval_refused(&r(409, "stale_generation"));
         assert_eq!(j["ended"], true);
-        let (s, j) = approval_refused(&r(400, "invalid_params"));
+        let ApiError(s, j) = approval_refused(&r(400, "invalid_params"));
         assert_eq!(s, Status::BadGateway);
         assert!(j.get("ended").is_none());
     }
