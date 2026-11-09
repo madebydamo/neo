@@ -6,7 +6,7 @@ use super::git::dirty_state;
 use super::ops::kind::id_timestamp;
 use super::ops::store::{find_recent_in_progress, gc_old_ops};
 use super::types::AppConfig;
-use super::util::{escape_html, op_id_ok};
+use super::util::{escape_html, op_id_ok, proc};
 use crate::utils::OperationKind;
 
 /// Running op shown in the action bar (first match wins), with its button label and class.
@@ -85,8 +85,12 @@ pub fn action_bar_oob_fragment(config: &AppConfig) -> String {
     action_bar_dynamic_element(config, true)
 }
 
-pub fn broadcast_action_bar(config: &AppConfig) {
-    let _ = config.unit_updates.send(action_bar_oob_fragment(config));
+/// [`action_bar_oob_fragment`] off the async workers (it reads git state).
+pub async fn action_bar_oob_async(config: &Arc<AppConfig>) -> String {
+    let cfg = Arc::clone(config);
+    proc::blocking(move || action_bar_oob_fragment(&cfg))
+        .await
+        .unwrap_or_default()
 }
 
 /// Background task: detect action-bar state changes and push OOB HTML to WS clients.
@@ -96,16 +100,14 @@ pub fn start_action_bar_watcher(config: Arc<AppConfig>) {
         loop {
             // Git + activation GC run in spawn_blocking so the async runtime stays responsive.
             let cfg = Arc::clone(&config);
-            let sig = tokio::task::spawn_blocking(move || action_bar_signature(&cfg))
+            let sig = proc::blocking(move || action_bar_signature(&cfg))
                 .await
                 .unwrap_or_default();
             if sig != last {
                 last = sig;
-                let cfg = Arc::clone(&config);
-                let frag = tokio::task::spawn_blocking(move || action_bar_oob_fragment(&cfg))
-                    .await
-                    .unwrap_or_default();
-                let _ = config.unit_updates.send(frag);
+                let _ = config
+                    .unit_updates
+                    .send(action_bar_oob_async(&config).await);
             }
             tokio::time::sleep(Duration::from_millis(750)).await;
         }

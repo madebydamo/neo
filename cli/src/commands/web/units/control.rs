@@ -5,7 +5,7 @@ use std::time::Duration;
 use super::super::locks::{lock_attr, LockMode, Scope};
 use super::super::types::AppConfig;
 use super::super::util::{escape_attr, escape_html, proc, status_slot_oob};
-use super::status::{query_unit_status_blocking, UnitStatus};
+use super::status::{query_unit_status, UnitStatus};
 
 pub use super::super::util::unit_name_valid;
 
@@ -143,8 +143,8 @@ fn render_unit_controls_content_with_state(unit: &str, st: &UnitStatus, pulling:
 }
 
 /// OOB fragment for htmx ws (and action HTTP responses).
-pub fn unit_controls_oob_fragment(unit: &str, config: &AppConfig) -> String {
-    let st = query_unit_status_blocking(unit);
+pub async fn unit_controls_oob_fragment(unit: &str, config: &AppConfig) -> String {
+    let st = query_unit_status(unit).await;
     let pulling = is_pull_in_flight(config, unit);
     unit_controls_oob_fragment_with_state(unit, &st, pulling)
 }
@@ -162,10 +162,10 @@ pub fn unit_controls_oob_fragment_with_state(unit: &str, st: &UnitStatus, pullin
 }
 
 /// Broadcast an OOB swap fragment for a unit's controls to all connected WS clients.
-pub fn broadcast_unit_update(unit: &str, config: &AppConfig) {
+pub async fn broadcast_unit_update(unit: &str, config: &AppConfig) {
     let _ = config
         .unit_updates
-        .send(unit_controls_oob_fragment(unit, config));
+        .send(unit_controls_oob_fragment(unit, config).await);
 }
 
 /// After a non-blocking systemctl action, ActiveState may lag for a few seconds.
@@ -178,7 +178,7 @@ pub fn schedule_unit_refresh_burst(unit: String, config: Arc<AppConfig>) {
     tokio::spawn(async move {
         for delay_ms in [150_u64, 400, 900, 1800, 3500] {
             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-            broadcast_unit_update(&unit, &config);
+            broadcast_unit_update(&unit, &config).await;
         }
     });
 }

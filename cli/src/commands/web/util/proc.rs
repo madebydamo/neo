@@ -6,6 +6,18 @@ use tokio::process::Command;
 
 use crate::utils::command::sudo_bin;
 
+/// Run blocking work (git, sops, a sync systemd call) off Rocket's async workers,
+/// which would otherwise stall unrelated requests and sockets.
+pub async fn blocking<T, F>(f: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> T + Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| format!("background task failed: {e}"))
+}
+
 /// `sudo -n`: neo-web has no terminal, so a missing sudo rule fails at once.
 pub fn sudo() -> Command {
     let mut c = Command::new(sudo_bin());

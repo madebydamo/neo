@@ -6,8 +6,7 @@ use crate::commands::web::locks::Blocked;
 use crate::commands::web::power::{
     self, going_down_html, hold_until_down, power_lock, PowerAction,
 };
-use crate::commands::web::util::{alert_html, generation_ok, sudo_cmd, AlertKind};
-use crate::utils::{switch_system_generation, GenerationMode};
+use crate::commands::web::util::{alert_html, generation_ok, AlertKind};
 
 fn power_now(
     action: PowerAction,
@@ -55,13 +54,7 @@ pub async fn versioning_gen_boot(n: u64) -> Result<RawHtml<String>, Blocked> {
         return Ok(RawHtml(alert_html(AlertKind::Error, "invalid generation")));
     }
     let lock = power_lock("generation", &format!("Boot into generation {n}"))?;
-    let sudo = sudo_cmd();
-    let res = tokio::task::spawn_blocking(move || {
-        switch_system_generation(n, GenerationMode::Boot, &sudo).map_err(|e| format!("{e:#}"))
-    })
-    .await
-    .unwrap_or_else(|e| Err(e.to_string()));
-    if let Err(e) = res {
+    if let Err(e) = power::set_boot_generation(n).await {
         return Ok(RawHtml(alert_html(
             AlertKind::Error,
             &format!("Setting generation {n} as the boot default failed, not restarting: {e}"),

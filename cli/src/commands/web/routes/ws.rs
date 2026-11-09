@@ -5,7 +5,7 @@ use std::time::Duration;
 use rocket::{get, State};
 use rocket_ws::{Channel, Message, WebSocket};
 
-use crate::commands::web::action_bar::action_bar_oob_fragment;
+use crate::commands::web::action_bar::action_bar_oob_async;
 use crate::commands::web::locks::locks_oob_element;
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::units::{
@@ -101,7 +101,7 @@ fn parse_ws_unit_command(text: &str) -> Option<(String, Vec<String>)> {
 pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel<'static> {
     let config = Arc::clone(config);
     let mut rx = config.unit_updates.subscribe();
-    let initial_bar = action_bar_oob_fragment(&config);
+    let initial_bar = action_bar_oob_async(&config).await;
     ws.channel(move |mut stream| {
         Box::pin(async move {
             use rocket::futures::{SinkExt, StreamExt};
@@ -156,7 +156,7 @@ pub async fn ws_status(ws: WebSocket, config: &State<Arc<AppConfig>>) -> Channel
                             // Lagged: drop missed messages, keep the socket alive and
                             // resend the state they may have carried.
                             Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                                vec![action_bar_oob_fragment(&config), locks_oob_element().await]
+                                vec![action_bar_oob_async(&config).await, locks_oob_element().await]
                             }
                             Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                         }

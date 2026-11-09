@@ -182,7 +182,7 @@ pub async fn start_units_best_effort(units: &[String], config: &Arc<AppConfig>) 
         if let Err(e) = systemctl(UnitAction::Start, u).await {
             eprintln!("web: clear-appdata start {}: {}", u, e);
         }
-        broadcast_unit_update(u, config);
+        broadcast_unit_update(u, config).await;
     }
 }
 
@@ -195,7 +195,7 @@ async fn rm_rf_path(path: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn finish_clear_appdata(
+async fn finish_clear_appdata(
     service: &str,
     appdata: &str,
     units: &[String],
@@ -209,7 +209,7 @@ fn finish_clear_appdata(
     let _ = config.unit_updates.send(btn);
     end_clear_appdata(config, service);
     for u in units {
-        broadcast_unit_update(u, config);
+        broadcast_unit_update(u, config).await;
         schedule_unit_refresh_burst(u.clone(), Arc::clone(config));
     }
 }
@@ -242,7 +242,7 @@ pub async fn run_clear_appdata(
             // Continue stopping others; wait_units_stopped surfaces stuck units.
             eprintln!("web: clear-appdata stop {}: {}", u, e);
         }
-        broadcast_unit_update(u, &config);
+        broadcast_unit_update(u, &config).await;
     }
 
     if let Err(e) = wait_units_stopped(&units, Duration::from_secs(90)).await {
@@ -251,7 +251,7 @@ pub async fn run_clear_appdata(
         if !to_restart.is_empty() {
             start_units_best_effort(&to_restart, &config).await;
         }
-        finish_clear_appdata(&service, &appdata, &units, &config, inner, title);
+        finish_clear_appdata(&service, &appdata, &units, &config, inner, title).await;
         return;
     }
 
@@ -266,7 +266,7 @@ pub async fn run_clear_appdata(
         if !to_restart.is_empty() {
             start_units_best_effort(&to_restart, &config).await;
         }
-        finish_clear_appdata(&service, &appdata, &units, &config, inner, title);
+        finish_clear_appdata(&service, &appdata, &units, &config, inner, title).await;
         return;
     }
 
@@ -277,7 +277,7 @@ pub async fn run_clear_appdata(
     }
 
     let (inner, title) = status_ok("appdata cleared");
-    finish_clear_appdata(&service, &appdata, &units, &config, inner, title);
+    finish_clear_appdata(&service, &appdata, &units, &config, inner, title).await;
 }
 
 #[cfg(test)]

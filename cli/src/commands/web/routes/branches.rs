@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Arc;
 
 use rocket::form::Form;
@@ -17,7 +18,7 @@ use crate::commands::web::trigger::{
 };
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::{
-    branch_ok, config_dir, escape_html, generation_ok, rev_ok, sudo_cmd,
+    branch_ok, config_dir, escape_html, generation_ok, proc, rev_ok, sudo_cmd,
 };
 use crate::commands::web::version_tree;
 use crate::commands::web::version_tree::notes::NoteTarget;
@@ -40,15 +41,13 @@ pub async fn versioning_tree(
     let dir_str = dir.to_str().unwrap_or(".").to_string();
     let limit = limit.unwrap_or(version_tree::PAGE);
     let sudo = sudo_cmd();
-    let view =
-        rocket::tokio::task::spawn_blocking(move || version_tree::load(&dir_str, limit, &sudo))
-            .await;
+    let view = proc::blocking(move || version_tree::load(&dir_str, limit, &sudo)).await;
     match view {
         Ok(v) => RawJson(
             serde_json::to_string(&v)
                 .unwrap_or_else(|e| serde_json::json!({ "error": e.to_string() }).to_string()),
         ),
-        Err(e) => RawJson(serde_json::json!({ "error": e.to_string() }).to_string()),
+        Err(e) => RawJson(serde_json::json!({ "error": e }).to_string()),
     }
 }
 
@@ -76,11 +75,11 @@ pub async fn versioning_note(form: Form<NoteForm>) -> RawJson<String> {
         _ => Err("invalid note target".to_string()),
     };
     let res = match target {
-        Ok(t) => rocket::tokio::task::spawn_blocking(move || {
+        Ok(t) => proc::blocking(move || {
             version_tree::notes::set(&t, &f.note).map_err(|e| format!("{e:#}"))
         })
         .await
-        .unwrap_or_else(|e| Err(e.to_string())),
+        .and_then(|r| r),
         Err(e) => Err(e),
     };
     RawJson(match res {
@@ -91,13 +90,17 @@ pub async fn versioning_note(form: Form<NoteForm>) -> RawJson<String> {
 
 /// Enabled/disabled services from `settings.toml` at a revision.
 #[get("/versioning/commit/<rev>/services")]
-pub fn versioning_services(config: &State<Arc<AppConfig>>, rev: &str) -> RawJson<String> {
+pub async fn versioning_services(config: &State<Arc<AppConfig>>, rev: &str) -> RawJson<String> {
     if !rev_ok(rev) {
         return RawJson(serde_json::json!({"error": "invalid rev"}).to_string());
     }
     let dir = config_dir(&config.settings_path);
-    let dir_str = dir.to_str().unwrap_or(".");
-    match enabled_services_at_rev(dir_str, rev) {
+    let rev = rev.to_string();
+    let services =
+        proc::blocking(move || enabled_services_at_rev(dir.to_str().unwrap_or("."), &rev))
+            .await
+            .and_then(|r| r);
+    match services {
         Ok(s) => RawJson(serde_json::to_string(&s).unwrap_or_else(|_| "{}".to_string())),
         Err(e) => RawJson(serde_json::json!({"error": e}).to_string()),
     }
@@ -105,11 +108,22 @@ pub fn versioning_services(config: &State<Arc<AppConfig>>, rev: &str) -> RawJson
 
 /// Changes between two revs: file tree, semantic settings summary and full diffs.
 #[get("/versioning/diff?<a>&<b>")]
-pub fn versioning_diff(config: &State<Arc<AppConfig>>, a: &str, b: &str) -> RawHtml<String> {
+pub async fn versioning_diff(config: &State<Arc<AppConfig>>, a: &str, b: &str) -> RawHtml<String> {
     if !rev_ok(a) || !rev_ok(b) {
         return RawHtml(r#"<div class="text-error text-sm">invalid revision</div>"#.to_string());
     }
     let dir = config_dir(&config.settings_path);
+    let (a, b) = (a.to_string(), b.to_string());
+    match proc::blocking(move || diff_html(&dir, &a, &b)).await {
+        Ok(html) => html,
+        Err(e) => RawHtml(format!(
+            r#"<div class="text-error text-sm">{}</div>"#,
+            escape_html(&e)
+        )),
+    }
+}
+
+fn diff_html(dir: &Path, a: &str, b: &str) -> RawHtml<String> {
     let dir_str = dir.to_str().unwrap_or(".");
     let revs = resolve_rev(dir_str, a).and_then(|ra| Ok((ra, resolve_rev(dir_str, b)?)));
     let (ra, rb) = match revs {
@@ -122,14 +136,14 @@ pub fn versioning_diff(config: &State<Arc<AppConfig>>, a: &str, b: &str) -> RawH
         }
     };
     let range = DiffRange::Revs { from: &ra, to: &rb };
-    match collect_changes(&dir, range) {
+    match collect_changes(dir, range) {
         Ok(set) if set.is_empty() => RawHtml(
             r#"<div class="text-sm text-base-content/60 py-6 text-center">No differences between these versions</div>"#
                 .to_string(),
         ),
         Ok(set) => {
-            let semantic = settings_semantic(&dir, &set, range);
-            let inputs = lock_updates(&dir, &set, range);
+            let semantic = settings_semantic(dir, &set, range);
+            let inputs = lock_updates(dir, &set, range);
             RawHtml(render_changes(
                 &set,
                 &RenderOptions {
@@ -148,7 +162,7 @@ pub fn versioning_diff(config: &State<Arc<AppConfig>>, a: &str, b: &str) -> RawH
 
 /// Checkout activation branch tip for rev, then trigger full activate.
 #[post("/versioning/activate/<rev>")]
-pub fn versioning_activate(
+pub async fn versioning_activate(
     config: &State<Arc<AppConfig>>,
     rev: &str,
 ) -> Result<RawHtml<String>, Blocked> {
@@ -157,6 +171,13 @@ pub fn versioning_activate(
             r#"<span class="text-error text-xs">invalid rev</span>"#.to_string(),
         ));
     }
+    let (cfg, rev) = (Arc::clone(config), rev.to_string());
+    proc::blocking(move || activate_rev(&cfg, &rev))
+        .await
+        .map_err(Blocked)?
+}
+
+fn activate_rev(config: &AppConfig, rev: &str) -> Result<RawHtml<String>, Blocked> {
     // Held across the checkout; released right before the activation takes it.
     let lock = try_lock(
         &LockSpec::system_change(),
@@ -208,12 +229,14 @@ pub fn versioning_activate(
 }
 
 #[post("/versioning/generations/<n>/switch")]
-pub fn versioning_gen_switch(n: u64) -> Result<RawHtml<String>, Blocked> {
+pub async fn versioning_gen_switch(n: u64) -> Result<RawHtml<String>, Blocked> {
     if !generation_ok(n) {
         return Ok(RawHtml(
             r#"<span class="text-error text-xs">invalid generation</span>"#.to_string(),
         ));
     }
     // Detached oneshot: switch-to-configuration stops neo-web; must not run in-process.
-    trigger_generation_switch(n, GenerationMode::Switch)
+    proc::blocking(move || trigger_generation_switch(n, GenerationMode::Switch))
+        .await
+        .map_err(Blocked)?
 }

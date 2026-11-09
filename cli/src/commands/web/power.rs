@@ -3,8 +3,9 @@
 use std::time::Duration;
 
 use super::locks::{try_lock, Blocked};
-use super::util::{escape_html, proc};
+use super::util::{escape_html, proc, sudo_cmd};
 use crate::utils::locks::{LockGuard, LockSpec, OpInfo};
+use crate::utils::{switch_system_generation, GenerationMode};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PowerAction {
@@ -33,6 +34,14 @@ pub fn hold_until_down(lock: LockGuard) {
         let _lock = lock;
         tokio::time::sleep(Duration::from_secs(300)).await;
     });
+}
+
+/// Make generation `n` the boot default (`switch-to-configuration boot`).
+pub async fn set_boot_generation(n: u64) -> Result<(), String> {
+    let sudo = sudo_cmd();
+    proc::blocking(move || switch_system_generation(n, GenerationMode::Boot, &sudo))
+        .await?
+        .map_err(|e| format!("{e:#}"))
 }
 
 /// Run `systemctl <action>` shortly after answering, so the response reaches the browser.

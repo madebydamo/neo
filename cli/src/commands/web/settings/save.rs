@@ -5,8 +5,8 @@ use rocket::http::Status;
 use toml_edit::{DocumentMut, Table};
 
 use super::{insert_dotted, json_to_toml_item, json_to_toml_value};
-use crate::commands::web::action_bar::broadcast_action_bar;
 use crate::commands::web::types::AppConfig;
+use crate::commands::web::util::proc;
 use crate::utils::secrets_store::Store;
 use crate::utils::{secrets, sort_document_alphabetically};
 
@@ -47,16 +47,15 @@ pub fn apply_payload_to_table(
     }
 }
 
-/// Refresh evaluator, action bar, and schema cache after settings.toml changes
-/// (save or restore). Safe to call from routes that rewrite settings without
-/// going through [`finish_save`].
+/// Refresh evaluator and schema cache after settings.toml changes (save or
+/// restore); the action-bar watcher notices the change by itself. Safe to call
+/// from routes that rewrite settings without going through [`finish_save`].
 pub fn refresh_after_settings_change(config: &AppConfig) {
     let ev = config.evaluator.clone();
     tokio::spawn(async move {
         let mut g = ev.lock().await;
         let _ = g.refresh().await;
     });
-    broadcast_action_bar(config);
     let cache = config.schema_cache.clone();
     tokio::spawn(async move {
         let mut c = cache.write().await;
@@ -116,28 +115,44 @@ pub async fn route_secrets(
         secrets::Backend::Sops(_) => {
             // Placeholders (unchanged values) are dropped; changed or cleared
             // secrets are re-encrypted (decrypting needs the root helper).
-            store
-                .save_encrypted(doc, &patterns, scope)
-                .map(|_| ())
-                .map_err(|e| {
-                    eprintln!("web: refusing save; encrypted secrets: {e:#}");
-                    Status::InternalServerError
-                })
+            let scope = scope.map(<[String]>::to_vec);
+            let mut owned = std::mem::take(doc);
+            let (owned, saved) = proc::blocking(move || {
+                let saved = store.save_encrypted(&mut owned, &patterns, scope.as_deref());
+                (owned, saved)
+            })
+            .await
+            .map_err(|e| {
+                eprintln!("web: refusing save; encrypted secrets: {e}");
+                Status::InternalServerError
+            })?;
+            *doc = owned;
+            saved.map(|_| ()).map_err(|e| {
+                eprintln!("web: refusing save; encrypted secrets: {e:#}");
+                Status::InternalServerError
+            })
         }
     }
 }
 
-pub fn finish_save(path: &Path, doc: &mut DocumentMut, config: &AppConfig) -> Status {
+pub async fn finish_save(path: &Path, doc: &mut DocumentMut, config: &AppConfig) -> Status {
     if write_settings_doc(path, doc).is_err() {
         return Status::InternalServerError;
     }
     // New or removed SSH keys change who may decrypt: re-encrypt right away.
     let store = Store::new(path.parent().unwrap_or(Path::new(".")));
-    if store.needs_rekey() {
-        if let Err(e) = store.rekey() {
-            eprintln!("web: re-encrypting secrets for the new SSH keys failed: {e:#}");
-            return Status::InternalServerError;
+    let rekeyed = proc::blocking(move || {
+        if store.needs_rekey() {
+            store.rekey().map(|_| ()).map_err(|e| format!("{e:#}"))
+        } else {
+            Ok(())
         }
+    })
+    .await
+    .and_then(|r| r);
+    if let Err(e) = rekeyed {
+        eprintln!("web: re-encrypting secrets for the new SSH keys failed: {e}");
+        return Status::InternalServerError;
     }
     refresh_after_settings_change(config);
     Status::Ok

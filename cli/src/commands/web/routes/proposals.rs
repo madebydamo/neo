@@ -21,7 +21,7 @@ use crate::commands::web::proposals::{
 };
 use crate::commands::web::settings::edit::{apply_edit, Edit};
 use crate::commands::web::types::AppConfig;
-use crate::commands::web::util::{config_dir, Htmx};
+use crate::commands::web::util::{config_dir, proc, Htmx};
 
 #[derive(Serialize)]
 pub struct ProposalCreated {
@@ -86,17 +86,19 @@ struct CardContext {
     other_pending: bool,
 }
 
-fn has_pending_changes(config: &AppConfig) -> bool {
+async fn has_pending_changes(config: &AppConfig) -> bool {
     let dir = config_dir(&config.settings_path);
-    collect_changes(&dir, DiffRange::Worktree).is_ok_and(|s| !s.is_empty())
+    proc::blocking(move || collect_changes(&dir, DiffRange::Worktree).is_ok_and(|s| !s.is_empty()))
+        .await
+        .unwrap_or(false)
 }
 
-fn card(config: &AppConfig, p: Option<Proposal>) -> Template {
-    Template::render("proposal_card", card_ctx(config, p))
+async fn card(config: &AppConfig, p: Option<Proposal>) -> Template {
+    Template::render("proposal_card", card_ctx(config, p).await)
 }
 
-fn card_ctx(config: &AppConfig, p: Option<Proposal>) -> CardContext {
-    let other_pending = has_pending_changes(config);
+async fn card_ctx(config: &AppConfig, p: Option<Proposal>) -> CardContext {
+    let other_pending = has_pending_changes(config).await;
     {
         match p {
             Some(p) => CardContext {
@@ -128,8 +130,8 @@ fn card_ctx(config: &AppConfig, p: Option<Proposal>) -> CardContext {
 }
 
 #[get("/proposals/<id>/card")]
-pub fn proposal_card(config: &State<Arc<AppConfig>>, id: &str) -> Template {
-    card(config, proposals::get(id))
+pub async fn proposal_card(config: &State<Arc<AppConfig>>, id: &str) -> Template {
+    card(config, proposals::get(id)).await
 }
 
 /// Values typed into the card's secret inputs (`ask_*` form fields). They go
@@ -166,7 +168,7 @@ pub async fn proposal_save(config: &State<Arc<AppConfig>>, id: &str, form: Asked
     let Some(p) =
         proposals::get(id).filter(|p| p.status == Status::Pending || p.status == Status::Failed)
     else {
-        return card(config, proposals::get(id));
+        return card(config, proposals::get(id)).await;
     };
     let p = match save(config, &p, &asked(form)).await {
         Ok(()) => proposals::set_status(
@@ -176,7 +178,7 @@ pub async fn proposal_save(config: &State<Arc<AppConfig>>, id: &str, form: Asked
         ),
         Err((s, m)) => proposals::set_status(id, s, &m),
     };
-    card(config, p)
+    card(config, p).await
 }
 
 /// Save, then activate like the Apply button. The activation output goes to
@@ -188,23 +190,22 @@ pub async fn proposal_apply(
     form: Asked,
     meta: Metadata<'_>,
 ) -> RawHtml<String> {
-    let render = |p: Option<Proposal>, extra: String| {
-        let html = meta
-            .render("proposal_card", card_ctx(config, p))
-            .map(|(_, h)| h)
-            .unwrap_or_default();
-        RawHtml(format!("{html}{extra}"))
-    };
     let Some(p) =
         proposals::get(id).filter(|p| p.status == Status::Pending || p.status == Status::Failed)
     else {
-        return render(proposals::get(id), String::new());
+        return render_card(&meta, config, proposals::get(id), String::new()).await;
     };
     if let Err((s, m)) = save(config, &p, &asked(form)).await {
-        return render(proposals::set_status(id, s, &m), String::new());
+        return render_card(
+            &meta,
+            config,
+            proposals::set_status(id, s, &m),
+            String::new(),
+        )
+        .await;
     }
-    match apply_or_activate(config) {
-        Ok(out) => render(
+    let (p, extra) = match apply_or_activate().await {
+        Ok(out) => (
             proposals::set_status(
                 id,
                 Status::Applied,
@@ -215,7 +216,7 @@ pub async fn proposal_apply(
                 out.0
             ),
         ),
-        Err(b) => render(
+        Err(b) => (
             proposals::set_status(
                 id,
                 Status::Saved,
@@ -226,18 +227,33 @@ pub async fn proposal_apply(
             ),
             String::new(),
         ),
-    }
+    };
+    render_card(&meta, config, p, extra).await
+}
+
+async fn render_card(
+    meta: &Metadata<'_>,
+    config: &AppConfig,
+    p: Option<Proposal>,
+    extra: String,
+) -> RawHtml<String> {
+    let ctx = card_ctx(config, p).await;
+    let html = meta
+        .render("proposal_card", ctx)
+        .map(|(_, h)| h)
+        .unwrap_or_default();
+    RawHtml(format!("{html}{extra}"))
 }
 
 #[post("/proposals/<id>/reject")]
-pub fn proposal_reject(config: &State<Arc<AppConfig>>, id: &str) -> Template {
+pub async fn proposal_reject(config: &State<Arc<AppConfig>>, id: &str) -> Template {
     let p = proposals::get(id)
         .filter(|p| {
             p.status == Status::Pending || p.status == Status::Failed || p.status == Status::Stale
         })
         .and_then(|_| proposals::set_status(id, Status::Rejected, "Rejected. Nothing was changed."))
         .or_else(|| proposals::get(id));
-    card(config, p)
+    card(config, p).await
 }
 
 /// Full page for a proposal (link from Telegram or the assistant's dashboard).
@@ -249,10 +265,11 @@ pub async fn proposal_page(
     meta: Metadata<'_>,
 ) -> Template {
     if htmx.is_htmx() {
-        return card(config, proposals::get(id));
+        return card(config, proposals::get(id)).await;
     }
+    let ctx = card_ctx(config, proposals::get(id)).await;
     let html = meta
-        .render("proposal_card", card_ctx(config, proposals::get(id)))
+        .render("proposal_card", ctx)
         .map(|(_, h)| format!(r#"<div class="max-w-2xl">{h}</div>"#));
     configuration_shell(
         config,

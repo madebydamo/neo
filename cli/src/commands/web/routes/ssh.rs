@@ -9,7 +9,7 @@ use std::process::Command;
 use rocket::response::content::RawHtml;
 use rocket::{get, post};
 
-use crate::commands::web::util::escape_html;
+use crate::commands::web::util::{escape_html, proc};
 use crate::utils::command::sudo_command;
 
 /// One keypair the UI shows and can rotate.
@@ -237,9 +237,12 @@ pub fn ssh_public_key_card(key: &str) -> Option<RawHtml<String>> {
 
 /// POST /ssh/<key>/regenerate — delete the keypair and re-run its key script.
 #[post("/ssh/<key>/regenerate")]
-pub fn ssh_regenerate(key: &str) -> Option<RawHtml<String>> {
+pub async fn ssh_regenerate(key: &str) -> Option<RawHtml<String>> {
     let spec = spec(key)?;
-    Some(RawHtml(match rotate_key(spec) {
+    let rotated = proc::blocking(move || rotate_key(spec))
+        .await
+        .and_then(|r| r);
+    Some(RawHtml(match rotated {
         Ok(k) => card_ok(spec, &k),
         Err(msg) => card_err(spec, &format!("Regenerate failed: {msg}")),
     }))

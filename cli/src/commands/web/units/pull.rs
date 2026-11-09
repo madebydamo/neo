@@ -13,11 +13,11 @@ use super::control::{
 };
 
 /// Push an error status for a container pull, clear in-flight, and refresh controls.
-fn fail_pull(unit: &str, msg: &str, config: &AppConfig) {
+async fn fail_pull(unit: &str, msg: &str, config: &AppConfig) {
     let (inner, title) = status_err(msg);
     broadcast_update_out(unit, &inner, &title, config);
     end_pull(config, unit);
-    broadcast_unit_update(unit, config);
+    broadcast_unit_update(unit, config).await;
 }
 
 fn last_progress_line(buf: &str) -> Option<&str> {
@@ -67,18 +67,18 @@ pub async fn run_container_pull(unit: String, cname: String, config: Arc<AppConf
         Ok(o) if o.status.success() => {
             let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
             if s.is_empty() {
-                fail_pull(&unit, "no image from inspect", &config);
+                fail_pull(&unit, "no image from inspect", &config).await;
                 return;
             }
             s
         }
         Ok(o) => {
             let err = String::from_utf8_lossy(&o.stderr);
-            fail_pull(&unit, &format!("inspect failed: {}", err.trim()), &config);
+            fail_pull(&unit, &format!("inspect failed: {}", err.trim()), &config).await;
             return;
         }
         Err(e) => {
-            fail_pull(&unit, &format!("docker error: {}", e), &config);
+            fail_pull(&unit, &format!("docker error: {}", e), &config).await;
             return;
         }
     };
@@ -97,7 +97,7 @@ pub async fn run_container_pull(unit: String, cname: String, config: Arc<AppConf
     {
         Ok(c) => c,
         Err(e) => {
-            fail_pull(&unit, &format!("pull spawn: {}", e), &config);
+            fail_pull(&unit, &format!("pull spawn: {}", e), &config).await;
             return;
         }
     };
@@ -169,14 +169,15 @@ pub async fn run_container_pull(unit: String, cname: String, config: Arc<AppConf
                     &unit,
                     &format!("pulled {img}, restart failed: {e}"),
                     &config,
-                );
+                )
+                .await;
                 return;
             }
 
             let (inner, title) = status_ok(&format!("updated {}", img));
             push(inner, title);
             end_pull(&config, &unit);
-            broadcast_unit_update(&unit, &config);
+            broadcast_unit_update(&unit, &config).await;
             schedule_unit_refresh_burst(unit, config);
         }
         Ok(s) => {
@@ -184,10 +185,11 @@ pub async fn run_container_pull(unit: String, cname: String, config: Arc<AppConf
                 &unit,
                 &format!("pull exit {}", s.code().unwrap_or(-1)),
                 &config,
-            );
+            )
+            .await;
         }
         Err(e) => {
-            fail_pull(&unit, &format!("pull wait: {}", e), &config);
+            fail_pull(&unit, &format!("pull wait: {}", e), &config).await;
         }
     }
 }

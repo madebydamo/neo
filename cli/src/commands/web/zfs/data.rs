@@ -17,10 +17,7 @@ use super::{
     list_filesystems, list_snapshots, now_epoch, now_ts, set_property, snapshot_action,
     snapshot_name_ok, snapshot_ref, SnapAction, Snapshot,
 };
-use crate::utils::{
-    current_generation_number, running_generation_number, switch_system_generation, GenerationMode,
-    GenerationTimeline,
-};
+use crate::utils::{current_generation_number, running_generation_number, GenerationTimeline};
 
 const PROP_RESTORE: &str = "neo:restore";
 const PROP_RESULT: &str = "neo:restore-result";
@@ -446,13 +443,7 @@ pub async fn restore(ds: &str, snap: &str, gen: Option<u64>) -> String {
     }
 
     if let Some(n) = gen {
-        let sudo = sudo_cmd();
-        let res = tokio::task::spawn_blocking(move || {
-            switch_system_generation(n, GenerationMode::Boot, &sudo).map_err(|e| format!("{e:#}"))
-        })
-        .await
-        .unwrap_or_else(|e| Err(e.to_string()));
-        if let Err(e) = res {
+        if let Err(e) = power::set_boot_generation(n).await {
             return render_card(err_notice(&format!(
                 "setting boot generation {n} failed, nothing scheduled: {e}"
             )))

@@ -13,7 +13,7 @@ use toml_edit::DocumentMut;
 use crate::commands::web::locks::{lock_attr, try_lock, Blocked, LockMode, Scope};
 use crate::commands::web::settings::save::refresh_after_settings_change;
 use crate::commands::web::types::AppConfig;
-use crate::commands::web::util::escape_html;
+use crate::commands::web::util::{escape_html, proc};
 use crate::utils::locks::{LockSpec, OpInfo};
 use crate::utils::secrets::{Backend, PLAIN_FILE, SOPS_FILE};
 use crate::utils::secrets_store::{admin_keys, host_key, ignored_keys, Store, IDENTITY_FILE};
@@ -194,6 +194,17 @@ async fn secret_paths(config: &AppConfig) -> Result<Vec<Vec<String>>, String> {
         .map_err(|e| format!("Could not list secret settings: {e:#}"))
 }
 
+/// Run a secrets store operation (sops, the root helper) off the async workers.
+async fn with_store<F>(config: &AppConfig, f: F) -> Result<String, String>
+where
+    F: FnOnce(&Store) -> anyhow::Result<String> + Send + 'static,
+{
+    let store = store(config);
+    proc::blocking(move || f(&store).map_err(|e| format!("{e:#}")))
+        .await
+        .and_then(|r| r)
+}
+
 fn done(config: &AppConfig, result: Result<String, String>) -> RawHtml<String> {
     let html = match result {
         Ok(msg) => {
@@ -210,15 +221,17 @@ fn done(config: &AppConfig, result: Result<String, String>) -> RawHtml<String> {
 pub async fn secrets_split(config: &State<Arc<AppConfig>>) -> Result<RawHtml<String>, Blocked> {
     let _lock = lock("Moving secrets to secrets.yaml")?;
     let result = match secret_paths(config).await {
-        Ok(p) => store(config)
-            .split(&p)
-            .map(|moved| {
-                format!(
-                    "Moved {} secret setting(s) to {PLAIN_FILE}. Activate to apply.",
-                    moved.len()
-                )
+        Ok(p) => {
+            with_store(config, move |s| {
+                s.split(&p).map(|moved| {
+                    format!(
+                        "Moved {} secret setting(s) to {PLAIN_FILE}. Activate to apply.",
+                        moved.len()
+                    )
+                })
             })
-            .map_err(|e| format!("{e:#}")),
+            .await
+        }
         Err(e) => Err(e),
     };
     Ok(done(config, result))
@@ -229,21 +242,23 @@ pub async fn secrets_split(config: &State<Arc<AppConfig>>) -> Result<RawHtml<Str
 pub async fn secrets_enable(config: &State<Arc<AppConfig>>) -> Result<RawHtml<String>, Blocked> {
     let _lock = lock("Encrypting secrets")?;
     let result = match secret_paths(config).await {
-        Ok(p) => store(config)
-            .enable(&p)
-            .map(|r| {
-                format!(
-                    "Encrypted {} secret(s) for {} key(s){}. Activate to apply.",
-                    r.values,
-                    r.recipients,
-                    if r.escrowed {
-                        ", host key escrowed"
-                    } else {
-                        ""
-                    }
-                )
+        Ok(p) => {
+            with_store(config, move |s| {
+                s.enable(&p).map(|r| {
+                    format!(
+                        "Encrypted {} secret(s) for {} key(s){}. Activate to apply.",
+                        r.values,
+                        r.recipients,
+                        if r.escrowed {
+                            ", host key escrowed"
+                        } else {
+                            ""
+                        }
+                    )
+                })
             })
-            .map_err(|e| format!("{e:#}")),
+            .await
+        }
         Err(e) => Err(e),
     };
     Ok(done(config, result))
@@ -251,23 +266,25 @@ pub async fn secrets_enable(config: &State<Arc<AppConfig>>) -> Result<RawHtml<St
 
 /// POST /secrets/disable — back to a plain secrets.yaml.
 #[post("/secrets/disable")]
-pub fn secrets_disable(config: &State<Arc<AppConfig>>) -> Result<RawHtml<String>, Blocked> {
+pub async fn secrets_disable(config: &State<Arc<AppConfig>>) -> Result<RawHtml<String>, Blocked> {
     let _lock = lock("Decrypting secrets")?;
-    let result = store(config)
-        .disable()
-        .map(|n| format!("Decrypted {n} secret(s) into {PLAIN_FILE}. Activate to apply."))
-        .map_err(|e| format!("{e:#}"));
+    let result = with_store(config, |s| {
+        s.disable()
+            .map(|n| format!("Decrypted {n} secret(s) into {PLAIN_FILE}. Activate to apply."))
+    })
+    .await;
     Ok(done(config, result))
 }
 
 /// POST /secrets/rekey — re-encrypt for the current keys.
 #[post("/secrets/rekey")]
-pub fn secrets_rekey(config: &State<Arc<AppConfig>>) -> Result<RawHtml<String>, Blocked> {
+pub async fn secrets_rekey(config: &State<Arc<AppConfig>>) -> Result<RawHtml<String>, Blocked> {
     let _lock = lock("Re-encrypting secrets")?;
-    let result = store(config)
-        .rekey()
-        .map(|n| format!("Re-encrypted for {n} key(s). Activate to apply."))
-        .map_err(|e| format!("{e:#}"));
+    let result = with_store(config, |s| {
+        s.rekey()
+            .map(|n| format!("Re-encrypted for {n} key(s). Activate to apply."))
+    })
+    .await;
     Ok(done(config, result))
 }
 

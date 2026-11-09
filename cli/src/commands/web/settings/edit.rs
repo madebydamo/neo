@@ -110,7 +110,7 @@ async fn save_service_inner(
     if let Err(s) = route_secrets(config, &mut doc, Some(&scope)).await {
         return s;
     }
-    finish_save(settings_path, &mut doc, config)
+    finish_save(settings_path, &mut doc, config).await
 }
 
 async fn save_core_section_inner(
@@ -186,7 +186,7 @@ async fn save_core_section_inner(
     if let Err(s) = route_secrets(config, &mut doc, scope).await {
         return s;
     }
-    finish_save(settings_path, &mut doc, config)
+    finish_save(settings_path, &mut doc, config).await
 }
 
 /// Ensure `[core]` exists and return a mutable reference, or InternalServerError.
@@ -334,7 +334,7 @@ async fn save_patch_inner(config: &AppConfig, ops: &[PatchOp]) -> Status {
             }
         }
     }
-    finish_save(settings_path, &mut doc, config)
+    finish_save(settings_path, &mut doc, config).await
 }
 
 #[cfg(test)]

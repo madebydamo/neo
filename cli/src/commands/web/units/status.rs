@@ -325,24 +325,11 @@ pub async fn query_unit_states(units: &[String]) -> HashMap<String, UnitStatus> 
     }
 }
 
-/// Blocking single-unit variant of [`query_unit_states`] (OOB fragments built in
-/// sync handlers). `unknown` on any error.
-pub fn query_unit_status_blocking(unit: &str) -> UnitStatus {
-    let units = sanitize_units(std::iter::once(&unit.to_string()));
-    let Some(u) = units.first() else {
-        return UnitStatus::unknown();
-    };
-    std::process::Command::new(systemctl_bin())
-        .arg("show")
-        .arg("--no-pager")
-        .arg(format!("--property={SHOW_PROPERTIES}"))
-        .arg("--")
-        .arg(u)
-        .stdin(std::process::Stdio::null())
-        .output()
-        .ok()
-        .filter(|o| !o.stdout.is_empty())
-        .and_then(|o| parse_show_output(&String::from_utf8_lossy(&o.stdout), &units).remove(u))
+/// Single-unit [`query_unit_states`]; `unknown` on any error.
+pub async fn query_unit_status(unit: &str) -> UnitStatus {
+    query_unit_states(&[unit.to_string()])
+        .await
+        .remove(unit)
         .unwrap_or_else(UnitStatus::unknown)
 }
 

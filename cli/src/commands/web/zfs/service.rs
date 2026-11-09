@@ -293,7 +293,7 @@ pub async fn run_restore(job: RestoreJob, mut lock: LockGuard, config: Arc<AppCo
         .unit_updates
         .send(snapshot_out_oob(&job.service, &inner, &title));
     for u in &job.units {
-        broadcast_unit_update(u, &config);
+        broadcast_unit_update(u, &config).await;
         schedule_unit_refresh_burst(u.clone(), Arc::clone(&config));
     }
 }
@@ -366,7 +366,7 @@ async fn restore_inner(
         if let Err(e) = systemctl(UnitAction::Stop, u).await {
             eprintln!("web: snapshot restore stop {u}: {e}");
         }
-        broadcast_unit_update(u, config);
+        broadcast_unit_update(u, config).await;
     }
 
     let restart = |config: Arc<AppConfig>| {

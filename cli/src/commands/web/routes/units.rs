@@ -42,7 +42,7 @@ async fn unit_action_response(
             update_out_oob(unit, &inner, &title)
         }
     };
-    let oob = unit_controls_oob_fragment(unit, config);
+    let oob = unit_controls_oob_fragment(unit, config).await;
     let _ = config.unit_updates.send(out.clone());
     let _ = config.unit_updates.send(oob.clone());
     schedule_unit_refresh_burst(unit.to_string(), Arc::clone(config));
@@ -76,7 +76,7 @@ pub async fn unit_stop(
 /// Kick off an async docker pull+restart. Returns immediately with OOB status +
 /// disabled ↻ button; progress and completion are pushed over `/ws/status`.
 #[post("/container/update/<container>")]
-pub fn container_update(
+pub async fn container_update(
     container: &str,
     config: &State<Arc<AppConfig>>,
 ) -> Result<RawHtml<String>, Blocked> {
@@ -93,13 +93,13 @@ pub fn container_update(
     if !try_begin_pull(config, &unit) {
         let (inner, _) = status_pulling("already pulling…");
         let out = update_out_oob(&unit, &inner, "docker pull already in progress");
-        let ctl = unit_controls_oob_fragment(&unit, config);
+        let ctl = unit_controls_oob_fragment(&unit, config).await;
         return Ok(RawHtml(format!("{out}{ctl}")));
     }
 
     let (inner, _) = status_pulling("starting pull…");
     let out = update_out_oob(&unit, &inner, "starting docker pull");
-    let ctl = unit_controls_oob_fragment(&unit, config);
+    let ctl = unit_controls_oob_fragment(&unit, config).await;
     let _ = config.unit_updates.send(out.clone());
     let _ = config.unit_updates.send(ctl.clone());
 
