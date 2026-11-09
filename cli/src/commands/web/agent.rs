@@ -6,6 +6,7 @@
 use anyhow::{anyhow, Context, Result};
 use serde_json::Value;
 
+use super::util::read_token_file;
 use crate::utils::command::now_secs;
 
 pub struct Gateway {
@@ -18,11 +19,9 @@ pub fn gateway() -> Option<Gateway> {
     let base = std::env::var("NEO_HERMES_URL")
         .ok()
         .filter(|s| !s.is_empty())?;
-    let path = std::env::var("NEO_HERMES_TOKEN_FILE").ok()?;
-    let token = std::fs::read_to_string(path).ok()?.trim().to_string();
-    (!token.is_empty()).then_some(Gateway {
+    Some(Gateway {
         base: base.trim_end_matches('/').to_string(),
-        token,
+        token: read_token_file("NEO_HERMES_TOKEN_FILE")?,
     })
 }
 

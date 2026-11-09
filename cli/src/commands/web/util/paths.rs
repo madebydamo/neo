@@ -19,6 +19,15 @@ pub fn state_dir() -> Option<PathBuf> {
     Some(PathBuf::from(home).join(".local/state/neo"))
 }
 
+/// Contents of the token file named by `$var`, trimmed; `None` when unset, unreadable
+/// or empty (the feature behind the token stays off).
+pub fn read_token_file(var: &str) -> Option<String> {
+    let path = std::env::var(var).ok()?;
+    let token = std::fs::read_to_string(path).ok()?;
+    let token = token.trim();
+    (!token.is_empty()).then(|| token.to_string())
+}
+
 pub fn sudo_cmd() -> String {
     sudo_bin()
 }

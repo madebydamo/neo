@@ -19,6 +19,7 @@ use crate::commands::web::proposals::{self, ProposalRequest};
 use crate::commands::web::redact::{redacted_current, redacted_default};
 use crate::commands::web::schema_cache::load_options;
 use crate::commands::web::types::{AppConfig, OptionHelper, OptionSchema, OptionType};
+use crate::commands::web::util::read_token_file;
 use crate::commands::web::util::service_name_ok;
 
 const PROTOCOL: &str = "2025-06-18";
@@ -27,10 +28,7 @@ const PROTOCOL: &str = "2025-06-18";
 pub struct AgentToken;
 
 fn expected_token() -> Option<String> {
-    let path = std::env::var("NEO_AGENT_TOKEN_FILE").ok()?;
-    let t = std::fs::read_to_string(path).ok()?;
-    let t = t.trim().to_string();
-    (!t.is_empty()).then_some(t)
+    read_token_file("NEO_AGENT_TOKEN_FILE")
 }
 
 fn same(a: &str, b: &str) -> bool {

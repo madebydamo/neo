@@ -14,8 +14,8 @@ pub use htmx::Htmx;
 pub use inflight::InFlightSet;
 pub use oob_status::{status_err, status_ok, status_pulling, status_slot_oob};
 pub use paths::{
-    docker_bin, neo_bin, nix_bin, rsync_bin, state_dir, static_dir, sudo_cmd, systemctl_bin,
-    template_dir, zfs_bin,
+    docker_bin, neo_bin, nix_bin, read_token_file, rsync_bin, state_dir, static_dir, sudo_cmd,
+    systemctl_bin, template_dir, zfs_bin,
 };
 pub use validate::{
     branch_ok, core_section_ok, generation_ok, oauth_env_key_ok, oauth_session_ok, op_id_ok,
