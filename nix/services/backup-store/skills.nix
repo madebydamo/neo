@@ -22,14 +22,14 @@
         - Each client is one account backup-<client>, home <path>/<client> (0700), one format; the gate refuses every other command
         - Storage is outside the Neo data volume, so this server's own backup never includes it
         - Dataset storage: <dataset>/<client>; ZFS backups go to <dataset>/<client>/<name>
-        - Client side: services.backup target = "store", storeUrl, storeClient
+        - Client side: a destination in services.backup.destinations with target = "store", storeUrl, storeClient
 
         ## Credentials
         - Settings: `services.backup-store.clients.<client>.publicKeys`: the client's host key (System → SSH there), plus an admin key to restore with
         - Settings: `services.backup-store.encryptionKey` when the dataset is encrypted
 
         ## Procedures
-        1. Add a client: clients.<client> with format and publicKeys, apply; on the client set target = "store", storeUrl = https://<subdomain>.<domain>
+        1. Add a client: clients.<client> with format and publicKeys, apply; on the client add a destination with target = "store", storeUrl = https://<subdomain>.<domain>
         2. Run a backup on the client: `systemctl start backup`, read `journalctl -u backup`
         3. Here: `journalctl -u backup-store-sshd` for logins and refused commands, `journalctl -u backup-store-setup` for storage
 

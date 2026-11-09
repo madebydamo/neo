@@ -46,6 +46,28 @@ fn is_mountpoint(p: &Path) -> bool {
         .is_ok_and(|s| s.success())
 }
 
+/// Empty the data folder after a failed copy, before the next destination.
+/// With Disko it is the data dataset's mountpoint, mounted again if a failed
+/// ZFS receive left it unmounted.
+fn reset_data_root(data_root: &Path, dataset: Option<&str>) -> Result<()> {
+    if let (Some(ds), false) = (dataset, is_mountpoint(data_root)) {
+        execute_command(
+            Command::new("mount")
+                .args(["-t", "zfs", "-o", "zfsutil", ds])
+                .arg(data_root),
+        )?;
+    }
+    for entry in fs::read_dir(data_root)? {
+        let path = entry?.path();
+        if path.is_dir() && !path.is_symlink() {
+            fs::remove_dir_all(&path)?;
+        } else {
+            fs::remove_file(&path)?;
+        }
+    }
+    Ok(())
+}
+
 fn git(repo: &Path) -> Command {
     let mut c = Command::new("git");
     c.arg("-C")
@@ -272,12 +294,13 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         .strip_prefix(&format!("{root}/"))
         .map(str::to_string);
 
-    let source = match (&from_backup, args.data) {
-        (_, false) => None,
-        (Some((s, _)), true) => Some(s.clone()),
+    // Every backup destination, in the order they are tried.
+    let sources: Vec<Source> = match (&from_backup, args.data) {
+        (_, false) => Vec::new(),
+        (Some((s, _)), true) => vec![s.clone()],
         (None, true) => Source::from_settings(&doc)?,
     };
-    if args.data && source.is_none() && args.data_from.is_none() {
+    if args.data && sources.is_empty() && args.data_from.is_none() {
         bail!("the backup is off in this config: restore without data (--data none), or point --data-from at a copy");
     }
     let mut identities = Vec::new();
@@ -295,18 +318,47 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         known_hosts: work.join("known_hosts"),
         work: work.join("backup"),
     };
-    let data_line = match &source {
-        Some(s) => {
-            if s.format == Format::Zfs && (mounted || !disko_on) {
-                bail!("a ZFS backup restores into the Disko layout only");
-            }
-            let line = backup::check(&access, s, args.data_from.as_deref())
-                .with_context(|| format!("cannot read the backup ({})", s.describe()))?;
-            format!("{} — {line}", s.describe())
+    // The first destination that can be read; the ones after it are the
+    // fallbacks if copying from it fails.
+    let usable = |s: &Source| -> Result<String> {
+        if s.format == Format::Zfs && (mounted || !disko_on) {
+            bail!("a ZFS backup restores into the Disko layout only");
         }
-        None => "none (empty data)".into(),
+        backup::check(&access, s, args.data_from.as_deref())
     };
-    if source.is_some() && config_rel.is_none() {
+    let mut first = None;
+    let mut unreadable = Vec::new();
+    for (i, s) in sources.iter().enumerate() {
+        match usable(s) {
+            Ok(line) => {
+                first = Some((i, line));
+                break;
+            }
+            Err(e) => {
+                println!("✗ cannot read the backup {}: {e:#}", s.describe());
+                unreadable.push(format!("{}: {e:#}", s.describe()));
+            }
+        }
+    }
+    let data_line = match (&first, sources.is_empty()) {
+        (_, true) => "none (empty data)".into(),
+        (None, false) => bail!(
+            "no backup destination can be read: {}",
+            unreadable.join("; ")
+        ),
+        (Some((i, line)), false) => {
+            let rest = sources.len() - i - 1;
+            format!(
+                "{} — {line}{}",
+                sources[*i].describe(),
+                match rest {
+                    0 => String::new(),
+                    n => format!(" (then {n} more if it fails)"),
+                }
+            )
+        }
+    };
+    if !sources.is_empty() && config_rel.is_none() {
         bail!("the config repo ({config_path}) is not inside {root}");
     }
 
@@ -380,19 +432,48 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         cap_arc();
     }
 
-    // 6. Data.
-    if let (Some(s), Some(rel)) = (&source, &config_rel) {
+    // 6. Data, from the next destination when one fails.
+    if let (Some((first, _)), Some(rel)) = (&first, &config_rel) {
         let data_root = under(&args.target, &root);
+        let dataset = format!("{pool}/neo");
         fs::create_dir_all(&data_root)?;
-        backup::restore_into(
-            &access,
-            s,
-            args.data_from.as_deref(),
-            &data_root,
-            rel,
-            &format!("{pool}/neo"),
-            &root,
-        )?;
+        let mut errors = Vec::new();
+        let mut restored = false;
+        for (i, s) in sources.iter().enumerate().skip(*first) {
+            if i != *first {
+                if let Err(e) = usable(s) {
+                    println!("✗ cannot read the backup {}: {e:#}", s.describe());
+                    errors.push(format!("{}: {e:#}", s.describe()));
+                    continue;
+                }
+                println!("→ trying the next backup: {}", s.describe());
+                reset_data_root(&data_root, disko_on.then_some(dataset.as_str()))?;
+            }
+            match backup::restore_into(
+                &access,
+                s,
+                args.data_from.as_deref(),
+                &data_root,
+                rel,
+                &dataset,
+                &root,
+            ) {
+                Ok(()) => {
+                    restored = true;
+                    break;
+                }
+                Err(e) => {
+                    println!("✗ restoring from {} failed: {e:#}", s.describe());
+                    errors.push(format!("{}: {e:#}", s.describe()));
+                }
+            }
+        }
+        if !restored {
+            bail!(
+                "no backup destination could be restored: {}",
+                errors.join("; ")
+            );
+        }
     }
 
     // 7. Repo, host key, install.

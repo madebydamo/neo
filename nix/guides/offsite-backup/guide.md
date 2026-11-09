@@ -37,21 +37,28 @@ Send your friend this list:
 
 ## 3. Set up the backup
 
-Open [Backup](service:backup), switch it on and fill in:
+Open [Backup](service:backup) and switch it on. Under
+[Backup destinations](option:backup.destinations), add one and name it after
+your friend, for example `friend`. Fill in:
 
-- [Backup server](option:backup.host): the name or IP address from your friend.
-- [Username](option:backup.user): the user your friend created.
-- [Extra SSH options](option:backup.extraOptions): add
-  `-o StrictHostKeyChecking=accept-new`, so your server trusts the friend's
-  server the first time it connects. If the port is not 22, add a second
-  entry with the port, for example `-p 2222`.
+- **Backup computer**: the name or IP address from your friend.
+- **Username**: the user your friend created.
+- **Extra SSH options**: add `-o StrictHostKeyChecking=accept-new`, so your
+  server trusts the friend's server the first time it connects. If the port is
+  not 22, add a second entry with the port, for example `-p 2222`.
 
-Leave the [SSH key](option:backup.sshKey) as it is: it is the key from step 1.
+Leave the **SSH key** as it is: it is the key from step 1.
 
 The backup lands in a folder on your friend's server named after your
-homeserver, in the backup user's home folder. Change
-[Folder on backup server](option:backup.remotePath) only if your friend asks
-for another place.
+homeserver, in the backup user's home folder. Change **Backup folder** only if
+your friend asks for another place.
+
+> [!tip]
+> One copy elsewhere is good, two are better. Add a second destination, for
+> example a USB disk on this server (**Back up to**: a disk on this server) or
+> another friend. Every night each destination gets its own copy, and if one
+> can't be reached the others still get theirs. If your friend has two disks,
+> add their computer twice, each time with a folder on the other disk.
 
 ## 4. Pick the time and what to skip
 
@@ -85,6 +92,7 @@ copy what changed.
 > systemctl show -p Result -p ExecMainStatus backup.service   # Result=success
 > ```
 
-If it fails, the details of the last run are in `/var/log/backup.log` on your
-server. "Permission denied" usually means the key from step 1 was not added to
+If it fails, the details of the last run are in
+`/var/log/backup-<destination>.log` on your server, for example
+`/var/log/backup-friend.log`. "Permission denied" usually means the key from step 1 was not added to
 the right user.

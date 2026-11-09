@@ -432,7 +432,7 @@ What stays out of git anyway: decrypted values only exist in `/run/neo-secrets` 
 
 ## Backups
 
-The **backup** service copies all Neo data (`/var/neo`: every service's appdata and the config repo) every night. Settings in the web UI under **Backup**, or in `settings.toml`:
+The **backup** service copies all Neo data (`/var/neo`: every service's appdata and the config repo) every night, to every **destination** you list. Several destinations make a 3-2-1 backup: e.g. a USB disk on the server and a friend's computer. A destination that fails is skipped and reported, the others still get their copy. Settings in the web UI under **Backup**, or in `settings.toml`. Per destination (`[services.backup.destinations.<name>]`):
 
 | Setting | Values |
 |---------|--------|
@@ -442,21 +442,39 @@ The **backup** service copies all Neo data (`/var/neo`: every service's appdata 
 | **Backup folder** (`remotePath`) | `files`/`encrypted`: a folder; on another computer relative to the user's home, on a disk the absolute path below its mount point |
 | **Backup dataset** (`dataset`) | `zfs`: e.g. `tank/backup/myhome`, created on the first run |
 | **Backups to keep** (`keep`) | `zfs`/`encrypted`: backups kept at the destination (default 14) |
+| **Restore order** (`priority`) | `neo restore` tries lower numbers first and takes the next one if a destination can't be read (default 100, then by name) |
+| `enabled` | `false` pauses a destination; its backups stay |
 
 ```toml
 [services.backup]
 enabled = true
+schedule = "03:00:00"
+
+[services.backup.destinations.usb]
+target = "disk"
+remotePath = "/mnt/usb/neo"
+priority = 10                  # fastest to restore from
+
+[services.backup.destinations.friend]
 host = "backup.example.com"
 user = "root"
 format = "zfs"
 dataset = "tank/backup/myhome"
+
+# The same computer twice: one folder on each of its disks.
+[services.backup.destinations.friend-disk2]
+host = "backup.example.com"
+user = "root"
+format = "encrypted"
+remotePath = "/mnt/disk2/myhome"
 ```
 
 - On the Disko (ZFS) layout every run copies **from a snapshot**, so databases are copied at one moment.
 - The login key is the server's **SSH host key** by default. Put its public key (**System → SSH**) into the backup computer's `~/.ssh/authorized_keys`. The host key is part of the encrypted config repo, so a restored machine and `neo restore` log in with the same key. (Backups set up before this kept the `homeserver` user's key; that key is not restored with the machine.)
 - `zfs` to a non-root user: on the destination, `zfs allow <user> create,receive,mount,destroy,hold <parent dataset>`. The first run sends everything, later runs only the changes. It never overwrites a dataset that holds something else.
 - `disk`: the disk must be mounted (`files`) or its pool importable (`zfs`). A `files` backup refuses to write onto the system disk, so an unplugged disk doesn't fill `/`.
-- Run one now: `sudo systemctl start backup`, log: `journalctl -u backup`.
+- Run one now: `sudo systemctl start backup` (all destinations), log: `journalctl -u backup`, per destination `/var/log/backup-<name>.log`.
+- Settings from before destinations existed (the keys directly under `[services.backup]`) become the destination `main` with `neo update`.
 
 ### Backup store
 
@@ -478,11 +496,10 @@ format = "encrypted"
 publicKeys = ["ssh-ed25519 AAAA…"]
 ```
 
-On the other server:
+On the other server, a destination:
 
 ```toml
-[services.backup]
-enabled = true
+[services.backup.destinations.store]
 target = "store"
 storeUrl = "https://backup.example.com"
 storeClient = "myhome"         # default: its hostname

@@ -13,62 +13,178 @@
             {
               enabled = mkEnableOption "Backup: a copy of all your homeserver's data on another computer or disk, every night" {rank = 0;};
 
-              # docs/design/backup-restore.md §2. neo restore reads the same keys.
-              target = mkOption {
-                type = types.enum ["ssh" "disk" "store"];
-                default = "ssh";
+              # docs/design/backup-restore.md §2. Every run backs up to each
+              # enabled destination in turn; neo restore reads the same keys and
+              # tries them by priority.
+              destinations = mkOption {
+                type = types.attrsOf (types.submodule {
+                  options =
+                    {
+                      enabled = mkOption {
+                        type = types.bool;
+                        default = true;
+                        rank = 0;
+                        description = "Back up to this place. Switched off, it is skipped and its backups stay where they are.";
+                      };
+
+                      target = mkOption {
+                        type = types.enum ["ssh" "disk" "store"];
+                        default = "ssh";
+                        rank = 5;
+                        description = "Where the backup goes: another computer you can log in to, a disk attached to this server, or a Neo backup store, which only needs HTTPS.";
+                        ui = lib.neo.ui.mkUi {
+                          label = "Back up to";
+                          choiceLabels = {
+                            ssh = "Another computer (SSH)";
+                            disk = "A disk on this server";
+                            store = "A Neo backup store (HTTPS)";
+                          };
+                        };
+                      };
+
+                      # target = store: SSH tunnelled through this address
+                      # (services.backup-store on the other server). https only.
+                      storeUrl = mkOption {
+                        type = types.str;
+                        default = "";
+                        example = "https://backup.example.com";
+                        rank = 6;
+                        description = "Web address of the backup store, starting with https://.";
+                        ui = lib.neo.ui.mkUi {
+                          label = "Store address";
+                          visibleWhen = "target=store";
+                        };
+                      };
+
+                      storeClient = mkOption {
+                        type = types.str;
+                        default = config.neo.core.hostname;
+                        rank = 6;
+                        description = "The name this server has in the store's list of servers.";
+                        ui = lib.neo.ui.mkUi {
+                          label = "Name in the store";
+                          visibleWhen = "target=store";
+                        };
+                      };
+
+                      format = mkOption {
+                        # encrypted: restic repository + neo-backup.age (data key for
+                        # the host key and the admin keys), docs/design/backup-restore.md §3.
+                        type = types.enum ["files" "encrypted" "zfs"];
+                        default = "files";
+                        rank = 7;
+                        description = "Plain files work with any computer or disk. Encrypted keeps several versions that only this server and your SSH keys can open. ZFS snapshots are fastest, but need ZFS on both sides.";
+                        ui = lib.neo.ui.mkUi {
+                          label = "Backup format";
+                          choiceLabels = {
+                            files = "Plain files";
+                            encrypted = "Encrypted";
+                            zfs = "ZFS snapshots";
+                          };
+                        };
+                      };
+
+                      # files: rsync destination folder; encrypted: folder holding
+                      # neo-backup.age and the restic repository. Relative paths are
+                      # relative to the remote user's home directory (user@host:path); a
+                      # disk needs an absolute path below its mount point.
+                      remotePath = mkOption {
+                        type = types.str;
+                        default = config.neo.core.hostname;
+                        description = "Folder where this homeserver's files are stored. On another computer, a name alone is a folder in that user's home; on a disk, give the full path where the disk is mounted.";
+                        rank = 60;
+                        ui = lib.neo.ui.mkUi {
+                          label = "Backup folder";
+                          visibleWhen = "format=files,encrypted";
+                        };
+                      };
+
+                      # zfs: dataset receiving the snapshots (zfs recv -F).
+                      dataset = mkOption {
+                        type = types.str;
+                        default = "";
+                        example = "tank/backup/homeserver";
+                        description = "ZFS dataset that receives the backups, starting with the pool name, for example tank/backup/homeserver. It is created on the first backup. With a backup store: its dataset, then your name in the store, then neo.";
+                        rank = 61;
+                        ui = lib.neo.ui.mkUi {
+                          label = "Backup dataset";
+                          visibleWhen = "format=zfs";
+                        };
+                      };
+
+                      keep = mkOption {
+                        type = types.ints.positive;
+                        default = 14;
+                        description = "How many backups are kept here. Older ones are deleted after each backup.";
+                        rank = 62;
+                        ui = lib.neo.ui.mkUi {
+                          label = "Backups to keep";
+                          visibleWhen = "format=zfs,encrypted";
+                        };
+                      };
+
+                      # neo restore sorts by (priority, name).
+                      priority = mkOption {
+                        type = types.int;
+                        default = 100;
+                        description = "When restoring, places with a lower number are tried first; the next one is used if one can't be reached. Backups always go to every place.";
+                        rank = 90;
+                        ui = lib.neo.ui.mkUi {label = "Restore order";};
+                      };
+                    }
+                    # The SSH host key by default (backup runs as root): it is escrowed in
+                    # identity.sops.yaml, so a restored machine and `neo restore` log in
+                    # with it too. Configs from before keep the homeserver key (migration
+                    # 013_backup_keeps_ssh_key).
+                    // (let
+                      ssh = lib.neo.mkSshConnectionOptions {
+                        rankBase = 10;
+                        defaultSshKey = "/etc/ssh/ssh_host_ed25519_key";
+                        hostDescription = "Name or IP address of the computer that receives the backup.";
+                        userDescription = "Username you log in with on that computer. For ZFS snapshots it needs the right to receive them (root, or zfs allow).";
+                        sshKeyDescription = "Key this server logs in with. The default is the server's own identity, which a restore brings back, so the backup keeps working after a restore. Add its public key (System → SSH) on the backup computer.";
+                        extraOptionsDescription = "Extra SSH options for the connection, e.g. -p 2222 for a different port.";
+                      };
+                      onSsh = ui: lib.neo.ui.mkUi (ui // {visibleWhen = "target=ssh";});
+                      # The store's login differs only in where the connection goes.
+                      onSshOrStore = ui: lib.neo.ui.mkUi (ui // {visibleWhen = "target=ssh,store";});
+                    in {
+                      host =
+                        ssh.host
+                        // {
+                          default = "";
+                          ui = onSsh {label = "Backup computer";};
+                        };
+                      user =
+                        ssh.user
+                        // {
+                          default = "root";
+                          ui = onSsh {label = "Username";};
+                        };
+                      sshKey =
+                        ssh.sshKey
+                        // {
+                          rank = 70;
+                          ui = onSshOrStore {label = "SSH key";};
+                        };
+                      extraOptions =
+                        ssh.extraOptions
+                        // {
+                          rank = 71;
+                          ui = onSshOrStore {label = "Extra SSH options";};
+                        };
+                    });
+                });
+                default = {};
                 rank = 5;
-                description = "Where the backup goes: another computer you can log in to, a disk attached to this server, or a Neo backup store, which only needs HTTPS.";
-                ui = lib.neo.ui.mkUi {
-                  label = "Back up to";
-                  choiceLabels = {
-                    ssh = "Another computer (SSH)";
-                    disk = "A disk on this server";
-                    store = "A Neo backup store (HTTPS)";
-                  };
-                };
-              };
-
-              # target = store: SSH tunnelled through this address (services.backup-store
-              # on the other server). https only.
-              storeUrl = mkOption {
-                type = types.str;
-                default = "";
-                example = "https://backup.example.com";
-                rank = 6;
-                description = "Web address of the backup store, starting with https://.";
-                ui = lib.neo.ui.mkUi {
-                  label = "Store address";
-                  visibleWhen = "target=store";
-                };
-              };
-
-              storeClient = mkOption {
-                type = types.str;
-                default = config.neo.core.hostname;
-                rank = 6;
-                description = "The name this server has in the store's list of servers.";
-                ui = lib.neo.ui.mkUi {
-                  label = "Name in the store";
-                  visibleWhen = "target=store";
-                };
-              };
-
-              format = mkOption {
-                # encrypted: restic repository + neo-backup.age (data key for the
-                # host key and the admin keys), docs/design/backup-restore.md §3.
-                type = types.enum ["files" "encrypted" "zfs"];
-                default = "files";
-                rank = 7;
-                description = "Plain files work with any computer or disk. Encrypted keeps several versions that only this server and your SSH keys can open. ZFS snapshots are fastest, but need ZFS on both sides.";
-                ui = lib.neo.ui.mkUi {
-                  label = "Backup format";
-                  choiceLabels = {
-                    files = "Plain files";
-                    encrypted = "Encrypted";
-                    zfs = "ZFS snapshots";
-                  };
-                };
+                example = literalExpression ''
+                  {
+                    friend = { host = "backup.example.com"; user = "neo"; format = "encrypted"; };
+                    usb = { target = "disk"; remotePath = "/mnt/usb/neo"; };
+                  }
+                '';
+                description = "Places the backup goes to, by name. Every backup is copied to each of them, so one lost or unreachable place still leaves the others. Add the same computer twice with different folders to use two of its disks.";
+                ui = lib.neo.ui.mkUi {label = "Backup destinations";};
               };
 
               # Defaults to neo.core.volumes.root; on ZFS copied from a snapshot.
@@ -80,45 +196,6 @@
                 ui = lib.neo.ui.mkUi {
                   label = "Folder to back up";
                   group = lib.neo.ui.groups.advanced;
-                };
-              };
-
-              # files: rsync destination folder; encrypted: folder holding
-              # neo-backup.age and the restic repository. Relative paths are
-              # relative to the remote user's home directory (user@host:path); a
-              # disk needs an absolute path below its mount point.
-              remotePath = mkOption {
-                type = types.str;
-                default = config.neo.core.hostname;
-                description = "Folder where this homeserver's files are stored. On another computer, a name alone is a folder in that user's home; on a disk, give the full path where the disk is mounted.";
-                rank = 60;
-                ui = lib.neo.ui.mkUi {
-                  label = "Backup folder";
-                  visibleWhen = "format=files,encrypted";
-                };
-              };
-
-              # zfs: dataset receiving the snapshots (zfs recv -F).
-              dataset = mkOption {
-                type = types.str;
-                default = "";
-                example = "tank/backup/homeserver";
-                description = "ZFS dataset that receives the backups, starting with the pool name, for example tank/backup/homeserver. It is created on the first backup. With a backup store: its dataset, then your name in the store, then neo.";
-                rank = 61;
-                ui = lib.neo.ui.mkUi {
-                  label = "Backup dataset";
-                  visibleWhen = "format=zfs";
-                };
-              };
-
-              keep = mkOption {
-                type = types.ints.positive;
-                default = 14;
-                description = "How many backups are kept at the destination. Older ones are deleted after each backup.";
-                rank = 62;
-                ui = lib.neo.ui.mkUi {
-                  label = "Backups to keep";
-                  visibleWhen = "format=zfs,encrypted";
                 };
               };
 
@@ -138,10 +215,7 @@
                 default = [];
                 description = "Folders to leave out of the backup, as paths inside Folder to back up, e.g. DATA/AppData/jellyfin/cache or DATA/Media. A plain name such as cache skips every folder with that name. Not used for ZFS snapshots.";
                 rank = 80;
-                ui = lib.neo.ui.mkUi {
-                  label = "Skip folders";
-                  visibleWhen = "format=files,encrypted";
-                };
+                ui = lib.neo.ui.mkUi {label = "Skip folders";};
               };
 
               logFile = mkOption {
@@ -151,52 +225,6 @@
                 description = "Path to log file for backup operations";
               };
             }
-            # The SSH host key by default (backup runs as root): it is escrowed in
-            # identity.sops.yaml, so a restored machine and `neo restore` log in
-            # with it too. Configs from before keep the homeserver key (migration
-            # 013_backup_keeps_ssh_key).
-            // (let
-              ssh = lib.neo.mkSshConnectionOptions {
-                rankBase = 10;
-                defaultSshKey = "/etc/ssh/ssh_host_ed25519_key";
-                hostDescription = "Name or IP address of the computer that receives the backup.";
-                userDescription = "Username you log in with on that computer. For ZFS snapshots it needs the right to receive them (root, or zfs allow).";
-                sshKeyDescription = "Key this server logs in with. The default is the server's own identity, which a restore brings back, so the backup keeps working after a restore. Add its public key (System → SSH) on the backup computer.";
-                extraOptionsDescription = "Extra SSH options for the connection, e.g. -p 2222 for a different port.";
-              };
-              onSsh = ui: lib.neo.ui.mkUi (ui // {visibleWhen = "target=ssh";});
-              # The store's login differs only in where the connection goes.
-              onSshOrStore = ui: lib.neo.ui.mkUi (ui // {visibleWhen = "target=ssh,store";});
-            in {
-              host =
-                ssh.host
-                // {
-                  default = "";
-                  ui = onSsh {label = "Backup computer";};
-                };
-              user =
-                ssh.user
-                // {
-                  default = "root";
-                  ui = onSsh {label = "Username";};
-                };
-              sshKey =
-                ssh.sshKey
-                // {
-                  ui = onSshOrStore {
-                    label = "SSH key";
-                    group = lib.neo.ui.groups.advanced;
-                  };
-                };
-              extraOptions =
-                ssh.extraOptions
-                // {
-                  ui = onSshOrStore {
-                    label = "Extra SSH options";
-                    group = lib.neo.ui.groups.advanced;
-                  };
-                };
-            })
             // lib.neo.mkSystemdUnits ["backup"]
             // lib.neo.mkSystemdTimers ["backup"]
             // lib.neo.mkServiceMeta {
@@ -208,11 +236,12 @@
               icon = ./icon.svg;
               tagline = "Copies your data to another computer, disk or backup store every night";
               description = ''
-                Keeps a copy of your app data and settings on another computer you control, for example a friend's server or a second box at your parents' place, or on a disk attached to this server.
+                Keeps a copy of your app data and settings on another computer you control, for example a friend's server or a second box at your parents' place, or on a disk attached to this server. Add several places for a 3-2-1 backup: every night each of them gets a copy.
                 If this server breaks, `neo restore` installs a new one from your configuration and this backup.
               '';
               notes = ''
-                Runs every night (Backup time). On the ZFS disk layout it copies from a snapshot, so databases are copied at one moment.
+                Runs every night (Backup time) and copies to every destination in turn, from the same moment: one that fails is skipped and reported (the run shows as failed), the others still get their copy. On the ZFS disk layout it copies from a snapshot, so databases are copied at one moment.
+                neo restore tries the destinations by Restore order and takes the next one when one can't be reached.
                 Plain files: rsync over SSH or to a mounted disk. Encrypted: restic over SFTP or to a mounted disk; its key is stored next to the backup (neo-backup.age), readable only with this server's key or an ed25519 key from System → SSH, so you can restore even without your config repo: neo restore --from-backup user@host:folder. Replace the key with neo backup rotate-key (makes a new full backup). ZFS snapshots: zfs send, incremental after the first run; the user needs root or zfs allow create,receive,mount,destroy on the destination.
                 A Neo backup store is reached over HTTPS only (SSH inside a WebSocket); all three formats work the same there. Add this server's key from System → SSH to the store's list of servers.
                 The default SSH key is the server's host key: add its public key (System → SSH) to the backup computer's authorized_keys.

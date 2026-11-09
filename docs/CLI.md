@@ -62,7 +62,7 @@ SSH to a finished host as **`homeserver@…`** for `neo`. **`admin@…`** uses t
 | `neo restore <repo>` | Reinstall a machine from its config repo and its backup, on a NixOS installer as root or from a laptop with `--host root@IP`: clone, restore the escrowed host key with `--key`, Disko, data, `nixos-install`. `--check`, `--data none`, `--data-from`, `--no-install`, `--config`. See [Rebuild a machine](INSTALL.md#rebuild-a-machine-from-its-config-repo) |
 | `neo restore --from-backup <backup>` | The same with the config repo taken out of the backup (`user@host:folder`, `ssh://user@host:port/folder`, or a mounted folder); an encrypted backup opens with `--key`. With a repo argument, only the data comes from that backup |
 | `neo backup extract-config <backup>` | Copy the config repo out of an encrypted or plain-files backup into `--out` (default `./neo-config`), with `--key` (and `--backup-key` for the SSH login) |
-| `neo backup rotate-key` | Encrypted backup, on the server: new key, new full backup, then the old one is deleted (runs as `backup-rotate-key.service`) |
+| `neo backup rotate-key` | Encrypted backup, on the server: every encrypted destination gets a new key and a new full backup, then the old one is deleted (runs as `backup-rotate-key.service`) |
 
 **Do not** `activate` a remote machine's config from your laptop. Use [nixos-anywhere](INSTALL.md#path-b--install-from-your-laptop-nixos-anywhere) for the first install, then activate **on** the server (or use Activate in the web UI there).
 

@@ -24,12 +24,21 @@ pub fn rotate_key(doc: &DocumentMut, dry_run: bool, sudo_cmd: &str) -> Result<()
         .and_then(|b| b.get("enabled"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    let format = b
-        .and_then(|b| b.get("format"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("files");
-    if !enabled || format != "encrypted" {
-        bail!("only the encrypted backup has a key: set services.backup.format = \"encrypted\" and apply first");
+    let is_encrypted = |d: &toml_edit::Item| {
+        d.get("enabled").and_then(|v| v.as_bool()) != Some(false)
+            && d.get("format").and_then(|v| v.as_str()) == Some("encrypted")
+    };
+    // Every encrypted destination gets a new key; configs from before
+    // `destinations` have the format at the top.
+    let encrypted = match b
+        .and_then(|b| b.get("destinations"))
+        .and_then(|d| d.as_table_like())
+    {
+        Some(dests) => dests.iter().any(|(_, d)| is_encrypted(d)),
+        None => b.is_some_and(is_encrypted),
+    };
+    if !enabled || !encrypted {
+        bail!("only the encrypted backup has a key: add a destination with format = \"encrypted\" and apply first");
     }
     if dry_run {
         println!("DRY-RUN: would start {ROTATE_UNIT}");
@@ -48,7 +57,7 @@ pub fn rotate_key(doc: &DocumentMut, dry_run: bool, sudo_cmd: &str) -> Result<()
     };
     execute_command(cmd.args(["start", "--no-block", ROTATE_UNIT]))
         .context("start the key rotation (is the encrypted backup applied on this machine?)")?;
-    println!("Key rotation started: a new key and a full backup with it, then the old backup is deleted.");
+    println!("Key rotation started: each encrypted destination gets a new key and a full backup with it, then its old backup is deleted.");
     println!("It runs in the background (journalctl -fu {ROTATE_UNIT}); the old backup stays usable until it is done.");
     Ok(())
 }

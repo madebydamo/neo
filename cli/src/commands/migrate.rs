@@ -117,6 +117,8 @@ const CUSTOM_MIGRATIONS: &[(&str, MigrationFn)] = &[
     ("012-neo-two-themes", migrate_012_neo_two_themes),
     ("013-backup-keeps-ssh-key", migrate_013_backup_keeps_ssh_key),
     ("014-plugin-tables", migrate_014_plugin_tables),
+    // After 013, which pins sshKey at the top of services.backup.
+    ("015-backup-destinations", migrate_015_backup_destinations),
 ];
 
 /// Delete retired [neo-service] and [nixos] tables.
@@ -451,6 +453,30 @@ fn migrate_014_plugin_tables(doc: &mut DocumentMut) {
     }
     let entries = crate::utils::plugins::plugins_from_doc(doc);
     crate::utils::plugins::write_plugins(doc, &entries);
+}
+
+/// The backup went from one destination to `services.backup.destinations.<name>`
+/// (docs/design/backup-restore.md §2): the existing one becomes `main`.
+fn migrate_015_backup_destinations(doc: &mut DocumentMut) {
+    for key in [
+        "target",
+        "format",
+        "host",
+        "user",
+        "sshKey",
+        "extraOptions",
+        "storeUrl",
+        "storeClient",
+        "remotePath",
+        "dataset",
+        "keep",
+    ] {
+        move_dotted(
+            doc,
+            &format!("services.backup.{key}"),
+            &format!("services.backup.destinations.main.{key}"),
+        );
+    }
 }
 
 /// The backup's default SSH key became the host key (escrowed, so it survives a
@@ -1116,14 +1142,17 @@ bootstrapMethod = "clone"
             .parse()
             .unwrap();
         assert!(apply_migrations(&mut doc));
-        let key = doc["services"]["backup"]["sshKey"].as_str();
+        let key = doc["services"]["backup"]["destinations"]["main"]["sshKey"].as_str();
         assert_eq!(key, Some("/home/homeserver/.ssh/id_ed25519"));
 
         let mut kept: DocumentMut = "[services.backup]\nhost = \"b\"\nsshKey = \"/k\"\n"
             .parse()
             .unwrap();
         apply_migrations(&mut kept);
-        assert_eq!(kept["services"]["backup"]["sshKey"].as_str(), Some("/k"));
+        assert_eq!(
+            kept["services"]["backup"]["destinations"]["main"]["sshKey"].as_str(),
+            Some("/k")
+        );
 
         let mut fresh = DocumentMut::new();
         apply_migrations(&mut fresh);
@@ -1131,6 +1160,23 @@ bootstrapMethod = "clone"
             .get("services")
             .and_then(|s| s.get("backup"))
             .is_none());
+    }
+
+    #[test]
+    fn migration_015_moves_the_backup_into_main() {
+        let mut doc: DocumentMut = "[services.backup]\nenabled = true\nschedule = \"03:00:00\"\nhost = \"b\"\nformat = \"encrypted\"\nextraOptions = [\"-p\", \"23\"]\nremotePath = \"dev\"\n"
+            .parse()
+            .unwrap();
+        apply_migrations(&mut doc);
+        let b = &doc["services"]["backup"];
+        assert_eq!(b["enabled"].as_bool(), Some(true));
+        assert_eq!(b["schedule"].as_str(), Some("03:00:00"));
+        assert!(b.get("host").is_none() && b.get("format").is_none());
+        let main = &b["destinations"]["main"];
+        assert_eq!(main["host"].as_str(), Some("b"));
+        assert_eq!(main["format"].as_str(), Some("encrypted"));
+        assert_eq!(main["remotePath"].as_str(), Some("dev"));
+        assert_eq!(main["extraOptions"].as_array().map(|a| a.len()), Some(2));
     }
 
     #[test]

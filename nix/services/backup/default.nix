@@ -12,16 +12,21 @@
       disko = config.neo.disko;
       root = config.neo.core.volumes.root;
 
-      isStore = cfg.target == "store";
+      # Enabled destinations by (priority, name), the order neo restore tries
+      # them in (restore/backup.rs); the backup runs in it too.
+      destinations = sortOn (d: d.priority) (
+        mapAttrsToList (name: d: d // {inherit name;}) (filterAttrs (_: d: d.enabled) cfg.destinations)
+      );
+      formats = unique (map (d: d.format) destinations);
+
       # https://host[:port]: SSH inside a WebSocket (services.backup-store).
-      storeAuthority = head (splitString "/" (removePrefix "https://" cfg.storeUrl));
-      storeHost = head (splitString ":" storeAuthority);
-      storeTunnel = pkgs.writeShellScript "neo-backup-store-tunnel" ''
-        exec ${getExe pkgs.websocat} --binary -E - ${escapeShellArg "wss://${storeAuthority}/"}
-      '';
-      storeOptions = [
+      storeAuthority = d: head (splitString "/" (removePrefix "https://" d.storeUrl));
+      storeHost = d: head (splitString ":" (storeAuthority d));
+      storeOptions = d: [
         "-o"
-        "ProxyCommand=${storeTunnel}"
+        "ProxyCommand=${pkgs.writeShellScript "neo-backup-store-tunnel" ''
+          exec ${getExe pkgs.websocat} --binary -E - ${escapeShellArg "wss://${storeAuthority d}/"}
+        ''}"
         "-o"
         "ServerAliveInterval=30"
         # The store is authenticated by its TLS certificate on first contact.
@@ -32,11 +37,54 @@
       ];
 
       # ssh takes the first value of an option, so extraOptions win.
-      sshCommand = concatStringsSep " " (
-        ["${pkgs.openssh}/bin/ssh" "-i" (escapeShellArg cfg.sshKey) "-o" "BatchMode=yes"]
-        ++ cfg.extraOptions
-        ++ optionals isStore storeOptions
-      );
+      sshCommand = d:
+        concatStringsSep " " (
+          ["${pkgs.openssh}/bin/ssh" "-i" (escapeShellArg d.sshKey) "-o" "BatchMode=yes"]
+          ++ d.extraOptions
+          ++ optionals (d.target == "store") (storeOptions d)
+        );
+
+      # One file of shell variables per destination, sourced by backup.sh.
+      destinationVars = d:
+        pkgs.writeText "neo-backup-${d.name}.sh" (toShellVars {
+          NEO_NAME = d.name;
+          # A store is SSH with another way in.
+          NEO_TARGET =
+            if d.target == "store"
+            then "ssh"
+            else d.target;
+          NEO_FORMAT = d.format;
+          NEO_DEST = d.remotePath;
+          NEO_DEST_DATASET = d.dataset;
+          NEO_KEEP = toString d.keep;
+          NEO_SSH_DEST =
+            if d.target == "store"
+            then "backup-${d.storeClient}@${storeHost d}"
+            else "${d.user}@${d.host}";
+          NEO_SSH = sshCommand d;
+          NEO_LOG = "${removeSuffix ".log" (toString cfg.logFile)}-${d.name}.log";
+        });
+
+      # Where a destination writes, for the duplicate check.
+      place = d:
+        concatStringsSep ":" [
+          (
+            if d.target == "store"
+            then "store/${d.storeClient}@${storeHost d}"
+            else if d.target == "ssh"
+            then "${d.user}@${d.host}"
+            else "disk"
+          )
+          (
+            if d.format == "zfs"
+            then "zfs/${d.dataset}"
+            else d.remotePath
+          )
+        ];
+      duplicates = let
+        places = map place destinations;
+      in
+        filter (d: count (p: p == place d) places > 1) destinations;
 
       # Admin keys that open neo-backup.age (encrypted format), with the host
       # key: the same recipients as secrets.sops.yaml.
@@ -56,17 +104,16 @@
       unit = name: {
         description =
           if name == "backup"
-          then "Neo backup (${cfg.format} to ${cfg.target})"
+          then "Neo backup to ${concatMapStringsSep ", " (d: d.name) destinations}"
           else "Neo backup: new encryption key and a new full backup";
         after = ["network-online.target"];
         wants = ["network-online.target"];
         environment = {
-          # A store is SSH with another way in.
-          NEO_TARGET =
-            if isStore
-            then "ssh"
-            else cfg.target;
-          NEO_FORMAT = cfg.format;
+          # name=file, in run order.
+          NEO_DESTINATIONS = concatMapStringsSep "\n" (d: "${d.name}=${destinationVars d}") destinations;
+          # The ZFS destinations whose base snapshot stays here.
+          NEO_ZFS_ACTIVE = concatMapStringsSep "\n" (d: d.name) (filter (d: d.format == "zfs") destinations);
+          NEO_ZFS_ALL = concatStringsSep "\n" (attrNames (filterAttrs (_: d: d.format == "zfs") cfg.destinations));
           NEO_SOURCE_DIR = toString cfg.sourceDir;
           NEO_ROOT = root;
           # The Neo data dataset holds volumes.root unless an additional disk
@@ -75,16 +122,7 @@
             if disko.enabled && !(elem root (attrValues disko.additionalDisks)) && hasPrefix root (toString cfg.sourceDir)
             then "${disko.poolName}/neo"
             else "";
-          NEO_DEST = cfg.remotePath;
-          NEO_DEST_DATASET = cfg.dataset;
-          NEO_KEEP = toString cfg.keep;
-          NEO_SSH_DEST =
-            if isStore
-            then "backup-${cfg.storeClient}@${storeHost}"
-            else "${cfg.user}@${cfg.host}";
-          NEO_SSH = sshCommand;
           NEO_EXCLUDES = concatStringsSep "\n" cfg.excludedDirs;
-          NEO_LOG = cfg.logFile;
           NEO_HOSTNAME = config.neo.core.hostname;
           NEO_HOST_KEY = config.neo.core.secrets.identityFile;
           NEO_RECIPIENTS = concatStringsSep "\n" adminKeys;
@@ -99,50 +137,66 @@
           # restic's metadata cache (encrypted like the repository).
           CacheDirectory = "neo-backup";
           CacheDirectoryMode = "0700";
-          # The store's SSH host key, once seen.
+          # The store's SSH host key, once seen; the ZFS base per destination.
           StateDirectory = "neo-backup";
           StateDirectoryMode = "0700";
         };
       };
     in {
       config = mkIf cfg.enabled {
-        assertions = [
-          {
-            assertion = cfg.format != "zfs" || disko.enabled;
-            message = "neo.services.backup: the ZFS format needs the ZFS disk layout (neo.disko.enabled).";
-          }
-          {
-            assertion = cfg.format != "zfs" || cfg.dataset != "";
-            message = "neo.services.backup: set dataset (e.g. tank/backup/${config.neo.core.hostname}) for the ZFS format.";
-          }
-          {
-            assertion = cfg.target != "ssh" || cfg.host != "";
-            message = "neo.services.backup: set the backup server (host).";
-          }
-          {
-            assertion = !isStore || hasPrefix "https://" cfg.storeUrl;
-            message = "neo.services.backup: storeUrl must start with https:// (the store is only reachable over HTTPS).";
-          }
-          {
-            assertion = cfg.target != "disk" || cfg.format == "zfs" || hasPrefix "/" cfg.remotePath;
-            message = "neo.services.backup: on a disk, the backup folder must be an absolute path (where the disk is mounted).";
-          }
-        ];
+        assertions =
+          [
+            {
+              assertion = destinations != [];
+              message = "neo.services.backup: add a destination (services.backup.destinations.<name>).";
+            }
+            {
+              assertion = duplicates == [];
+              message = "neo.services.backup: destinations ${concatMapStringsSep ", " (d: d.name) duplicates} write to the same place; give each its own folder or dataset.";
+            }
+          ]
+          ++ concatMap (d: let
+            at = "neo.services.backup.destinations.${d.name}";
+          in [
+            {
+              assertion = d.format != "zfs" || disko.enabled;
+              message = "${at}: the ZFS format needs the ZFS disk layout (neo.disko.enabled).";
+            }
+            {
+              assertion = d.format != "zfs" || d.dataset != "";
+              message = "${at}: set dataset (e.g. tank/backup/${config.neo.core.hostname}) for the ZFS format.";
+            }
+            {
+              assertion = d.target != "ssh" || d.host != "";
+              message = "${at}: set the backup server (host).";
+            }
+            {
+              assertion = d.target != "store" || hasPrefix "https://" d.storeUrl;
+              message = "${at}: storeUrl must start with https:// (the store is only reachable over HTTPS).";
+            }
+            {
+              assertion = d.target != "disk" || d.format == "zfs" || hasPrefix "/" d.remotePath;
+              message = "${at}: on a disk, the backup folder must be an absolute path (where the disk is mounted).";
+            }
+          ])
+          destinations;
         warnings =
-          optional (cfg.format == "encrypted" && adminKeys == []) ''
+          optional (elem "encrypted" formats && adminKeys == []) ''
             neo.services.backup: the encrypted backup can only be opened with this server's own key, because System → SSH has no ssh-ed25519 key. Add yours, or a lost server means a lost backup.''
-          ++ optional (let
-            store = config.neo.services.backup-store;
-          in
-            isStore && store.enabled && storeHost == "${toString store.subdomain}.${toString config.neo.services.swag.domain}") ''
-            neo.services.backup: the backup goes to this server's own backup store: if this server is lost, so is the backup.'';
+          ++ concatMap (d:
+            optional (let
+              store = config.neo.services.backup-store;
+            in
+              d.target == "store" && store.enabled && storeHost d == "${toString store.subdomain}.${toString config.neo.services.swag.domain}") ''
+              neo.services.backup.destinations.${d.name}: the backup goes to this server's own backup store: if this server is lost, so is that copy.'')
+          destinations;
 
         systemd.services =
           {backup = unit "backup";}
           # `neo backup rotate-key`: new data key, new repository (full backup),
           # then the old repository is removed. Not in systemdUnits: the
           # service target must never start it.
-          // optionalAttrs (cfg.format == "encrypted") {
+          // optionalAttrs (elem "encrypted" formats) {
             backup-rotate-key = unit "backup-rotate-key";
           };
 

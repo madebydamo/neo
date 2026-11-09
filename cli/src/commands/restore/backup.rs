@@ -40,6 +40,8 @@ pub enum Location {
 
 #[derive(Debug, Clone)]
 pub struct Source {
+    /// The destination's name in the settings; empty for `--from-backup`.
+    pub name: String,
     pub location: Location,
     pub format: Format,
     /// files: folder holding `<basename of sourceDir>/`; encrypted: folder
@@ -76,26 +78,63 @@ pub fn hostname(doc: &DocumentMut) -> String {
 }
 
 impl Source {
-    /// The backup configured in settings.toml, or None when backup is off.
-    pub fn from_settings(doc: &DocumentMut) -> Result<Option<Source>> {
+    /// The enabled backup destinations in settings.toml, in the order a restore
+    /// tries them: by `priority`, then name (the backup's own run order,
+    /// nix/services/backup). Empty when backup is off. Configs from before
+    /// `destinations` (migration 015) are one destination named `main`.
+    pub fn from_settings(doc: &DocumentMut) -> Result<Vec<Source>> {
         let Some(b) = doc.get("services").and_then(|s| s.get("backup")) else {
-            return Ok(None);
+            return Ok(Vec::new());
         };
         if !b.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false) {
-            return Ok(None);
+            return Ok(Vec::new());
         }
+        let root = volumes_root(doc);
+        let source_dir = b
+            .get("sourceDir")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&root)
+            .to_string();
+        let mut found = Vec::new();
+        match b.get("destinations").and_then(|d| d.as_table_like()) {
+            Some(dests) => {
+                for (name, d) in dests.iter() {
+                    if d.get("enabled").and_then(|v| v.as_bool()) == Some(false) {
+                        continue;
+                    }
+                    let priority = d
+                        .get("priority")
+                        .and_then(|v| v.as_integer())
+                        .unwrap_or(100);
+                    found.push((priority, Self::destination(doc, name, d, &source_dir)?));
+                }
+            }
+            None => found.push((0, Self::destination(doc, "main", b, &source_dir)?)),
+        }
+        found.sort_by(|(pa, a), (pb, b)| pa.cmp(pb).then_with(|| a.name.cmp(&b.name)));
+        Ok(found.into_iter().map(|(_, s)| s).collect())
+    }
+
+    /// One destination table (`services.backup.destinations.<name>`).
+    fn destination(
+        doc: &DocumentMut,
+        name: &str,
+        b: &toml_edit::Item,
+        source_dir: &str,
+    ) -> Result<Source> {
+        let at = format!("services.backup.destinations.{name}");
         let get = |k: &str| b.get(k).and_then(|v| v.as_str()).map(str::to_string);
         let format = match get("format").as_deref().unwrap_or("files") {
             "files" => Format::Files,
             "encrypted" => Format::Encrypted,
             "zfs" => Format::Zfs,
-            other => bail!("services.backup.format = {other:?} is not files, encrypted or zfs"),
+            other => bail!("{at}.format = {other:?} is not files, encrypted or zfs"),
         };
         let location = match get("target").as_deref().unwrap_or("ssh") {
             "ssh" => {
                 let host = get("host")
                     .filter(|h| !h.is_empty())
-                    .context("services.backup.host is not set")?;
+                    .with_context(|| format!("{at}.host is not set"))?;
                 let user = get("user").unwrap_or_else(|| "root".into());
                 let options = b
                     .get("extraOptions")
@@ -115,15 +154,14 @@ impl Source {
             "store" => {
                 let url = get("storeUrl")
                     .filter(|u| !u.is_empty())
-                    .context("services.backup.storeUrl is not set")?;
+                    .with_context(|| format!("{at}.storeUrl is not set"))?;
                 let client = get("storeClient").unwrap_or_else(|| hostname(doc));
                 store_location(&url, &client)?
             }
-            other => bail!("services.backup.target = {other:?} is not ssh, disk or store"),
+            other => bail!("{at}.target = {other:?} is not ssh, disk or store"),
         };
         let root = volumes_root(doc);
-        let source_dir = get("sourceDir").unwrap_or_else(|| root.clone());
-        let folder = Path::new(&source_dir)
+        let folder = Path::new(source_dir)
             .file_name()
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_else(|| "neo".into());
@@ -132,14 +170,15 @@ impl Source {
                 "the backup copies {source_dir}, not all of {root}: restore it by hand (docs/RESTORE.md)"
             );
         }
-        Ok(Some(Source {
+        Ok(Source {
+            name: name.to_string(),
             location,
             format,
             remote_path: get("remotePath").unwrap_or_else(|| hostname(doc)),
             folder,
             dataset: get("dataset").unwrap_or_default(),
             ssh_key: get("sshKey").unwrap_or_else(|| "/etc/ssh/ssh_host_ed25519_key".into()),
-        }))
+        })
     }
 
     /// A backup named on the command line (`--from-backup`): `user@host:folder`
@@ -186,6 +225,7 @@ impl Source {
             p => p.to_string(),
         };
         Ok(Source {
+            name: String::new(),
             location,
             format: Format::Files,
             remote_path,
@@ -200,13 +240,18 @@ impl Source {
             Location::Ssh { dest, .. } => dest.clone(),
             Location::Disk => "a disk on this machine".into(),
         };
-        match self.format {
+        let what = match self.format {
             Format::Files => format!("files in {}/{} on {at}", self.remote_path, self.folder),
             Format::Encrypted => format!(
                 "encrypted backup in {} on {at}",
                 folder_or_home(&self.remote_path)
             ),
             Format::Zfs => format!("ZFS snapshots of {} on {at}", self.dataset),
+        };
+        if self.name.is_empty() {
+            what
+        } else {
+            format!("{} ({what})", self.name)
         }
     }
 }
@@ -900,11 +945,11 @@ mod tests {
 
     #[test]
     fn off_without_backup() {
-        assert!(Source::from_settings(&doc("")).unwrap().is_none());
+        assert!(Source::from_settings(&doc("")).unwrap().is_empty());
         assert!(
             Source::from_settings(&doc("[services.backup]\nhost = \"x\"\n"))
                 .unwrap()
-                .is_none()
+                .is_empty()
         );
     }
 
@@ -913,7 +958,7 @@ mod tests {
         let d = doc(
             "[core]\nhostname = \"myhome\"\n[services.backup]\nenabled = true\nhost = \"b.example\"\nuser = \"zh1\"\nextraOptions = [\"-p\", \"23\"]\n",
         );
-        let s = Source::from_settings(&d).unwrap().unwrap();
+        let s = Source::from_settings(&d).unwrap().remove(0);
         assert_eq!(s.format, Format::Files);
         assert_eq!(s.remote_path, "myhome");
         assert_eq!(s.folder, "neo");
@@ -933,7 +978,7 @@ mod tests {
         let d = doc(
             "[services.backup]\nenabled = true\ntarget = \"disk\"\nformat = \"zfs\"\ndataset = \"usb/neo\"\n",
         );
-        let s = Source::from_settings(&d).unwrap().unwrap();
+        let s = Source::from_settings(&d).unwrap().remove(0);
         assert_eq!(s.location, Location::Disk);
         assert_eq!(s.format, Format::Zfs);
         assert_eq!(s.dataset, "usb/neo");
@@ -942,13 +987,15 @@ mod tests {
     #[test]
     fn encrypted_from_settings() {
         let d = doc("[services.backup]\nenabled = true\nformat = \"encrypted\"\nhost = \"b\"\nremotePath = \"bk/home\"\n");
-        let s = Source::from_settings(&d).unwrap().unwrap();
+        let s = Source::from_settings(&d).unwrap().remove(0);
         assert_eq!(s.format, Format::Encrypted);
         assert_eq!(
             join_remote(&s.remote_path, HEADER),
             "bk/home/neo-backup.age"
         );
-        assert!(s.describe().starts_with("encrypted backup in bk/home"));
+        assert!(s
+            .describe()
+            .starts_with("main (encrypted backup in bk/home"));
     }
 
     #[test]
@@ -983,7 +1030,7 @@ mod tests {
     #[test]
     fn store() {
         let d = doc("[core]\nhostname = \"myhome\"\n[services.backup]\nenabled = true\ntarget = \"store\"\nformat = \"encrypted\"\nstoreUrl = \"https://backup.example.com/\"\n");
-        let s = Source::from_settings(&d).unwrap().unwrap();
+        let s = Source::from_settings(&d).unwrap().remove(0);
         let Location::Ssh { dest, options } = &s.location else {
             panic!();
         };
@@ -1013,6 +1060,30 @@ mod tests {
         assert!(Source::from_location("https://b.example/dev").is_err());
         assert!(Source::from_location("http://m@b.example/dev").is_err());
         assert!(store_location("http://b.example", "m").is_err());
+    }
+
+    #[test]
+    fn destinations_in_restore_order() {
+        let d = doc(concat!(
+            "[core]\nhostname = \"myhome\"\n",
+            "[services.backup]\nenabled = true\n",
+            "[services.backup.destinations.usb]\ntarget = \"disk\"\nremotePath = \"/mnt/usb\"\n",
+            "[services.backup.destinations.friend-a]\nhost = \"b.example\"\nremotePath = \"disk1/neo\"\nformat = \"encrypted\"\npriority = 10\n",
+            "[services.backup.destinations.friend-b]\nhost = \"b.example\"\nremotePath = \"disk2/neo\"\nformat = \"encrypted\"\npriority = 10\n",
+            "[services.backup.destinations.old]\nenabled = false\nhost = \"gone.example\"\n",
+        ));
+        let all = Source::from_settings(&d).unwrap();
+        let names: Vec<&str> = all.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["friend-a", "friend-b", "usb"]);
+        assert_eq!(all[0].remote_path, "disk1/neo");
+        assert_eq!(all[1].remote_path, "disk2/neo");
+        assert_eq!(all[2].location, Location::Disk);
+        assert!(all[0]
+            .describe()
+            .starts_with("friend-a (encrypted backup in disk1/neo"));
+        // The flat keys of configs from before are one destination.
+        let legacy = doc("[services.backup]\nenabled = true\nhost = \"h\"\n");
+        assert_eq!(Source::from_settings(&legacy).unwrap()[0].name, "main");
     }
 
     #[test]

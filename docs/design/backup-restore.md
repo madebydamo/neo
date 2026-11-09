@@ -15,10 +15,18 @@ On a Disko (ZFS) machine every run first takes a snapshot `zroot/neo@neo-backup-
 **from the snapshot**, so databases are copied at one point in time, not while they change. Without
 ZFS the live folder is copied (as before).
 
-## 2. Destination (`neo.services.backup`)
+## 2. Destinations (`neo.services.backup`)
+
+`destinations.<name>` lists where the backup goes; every run copies to each enabled one. Several
+destinations are how a 3-2-1 backup looks here: e.g. a USB disk on the server and a friend's
+computer. The same computer may appear twice with different folders (two of its disks); two
+destinations writing to the same place (login + folder or dataset) are refused by assertion.
+
+Shared by all destinations: `schedule`, `sourceDir`, `excludedDirs`. Per destination:
 
 | Setting | Values | Meaning |
 |---------|--------|---------|
+| `enabled` | default true | off: skipped by the backup and by `neo restore`, its data stays |
 | `target` | `ssh` (default), `disk`, `store` | another computer over SSH, a disk attached to this server, or a Neo backup store over HTTPS (§6) |
 | `format` | `files` (default), `encrypted`, `zfs` | plain copy with rsync (any filesystem), restic repository encrypted on this server (§3), or `zfs send` (ZFS on both sides, Disko here) |
 | `host`, `user` | | SSH login, `target = ssh` only |
@@ -27,7 +35,30 @@ ZFS the live folder is copied (as before).
 | `remotePath` | path | `files`/`encrypted`: folder. Relative paths are in the SSH user's home; on a disk it must be absolute (the disk's mount point and a folder) |
 | `dataset` | `pool/path` | `format = zfs`: dataset that receives the snapshots, e.g. `tank/backup/myhome` |
 | `keep` | int, default 14 | `zfs`/`encrypted`: backups kept at the destination |
-| `schedule`, `excludedDirs`, `sourceDir` | | as before (`excludedDirs`/`sourceDir` not for `zfs`) |
+| `priority` | int, default 100 | order: lower first, then by name. The backup runs in it, `neo restore` tries it (§4) |
+
+Configs from before had these keys directly in `services.backup`; migration
+`015-backup-destinations` moves them to `destinations.main`, and `neo restore` reads the old layout
+the same way (a repo restored from an old backup).
+
+### A run
+
+1. `flock` on `/run/neo-backup.lock` (the nightly run waits for a key rotation).
+2. One snapshot `zroot/neo@neo-backup-<UTC>` (Disko only): every destination gets the same moment.
+3. Each destination in order, in a subshell with its own variables (a Nix-generated file per
+   destination, listed in `NEO_DESTINATIONS`). A failure (`die`, or any failing command under
+   `errexit`) ends that destination only; the run logs it and goes on. Log lines are tagged
+   `backup [<name>]`; rsync/restic output goes to `/var/log/backup-<name>.log`.
+4. Local snapshots are pruned (below), then the unit fails if any destination failed, so the web
+   UI status shows it.
+
+**ZFS bases.** An incremental `zfs send` needs a snapshot the destination already has, and with
+several ZFS destinations those differ (one was unreachable last night). Each successful ZFS
+destination writes the snapshot it received to `/var/lib/neo-backup/zfs-base-<name>`. Pruning keeps
+the snapshots named there (also of disabled ZFS destinations; files of removed ones are deleted) and
+destroys the other `neo-backup-*` snapshots. While an enabled ZFS destination has no file (its first
+run failed, or the machine was just restored and `/var/lib` is new), the older snapshots all stay,
+since one of them may be its base; only this run's snapshot goes if no one received it.
 
 The combinations:
 
@@ -37,17 +68,13 @@ The combinations:
   filesystem (an unplugged disk would otherwise fill `/`).
 - **ssh + zfs**: `zfs send [-i <last common snapshot>] zroot/neo@neo-backup-… | ssh … zfs recv -u
   -F -o canmount=noauto -o com.sun:auto-snapshot=false <dataset>`. Needs root or
-  `zfs allow <user> create,receive,mount,destroy,hold <parent>` on the destination. Only the
-  newest backup snapshot is kept locally (the base of the next incremental); the destination keeps
-  `keep`. The first run is a full send and refuses a destination dataset that exists already
+  `zfs allow <user> create,receive,mount,destroy,hold <parent>` on the destination. Locally only
+  the bases of the ZFS destinations are kept (above); the destination keeps `keep`. The first run is a full send and refuses a destination dataset that exists already
   without a common snapshot, instead of overwriting it.
 - **disk + zfs**: the same, `zfs recv` locally. The pool (first part of `dataset`) is imported
   with `-N` when needed and exported again afterwards.
 - **ssh/disk + encrypted**: restic over SFTP (`sftp.command` = the backup's ssh with its key and
   options), or into the folder on the disk. See §3.
-
-Runs are serialised with a `flock` on `/run/neo-backup.lock`: the nightly run waits for a key
-rotation.
 
 **SSH key.** The default is now the SSH **host key** (`/etc/ssh/ssh_host_ed25519_key`; the backup
 runs as root). The host key is escrowed in `identity.sops.yaml` and restored on reinstall, so a
@@ -110,10 +137,11 @@ decrypts the header into its private `RuntimeDirectory`.
 
 ### Key rotation (`neo backup rotate-key`)
 
-Starts `backup-rotate-key.service` (the same script, `NEO_ROTATE=true`; only defined for the
-encrypted format and kept out of `systemdUnits`, so the service target never starts it):
-new data key, new repository, **full** backup into it, new header, then the old repository is
-deleted. Until the new header is up the old backup stays complete and usable; an interrupted
+Starts `backup-rotate-key.service` (the same script, `NEO_ROTATE=true`; only defined when a
+destination is encrypted, and kept out of `systemdUnits`, so the service target never starts it).
+For every encrypted destination (the others are skipped): new data key, new repository, **full**
+backup into it, new header, then the old repository is deleted. Each destination has its own data
+key. Until the new header is up the old backup stays complete and usable; an interrupted
 rotation leaves a stray `restic-*` folder that the next successful run removes.
 
 Rotation replaces the repository instead of `restic key passwd` on purpose: a restic password
@@ -184,6 +212,12 @@ neo restore <repo> [--host root@IP] [--disk /dev/disk/by-id/…] [--key ~/.ssh/a
 neo restore --from-backup <backup> …          # the config repo from the backup (§3)
 ```
 
+**Several destinations.** Without `--from-backup`, the preflight checks the destinations in
+`priority` order and takes the first one it can read; the unreadable ones are printed. The plan
+names it and how many follow. If copying from it fails, the data folder is emptied (the data
+dataset mounted again after a failed `zfs recv`) and the next readable destination is tried. Only
+when none works does the restore stop. `--from-backup` names exactly one backup, without fallback.
+
 Two modes, one code path:
 
 - **On the new machine** (no `--host`): booted from any NixOS installer, as root. Everything below
@@ -212,7 +246,7 @@ Steps (local mode):
    the plan (disk, data source and size, hostname, domain) and asks (unless `--yes`).
 5. **Disko**: the config's own `diskoScript` (destroy, format, mount), so the Disko version is the
    one the config pins. The ZFS ARC is capped while the installer's store lives in RAM.
-6. **Data** from the backup into the new `zroot/neo`: rsync of `<remotePath>/<basename>/` for
+6. **Data** from the backup (the first destination that works, see above) into the new `zroot/neo`: rsync of `<remotePath>/<basename>/` for
    `files`, `restic restore latest` for `encrypted` (header opened with the escrowed host key or
    the admin key; the next backup continues in the same repository), `zfs send` of the newest
    backup snapshot into `zroot/neo` for `zfs` (the next backup from the new machine continues
@@ -233,7 +267,7 @@ their appdata when the folder still belongs to the old uid, so the copy does not
 ## 6. Backup store
 
 The **backup-store** service (`nix/services/backup-store`) keeps other servers' backups, and is
-reachable only over HTTPS. On the client it is `target = "store"`.
+reachable only over HTTPS. On the client it is a destination with `target = "store"`.
 
 ### SSH inside HTTPS
 
@@ -305,7 +339,7 @@ Removing a client removes its account and keeps its data.
 
 ### Restore
 
-The store is a normal source: from the settings (`target = "store"`), or
+The store is a normal source: from the settings (a destination with `target = "store"`), or
 `neo restore --from-backup https://<client>@<store>/<folder>` / `neo backup extract-config` the same
 way (`user` is derived as `backup-<client>`). The admin key must be in the client's `publicKeys`.
 `websocat` is in the `neo` package's restore tools. A store itself has no backup of what it holds.

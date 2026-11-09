@@ -25,7 +25,7 @@ nix run github:madebydamo/neo#neo -- restore git@github.com:you/homeserver-confi
 | 3. hardware config | generated on the target and committed (`--keep-hardware` to skip) |
 | 4. repo, key, tokens on the installer | copied into the installer's RAM, with every flake input (`nix flake archive`, fetched with your laptop's credentials); tokens from `secrets.sops.yaml` to Nix; the key is deleted at the end |
 | 5. Disko, ARC cap | the config's own `diskoScript`, ARC capped |
-| 6. copy DATA, fix ownership | from the configured backup (rsync, restic or `zfs send`); Hermes re-owns its data itself |
+| 6. copy DATA, fix ownership | from the configured backup (rsync, restic or `zfs send`): the first destination by **Restore order** that can be read, the next one if copying fails; Hermes re-owns its data itself |
 | 7. `neo restore` | the same, as the unit `neo-restore` on the target |
 | 8. boot entry | Neo's boot loader install adds it; `neo restore` checks it |
 

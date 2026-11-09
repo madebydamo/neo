@@ -1,34 +1,45 @@
-# Neo backup (docs/design/backup-restore.md §2). Runs as root from backup.service.
+# Neo backup (docs/design/backup-restore.md §2). Runs as root from backup.service:
+# one snapshot, then a copy of it to every destination in turn. A destination
+# that fails is reported and the next one still runs.
 #
 # Env (set by default.nix):
-#   NEO_TARGET       ssh | disk
-#   NEO_FORMAT       files | encrypted | zfs
+#   NEO_DESTINATIONS newline-separated name=file, in run order; each file sets
+#                    the destination's variables below
+#   NEO_ZFS_ACTIVE   newline-separated names of the enabled zfs destinations
+#   NEO_ZFS_ALL      the same, disabled ones included (their base snapshot stays)
 #   NEO_SOURCE_DIR   folder to back up (files, encrypted)
 #   NEO_ROOT         neo.core.volumes.root, mountpoint of NEO_DATASET
 #   NEO_DATASET      local ZFS dataset holding NEO_ROOT ("" without Disko)
+#   NEO_EXCLUDES     newline-separated excludes below NEO_SOURCE_DIR (files, encrypted)
+#   NEO_HOSTNAME     restic snapshot host (encrypted)
+#   NEO_HOST_KEY     SSH host key: opens neo-backup.age, and a recipient of it (encrypted)
+#   NEO_RECIPIENTS   newline-separated admin ssh-ed25519 keys, recipients of neo-backup.age (encrypted)
+#   NEO_ROTATE       true: new data key and repository for every encrypted
+#                    destination, the others are skipped (backup-rotate-key.service)
+#
+# Per destination:
+#   NEO_NAME         its name in destinations.<name>
+#   NEO_TARGET       ssh | disk
+#   NEO_FORMAT       files | encrypted | zfs
 #   NEO_DEST         remotePath (files, encrypted)
 #   NEO_DEST_DATASET dataset (zfs)
 #   NEO_KEEP         backups kept at the destination (zfs, encrypted)
 #   NEO_SSH_DEST     user@host (ssh)
 #   NEO_SSH          ssh command line with key and options (ssh)
-#   NEO_EXCLUDES     newline-separated excludes below NEO_SOURCE_DIR (files, encrypted)
 #   NEO_LOG          rsync / restic log file
-#   NEO_HOSTNAME     restic snapshot host (encrypted)
-#   NEO_HOST_KEY     SSH host key: opens neo-backup.age, and a recipient of it (encrypted)
-#   NEO_RECIPIENTS   newline-separated admin ssh-ed25519 keys, recipients of neo-backup.age (encrypted)
-#   NEO_ROTATE       true: new data key and repository (encrypted, backup-rotate-key.service)
 
 PREFIX=neo-backup-
 snap=""
+pruned=0
+state_dir=${STATE_DIRECTORY:-/var/lib/neo-backup}
 
-log() { echo "backup: $*"; }
+log() { echo "backup${NEO_NAME:+ [$NEO_NAME]}: $*"; }
 die() {
-  echo "backup: $*" >&2
+  echo "backup${NEO_NAME:+ [$NEO_NAME]}: $*" >&2
   exit 1
 }
 
 # Commands at the destination: over SSH, or here for a disk.
-read -r -a ssh_cmd <<<"${NEO_SSH:-}"
 at_dest() {
   if [ "$NEO_TARGET" = ssh ]; then
     "${ssh_cmd[@]}" "$NEO_SSH_DEST" "$(printf '%q ' "$@")"
@@ -37,10 +48,10 @@ at_dest() {
   fi
 }
 
+# An interrupted run: the snapshot goes unless a ZFS destination got it.
 cleanup() {
-  if [ -n "$snap" ] && [ "$NEO_FORMAT" != zfs ]; then
-    zfs destroy "$NEO_DATASET@$snap" 2>/dev/null || true
-  fi
+  [ "$pruned" = 0 ] && [ -n "$snap" ] || return 0
+  grep -qsx "$snap" "$state_dir"/zfs-base-* || zfs destroy "$NEO_DATASET@$snap" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -55,12 +66,11 @@ take_snapshot() {
   log "snapshot $NEO_DATASET@$snap"
 }
 
-# Folder to copy: on ZFS the same folder frozen in a fresh snapshot,
+# Folder to copy: on ZFS the same folder frozen in this run's snapshot,
 # <root>/.zfs/snapshot/<snap>/<path below root>. Sets src.
 source_folder() {
   src="$NEO_SOURCE_DIR"
-  if [ -n "$NEO_DATASET" ]; then
-    take_snapshot
+  if [ -n "$snap" ]; then
     local rel="${NEO_SOURCE_DIR#"$NEO_ROOT"}"
     src="$NEO_ROOT/.zfs/snapshot/$snap$rel"
   fi
@@ -126,7 +136,7 @@ unstick_and_retry() {
 }
 
 backup_zfs() {
-  [ -n "$NEO_DATASET" ] || die "ZFS format needs the ZFS disk layout (Disko) on this server"
+  [ -n "$snap" ] || die "ZFS format needs the ZFS disk layout (Disko) on this server"
   [ -n "$NEO_DEST_DATASET" ] || die "set the destination dataset for the ZFS format"
   local pool=${NEO_DEST_DATASET%%/*} imported=0
   if [ "$NEO_TARGET" = disk ] && ! zpool list -H "$pool" >/dev/null 2>&1; then
@@ -149,7 +159,6 @@ backup_zfs() {
     at_dest zfs list -H -o name "$pool" >/dev/null 2>&1 || die "pool $pool not found at the destination"
   fi
 
-  take_snapshot
   local send=(zfs send) recv=(zfs recv -u -F -o canmount=noauto -o com.sun:auto-snapshot=false "$NEO_DEST_DATASET")
   if [ -n "$base" ]; then
     send+=(-i "@$base")
@@ -168,10 +177,9 @@ backup_zfs() {
     "${send[@]}" | "${recv[@]}" || die "zfs send/recv failed"
   fi
 
-  # Here: only the newest backup snapshot (next base). There: the newest NEO_KEEP.
-  for s in $(zfs list -H -t snapshot -o name -S createtxg -d 1 "$NEO_DATASET" | grep "@$PREFIX" | tail -n +2); do
-    zfs destroy "$s" || true
-  done
+  # The next base of this destination (prune_snapshots keeps it here).
+  echo "$snap" >"$state_dir/zfs-base-$NEO_NAME"
+  # There: the newest NEO_KEEP.
   for s in $(at_dest zfs list -H -t snapshot -o name -S createtxg -d 1 "$NEO_DEST_DATASET" | grep "@$PREFIX" | tail -n "+$((NEO_KEEP + 1))"); do
     at_dest zfs destroy "$s" || true
   done
@@ -395,21 +403,93 @@ backup_encrypted() {
   log "done"
 }
 
+# Local backup snapshots, after every destination ran: kept are the newest one
+# each ZFS destination received (the base of its next incremental send). While
+# an enabled ZFS destination has never received one from this server (first
+# run failed, or the machine was restored), older ones stay: one of them may be
+# its base.
+prune_snapshots() {
+  pruned=1
+  [ -n "$snap" ] || return 0
+  local keep="" unknown=0 f n s
+  for f in "$state_dir"/zfs-base-*; do
+    [ -e "$f" ] || continue
+    n=${f##*/zfs-base-}
+    if grep -qx -- "$n" <<<"${NEO_ZFS_ALL:-}"; then
+      keep+="$(cat "$f")"$'\n'
+    else
+      rm -f "$f"
+    fi
+  done
+  while IFS= read -r n; do
+    [ -z "$n" ] || [ -e "$state_dir/zfs-base-$n" ] || unknown=1
+  done <<<"${NEO_ZFS_ACTIVE:-}"
+  for s in $(zfs list -H -t snapshot -o name -d 1 "$NEO_DATASET" | sed -n "s|^.*@\($PREFIX.*\)\$|\1|p"); do
+    if grep -qx -- "$s" <<<"$keep"; then
+      continue
+    elif [ "$s" = "$snap" ] || [ "$unknown" = 0 ]; then
+      zfs destroy "$NEO_DATASET@$s" || true
+    fi
+  done
+}
+
+# One destination, in a subshell: variables, die and the ssh command stay there.
+backup_to() {
+  # shellcheck source=/dev/null
+  . "$1"
+  read -r -a ssh_cmd <<<"${NEO_SSH:-}"
+  log "starting ($NEO_FORMAT to $NEO_TARGET)"
+  if [ "$NEO_TARGET" = ssh ]; then
+    # ssh exits 255 only for its own failures (connect, auth). Restricted
+    # shells such as rsync.net's reject `true`, so the remote status is ignored.
+    local rc=0 err
+    err=$(at_dest true 2>&1 >/dev/null) || rc=$?
+    [ "$rc" != 255 ] || die "cannot log in to $NEO_SSH_DEST: $err"
+  fi
+  case "$NEO_FORMAT" in
+  files) backup_files ;;
+  encrypted) backup_encrypted ;;
+  zfs) backup_zfs ;;
+  *) die "unknown format $NEO_FORMAT" ;;
+  esac
+}
+
 # One backup at a time (the nightly run waits for a key rotation).
 exec 9>/run/neo-backup.lock
 flock 9
 
-log "starting ($NEO_FORMAT to $NEO_TARGET) at $(date)"
-if [ "$NEO_TARGET" = ssh ]; then
-  # ssh exits 255 only for its own failures (connect, auth). Restricted
-  # shells such as rsync.net's reject `true`, so the remote status is ignored.
-  rc=0
-  err=$(at_dest true 2>&1 >/dev/null) || rc=$?
-  [ "$rc" != 255 ] || die "cannot log in to $NEO_SSH_DEST: $err"
+log "starting at $(date)"
+mapfile -t destinations <<<"${NEO_DESTINATIONS:-}"
+# One moment for every destination.
+[ -z "$NEO_DATASET" ] || take_snapshot
+
+failed=()
+done_count=0
+for entry in "${destinations[@]}"; do
+  [ -n "$entry" ] || continue
+  name=${entry%%=*}
+  file=${entry#*=}
+  # shellcheck source=/dev/null
+  if [ "${NEO_ROTATE:-false}" = true ] && [ "$(. "$file" && echo "$NEO_FORMAT")" != encrypted ]; then
+    continue
+  fi
+  set +e
+  (
+    set -e
+    backup_to "$file"
+  ) </dev/null
+  rc=$?
+  set -e
+  if [ "$rc" = 0 ]; then
+    done_count=$((done_count + 1))
+  else
+    log "backup to $name failed, going on with the next destination"
+    failed+=("$name")
+  fi
+done
+prune_snapshots
+
+if [ "${#failed[@]}" -gt 0 ]; then
+  die "$done_count destination(s) done, failed: ${failed[*]}"
 fi
-case "$NEO_FORMAT" in
-files) backup_files ;;
-encrypted) backup_encrypted ;;
-zfs) backup_zfs ;;
-*) die "unknown format $NEO_FORMAT" ;;
-esac
+log "all $done_count destination(s) done"
