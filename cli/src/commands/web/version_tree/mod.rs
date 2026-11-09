@@ -11,12 +11,13 @@ pub mod notes;
 
 use std::path::Path;
 use std::sync::Mutex;
-use std::time::{Duration, Instant, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 pub use model::TreeView;
 use model::{build_tree, CommitIn, GenIn, TreeInput};
 
 use super::git::{activation_tips, git_stdout, is_worktree_dirty};
+use crate::utils::command::mtime_secs;
 use crate::utils::generation::{generation_links, ACTIVATION_LOG};
 use crate::utils::{
     current_generation_number, parse_generation_from_message, running_generation_number,
@@ -39,15 +40,7 @@ static EVENTS_CACHE: Mutex<Option<(String, Instant, Events)>> = Mutex::new(None)
 fn activation_events(sudo_cmd: &str, links_key: &str) -> Events {
     let log_key = std::fs::metadata(ACTIVATION_LOG)
         .ok()
-        .map(|m| {
-            let mtime = m
-                .modified()
-                .ok()
-                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
-            format!("{}:{}", m.len(), mtime)
-        })
+        .map(|m| format!("{}:{}", m.len(), mtime_secs(&m)))
         .unwrap_or_default();
     let key = format!("{links_key}|{log_key}");
     if let Ok(guard) = EVENTS_CACHE.lock() {

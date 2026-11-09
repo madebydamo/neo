@@ -13,11 +13,11 @@ pub mod render;
 pub mod service;
 
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use tokio::process::Command as AsyncCommand;
 
 use super::util::{proc, zfs_bin};
+use crate::utils::command::now_secs;
 
 /// A mounted ZFS filesystem (from /proc/self/mounts; disko uses legacy mounts,
 /// so the `mountpoint` property alone would say "legacy").
@@ -397,10 +397,7 @@ pub fn now_ts() -> String {
 }
 
 pub fn now_epoch() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
+    now_secs() as i64
 }
 
 /// (year, month, day, hour, minute, second) in UTC.

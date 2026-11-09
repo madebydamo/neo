@@ -6,6 +6,8 @@
 use anyhow::{anyhow, Context, Result};
 use serde_json::Value;
 
+use crate::utils::command::now_secs;
+
 pub struct Gateway {
     pub base: String,
     token: String,
@@ -50,11 +52,7 @@ pub fn session_id(context: &str, fresh: bool) -> String {
     }
     out.truncate(80);
     if fresh {
-        let t = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or_default();
-        out.push_str(&format!("-{t}"));
+        out.push_str(&format!("-{}", now_secs()));
     }
     out
 }
@@ -419,10 +417,7 @@ impl Gateway {
     pub async fn ensure_session(&self, id: &str, title: Option<&str>) -> Result<()> {
         let mut titles: Vec<Option<String>> = Vec::new();
         if let Some(t) = title.map(str::trim).filter(|t| !t.is_empty()) {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs() as i64)
-                .unwrap_or_default();
+            let now = now_secs() as i64;
             let tail = &id[id.len().saturating_sub(4)..];
             titles.push(Some(t.to_string()));
             titles.push(Some(format!(

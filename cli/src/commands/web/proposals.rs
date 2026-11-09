@@ -31,6 +31,7 @@ use crate::commands::web::settings::save::load_settings_doc;
 use crate::commands::web::settings::toml_item_to_json;
 use crate::commands::web::types::{AppConfig, OptionHelper, OptionSchema, OptionType};
 use crate::commands::web::util::{service_name_ok, state_dir};
+use crate::utils::command::now_secs;
 use crate::utils::secrets::{self, Backend, Node, Tree};
 use crate::utils::secrets_store;
 
@@ -217,15 +218,8 @@ pub struct Proposal {
     created: u64,
 }
 
-fn now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or_default()
-}
-
 fn live(p: &Proposal) -> bool {
-    now().saturating_sub(p.created) < TTL
+    now_secs().saturating_sub(p.created) < TTL
 }
 
 fn store_path() -> Option<PathBuf> {
@@ -1301,7 +1295,7 @@ pub async fn create(config: &AppConfig, req: ProposalRequest) -> Result<Proposal
         planned,
         status: Status::Pending,
         message: String::new(),
-        created: now(),
+        created: now_secs(),
     };
     put(p.clone());
     Ok(p)
@@ -1980,14 +1974,14 @@ mod tests {
             fingerprint: String::new(),
             status: Status::Pending,
             message: String::new(),
-            created: now(),
+            created: now_secs(),
         };
         let text = serde_json::to_string(&vec![&pr]).unwrap();
         let back: Vec<Proposal> = serde_json::from_str(&text).unwrap();
         assert_eq!(back[0].planned.len(), 2);
         assert!(live(&back[0]));
         let old = Proposal {
-            created: now() - TTL - 1,
+            created: now_secs() - TTL - 1,
             ..back[0].clone()
         };
         assert!(!live(&old));
