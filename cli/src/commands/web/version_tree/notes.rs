@@ -18,7 +18,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
 use super::model::NotesView;
-use crate::commands::web::util::state_dir;
+use crate::commands::web::util::{state_dir, state_file};
 use crate::commands::web::zfs::sanitize_comment;
 
 const FILE: &str = "version-notes.json";
@@ -69,21 +69,14 @@ fn notes_path() -> Option<PathBuf> {
 /// Missing or unreadable file → no notes (never fails the timeline).
 pub fn load() -> VersionNotes {
     notes_path()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|t| serde_json::from_str(&t).ok())
+        .and_then(|p| state_file::load_json(&p))
         .unwrap_or_default()
 }
 
 fn save(notes: &VersionNotes) -> Result<()> {
     let path = notes_path().context("no state directory for version notes")?;
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
-    }
-    let tmp = path.with_extension("json.tmp");
     let body = serde_json::to_string_pretty(notes).context("serialize version notes")?;
-    std::fs::write(&tmp, body).with_context(|| format!("write {}", tmp.display()))?;
-    std::fs::rename(&tmp, &path).with_context(|| format!("replace {}", path.display()))?;
-    Ok(())
+    state_file::write_atomic(&path, &body, 0o644)
 }
 
 /// Full commit id (SHA-1 or SHA-256 hex).

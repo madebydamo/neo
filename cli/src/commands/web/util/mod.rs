@@ -6,6 +6,7 @@ mod inflight;
 mod oob_status;
 mod paths;
 pub mod proc;
+pub mod state_file;
 mod validate;
 
 pub use alerts::{alert_html, changes_actions_row, AlertKind};

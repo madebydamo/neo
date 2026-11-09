@@ -30,7 +30,7 @@ use crate::commands::web::settings::edit::PatchOp;
 use crate::commands::web::settings::save::load_settings_doc;
 use crate::commands::web::settings::toml_item_to_json;
 use crate::commands::web::types::{AppConfig, OptionHelper, OptionSchema, OptionType};
-use crate::commands::web::util::{service_name_ok, state_dir};
+use crate::commands::web::util::{service_name_ok, state_dir, state_file};
 use crate::utils::command::now_secs;
 use crate::utils::secrets::{self, Backend, Node, Tree};
 use crate::utils::secrets_store;
@@ -230,8 +230,7 @@ fn store_path() -> Option<PathBuf> {
 /// (the store then lives in memory only).
 fn load_store() -> HashMap<String, Proposal> {
     let list: Vec<Proposal> = store_path()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|t| serde_json::from_str(&t).ok())
+        .and_then(|p| state_file::load_json(&p))
         .unwrap_or_default();
     list.into_iter()
         .filter(live)
@@ -242,26 +241,9 @@ fn load_store() -> HashMap<String, Proposal> {
 fn write_store(store: &HashMap<String, Proposal>) -> anyhow::Result<()> {
     use anyhow::Context;
     let path = store_path().context("no state directory for proposals")?;
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
-    }
     let list: Vec<&Proposal> = store.values().collect();
     let body = serde_json::to_string(&list).context("serialize proposals")?;
-    let tmp = path.with_extension("json.tmp");
-    {
-        use std::io::Write;
-        use std::os::unix::fs::OpenOptionsExt;
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&tmp)
-            .and_then(|mut f| f.write_all(body.as_bytes()))
-            .with_context(|| format!("write {}", tmp.display()))?;
-    }
-    std::fs::rename(&tmp, &path).with_context(|| format!("replace {}", path.display()))?;
-    Ok(())
+    state_file::write_atomic(&path, &body, 0o600)
 }
 
 fn persist(store: &HashMap<String, Proposal>) {
