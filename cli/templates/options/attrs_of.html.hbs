@@ -171,18 +171,9 @@
                            placeholder="{{defaultDisplay}}"
                            aria-label="{{label}}">
                     {{#if secret}}
-                      <button type="button" class="btn btn-ghost btn-sm shrink-0"
-                              @click="reveal = !reveal"
-                              :aria-pressed="reveal"
-                              x-text="reveal ? 'Hide' : 'Show'"
-                              aria-label="Show or hide {{label}}"></button>
+                      {{> options/secret_toggle}}
                     {{/if}}
-                    <template x-if="resolveHelper('{{../name}}', { field: '{{name}}' })">
-                      <button type="button" class="btn btn-soft btn-primary btn-sm shrink-0"
-                              @click="runHelper('{{../name}}', { key: key, field: '{{name}}' })"
-                              :disabled="helperBusy"
-                              x-text="resolveHelper('{{../name}}', { field: '{{name}}' }).label"></button>
-                    </template>
+                    {{> options/helper_button option=../name field=name target_key="key" accessor="key"}}
                     <button type="button" @click="values['{{../name}}'][key]['{{name}}'] = null"
                             class="btn btn-ghost btn-xs shrink-0">Clear</button>
                   </div>
@@ -195,18 +186,9 @@
                            placeholder="{{defaultDisplay}}"
                            aria-label="{{label}}">
                     {{#if secret}}
-                      <button type="button" class="btn btn-ghost btn-sm shrink-0"
-                              @click="reveal = !reveal"
-                              :aria-pressed="reveal"
-                              x-text="reveal ? 'Hide' : 'Show'"
-                              aria-label="Show or hide {{label}}"></button>
+                      {{> options/secret_toggle}}
                     {{/if}}
-                    <template x-if="resolveHelper('{{../name}}', { field: '{{name}}' })">
-                      <button type="button" class="btn btn-soft btn-primary btn-sm shrink-0"
-                              @click="runHelper('{{../name}}', { key: key, field: '{{name}}' })"
-                              :disabled="helperBusy"
-                              x-text="resolveHelper('{{../name}}', { field: '{{name}}' }).label"></button>
-                    </template>
+                    {{> options/helper_button option=../name field=name target_key="key" accessor="key"}}
                   </div>
                 {{/if}}
               </div>
@@ -259,11 +241,7 @@
             {{else}}
               <input {{#if secret}}:type="reveal ? 'text' : 'password'" autocomplete="off"{{/if}} class="input input-sm flex-1 font-mono" x-model="values['{{name}}'][key]" aria-label="{{label}}">
               {{#if secret}}
-                <button type="button" class="btn btn-ghost btn-sm shrink-0"
-                        @click="reveal = !reveal"
-                        :aria-pressed="reveal"
-                        x-text="reveal ? 'Hide' : 'Show'"
-                        aria-label="Show or hide {{label}}"></button>
+                {{> options/secret_toggle}}
               {{/if}}
             {{/if}}
           {{/if}}

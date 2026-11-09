@@ -34,12 +34,7 @@
                 :title="'Move this entry first (' + pilEntryLabel('{{name}}') + ')'">
           Set as <span x-text="pilEntryLabel('{{name}}')"></span>
         </button>
-        <template x-if="resolveHelper('{{name}}')">
-          <button type="button" class="btn btn-outline btn-xs shrink-0"
-                  @click="runHelper('{{name}}', { index: idx })"
-                  :disabled="helperBusy"
-                  x-text="resolveHelper('{{name}}').label"></button>
-        </template>
+        {{> options/helper_button option=name target_key="index" accessor="idx" btn_class="btn-outline btn-xs"}}
         <button type="button" @click="removeListItem('{{name}}', idx)"
                 class="btn btn-ghost btn-xs text-error shrink-0">Remove</button>
       </div>

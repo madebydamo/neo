@@ -1,0 +1,9 @@
+{{!-- Fill-assist button of an option (ui helper). Params: option; field for a field of a
+     submodule entry; target_key + accessor name the entry or item ("key" / "index" and
+     the Alpine variable); btn_class overrides the look. --}}
+<template x-if="resolveHelper('{{option}}'{{#if field}}, { field: '{{field}}' }{{/if}})">
+  <button type="button" class="btn {{#if btn_class}}{{btn_class}}{{else}}btn-soft btn-primary btn-sm{{/if}} shrink-0"
+          @click="runHelper('{{option}}'{{#if target_key}}, { {{target_key}}: {{accessor}}{{#if field}}, field: '{{field}}'{{/if}} }{{/if}})"
+          :disabled="helperBusy"
+          x-text="resolveHelper('{{option}}'{{#if field}}, { field: '{{field}}' }{{/if}}).label"></button>
+</template>

@@ -7,18 +7,9 @@
            aria-label="{{label}}"
            :aria-invalid="!!patternError('{{name}}')">
     {{#if secret}}
-      <button type="button" class="btn btn-ghost btn-sm shrink-0"
-              @click="reveal = !reveal"
-              :aria-pressed="reveal"
-              x-text="reveal ? 'Hide' : 'Show'"
-              aria-label="Show or hide {{label}}"></button>
+      {{> options/secret_toggle}}
     {{/if}}
-    <template x-if="resolveHelper('{{name}}')">
-      <button type="button" class="btn btn-soft btn-primary btn-sm shrink-0"
-              @click="runHelper('{{name}}')"
-              :disabled="helperBusy"
-              x-text="resolveHelper('{{name}}').label"></button>
-    </template>
+    {{> options/helper_button option=name}}
   </div>
   {{#if (eq type.kind "strMatching")}}
     <p class="text-xs text-error leading-snug" x-cloak x-show="!!patternError('{{name}}')"
