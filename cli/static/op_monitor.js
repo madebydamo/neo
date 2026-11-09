@@ -13,14 +13,16 @@
 // Reconnects with backoff after a drop (neo-web restarts during a switch) and resumes
 // the log from the last byte offset — no duplicated or missing lines.
 (function (root, factory) {
-  var api = factory();
+  var api = factory((root && root.NeoUtil) || require('./neo_util.js'));
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root && root.document) {
     root.NeoOpMonitor = api;
     api.autostart(root);
   }
-})(typeof window !== 'undefined' ? window : null, function () {
+})(typeof window !== 'undefined' ? window : null, function (NeoUtil) {
   'use strict';
+
+  var esc = NeoUtil.esc;
 
   var RESUME_KEY = 'neo.opMonitor';
   var BACKOFF_MS = [300, 700, 1500, 2500, 4000];
@@ -216,14 +218,6 @@
       };
     },
   };
-
-  function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
 
   // ---------------------------------------------------------------------------
   // DOM monitor

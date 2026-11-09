@@ -14,17 +14,10 @@ window.versioningPage = function versioningPage() {
   var LEGEND_KEY = 'neo.versioningLegend';
   var PAGE = 40;
   var VT = window.NeoVersionTree;
+  var escapeHtml = window.NeoUtil.esc;
 
   function pad2(n) {
     return n < 10 ? '0' + n : String(n);
-  }
-
-  function escapeHtml(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
   }
 
   function toast(msg, type) {
