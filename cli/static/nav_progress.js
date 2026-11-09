@@ -7,7 +7,8 @@
  *   - marks the swap target (`aria-busy="true"` + `.neo-swap-busy`) so the pane
  *     being replaced dims (CSS delays the dim to avoid flicker on fast loads);
  *   - after `showDelay` (150ms) shows a thin trickling progress bar at the top;
- *   - after `slowDelay` (1.5s) adds `.is-slow` to #nav-busy ("Loading…" label).
+ *   - after `slowDelay` (1.5s) adds `.is-slow` to #nav-busy ("Loading…" label);
+ *   - reports page navigations to `onBusyChange`, for the navbar spinner.
  * Every start is paired with an end on htmx:afterRequest / sendError / sendAbort /
  * timeout (plus a hard safety timeout), so the indicator always finishes.
  *
@@ -27,7 +28,7 @@
 
   /**
    * Progress controller. Pure DOM/timer logic so it can be unit tested.
-   * opts: { doc, setTimeout, clearTimeout, showDelay, slowDelay, trickleMs, maxMs }
+   * opts: { doc, setTimeout, clearTimeout, showDelay, slowDelay, trickleMs, maxMs, onBusyChange }
    */
   function createController(opts) {
     opts = opts || {};
@@ -40,6 +41,7 @@
     var maxMs = opts.maxMs != null ? opts.maxMs : 60000;
 
     var active = []; // { key, source, target, safety }
+    var reportedBusy = false;
     var progress = 0;
     var visible = false;
     var showTimer = null;
@@ -162,6 +164,16 @@
       return -1;
     }
 
+    /** Tell the page when requests into #config-content start and stop. */
+    function reportBusy() {
+      var busy = active.some(function (e) {
+        return e.target && e.target.id === 'config-content';
+      });
+      if (busy === reportedBusy) return;
+      reportedBusy = busy;
+      if (opts.onBusyChange) opts.onBusyChange(busy);
+    }
+
     function start(key, info) {
       info = info || {};
       if (indexOf(key) !== -1) return;
@@ -172,6 +184,7 @@
         end(key);
       }, maxMs);
       active.push(entry);
+      reportBusy();
       if (active.length === 1) {
         if (visible) {
           show();
@@ -189,6 +202,7 @@
       clearT(entry.safety);
       markSource(entry.source, false);
       markTarget(entry.target, false);
+      reportBusy();
       if (!active.length) finish();
     }
 
@@ -371,5 +385,7 @@
 });
 
 if (typeof document !== 'undefined' && typeof module === 'undefined') {
-  window.neoNavProgress = window.NeoNavProgress.install(document);
+  window.neoNavProgress = window.NeoNavProgress.install(document, {
+    onBusyChange: window.neoSetNavBusy,
+  });
 }

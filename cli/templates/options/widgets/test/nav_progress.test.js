@@ -215,3 +215,23 @@ test('scrubLoadingMarkers is a harmless no-op when there is nothing stale', () =
   const doc = fakeDoc([]);
   assert.doesNotThrow(() => NeoNavProgress.scrubLoadingMarkers(doc));
 });
+
+test('onBusyChange reports navigations only, once per change', () => {
+  const content = fakeEl('config-content');
+  const other = fakeEl('other');
+  const doc = fakeDoc([content, other]);
+  const timers = fakeTimers();
+  const seen = [];
+  const ctl = NeoNavProgress.createController({ doc, ...timers, onBusyChange: (b) => seen.push(b) });
+  ctl.start('opted-in', { target: other });
+  assert.deepEqual(seen, []);
+  ctl.start('nav1', { target: content });
+  ctl.start('nav2', { target: content });
+  assert.deepEqual(seen, [true]);
+  ctl.end('nav1');
+  assert.deepEqual(seen, [true]);
+  ctl.end('nav2');
+  assert.deepEqual(seen, [true, false]);
+  ctl.end('opted-in');
+  assert.deepEqual(seen, [true, false]);
+});

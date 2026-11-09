@@ -381,11 +381,11 @@ window.servicesGrid = function servicesGrid() {
     el.setAttribute('aria-hidden', on ? 'false' : 'true');
   }
 
-  /** Instant navbar spinner for config navigations (no CSS fade). */
-  function setNavBusy(on) {
+  /** Instant navbar spinner for config navigations (no CSS fade); driven by nav_progress.js. */
+  window.neoSetNavBusy = function (on) {
     navLoadBusy = !!on;
     syncBarBusy();
-  }
+  };
 
   /** After action-bar swaps (HTTP or WS OOB), re-fold data-eval-busy into #nav-busy. */
   function syncBarBusyIfActionBar(evt) {
@@ -413,6 +413,15 @@ window.servicesGrid = function servicesGrid() {
     return !!(target.getAttribute && target.getAttribute('hx-target') === '#config-content');
   }
 
+  /** A request that replaces #config-content, however htmx reports its target. */
+  function isNavRequest(detail) {
+    return (
+      isConfigContentTarget(detail.target) ||
+      isConfigContentTarget(detail.elt) ||
+      isConfigContentTarget(detail.requestConfig && detail.requestConfig.target)
+    );
+  }
+
   /**
    * Hold #config-content's current height while a nav request is in flight so the
    * document does not collapse when a tall option pane is swapped for a shorter grid
@@ -436,47 +445,20 @@ window.servicesGrid = function servicesGrid() {
   // After a successful save, option_form updates originals before reload, so dirty is false.
   document.body.addEventListener('htmx:beforeRequest', function (evt) {
     try {
-      var d = evt.detail || {};
-      var t = d.target;
-      var isNav = isConfigContentTarget(t) || isConfigContentTarget(d.elt);
-      if (!isNav && d.requestConfig && d.requestConfig.target) {
-        isNav = isConfigContentTarget(d.requestConfig.target);
-      }
-      if (!isNav) return;
-      setNavBusy(true);
+      if (!isNavRequest(evt.detail || {})) return;
       lockConfigContentHeight();
       if (window.neoAllowNextConfigNav) {
         window.neoAllowNextConfigNav = false;
         return;
       }
       if (!window.neoConfirmLeaveConfigForm()) {
-        setNavBusy(false);
         unlockConfigContentHeight();
         evt.preventDefault();
       }
     } catch (e) {}
   });
 
-  // Always clear nav spinner when a config-content request finishes (or errors / aborts).
-  function clearNavBusyIfConfig(evt) {
-    try {
-      var d = evt.detail || {};
-      var t = d.target;
-      var isNav = isConfigContentTarget(t) || isConfigContentTarget(d.elt);
-      if (!isNav && d.requestConfig && d.requestConfig.target) {
-        isNav = isConfigContentTarget(d.requestConfig.target);
-      }
-      if (!isNav) return;
-      setNavBusy(false);
-    } catch (e) {
-      setNavBusy(false);
-    }
-  }
-  document.body.addEventListener('htmx:afterRequest', clearNavBusyIfConfig);
-  document.body.addEventListener('htmx:afterSwap', function (evt) {
-    clearNavBusyIfConfig(evt);
-    syncBarBusyIfActionBar(evt);
-  });
+  document.body.addEventListener('htmx:afterSwap', syncBarBusyIfActionBar);
   document.body.addEventListener('htmx:oobAfterSwap', syncBarBusyIfActionBar);
 
   // A WS OOB push can replace an element (e.g. #action-bar-dynamic) while its own
@@ -504,21 +486,14 @@ window.servicesGrid = function servicesGrid() {
       attributeFilter: ['data-eval-busy'],
     });
   })();
-  document.body.addEventListener('htmx:responseError', function (evt) {
-    clearNavBusyIfConfig(evt);
-    try {
-      if (isConfigContentTarget((evt.detail || {}).target)) unlockConfigContentHeight();
-    } catch (e) {
-      unlockConfigContentHeight();
-    }
-  });
-  document.body.addEventListener('htmx:sendError', function (evt) {
-    clearNavBusyIfConfig(evt);
-    try {
-      if (isConfigContentTarget((evt.detail || {}).target)) unlockConfigContentHeight();
-    } catch (e) {
-      unlockConfigContentHeight();
-    }
+  ['htmx:responseError', 'htmx:sendError'].forEach(function (name) {
+    document.body.addEventListener(name, function (evt) {
+      try {
+        if (isConfigContentTarget((evt.detail || {}).target)) unlockConfigContentHeight();
+      } catch (e) {
+        unlockConfigContentHeight();
+      }
+    });
   });
 
   // Browser leave / hard navigation while the option form has unsaved edits.
