@@ -399,3 +399,11 @@ test('a list entry past the end is padded; a missing attrs entry is left alone',
   attrs.addNestedListItem('rows', 'nope', 'ports');
   assert.deepEqual(attrs.values.rows, {});
 });
+
+test('visibleWhen on an entry field works for list indexes too', () => {
+  loadWidgets();
+  const form = makeForm({ options: [{ ...entryOption('listOf'), current: [{ mode: 'a' }, { mode: 'b' }] }] });
+  assert.equal(form.isEntryFieldVisible('rows', 0, 'mode=a'), true);
+  assert.equal(form.isEntryFieldVisible('rows', 1, 'mode=a'), false);
+  assert.equal(form.isEntryFieldVisible('rows', 1, ''), true);
+});

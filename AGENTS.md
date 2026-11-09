@@ -189,9 +189,15 @@ Implementations: `cli/templates/options/widgets/<name>.html.hbs` + `<name>.js` (
 
 Reference consumers: `nix/services/tinyauth/option.nix` (`access` + `ui.choices = "authApps"`); `nix/services/hermes/option.nix` (`telegramAllowedUserId` + `primaryItemList`); `nix/services/swag/option.nix` (`proxyPass` + `proxyRouteList`).
 
+### Shared pieces
+
+Fields of a submodule entry render once: `options/entry_field` (`parent`, `accessor`, `target_key`), used by `attrs_of` and `list_of`, so secrets, `visibleWhen` and helpers work in both. Inputs use `options/secret_toggle` and `options/helper_button`. Page chrome: `partials/head_meta`, `partials/changes_modal`, `partials/eval_error_actions`, `partials/core_card`, `partials/section_heading`. Handlebars partials take hash params; a class passed in one must be written out in full so Tailwind sees it.
+
+Scripts share `static/neo_util.js` (`NeoUtil`, loaded first on both pages): `esc`, `store('local'|'session')` (storage that never throws), `onReady`, `markStandalone`, `reloadPane` (the leave guard asks, so callers do not confirm), `readJson(res, fallback)`, and the global `neoToast`. Buttons whose output lands in `#changes-body` use `hx-on::after-request="NeoOpMonitor.changesAfterRequest(event, 'Title')"`. Widget tests run in the real `option_form.js` through `widgets/test/harness.js`.
+
 ### Loading feedback
 
-`cli/static/nav_progress.js` hooks htmx events generically: any request swapping into `#config-content` gets a delayed top progress bar (`#neo-progress`), a pressed/spinner state on the clicked element (`data-neo-loading`), a veiled target (`aria-busy` + `.neo-swap-busy`) and a "Loading…" label after ~1.5s. Opt other requests in with `data-neo-progress` (on the element or an ancestor), out with `data-neo-progress="false"`. Do not add per-page loading hacks.
+`cli/static/nav_progress.js` hooks htmx events generically: any request swapping into `#config-content` drives the navbar spinner (`onBusyChange`) and gets a delayed top progress bar (`#neo-progress`), a pressed/spinner state on the clicked element (`data-neo-loading`), a veiled target (`aria-busy` + `.neo-swap-busy`) and a "Loading…" label after ~1.5s. Opt other requests in with `data-neo-progress` (on the element or an ancestor), out with `data-neo-progress="false"`. Do not add per-page loading hacks.
 
 ### Operation locks
 
