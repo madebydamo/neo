@@ -119,7 +119,20 @@
         These settings.toml tables will be deleted when you save, so Nix can evaluate after the plugin is gone.
         Appdata directories are kept.
       </p>
-      <div id="plugin-remove-body-{{name}}" class="text-sm max-h-[50vh] overflow-y-auto"></div>
+      <div class="text-sm max-h-[50vh] overflow-y-auto">
+        <template x-for="p in (plRemovePreview?.['{{name}}'] || [])" :key="p.id">
+          <div class="mb-3">
+            <div class="font-semibold font-mono" x-text="p.id"></div>
+            <div class="text-[11px] opacity-60 break-all" x-text="p.url"></div>
+            <ul class="list-disc pl-5 mt-1 space-y-0.5" x-show="p.services.length">
+              <template x-for="svc in p.services" :key="svc">
+                <li class="font-mono" x-text="svc"></li>
+              </template>
+            </ul>
+            <p class="text-xs opacity-60 mt-1" x-show="!p.services.length">No settings tables attributed to this plugin.</p>
+          </div>
+        </template>
+      </div>
       <div class="modal-action">
         <button type="button" id="plugin-remove-cancel-{{name}}" class="btn btn-sm btn-ghost">Cancel</button>
         <button type="button" id="plugin-remove-confirm-{{name}}" class="btn btn-sm btn-error">Remove plugin</button>

@@ -345,14 +345,8 @@
     },
 
     confirmPluginRemoval(optionName, preview) {
-      const esc = (s) => String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
       const dlg = document.getElementById(`plugin-remove-dialog-${optionName}`);
-      const body = document.getElementById(`plugin-remove-body-${optionName}`);
-      if (!dlg || !body) {
+      if (!dlg) {
         const lines = preview.map((p) => {
           const svcs = p.services.length ? p.services.join(', ') : 'no service tables';
           return `${p.id}: ${svcs}`;
@@ -362,13 +356,7 @@
           '\n\nAppdata directories are kept. Save afterwards to drop settings.toml tables.'
         ));
       }
-      body.innerHTML = preview.map((p) => {
-        const svcs = p.services.length
-          ? `<ul class="list-disc pl-5 mt-1 space-y-0.5">${p.services.map((s) => `<li class="font-mono">${esc(s)}</li>`).join('')}</ul>`
-          : '<p class="text-xs opacity-60 mt-1">No settings tables attributed to this plugin.</p>';
-        return `<div class="mb-3"><div class="font-semibold font-mono">${esc(p.id)}</div>` +
-          `<div class="text-[11px] opacity-60 break-all">${esc(p.url)}</div>${svcs}</div>`;
-      }).join('');
+      this.plRemovePreview = { ...this.plRemovePreview, [optionName]: preview };
       return new Promise((resolve) => {
         const ok = document.getElementById(`plugin-remove-confirm-${optionName}`);
         const cancel = document.getElementById(`plugin-remove-cancel-${optionName}`);

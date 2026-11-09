@@ -279,18 +279,18 @@ test('removePlugin: an entry added in this session goes without asking', async (
   assert.deepEqual(form.values.plugins, {});
 });
 
-test('confirmPluginRemoval dialog: confirm removes; HTML-escaped', async () => {
+test('confirmPluginRemoval dialog: confirm removes; shows what goes', async () => {
   const document = createDocument({ pluginInventory: inventory });
   const dlg = document.set('plugin-remove-dialog-plugins');
-  const body = document.set('plugin-remove-body-plugins');
   const okBtn = document.set('plugin-remove-confirm-plugins');
   document.set('plugin-remove-cancel-plugins');
   const form = formWithPlugins({ document, current: { 'portrait-dev': one('github:u/a&b<"x">', 'dev') } });
 
   const p = form.removePlugin('plugins', 'portrait-dev');
   assert.equal(dlg.open, true);
-  assert.match(body.innerHTML, /github:u\/a&amp;b&lt;&quot;x&quot;&gt;/);
-  assert.match(body.innerHTML, /<li class="font-mono">dev-portrait<\/li>/);
+  const [shown] = form.plRemovePreview.plugins;
+  assert.equal(shown.url, 'github:u/a&b<"x">');
+  assert.deepEqual(shown.services, ['dev-portrait']);
   okBtn.click();
   await p;
   assert.deepEqual(form.values.plugins, {});
@@ -299,7 +299,6 @@ test('confirmPluginRemoval dialog: confirm removes; HTML-escaped', async () => {
 test('confirmPluginRemoval dialog: cancel keeps the entry', async () => {
   const document = createDocument({ pluginInventory: inventory });
   document.set('plugin-remove-dialog-plugins');
-  document.set('plugin-remove-body-plugins');
   document.set('plugin-remove-confirm-plugins');
   const cancelBtn = document.set('plugin-remove-cancel-plugins');
   const form = formWithPlugins({ document, current: { bar: one('git+file:///opt/bar') } });
