@@ -34,6 +34,26 @@ window.versioningPage = function versioningPage() {
 
   var SPINNER = '<div class="flex justify-center py-8"><span class="loading loading-spinner loading-sm opacity-50"></span></div>';
 
+  /** Fill the open shared dialog from `url`, below `head`; failures show in place of the spinner. */
+  function loadIntoModal(url, head) {
+    head = head || '';
+    function show(html) {
+      var body = document.getElementById('changes-body');
+      if (!body) return;
+      body.innerHTML = head + html;
+      // Service links in the settings summary navigate via hx-get.
+      if (typeof htmx !== 'undefined' && htmx.process) htmx.process(body);
+    }
+    fetch(url)
+      .then(function (r) {
+        return r.text();
+      })
+      .then(show)
+      .catch(function (e) {
+        show('<div class="text-error text-sm">' + escapeHtml(String(e)) + '</div>');
+      });
+  }
+
   return {
     tab: 'timeline',
     loading: true,
@@ -602,35 +622,12 @@ window.versioningPage = function versioningPage() {
         this.entryHeading(b, 'To') +
         '</div>';
       openModal(title, head + SPINNER);
-      fetch('/versioning/diff?a=' + encodeURIComponent(a) + '&b=' + encodeURIComponent(b))
-        .then(function (r) {
-          return r.text();
-        })
-        .then(function (html) {
-          var body = document.getElementById('changes-body');
-          if (!body) return;
-          body.innerHTML = head + html;
-          // Service links in the settings summary navigate via hx-get.
-          if (typeof htmx !== 'undefined' && htmx.process) htmx.process(body);
-        })
-        .catch(function (e) {
-          var body = document.getElementById('changes-body');
-          if (body) body.innerHTML = head + '<div class="text-error text-sm">' + escapeHtml(String(e)) + '</div>';
-        });
+      loadIntoModal('/versioning/diff?a=' + encodeURIComponent(a) + '&b=' + encodeURIComponent(b), head);
     },
 
     reviewPending() {
       openModal('Pending changes', SPINNER);
-      fetch('/changes/summary')
-        .then(function (r) {
-          return r.text();
-        })
-        .then(function (html) {
-          var body = document.getElementById('changes-body');
-          if (!body) return;
-          body.innerHTML = html;
-          if (typeof htmx !== 'undefined' && htmx.process) htmx.process(body);
-        });
+      loadIntoModal('/changes/summary');
     },
 
     post(url, title) {
