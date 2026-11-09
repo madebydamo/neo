@@ -164,7 +164,7 @@ impl OperationLog {
         match f() {
             Ok(v) => Ok(v),
             Err(e) => {
-                self.write_state("failed", phase, Some(&e.to_string()), None);
+                self.write_state("failed", phase, Some(&format!("{e:#}")), None);
                 Err(e)
             }
         }

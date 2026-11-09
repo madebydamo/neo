@@ -110,7 +110,7 @@ pub fn activate(
         op.write_state_extra(
             "failed",
             "branch-failed",
-            Some(&e.to_string()),
+            Some(&format!("{e:#}")),
             None,
             Some(serde_json::json!({ "activation_mode": mode_s })),
         );
