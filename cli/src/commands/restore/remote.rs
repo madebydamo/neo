@@ -13,7 +13,7 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use super::backup::{self, Access, Location, Source};
-use super::local::{commit_uncommitted, remote_url, WORK_DIR};
+use super::local::{commit_uncommitted, default_origin, remote_url, stage_repo, WORK_DIR};
 use super::{DataSource, RestoreArgs};
 use crate::utils::command::{confirm, shell_quote, stdout_checked};
 use crate::utils::execute_command;
@@ -338,7 +338,7 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
     let target = Target::new(host, key.clone());
     let host = target.host.as_str();
 
-    // Clone on the client: it has the credentials for a private repo. Without
+    // Stage it on the client: it has the credentials for a private repo. Without
     // a repo, take it out of the backup here (the admin key opens it).
     let tmp = TempDir::new("neo-restore")?;
     let local = tmp.join("config");
@@ -374,13 +374,12 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
         commit_uncommitted(&local)?;
     } else {
         let repo = repo.context("give the config repo, or --from-backup <backup>")?;
-        execute_command(Command::new("git").args(["clone", "-q", repo]).arg(&local))?;
+        stage_repo(repo, &local)?;
     }
     let origin = match (&args.origin, repo) {
         (Some(o), _) => o.clone(),
         (None, None) => remote_url(&local),
-        (None, Some(r)) if Path::new(r).is_dir() => remote_url(Path::new(r)),
-        (None, Some(r)) => r.to_string(),
+        (None, Some(r)) => default_origin(r),
     };
 
     target.ensure_installer(args.yes)?;

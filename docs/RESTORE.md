@@ -38,6 +38,8 @@ nix run github:madebydamo/neo#neo -- restore --from-backup user@backup.example.c
 
 `neo backup extract-config user@backup.example.com:myhome` only copies the repo out (push it somewhere first). For a [backup store](INSTALL.md#backup-store) the location is `https://<name in the store>@backup.example.com/<folder>`; your key must be in that server's list on the store.
 
+The repo argument can be a git URL, a checkout on this computer (its last commit; you get a warning about uncommitted changes), a bare repo, or a saved copy of the files without `.git`, which is restored as one new commit. With `--host`, it only has to exist on the computer you run this from.
+
 `--check` prints the plan and changes nothing. The checklist below still applies: DNS, local plugins (refused when missing), the provider's boot order. A cutover from a machine that still runs is not automatic: stop the old one (step 6, "Old machine still running") and let its last backup run first, or use `--data-from` with a final copy.
 
 The rest of this page is the manual procedure from the real move, kept because it explains each step and helps when something fails halfway.
@@ -270,7 +272,7 @@ ssh root@NEW 'export NIX_CONFIG="$(cat /root/restore/nix.conf)"
 
 or `rm -rf /mnt/var/neo/DATA/AppData/configuration /mnt/etc/ssh` and run `neo restore` again.
 
-`neo restore` sets the restored repo's `origin` to the URL you gave it. With a local path, fix it afterwards: `git -C /mnt/var/neo/DATA/AppData/configuration remote remove origin` (or set your real remote).
+`neo restore` sets the restored repo's `origin` to the URL you gave it. A local checkout passes on its own `origin`; a copy without one, or one pointing at another local path, leaves the restored repo without a remote. Set your real remote afterwards with `git -C /mnt/var/neo/DATA/AppData/configuration remote add origin …`.
 
 ## 8. Boot entry, test boot, cutover
 
