@@ -15,13 +15,13 @@
 // sidebar still scrolls). Dropping on the middle of a service makes a group,
 // on a group adds to it, near an edge reorders.
 (function (root, factory) {
-  var api = factory();
+  var api = factory((root && root.NeoUtil) || require('./neo_util.js'));
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root && root.document) {
     root.NeoSidebarLayout = api;
     api.autostart(root);
   }
-})(typeof window !== 'undefined' ? window : null, function () {
+})(typeof window !== 'undefined' ? window : null, function (NeoUtil) {
   'use strict';
 
   var STORAGE_KEY = 'neo-sidebar-layout-v1';
@@ -191,21 +191,18 @@
 
   // --- Storage (best effort: private windows may throw) ---
 
+  var storage = NeoUtil.store('local');
+
   function load() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch (_) {
-      return null;
-    }
+    return storage.getJson(STORAGE_KEY, null);
   }
 
   function save(tree) {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tree)); } catch (_) {}
+    storage.setJson(STORAGE_KEY, tree);
   }
 
   function clear() {
-    try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+    storage.remove(STORAGE_KEY);
   }
 
   // --- DOM ---

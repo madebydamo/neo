@@ -15,20 +15,14 @@ window.versioningPage = function versioningPage() {
   var PAGE = 40;
   var VT = window.NeoVersionTree;
   var escapeHtml = window.NeoUtil.esc;
+  var local = window.NeoUtil.store('local');
+  var session = window.NeoUtil.store('session');
 
   function pad2(n) {
     return n < 10 ? '0' + n : String(n);
   }
 
   var toast = window.neoToast;
-
-  function store(key, val) {
-    try {
-      if (val === undefined) return localStorage.getItem(key);
-      localStorage.setItem(key, val);
-    } catch (e) {}
-    return null;
-  }
 
   /** Output of a POST (activation monitor, alerts) in the shared dialog. */
   function openModal(title, html) {
@@ -64,11 +58,9 @@ window.versioningPage = function versioningPage() {
 
     init() {
       var self = this;
-      try {
-        var t = sessionStorage.getItem(TAB_KEY);
-        if (t === 'timeline' || t === 'data') this.tab = t;
-      } catch (e) {}
-      this.legendOpen = store(LEGEND_KEY) !== 'closed';
+      var t = session.get(TAB_KEY);
+      if (t === 'timeline' || t === 'data') this.tab = t;
+      this.legendOpen = local.get(LEGEND_KEY) !== 'closed';
       this.loadTree();
       this.loadZfs();
       this._tick = setInterval(function () {
@@ -98,15 +90,13 @@ window.versioningPage = function versioningPage() {
 
     setTab(t) {
       this.tab = t;
-      try {
-        sessionStorage.setItem(TAB_KEY, t);
-      } catch (e) {}
+      session.set(TAB_KEY, t);
       if (t === 'timeline') this.scheduleDraw();
     },
 
     toggleLegend() {
       this.legendOpen = !this.legendOpen;
-      store(LEGEND_KEY, this.legendOpen ? 'open' : 'closed');
+      local.set(LEGEND_KEY, this.legendOpen ? 'open' : 'closed');
     },
 
     onEscape() {

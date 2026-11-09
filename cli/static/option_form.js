@@ -367,16 +367,11 @@ function optionForm() {
     },
 
     _loadPref(kind, fallback) {
-      try {
-        const raw = window.localStorage.getItem(this._prefKey(kind));
-        return raw ? JSON.parse(raw) : fallback;
-      } catch (_) {
-        return fallback;
-      }
+      return window.NeoUtil.store('local').getJson(this._prefKey(kind), fallback);
     },
 
     _savePref(kind, value) {
-      try { window.localStorage.setItem(this._prefKey(kind), JSON.stringify(value)); } catch (_) { /* private mode */ }
+      window.NeoUtil.store('local').setJson(this._prefKey(kind), value);
     },
 
     initPaneChrome() {

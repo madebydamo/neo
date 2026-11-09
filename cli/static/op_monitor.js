@@ -456,15 +456,15 @@
 
   function rememberResume(win, id, el) {
     if (!el.closest || !el.closest('#changes-modal')) return;
-    try { win.localStorage.setItem(RESUME_KEY, id); } catch (e) {}
+    NeoUtil.store('local', win).set(RESUME_KEY, id);
   }
 
   function forgetResume(win) {
-    try { win.localStorage.removeItem(RESUME_KEY); } catch (e) {}
+    NeoUtil.store('local', win).remove(RESUME_KEY);
   }
 
   function pendingResume(win) {
-    try { return win.localStorage.getItem(RESUME_KEY); } catch (e) { return null; }
+    return NeoUtil.store('local', win).get(RESUME_KEY);
   }
 
   // ---------------------------------------------------------------------------

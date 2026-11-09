@@ -18,3 +18,44 @@ test('toast does nothing without a host', () => {
     delete globalThis.document;
   }
 });
+
+function fakeWin() {
+  const data = new Map();
+  return {
+    localStorage: {
+      getItem: (k) => (data.has(k) ? data.get(k) : null),
+      setItem: (k, v) => data.set(k, v),
+      removeItem: (k) => data.delete(k),
+    },
+  };
+}
+
+test('store round-trips text and JSON', () => {
+  const s = NeoUtil.store('local', fakeWin());
+  assert.strictEqual(s.get('a'), null);
+  s.set('a', '1');
+  assert.strictEqual(s.get('a'), '1');
+  s.remove('a');
+  assert.strictEqual(s.get('a'), null);
+  assert.deepStrictEqual(s.getJson('j', { none: true }), { none: true });
+  s.setJson('j', { x: 1 });
+  assert.deepStrictEqual(s.getJson('j', null), { x: 1 });
+  s.set('bad', '{');
+  assert.strictEqual(s.getJson('bad', 'fallback'), 'fallback');
+});
+
+test('store survives storage that throws', () => {
+  const boom = () => {
+    throw new Error('blocked');
+  };
+  const s = NeoUtil.store('local', { localStorage: { getItem: boom, setItem: boom, removeItem: boom } });
+  assert.strictEqual(s.get('a'), null);
+  assert.strictEqual(s.getJson('a', 7), 7);
+  s.set('a', '1');
+  s.setJson('a', 1);
+  s.remove('a');
+  // No storage at all (access itself fails).
+  const none = NeoUtil.store('session', {});
+  assert.strictEqual(none.get('a'), null);
+  none.set('a', '1');
+});

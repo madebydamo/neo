@@ -474,19 +474,16 @@
   var STORE_RUN = 'neo-agent-run';
   var STORE_UNREAD = 'neo-agent-unread';
 
+  // Blocked storage: the indicator just does not survive a reload.
+  var session = window.NeoUtil.store('session');
+
   function storeGet(key) {
-    try {
-      return window.sessionStorage.getItem(key);
-    } catch (e) {
-      return null;
-    }
+    return session.get(key);
   }
 
   function storeSet(key, value) {
-    try {
-      if (value == null) window.sessionStorage.removeItem(key);
-      else window.sessionStorage.setItem(key, JSON.stringify(value));
-    } catch (e) { /* storage blocked: the indicator just does not survive a reload */ }
+    if (value == null) session.remove(key);
+    else session.setJson(key, value);
   }
 
   function busy() {

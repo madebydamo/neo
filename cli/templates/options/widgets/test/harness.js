@@ -139,6 +139,7 @@ function installGlobals(opts) {
   if (!globalThis.window) globalThis.window = globalThis;
   globalThis.window.confirm = opts.confirm || (() => true);
   globalThis.window.neoToast = opts.neoToast || (() => {});
+  globalThis.window.NeoUtil = require('../../../../static/neo_util.js');
   if (opts.fetch) {
     globalThis.fetch = opts.fetch;
   }

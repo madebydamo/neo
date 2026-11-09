@@ -225,6 +225,7 @@ window.configShell = function configShell() {
  */
 window.servicesGrid = function servicesGrid() {
   var STORE_KEY = 'neo.servicesFilters';
+  var session = window.NeoUtil.store('session');
   return {
     q: '',
     status: 'all', // all | installed | available
@@ -239,15 +240,13 @@ window.servicesGrid = function servicesGrid() {
         if (c.dataset.enabled === 'true') installed++;
       });
       this.counts = { all: cards.length, installed: installed, available: cards.length - installed };
-      try {
-        var saved = JSON.parse(sessionStorage.getItem(STORE_KEY) || 'null');
-        if (saved) {
-          this.q = saved.q || '';
-          this.status = saved.status || 'all';
-          this.category = saved.category || 'all';
-          this.plugin = saved.plugin || 'all';
-        }
-      } catch (e) {}
+      var saved = session.getJson(STORE_KEY, null);
+      if (saved) {
+        this.q = saved.q || '';
+        this.status = saved.status || 'all';
+        this.category = saved.category || 'all';
+        this.plugin = saved.plugin || 'all';
+      }
       // Drop stale filters (category / plugin no longer present after a config change).
       var root = this.$root;
       var hasCard = function (pred) {
@@ -267,12 +266,7 @@ window.servicesGrid = function servicesGrid() {
     },
 
     persist() {
-      try {
-        sessionStorage.setItem(
-          STORE_KEY,
-          JSON.stringify({ q: this.q, status: this.status, category: this.category, plugin: this.plugin })
-        );
-      } catch (e) {}
+      session.setJson(STORE_KEY, { q: this.q, status: this.status, category: this.category, plugin: this.plugin });
     },
 
     /** "/" focuses search (unless typing in another field). */

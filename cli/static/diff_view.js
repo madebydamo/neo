@@ -13,14 +13,10 @@
   'use strict';
 
   var VIEW_KEY = 'neo.diffView';
+  var storage = window.NeoUtil.store('local');
 
   function readView() {
-    try {
-      var v = window.localStorage.getItem(VIEW_KEY);
-      return v === 'split' ? 'split' : 'unified';
-    } catch (e) {
-      return 'unified';
-    }
+    return storage.get(VIEW_KEY) === 'split' ? 'split' : 'unified';
   }
 
   function syncViewButtons(root, view) {
@@ -38,11 +34,7 @@
   }
 
   function setView(view) {
-    try {
-      window.localStorage.setItem(VIEW_KEY, view);
-    } catch (e) {
-      /* storage unavailable: keep the in-page choice only */
-    }
+    storage.set(VIEW_KEY, view);
     applyView(view);
   }
 

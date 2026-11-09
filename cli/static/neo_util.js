@@ -60,5 +60,49 @@
     }, 4000);
   }
 
-  return { esc: esc, toast: toast };
+  /**
+   * Browser storage that never throws (private windows, blocked site data):
+   * reads fall back, writes are dropped.
+   * @param {'local'|'session'} kind
+   * @param {Window} [win]
+   */
+  function store(kind, win) {
+    function area() {
+      return (win || window)[kind + 'Storage'];
+    }
+    function get(key) {
+      try {
+        return area().getItem(key);
+      } catch (e) {
+        return null;
+      }
+    }
+    function set(key, value) {
+      try {
+        area().setItem(key, value);
+      } catch (e) {}
+    }
+    return {
+      get: get,
+      set: set,
+      remove: function (key) {
+        try {
+          area().removeItem(key);
+        } catch (e) {}
+      },
+      getJson: function (key, fallback) {
+        try {
+          var raw = get(key);
+          return raw ? JSON.parse(raw) : fallback;
+        } catch (e) {
+          return fallback;
+        }
+      },
+      setJson: function (key, value) {
+        set(key, JSON.stringify(value));
+      },
+    };
+  }
+
+  return { esc: esc, toast: toast, store: store };
 });

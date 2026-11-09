@@ -26,7 +26,7 @@ const iframeKnownUrl = {};
 })();
 
 // Drop legacy deep-link cache from older navigator builds (one-shot cleanup).
-try { localStorage.removeItem('neo-last-urls'); } catch (e) {}
+NeoUtil.store('local').remove('neo-last-urls');
 
 // --- Mobile collapsible sidebar (drawer) ---
 // md+ keeps the sidebar always visible (static); below md it is an off-canvas drawer.
