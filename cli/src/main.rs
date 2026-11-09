@@ -256,7 +256,7 @@ fn run(cli: Cli) -> Result<()> {
 
     // The writable settings file lives under configPath (same as `neo edit` uses).
     // The original CLI --settings (or /etc/neo/settings.toml) is only the source we loaded from.
-    let web_settings_path: PathBuf = PathBuf::from(format!("{}/settings.toml", config_path));
+    let web_settings_path: PathBuf = PathBuf::from(&config_path).join(utils::settings::FILE);
 
     let dry_run = cli.dry_run;
     let nix_cmd = cli.nix_path.as_deref().unwrap_or("nix");

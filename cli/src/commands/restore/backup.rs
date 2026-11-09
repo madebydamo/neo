@@ -13,7 +13,7 @@ use crate::utils::command::{output_checked, output_with_stdin, shell_quote, stdo
 use crate::utils::execute_command;
 use crate::utils::fsutil::write_private;
 use crate::utils::profile::{DEFAULT_CONFIG_REL, DEFAULT_VOLUMES_ROOT};
-use crate::utils::settings::{bool_at, item_at, str_at};
+use crate::utils::settings::{bool_at, item_at, str_at, FILE as SETTINGS_FILE};
 
 /// Prefix of the snapshots the backup service takes (backup.sh).
 pub const SNAPSHOT_PREFIX: &str = "neo-backup-";
@@ -719,7 +719,7 @@ pub fn extract_config(access: &Access, source: &Source, out: &Path) -> Result<St
             let _ = fs::remove_dir_all(&stage);
             let mut rel = DEFAULT_CONFIG_REL.to_string();
             enc.restore(&stage, &[], &[&rel])?;
-            if !stage.join(&rel).join("settings.toml").exists() {
+            if !stage.join(&rel).join(SETTINGS_FILE).exists() {
                 rel =
                     enc.config_repos()?.into_iter().next().context(
                         "the backup holds no config repo (no settings.toml next to .git)",
@@ -743,7 +743,7 @@ pub fn extract_config(access: &Access, source: &Source, out: &Path) -> Result<St
             execute_command(&mut rsync).with_context(|| {
                 format!("no config repo at {origin}{DEFAULT_CONFIG_REL} in the backup")
             })?;
-            if !out.join("settings.toml").exists() {
+            if !out.join(SETTINGS_FILE).exists() {
                 bail!("{origin}{DEFAULT_CONFIG_REL} holds no settings.toml");
             }
             Ok(DEFAULT_CONFIG_REL.to_string())

@@ -211,7 +211,7 @@ impl Store {
     }
 
     pub fn settings_path(&self) -> PathBuf {
-        self.dir.join("settings.toml")
+        self.dir.join(super::settings::FILE)
     }
 
     fn path(&self, name: &str) -> PathBuf {

@@ -4,6 +4,9 @@ use anyhow::{Context, Result};
 use std::path::Path;
 use toml_edit::{DocumentMut, Item, Table};
 
+/// The settings file in a config repo.
+pub const FILE: &str = "settings.toml";
+
 /// Load baked default settings (if any) and overlay the user file at `path`.
 pub fn load_or_default_settings(path: &Path) -> Result<DocumentMut> {
     let default_str = baked_default_settings()?;

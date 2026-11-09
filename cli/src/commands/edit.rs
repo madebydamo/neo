@@ -4,7 +4,7 @@ use std::process::Command;
 use crate::utils::execute_command;
 
 pub fn edit(config_path: &str, dry_run: bool) -> Result<()> {
-    let settings_file = format!("{}/settings.toml", config_path);
+    let settings_file = format!("{config_path}/{}", crate::utils::settings::FILE);
     if dry_run {
         println!("DRY-RUN: vim {}", settings_file);
         return Ok(());

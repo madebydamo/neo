@@ -15,7 +15,7 @@ use super::{
 use crate::utils::command::{confirm, is_root};
 use crate::utils::execute_command;
 use crate::utils::profile::DEFAULT_SERVER_CONFIG_PATH;
-use crate::utils::settings::{disko_enabled, str_at};
+use crate::utils::settings::{disko_enabled, str_at, FILE as SETTINGS_FILE};
 
 pub const WORK_DIR: &str = "/root/neo-restore";
 
@@ -169,7 +169,7 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     let staging = work.join("config");
     let _ = fs::remove_dir_all(&staging);
     stage_repo(&repo_url, &staging)?;
-    let settings_path = staging.join("settings.toml");
+    let settings_path = staging.join(SETTINGS_FILE);
     let mut doc: DocumentMut = fs::read_to_string(&settings_path)
         .context("the repository has no settings.toml")?
         .parse()
@@ -534,7 +534,7 @@ fn is_git_repo(dir: &Path) -> bool {
 pub(crate) fn stage_repo(repo: &str, dest: &Path) -> Result<()> {
     let dir = Path::new(repo);
     if dir.is_dir() && !is_git_repo(dir) {
-        if !dir.join("settings.toml").exists() {
+        if !dir.join(SETTINGS_FILE).exists() {
             bail!(
                 "{repo} is neither a git repository nor a copy of a config repo (no settings.toml)"
             );
@@ -563,7 +563,7 @@ pub(crate) fn stage_repo(repo: &str, dest: &Path) -> Result<()> {
             ])
             .arg(dest),
     )?;
-    if !dest.join("settings.toml").exists() {
+    if !dest.join(SETTINGS_FILE).exists() {
         bail!("{repo} has no settings.toml in its last commit: is this the config repo?");
     }
     Ok(())

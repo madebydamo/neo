@@ -18,7 +18,7 @@ pub fn paste_settings(
         );
         return Ok(());
     }
-    let target = PathBuf::from(config_path).join("settings.toml");
+    let target = PathBuf::from(config_path).join(crate::utils::settings::FILE);
     fs::create_dir_all(config_path)?;
 
     // Parse + sort so paste/init/restore match web-save ordering (stable diffs).

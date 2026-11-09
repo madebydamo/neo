@@ -6,7 +6,7 @@ use toml_edit::{Array, DocumentMut, Item, Table};
 use crate::utils::{is_local_flake_ref, sort_document_alphabetically};
 
 pub fn migrate(config_path: &str, source_settings: &Path, dry_run: bool) -> Result<()> {
-    let live = PathBuf::from(config_path).join("settings.toml");
+    let live = PathBuf::from(config_path).join(crate::utils::settings::FILE);
     let target = if live.exists() {
         live
     } else if source_settings.exists() {
