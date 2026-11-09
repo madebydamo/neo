@@ -11,19 +11,7 @@ const serviceIframes = {};   // key -> iframe element
 // that do not know about neo. Never persisted (no long-lived deep-link cache).
 const iframeKnownUrl = {};
 
-// Home-screen launch (iOS sets navigator.standalone; others use display-mode).
-(function markStandalone() {
-  try {
-    var standalone =
-      window.navigator.standalone === true ||
-      window.matchMedia('(display-mode: standalone)').matches ||
-      window.matchMedia('(display-mode: fullscreen)').matches ||
-      window.matchMedia('(display-mode: minimal-ui)').matches;
-    if (!standalone) return;
-    document.documentElement.classList.add('neo-standalone');
-    if (document.body) document.body.classList.add('neo-standalone');
-  } catch (e) {}
-})();
+NeoUtil.markStandalone();
 
 // Drop legacy deep-link cache from older navigator builds (one-shot cleanup).
 NeoUtil.store('local').remove('neo-last-urls');

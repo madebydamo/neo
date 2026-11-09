@@ -110,5 +110,22 @@
     else fn();
   }
 
-  return { esc: esc, toast: toast, store: store, onReady: onReady };
+  /**
+   * Mark a home-screen launch (iOS sets navigator.standalone; others use
+   * display-mode). Call it from a script at the end of the body.
+   */
+  function markStandalone() {
+    try {
+      var standalone =
+        window.navigator.standalone === true ||
+        window.matchMedia('(display-mode: standalone)').matches ||
+        window.matchMedia('(display-mode: fullscreen)').matches ||
+        window.matchMedia('(display-mode: minimal-ui)').matches;
+      if (!standalone) return;
+      document.documentElement.classList.add('neo-standalone');
+      if (document.body) document.body.classList.add('neo-standalone');
+    } catch (e) {}
+  }
+
+  return { esc: esc, toast: toast, store: store, onReady: onReady, markStandalone: markStandalone };
 });
