@@ -8,6 +8,8 @@ use pulldown_cmark::{
 };
 use serde::{Deserialize, Serialize};
 
+use super::util::escape_html;
+
 /// A service a guide uses, with its state on this machine.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct GuideService {
@@ -101,21 +103,6 @@ pub struct RenderCtx<'a> {
     pub assistant: bool,
 }
 
-fn escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&#39;"),
-            _ => out.push(c),
-        }
-    }
-    out
-}
-
 pub fn slug(text: &str) -> String {
     let mut out = String::new();
     let mut dash = false;
@@ -133,7 +120,7 @@ pub fn slug(text: &str) -> String {
 
 /// htmx navigation into `#config-content` (same as service cards).
 fn nav_attrs(url: &str) -> String {
-    let u = escape(url);
+    let u = escape_html(url);
     format!(
         r##"href="{u}" hx-get="{u}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true""##
     )
@@ -158,7 +145,7 @@ fn link_open(dest: &str, ctx: &RenderCtx) -> Option<String> {
     let neo = matches!(scheme, "service" | "option" | "guide" | "privacy");
     if !neo {
         if scheme == "http" || scheme == "https" {
-            let d = escape(dest);
+            let d = escape_html(dest);
             return Some(format!(
                 r#"<a href="{d}" target="_blank" rel="noopener" class="link">"#
             ));
@@ -168,7 +155,7 @@ fn link_open(dest: &str, ctx: &RenderCtx) -> Option<String> {
     if ctx.broken.iter().any(|b| b == dest) {
         return Some(format!(
             r#"<span class="neo-guide-broken" title="Not available here: {}">"#,
-            escape(dest)
+            escape_html(dest)
         ));
     }
     Some(match scheme {
@@ -176,18 +163,18 @@ fn link_open(dest: &str, ctx: &RenderCtx) -> Option<String> {
             let icon = ctx
                 .service_icons
                 .get(target)
-                .map(|i| format!(r#"<img src="{}" alt="" loading="lazy">"#, escape(i)))
+                .map(|i| format!(r#"<img src="{}" alt="" loading="lazy">"#, escape_html(i)))
                 .unwrap_or_default();
             format!(
                 r#"<a {} class="neo-guide-chip" data-guide-service="{}">{icon}"#,
                 nav_attrs(&format!("/configuration/option/{target}")),
-                escape(target)
+                escape_html(target)
             )
         }
         "option" => format!(
             r#"<a {} class="neo-guide-option" data-guide-option="{}">"#,
             nav_attrs(&option_url(target)),
-            escape(target)
+            escape_html(target)
         ),
         "guide" => format!(
             r#"<a {} class="link link-primary">"#,
@@ -318,7 +305,7 @@ pub fn render(md: &str, ctx: &RenderCtx) -> (String, Vec<TocEntry>) {
                     links.push(None);
                     out.push(Event::Html(CowStr::from(format!(
                         r#"<a href="{}" class="link">"#,
-                        escape(&dest_url)
+                        escape_html(&dest_url)
                     ))));
                 }
             },
@@ -358,7 +345,7 @@ pub fn render(md: &str, ctx: &RenderCtx) -> (String, Vec<TocEntry>) {
                 out.push(Event::Html(CowStr::from("</code></pre></details>")));
             }
             Event::Text(t) if links.last().and_then(|l| l.as_deref()) == Some("\u{0}neo-check") => {
-                out.push(Event::Html(CowStr::from(escape(&t))));
+                out.push(Event::Html(CowStr::from(escape_html(&t))));
             }
             other => out.push(other),
         }
