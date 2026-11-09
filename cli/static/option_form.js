@@ -539,7 +539,7 @@ function optionForm() {
           this.executeHelper(optionName, target, helper, inputs)
         );
       } else {
-        alert('Helper dialog unavailable');
+        window.neoToast('Helper dialog unavailable', 'error');
       }
     },
 
@@ -559,7 +559,7 @@ function optionForm() {
         });
         const body = await res.json().catch(() => ({}));
         if (!body.ok) {
-          alert(body.error || 'Helper failed');
+          window.neoToast(body.error || 'Helper failed', 'error');
           return;
         }
         this.applyHelperValue(
@@ -569,7 +569,7 @@ function optionForm() {
           body.value
         );
       } catch (e) {
-        alert('Helper error: ' + e);
+        window.neoToast('Helper error: ' + e, 'error');
       } finally {
         this.helperBusy = false;
       }
