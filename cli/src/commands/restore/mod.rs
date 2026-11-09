@@ -27,7 +27,6 @@ pub mod backup;
 pub(crate) mod local;
 pub(crate) mod remote;
 
-const DEFAULT_CONFIG_PATH: &str = "/var/neo/DATA/AppData/configuration";
 pub(crate) const DEFAULT_TARGET: &str = "/mnt";
 
 /// What the data of the restored machine comes from.

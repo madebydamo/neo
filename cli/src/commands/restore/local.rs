@@ -11,10 +11,10 @@ use toml_edit::DocumentMut;
 use super::backup::{self, Access, Format, Source};
 use super::{
     access_tokens, int_setting, mount_zfs, restore_identity, under, DataSource, RestoreArgs,
-    DEFAULT_CONFIG_PATH,
 };
 use crate::utils::command::{confirm, is_root};
 use crate::utils::execute_command;
+use crate::utils::profile::DEFAULT_SERVER_CONFIG_PATH;
 use crate::utils::settings::{disko_enabled, str_at};
 
 pub const WORK_DIR: &str = "/root/neo-restore";
@@ -250,7 +250,7 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         .unwrap_or("zroot")
         .to_string();
     let config_path = str_at(&doc, &["neo-cli", "server", "configPath"])
-        .unwrap_or(DEFAULT_CONFIG_PATH)
+        .unwrap_or(DEFAULT_SERVER_CONFIG_PATH)
         .to_string();
     let config_rel = config_path
         .strip_prefix(&format!("{root}/"))

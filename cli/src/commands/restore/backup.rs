@@ -12,6 +12,7 @@ use toml_edit::DocumentMut;
 use crate::utils::command::{output_checked, output_with_stdin, shell_quote, stdout_checked};
 use crate::utils::execute_command;
 use crate::utils::fsutil::write_private;
+use crate::utils::profile::{DEFAULT_CONFIG_REL, DEFAULT_VOLUMES_ROOT};
 use crate::utils::settings::{bool_at, item_at, str_at};
 
 /// Prefix of the snapshots the backup service takes (backup.sh).
@@ -20,9 +21,6 @@ pub const SNAPSHOT_PREFIX: &str = "neo-backup-";
 /// Encrypted format: the data key next to the restic repository, encrypted
 /// with age to the host key and the admin keys (backup.sh).
 pub const HEADER: &str = "neo-backup.age";
-
-/// The config repo below volumes.root unless `configPath` moves it.
-pub const DEFAULT_CONFIG_REL: &str = "DATA/AppData/configuration";
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Format {
@@ -60,7 +58,7 @@ pub struct Source {
 /// neo.core.volumes.root (default /var/neo).
 pub fn volumes_root(doc: &DocumentMut) -> String {
     str_at(doc, &["core", "volumes", "root"])
-        .unwrap_or("/var/neo")
+        .unwrap_or(DEFAULT_VOLUMES_ROOT)
         .trim_end_matches('/')
         .to_string()
 }

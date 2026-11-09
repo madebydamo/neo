@@ -62,6 +62,13 @@ pub fn resolve_profile(
 /// Default flake input for neo. The server profile uses this unless overridden.
 pub const DEFAULT_NEO_INPUT: &str = "github:madebydamo/neo";
 
+/// `neo.core.volumes.root` unless the settings move it.
+pub const DEFAULT_VOLUMES_ROOT: &str = "/var/neo";
+/// The config repo below the volumes root unless `configPath` moves it.
+pub const DEFAULT_CONFIG_REL: &str = "DATA/AppData/configuration";
+/// [`DEFAULT_VOLUMES_ROOT`]/[`DEFAULT_CONFIG_REL`] (checked by a test).
+pub const DEFAULT_SERVER_CONFIG_PATH: &str = "/var/neo/DATA/AppData/configuration";
+
 /// Default `nix flake init -t` template.
 pub const DEFAULT_TEMPLATE: &str = "github:madebydamo/neo#homeserver";
 
@@ -182,7 +189,7 @@ pub fn resolve_config_path(doc: &DocumentMut, profile: &str) -> String {
         return p.to_string();
     }
     if profile == PROFILE_SERVER {
-        "/var/neo/DATA/AppData/configuration".to_string()
+        DEFAULT_SERVER_CONFIG_PATH.to_string()
     } else {
         "./build".to_string()
     }
@@ -191,6 +198,14 @@ pub fn resolve_config_path(doc: &DocumentMut, profile: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_config_path_is_inside_the_default_root() {
+        assert_eq!(
+            DEFAULT_SERVER_CONFIG_PATH,
+            format!("{DEFAULT_VOLUMES_ROOT}/{DEFAULT_CONFIG_REL}")
+        );
+    }
 
     fn doc(raw: &str) -> DocumentMut {
         raw.parse().unwrap()
