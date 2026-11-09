@@ -462,17 +462,7 @@ fn init_skippable_while_system_locked(err: &LockError, config_path: &str) -> boo
     } else {
         c.holders.clone()
     };
-    let blocked_by_switch = if holders.is_empty() {
-        // Holder file gone already; match the conflict message label.
-        let m = c.to_string();
-        m.contains("Activation in progress")
-            || m.contains("Update in progress")
-            || m.contains("Generation switch in progress")
-            || m.contains("Flake input update in progress")
-    } else {
-        holders.iter().any(|h| switch_kind(&h.kind))
-    };
-    if !blocked_by_switch {
+    if !holders.iter().any(|h| switch_kind(&h.kind)) {
         return false;
     }
     let p = std::path::Path::new(config_path);
