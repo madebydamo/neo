@@ -9,10 +9,11 @@ use tokio::io::{AsyncBufReadExt, BufReader as AsyncBufReader};
 use crate::commands::web::locks::{try_lock, Blocked};
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::units::{
-    clear_appdata_btn_oob, clear_appdata_out_oob, map_services, normalize_container_unit,
-    perform_unit_action, run_clear_appdata, run_container_pull, schedule_unit_refresh_burst,
-    trusted_appdata, try_begin_clear_appdata, try_begin_pull, unit_controls_oob_fragment,
-    unit_name_valid, update_out_oob, ServiceStatusRequest, ServiceStatusResponse, UnitAction,
+    begin_clear_appdata, begin_pull, clear_appdata_btn_oob, clear_appdata_out_oob, map_services,
+    normalize_container_unit, pane_lock_spec, perform_unit_action, run_clear_appdata,
+    run_container_pull, schedule_unit_refresh_burst, trusted_appdata, unit_controls_oob_fragment,
+    unit_name_valid, update_out_oob, ClearJob, ServiceStatusRequest, ServiceStatusResponse,
+    UnitAction,
 };
 use crate::commands::web::util::{escape_html, proc, service_name_ok, status_err, status_pulling};
 use crate::utils::locks::{LockSpec, OpInfo};
@@ -90,12 +91,7 @@ pub async fn container_update(
         &LockSpec::unit(&unit),
         OpInfo::new("pull", format!("Image update of {unit}")),
     )?;
-    if !try_begin_pull(config, &unit) {
-        let (inner, _) = status_pulling("already pulling…");
-        let out = update_out_oob(&unit, &inner, "docker pull already in progress");
-        let ctl = unit_controls_oob_fragment(&unit, config).await;
-        return Ok(RawHtml(format!("{out}{ctl}")));
-    }
+    begin_pull(config, &unit);
 
     let (inner, _) = status_pulling("starting pull…");
     let out = update_out_oob(&unit, &inner, "starting docker pull");
@@ -112,8 +108,8 @@ pub async fn container_update(
     Ok(RawHtml(format!("{out}{ctl}")))
 }
 
-/// Clear a service's appdata: stop all related units, rm -rf the declared path,
-/// then start only units that were running beforehand.
+/// Clear a service's appdata: stop its units and target, rm -rf the declared path,
+/// then start only what was running beforehand.
 /// Path and units come from trusted flake evaluation (never from the client).
 #[post("/service/<service>/clear-appdata")]
 pub async fn clear_appdata(
@@ -131,26 +127,12 @@ pub async fn clear_appdata(
         }
     };
 
-    let units: Vec<String> = pane.units.iter().map(|u| u.name.clone()).collect();
-    // Service data + every unit exclusively, system shared (no activation
-    // restarting them mid-delete). Held until the job ends.
+    // Held until the job ends.
     let lock = try_lock(
-        &LockSpec::service_data(
-            service,
-            units
-                .iter()
-                .map(String::as_str)
-                .chain(pane.group_unit.as_deref()),
-        ),
+        &pane_lock_spec(service, &pane),
         OpInfo::new("clear-appdata", format!("Clearing app data of {service}")),
     )?;
-
-    if !try_begin_clear_appdata(config, service) {
-        let (inner, _) = status_pulling("already clearing…");
-        let out = clear_appdata_out_oob(service, &inner, "clear appdata already in progress");
-        let btn = clear_appdata_btn_oob(service, &appdata, true);
-        return Ok(RawHtml(format!("{out}{btn}")));
-    }
+    begin_clear_appdata(config, service);
 
     let (inner, _) = status_pulling("starting…");
     let out = clear_appdata_out_oob(service, &inner, "starting clear appdata");
@@ -158,12 +140,13 @@ pub async fn clear_appdata(
     let _ = config.unit_updates.send(out.clone());
     let _ = config.unit_updates.send(btn.clone());
 
-    let cfg = Arc::clone(config);
-    let svc = service.to_string();
-    tokio::spawn(async move {
-        let _lock = lock;
-        run_clear_appdata(svc, appdata, units, cfg).await;
-    });
+    let job = ClearJob {
+        service: service.to_string(),
+        appdata,
+        units: pane.units.iter().map(|u| u.name.clone()).collect(),
+        group_unit: pane.group_unit.clone(),
+    };
+    tokio::spawn(run_clear_appdata(job, lock, Arc::clone(config)));
 
     Ok(RawHtml(format!("{out}{btn}")))
 }

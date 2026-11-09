@@ -31,9 +31,9 @@ pub fn is_pull_in_flight(config: &AppConfig, unit: &str) -> bool {
     config.pulls_in_flight.contains(unit)
 }
 
-/// Mark unit as pulling. Returns false if a pull is already in flight for this unit.
-pub fn try_begin_pull(config: &AppConfig, unit: &str) -> bool {
-    config.pulls_in_flight.try_begin(unit)
+/// Mark unit as pulling (shown on its row).
+pub fn begin_pull(config: &AppConfig, unit: &str) {
+    config.pulls_in_flight.begin(unit);
 }
 
 pub fn end_pull(config: &AppConfig, unit: &str) {

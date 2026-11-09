@@ -7,7 +7,7 @@ use rocket::{get, post, FromForm, State};
 
 use crate::commands::web::locks::{try_lock, Blocked};
 use crate::commands::web::types::AppConfig;
-use crate::commands::web::units::{trusted_appdata, try_begin_clear_appdata};
+use crate::commands::web::units::{begin_clear_appdata, pane_lock_spec, trusted_appdata};
 use crate::commands::web::util::{
     escape_html, service_name_ok, status_err, status_ok, status_pulling,
 };
@@ -100,19 +100,10 @@ pub async fn service_snapshot_restore(
     // Exclusive on the service and all its units, system shared: no unit control,
     // pull, clear, other restore, activation, update or generation switch meanwhile.
     let lock = try_lock(
-        &LockSpec::service_data(
-            service,
-            pane.units
-                .iter()
-                .map(|u| u.name.as_str())
-                .chain(pane.group_unit.as_deref()),
-        ),
+        &pane_lock_spec(service, &pane),
         OpInfo::new("restore", format!("Snapshot restore of {service}")),
     )?;
-    // Shared with clear-appdata: never both at once on one service.
-    if !try_begin_clear_appdata(config, service) {
-        return Ok(out_err(service, "another appdata operation is in progress"));
-    }
+    begin_clear_appdata(config, service);
 
     let job = RestoreJob {
         service: service.to_string(),
@@ -166,15 +157,11 @@ async fn service_manage(
         Ok(l) => l,
         Err(Blocked(msg)) => return out_err(service, &msg),
     };
-    // A running restore reads this dataset's snapshots.
-    let busy = config.clear_appdata_in_flight.contains(service);
-    if busy {
-        return out_err(service, "another appdata operation is in progress");
-    }
     let (inner, title) = match service_zfs::manage(&appdata, snap, action).await {
         Ok(msg) => status_ok(&msg),
         Err(e) => status_err(&e),
     };
+    let busy = config.clear_appdata_in_flight.contains(service);
     let card = render_service_snapshots(service, &appdata, busy, true).await;
     RawHtml(format!(
         "{card}{}",

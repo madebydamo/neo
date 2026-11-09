@@ -17,8 +17,7 @@ use std::time::Duration;
 use super::super::locks::{lock_attr, LockMode, Scope};
 use super::super::types::AppConfig;
 use super::super::units::{
-    broadcast_unit_update, end_clear_appdata, schedule_unit_refresh_burst, start_units_best_effort,
-    systemctl, units_currently_running, wait_units_stopped, UnitAction,
+    broadcast_unit_update, end_clear_appdata, quiesce, schedule_unit_refresh_burst,
 };
 use super::super::util::{
     escape_attr, escape_html, proc, rsync_bin, status_err, status_ok, status_pulling,
@@ -30,10 +29,6 @@ use super::{
     snapshot_action, snapshot_has_path, zfs_mounts, SnapAction, Snapshot, ZfsMount,
 };
 use crate::utils::locks::LockGuard;
-
-/// Units the restore must never stop: stopping them kills the web UI running the job.
-/// Same exclusions as the service targets (nix/lib/service-targets.nix).
-const NEVER_STOP: &[&str] = &["neo-web", "neo-bootstrap"];
 
 const OUT_CLASSES: &str = "snapshot-out text-xs max-w-full truncate empty:hidden";
 
@@ -333,75 +328,28 @@ async fn restore_inner(
     let safety =
         create_snapshot(&loc.mount.dataset, &prerestore_snapshot_name(&job.service)).await?;
 
-    let units: Vec<String> = job
-        .units
-        .iter()
-        .filter(|u| !NEVER_STOP.contains(&u.as_str()))
-        .cloned()
-        .collect();
-    let to_restart = units_currently_running(&units).await;
-    let target_was_active = match &job.group_unit {
-        Some(t) => !units_currently_running(std::slice::from_ref(t))
-            .await
-            .is_empty(),
-        None => false,
-    };
-
-    // systemd refuses to start these until the guards are released.
-    let guarded: Vec<String> = units
-        .iter()
-        .cloned()
-        .chain(job.group_unit.clone())
-        .collect();
-    lock.guard_units(&guarded)
-        .map_err(|e| format!("cannot protect units during restore: {e}"))?;
-
     push("stopping service…");
-    if let Some(t) = &job.group_unit {
-        if let Err(e) = systemctl(UnitAction::Stop, t).await {
-            eprintln!("web: snapshot restore stop {t}: {e}");
-        }
-    }
-    for u in &units {
-        if let Err(e) = systemctl(UnitAction::Stop, u).await {
-            eprintln!("web: snapshot restore stop {u}: {e}");
-        }
-        broadcast_unit_update(u, config).await;
-    }
-
-    let restart = |config: Arc<AppConfig>| {
-        let to_restart = to_restart.clone();
-        let group = job.group_unit.clone();
-        async move {
-            if let (Some(t), true) = (group, target_was_active) {
-                if let Err(e) = systemctl(UnitAction::Start, &t).await {
-                    eprintln!("web: snapshot restore start {t}: {e}");
-                }
-            }
-            start_units_best_effort(&to_restart, &config).await;
-        }
-    };
-
-    if let Err(e) = wait_units_stopped(&units, Duration::from_secs(120)).await {
-        lock.release_unit_guards();
-        restart(Arc::clone(config)).await;
-        return Err(e);
-    }
+    let quiesced = quiesce(
+        &job.units,
+        job.group_unit.as_deref(),
+        Duration::from_secs(120),
+        lock,
+        config,
+    )
+    .await?;
 
     push(&format!("restoring files from {}…", job.snap));
     if let Err(e) = rsync_restore(&src, &job.appdata).await {
-        lock.release_unit_guards();
-        restart(Arc::clone(config)).await;
+        quiesced.restart(lock, config).await;
         return Err(format!(
             "{e} — appdata may be partial; restore {safety} to undo"
         ));
     }
 
-    if target_was_active || !to_restart.is_empty() {
+    if quiesced.will_start() {
         push("starting service…");
     }
-    lock.release_unit_guards();
-    restart(Arc::clone(config)).await;
+    quiesced.restart(lock, config).await;
 
     Ok(format!(
         "restored {} (undo: pre-restore snapshot)",

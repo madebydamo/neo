@@ -1,7 +1,8 @@
-//! Clear service appdata: stop units → rm -rf → restart previously-running units.
+//! Clear service appdata: stop units (see [`super::quiesce`]) → rm -rf → restart
+//! previously-running units.
 use std::path::{Component, Path};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use super::super::locks::{lock_attr, LockMode, Scope};
 use super::super::schema_cache::extract_pane;
@@ -9,14 +10,14 @@ use super::super::types::{AppConfig, OptionPaneContext};
 use super::super::util::{
     escape_attr, escape_html, proc, status_err, status_ok, status_pulling, status_slot_oob,
 };
-use super::control::{
-    broadcast_unit_update, schedule_unit_refresh_burst, systemctl, unit_name_valid, UnitAction,
-};
-use super::status::query_unit_states;
+use super::control::{broadcast_unit_update, schedule_unit_refresh_burst, unit_name_valid};
+use super::quiesce::quiesce;
+use crate::utils::locks::{LockGuard, LockSpec};
 
-/// Mark service as clearing appdata. Returns false if already in flight.
-pub fn try_begin_clear_appdata(config: &AppConfig, service: &str) -> bool {
-    config.clear_appdata_in_flight.try_begin(service)
+/// Mark the service's data as being worked on (disables its buttons). The operation
+/// lock is what keeps two such jobs apart.
+pub fn begin_clear_appdata(config: &AppConfig, service: &str) {
+    config.clear_appdata_in_flight.begin(service);
 }
 
 pub fn end_clear_appdata(config: &AppConfig, service: &str) {
@@ -63,6 +64,18 @@ pub fn clear_appdata_btn_oob(service: &str, appdata: &str, busy: bool) -> String
             confirm = confirm,
         )
     }
+}
+
+/// Lock for work on a service's data: system shared (no activation restarting
+/// units meanwhile), the service and each of its units exclusive.
+pub fn pane_lock_spec(service: &str, pane: &OptionPaneContext) -> LockSpec {
+    LockSpec::service_data(
+        service,
+        pane.units
+            .iter()
+            .map(|u| u.name.as_str())
+            .chain(pane.group_unit.as_deref()),
+    )
 }
 
 /// A service's pane plus its appdata path, both from trusted flake evaluation
@@ -132,60 +145,6 @@ pub fn is_safe_appdata_path(path: &str, appdata_root: Option<&str>) -> bool {
     true
 }
 
-fn unit_is_stopped(state: &str) -> bool {
-    matches!(state, "inactive" | "failed" | "dead" | "not-found")
-}
-
-/// Whether a unit should be restarted after clear-appdata (was up before stop).
-/// Inactive / failed / not-found units are left stopped after the delete.
-fn unit_was_running(state: &str) -> bool {
-    matches!(state, "active" | "activating" | "reloading")
-}
-
-/// Snapshot units that are currently running (should be restarted after clear).
-pub async fn units_currently_running(units: &[String]) -> Vec<String> {
-    let states = query_unit_states(units).await;
-    units
-        .iter()
-        .filter(|u| states.get(*u).is_some_and(|s| unit_was_running(&s.active)))
-        .cloned()
-        .collect()
-}
-
-pub async fn wait_units_stopped(units: &[String], timeout: Duration) -> Result<(), String> {
-    if units.is_empty() {
-        return Ok(());
-    }
-    let deadline = Instant::now() + timeout;
-    loop {
-        let states = query_unit_states(units).await;
-        let pending: Vec<String> = states
-            .iter()
-            .filter(|(_, s)| !unit_is_stopped(&s.active))
-            .map(|(u, s)| format!("{u}={}", s.active))
-            .collect();
-        if pending.is_empty() {
-            return Ok(());
-        }
-        if Instant::now() >= deadline {
-            return Err(format!(
-                "timeout waiting for units to stop ({})",
-                pending.join(", ")
-            ));
-        }
-        tokio::time::sleep(Duration::from_millis(250)).await;
-    }
-}
-
-pub async fn start_units_best_effort(units: &[String], config: &Arc<AppConfig>) {
-    for u in units {
-        if let Err(e) = systemctl(UnitAction::Start, u).await {
-            eprintln!("web: clear-appdata start {}: {}", u, e);
-        }
-        broadcast_unit_update(u, config).await;
-    }
-}
-
 async fn rm_rf_path(path: &str) -> Result<(), String> {
     let p = Path::new(path);
     if !p.exists() {
@@ -214,75 +173,74 @@ async fn finish_clear_appdata(
     }
 }
 
-/// Background: stop all service units, wait until stopped, rm -rf appdata,
-/// then start only units that were running before the clear.
-pub async fn run_clear_appdata(
-    service: String,
-    appdata: String,
-    units: Vec<String>,
-    config: Arc<AppConfig>,
-) {
-    let units: Vec<String> = units.into_iter().filter(|u| unit_name_valid(u)).collect();
+pub struct ClearJob {
+    pub service: String,
+    pub appdata: String,
+    pub units: Vec<String>,
+    pub group_unit: Option<String>,
+}
 
-    let push = |inner: String, title: String| {
-        let frag = clear_appdata_out_oob(&service, &inner, &title);
+/// Background: take the service down like a snapshot restore, rm -rf appdata, then
+/// start only what was running before the clear. Holds and releases `lock`.
+pub async fn run_clear_appdata(job: ClearJob, mut lock: LockGuard, config: Arc<AppConfig>) {
+    let result = clear_inner(&job, &mut lock, &config).await;
+    drop(lock);
+    let (inner, title) = match result {
+        Ok(()) => status_ok("appdata cleared"),
+        Err(e) => status_err(&e),
+    };
+    let frag = clear_appdata_out_oob(&job.service, &inner, &title);
+    let _ = config.unit_updates.send(frag);
+    let btn = clear_appdata_btn_oob(&job.service, &job.appdata, false);
+    let _ = config.unit_updates.send(btn);
+    end_clear_appdata(&config, &job.service);
+    for u in &job.units {
+        broadcast_unit_update(u, &config).await;
+        schedule_unit_refresh_burst(u.clone(), Arc::clone(&config));
+    }
+}
+
+async fn clear_inner(
+    job: &ClearJob,
+    lock: &mut LockGuard,
+    config: &Arc<AppConfig>,
+) -> Result<(), String> {
+    let push = |msg: &str| {
+        let (inner, title) = status_pulling(msg);
+        let frag = clear_appdata_out_oob(&job.service, &inner, &title);
         let _ = config.unit_updates.send(frag);
     };
 
-    // Only restart units that were up; stopped / missing units stay down.
-    let to_restart = units_currently_running(&units).await;
+    let units: Vec<String> = job
+        .units
+        .iter()
+        .filter(|u| unit_name_valid(u))
+        .cloned()
+        .collect();
 
-    {
-        let (inner, title) = status_pulling("stopping units…");
-        push(inner, title);
+    push("stopping units…");
+    let quiesced = quiesce(
+        &units,
+        job.group_unit.as_deref(),
+        Duration::from_secs(90),
+        lock,
+        config,
+    )
+    .await?;
+
+    push("removing appdata…");
+    let removed = rm_rf_path(&job.appdata).await;
+    if removed.is_ok() && quiesced.will_start() {
+        push("starting units…");
     }
-
-    for u in &units {
-        if let Err(e) = systemctl(UnitAction::Stop, u).await {
-            // Continue stopping others; wait_units_stopped surfaces stuck units.
-            eprintln!("web: clear-appdata stop {}: {}", u, e);
-        }
-        broadcast_unit_update(u, &config).await;
-    }
-
-    if let Err(e) = wait_units_stopped(&units, Duration::from_secs(90)).await {
-        let (inner, title) = status_err(&e);
-        // Best-effort: restore only units we stopped that were previously running.
-        if !to_restart.is_empty() {
-            start_units_best_effort(&to_restart, &config).await;
-        }
-        finish_clear_appdata(&service, &appdata, &units, &config, inner, title).await;
-        return;
-    }
-
-    {
-        let (inner, title) = status_pulling("removing appdata…");
-        push(inner, title);
-    }
-
-    if let Err(e) = rm_rf_path(&appdata).await {
-        let (inner, title) = status_err(&e);
-        // Best-effort restart so previously-running services are not left down.
-        if !to_restart.is_empty() {
-            start_units_best_effort(&to_restart, &config).await;
-        }
-        finish_clear_appdata(&service, &appdata, &units, &config, inner, title).await;
-        return;
-    }
-
-    if !to_restart.is_empty() {
-        let (inner, title) = status_pulling("starting units…");
-        push(inner, title);
-        start_units_best_effort(&to_restart, &config).await;
-    }
-
-    let (inner, title) = status_ok("appdata cleared");
-    finish_clear_appdata(&service, &appdata, &units, &config, inner, title).await;
+    // Also after a failed delete, so previously-running services are not left down.
+    quiesced.restart(lock, config).await;
+    removed
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{is_safe_appdata_path, unit_was_running};
+    use super::is_safe_appdata_path;
 
     #[test]
     fn appdata_path_under_volume() {
@@ -304,18 +262,5 @@ mod tests {
     fn appdata_path_outside_volume_deep() {
         assert!(is_safe_appdata_path("/var/lib/example", None));
         assert!(!is_safe_appdata_path("/var/lib", None));
-    }
-
-    #[test]
-    fn unit_was_running_only_up_states() {
-        assert!(unit_was_running("active"));
-        assert!(unit_was_running("activating"));
-        assert!(unit_was_running("reloading"));
-        assert!(!unit_was_running("inactive"));
-        assert!(!unit_was_running("failed"));
-        assert!(!unit_was_running("dead"));
-        assert!(!unit_was_running("not-found"));
-        assert!(!unit_was_running("deactivating"));
-        assert!(!unit_was_running("unknown"));
     }
 }
