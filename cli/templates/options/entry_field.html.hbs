@@ -134,7 +134,7 @@
     <div class="flex gap-2 items-center"{{#if secret}} x-data="{ reveal: false }"{{/if}}>
       <input {{#if secret}}:type="reveal ? 'text' : 'password'" autocomplete="off"{{else}}type="text"{{/if}} class="input input-sm flex-1 font-mono"
              x-model="values['{{parent}}'][{{accessor}}]['{{name}}']"
-             placeholder="{{defaultDisplay}}"
+             {{#if (ne defaultDisplay "null")}}placeholder="{{defaultDisplay}}"{{/if}}
              aria-label="{{label}}">
       {{#if secret}}
         {{> options/secret_toggle}}
@@ -149,7 +149,7 @@
     <div class="flex gap-2 items-center"{{#if secret}} x-data="{ reveal: false }"{{/if}}>
       <input {{#if secret}}:type="reveal ? 'text' : 'password'" autocomplete="off"{{else}}type="text"{{/if}} class="input input-sm flex-1 font-mono"
              x-model="values['{{parent}}'][{{accessor}}]['{{name}}']"
-             placeholder="{{defaultDisplay}}"
+             {{#if (ne defaultDisplay "null")}}placeholder="{{defaultDisplay}}"{{/if}}
              aria-label="{{label}}">
       {{#if secret}}
         {{> options/secret_toggle}}
