@@ -10,78 +10,66 @@
       appdata = cfg.appdata;
       domain = config.neo.services.swag.domain;
     in {
-      config = mkIf cfg.enabled {
-        # paperless-ngx 3.0+ raises ImproperlyConfigured without a real secret key.
-        assertions = [
-          {
-            assertion = lib.neo.isSet cfg.secretKey && cfg.secretKey != "change-me";
-            message = "neo.services.paperless: secretKey must be set to a unique value when enabled (use the Generate helper; not the default \"change-me\").";
-          }
-        ];
+      config = mkIf cfg.enabled (mkMerge [
+        (lib.neo.mkPostgresSidecar config {
+          name = "paperless-db";
+          image = cfg.containers."paperless-db";
+          inherit appdata;
+          db = "paperless";
+          user = "paperless_user";
+          password = cfg.dbPassword;
+        })
+        (lib.neo.mkRedisSidecar config {
+          name = "paperless-redis";
+          image = cfg.containers."paperless-redis";
+          inherit appdata;
+        })
+        {
+          # paperless-ngx 3.0+ raises ImproperlyConfigured without a real secret key.
+          assertions = [
+            {
+              assertion = lib.neo.isSet cfg.secretKey && cfg.secretKey != "change-me";
+              message = "neo.services.paperless: secretKey must be set to a unique value when enabled (use the Generate helper; not the default \"change-me\").";
+            }
+          ];
 
-        systemd.services.docker-paperless-db.preStart = lib.neo.mkEnsureDirs config [
-          "${appdata}/pgdata"
-        ];
-        systemd.services.docker-paperless-redis.preStart = lib.neo.mkEnsureDirs config [
-          "${appdata}/redisdata"
-        ];
-        systemd.services.docker-paperless.preStart = lib.neo.mkEnsureDirs config [
-          "${appdata}/data"
-          "${appdata}/media"
-          "${appdata}/export"
-          "${appdata}/consume"
-        ];
+          systemd.services.docker-paperless.preStart = lib.neo.mkEnsureDirs config [
+            "${appdata}/data"
+            "${appdata}/media"
+            "${appdata}/export"
+            "${appdata}/consume"
+          ];
 
-        # Secrets reach the containers through env files rendered at activation.
-        neo.core.secrets.containerEnv = {
-          paperless-db.POSTGRES_PASSWORD = cfg.dbPassword;
-          paperless = {
-            PAPERLESS_DBPASS = cfg.dbPassword;
-            PAPERLESS_SECRET_KEY = cfg.secretKey;
-          };
-        };
-
-        virtualisation.oci-containers.containers = {
-          paperless-redis = {
-            image = cfg.containers."paperless-redis";
-            volumes = [
-              "${appdata}/redisdata:/data"
-            ];
-            networks = ["internal"];
-          };
-
-          paperless-db = {
-            image = cfg.containers."paperless-db";
-            environment = {
-              POSTGRES_DB = "paperless";
-              POSTGRES_USER = "paperless_user";
+          # Secrets reach the containers through env files rendered at activation.
+          neo.core.secrets.containerEnv = {
+            paperless = {
+              PAPERLESS_DBPASS = cfg.dbPassword;
+              PAPERLESS_SECRET_KEY = cfg.secretKey;
             };
-            volumes = [
-              "${appdata}/pgdata:/var/lib/postgresql/data"
-            ];
-            networks = ["internal"];
           };
 
-          paperless = {
-            image = cfg.containers.paperless;
-            environment = {
-              PAPERLESS_REDIS = "redis://paperless-redis:6379";
-              PAPERLESS_DBHOST = "paperless-db";
-              PAPERLESS_DBNAME = "paperless";
-              PAPERLESS_DBUSER = "paperless_user";
-              PAPERLESS_TIME_ZONE = config.neo.core.timeZone;
-              PAPERLESS_OCR_LANGUAGE = "deu+eng";
-              PAPERLESS_CSRF_TRUSTED_ORIGINS = "https://${cfg.subdomain}.${domain}";
+          virtualisation.oci-containers.containers = {
+            paperless = {
+              image = cfg.containers.paperless;
+              environment = {
+                PAPERLESS_REDIS = "redis://paperless-redis:6379";
+                PAPERLESS_DBHOST = "paperless-db";
+                PAPERLESS_DBNAME = "paperless";
+                PAPERLESS_DBUSER = "paperless_user";
+                PAPERLESS_TIME_ZONE = config.neo.core.timeZone;
+                PAPERLESS_OCR_LANGUAGE = "deu+eng";
+                PAPERLESS_CSRF_TRUSTED_ORIGINS = "https://${cfg.subdomain}.${domain}";
+              };
+              volumes = [
+                "${appdata}/data:/usr/src/paperless/data"
+                "${appdata}/media:/usr/src/paperless/media"
+                "${appdata}/export:/usr/src/paperless/export"
+                "${appdata}/consume:/usr/src/paperless/consume"
+              ];
+              networks = ["internal"];
             };
-            volumes = [
-              "${appdata}/data:/usr/src/paperless/data"
-              "${appdata}/media:/usr/src/paperless/media"
-              "${appdata}/export:/usr/src/paperless/export"
-              "${appdata}/consume:/usr/src/paperless/consume"
-            ];
-            networks = ["internal"];
           };
-        };
-      };
+        }
+      ]);
     };
 }

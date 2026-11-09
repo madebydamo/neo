@@ -33,169 +33,157 @@
       ssoPort = 8080;
       mcpPort = 8081; # Must match swag.nix.
     in {
-      config = mkIf cfg.enabled {
-        assertions = lib.neo.requireSecrets "docmost" cfg [
-          {
-            name = "appSecret";
-            minLength = 32;
-          }
-          "dbPassword"
-        ];
+      config = mkIf cfg.enabled (mkMerge [
+        (lib.neo.mkPostgresSidecar config {
+          name = "docmost-db";
+          image = cfg.containers."docmost-db";
+          inherit appdata;
+          db = "docmost";
+          password = dbPassword;
+          # The Postgres 18 official image expects the volume here, not at .../data.
+          dataPath = "/var/lib/postgresql";
+        })
+        (lib.neo.mkRedisSidecar config {
+          name = "docmost-redis";
+          image = cfg.containers."docmost-redis";
+          inherit appdata;
+          cmd = ["redis-server" "--appendonly" "yes" "--maxmemory-policy" "noeviction"];
+        })
+        {
+          assertions = lib.neo.requireSecrets "docmost" cfg [
+            {
+              name = "appSecret";
+              minLength = 32;
+            }
+            "dbPassword"
+          ];
 
-        # Postgres 18 official image expects the volume at /var/lib/postgresql (not .../data).
-        systemd.services.docker-docmost-db.preStart = lib.neo.mkEnsureDirs config [
-          "${appdata}/pgdata"
-        ];
-        systemd.services.docker-docmost-redis.preStart = lib.neo.mkEnsureDirs config [
-          "${appdata}/redisdata"
-        ];
-        systemd.services.docker-docmost.preStart = lib.neo.mkEnsureDirs config [
-          "${appdata}/storage"
-        ];
+          systemd.services.docker-docmost.preStart = lib.neo.mkEnsureDirs config [
+            "${appdata}/storage"
+          ];
 
-        virtualisation.oci-containers.containers = {
-          docmost-redis = {
-            image = cfg.containers."docmost-redis";
-            cmd = ["redis-server" "--appendonly" "yes" "--maxmemory-policy" "noeviction"];
-            volumes = [
-              "${appdata}/redisdata:/data"
-            ];
-            networks = ["internal"];
-          };
-
-          docmost-db = {
-            image = cfg.containers."docmost-db";
-            environment = {
-              POSTGRES_DB = "docmost";
-              POSTGRES_USER = "docmost";
-            };
-            volumes = [
-              "${appdata}/pgdata:/var/lib/postgresql"
-            ];
-            networks = ["internal"];
-          };
-
-          docmost = {
-            image = cfg.containers.docmost;
-            environment = {
-              APP_URL = "https://${cfg.subdomain}.${domain}";
-              REDIS_URL = "redis://docmost-redis:6379";
-            };
-            volumes = [
-              "${appdata}/storage:/app/data/storage"
-            ];
-            networks = ["internal"];
-          };
-
-          docmost-sso = mkIf ssoActive {
-            image = cfg.containers."docmost-sso";
-            cmd = ["python3" "/app/sso.py"];
-            environment = {
-              PORT = toString ssoPort;
-              DOCMOST_URL = "http://docmost:${toString cfg.port}";
-              SERVICE_EMAIL = serviceEmail;
-              MAIL_DOMAIN = domain;
-              LOGOUT_URL = "https://${tinyauthCfg.subdomain}.${domain}/logout";
-              ADMINS = concatStringsSep "," cfg.admins;
-              ADMIN_GROUPS = concatStringsSep "," cfg.adminGroups;
-            };
-            volumes = ["${./sso.py}:/app/sso.py:ro"];
-            networks = ["internal"];
-          };
-
-          docmost-mcp = mkIf mcpActive {
-            image = cfg.containers."docmost-mcp";
-            cmd = ["python3" "/app/mcp.py"];
-            environment = {
-              PORT = toString mcpPort;
-              PUBLIC_URL = "https://${cfg.subdomain}.${domain}";
-              # sso.py (sign-in, Docmost login) reads these (keys: containerEnv).
-              DOCMOST_URL = "http://docmost:${toString cfg.port}";
-              SERVICE_EMAIL = serviceEmail;
-              MAIL_DOMAIN = domain;
-              ADMINS = concatStringsSep "," cfg.admins;
-              ADMIN_GROUPS = concatStringsSep "," cfg.adminGroups;
-            };
-            volumes = [
-              "${./sso.py}:/app/sso.py:ro"
-              "${./mcp.py}:/app/mcp.py:ro"
-            ];
-            networks = ["internal"];
-          };
-        };
-
-        # Secrets reach the containers through rendered env files.
-        neo.core.secrets.containerEnv =
-          {
-            docmost-db.POSTGRES_PASSWORD = dbPassword;
+          virtualisation.oci-containers.containers = {
             docmost = {
-              APP_SECRET = cfg.appSecret or "";
-              DATABASE_URL = "postgresql://docmost:${dbPassword}@docmost-db:5432/docmost";
+              image = cfg.containers.docmost;
+              environment = {
+                APP_URL = "https://${cfg.subdomain}.${domain}";
+                REDIS_URL = "redis://docmost-redis:6379";
+              };
+              volumes = [
+                "${appdata}/storage:/app/data/storage"
+              ];
+              networks = ["internal"];
             };
-          }
-          // lib.optionalAttrs ssoActive {
-            docmost-sso = {
-              SSO_KEY = ssoKey;
-              SWAG_KEY = swagKey;
+
+            docmost-sso = mkIf ssoActive {
+              image = cfg.containers."docmost-sso";
+              cmd = ["python3" "/app/sso.py"];
+              environment = {
+                PORT = toString ssoPort;
+                DOCMOST_URL = "http://docmost:${toString cfg.port}";
+                SERVICE_EMAIL = serviceEmail;
+                MAIL_DOMAIN = domain;
+                LOGOUT_URL = "https://${tinyauthCfg.subdomain}.${domain}/logout";
+                ADMINS = concatStringsSep "," cfg.admins;
+                ADMIN_GROUPS = concatStringsSep "," cfg.adminGroups;
+              };
+              volumes = ["${./sso.py}:/app/sso.py:ro"];
+              networks = ["internal"];
             };
-          }
-          // lib.optionalAttrs mcpActive {
-            docmost-mcp = {
-              MCP_KEY = mcpKey;
-              SSO_KEY = ssoKey;
-              SWAG_KEY = swagKey;
+
+            docmost-mcp = mkIf mcpActive {
+              image = cfg.containers."docmost-mcp";
+              cmd = ["python3" "/app/mcp.py"];
+              environment = {
+                PORT = toString mcpPort;
+                PUBLIC_URL = "https://${cfg.subdomain}.${domain}";
+                # sso.py (sign-in, Docmost login) reads these (keys: containerEnv).
+                DOCMOST_URL = "http://docmost:${toString cfg.port}";
+                SERVICE_EMAIL = serviceEmail;
+                MAIL_DOMAIN = domain;
+                ADMINS = concatStringsSep "," cfg.admins;
+                ADMIN_GROUPS = concatStringsSep "," cfg.adminGroups;
+              };
+              volumes = [
+                "${./sso.py}:/app/sso.py:ro"
+                "${./mcp.py}:/app/mcp.py:ro"
+              ];
+              networks = ["internal"];
             };
           };
 
-        # The SQL setup below reads the SSO key at runtime.
-        neo.core.secrets.templates = mkIf ssoActive {
-          "docmost-sso-key" = {
-            content = ssoKey;
-            restartUnits = ["docmost-sso-setup.service"];
-          };
-        };
+          # Secrets reach the containers through rendered env files.
+          neo.core.secrets.containerEnv =
+            {
+              docmost = {
+                APP_SECRET = cfg.appSecret or "";
+                DATABASE_URL = "postgresql://docmost:${dbPassword}@docmost-db:5432/docmost";
+              };
+            }
+            // lib.optionalAttrs ssoActive {
+              docmost-sso = {
+                SSO_KEY = ssoKey;
+                SWAG_KEY = swagKey;
+              };
+            }
+            // lib.optionalAttrs mcpActive {
+              docmost-mcp = {
+                MCP_KEY = mcpKey;
+                SSO_KEY = ssoKey;
+                SWAG_KEY = swagKey;
+              };
+            };
 
-        # Fresh Docmost: create the workspace with the service account as owner.
-        # Existing workspace: add the service account as admin in SQL. Then set
-        # every account's password to HMAC(ssoKey, email) (pgcrypto, bcrypt like
-        # Docmost); accounts made before SSO switch over here. Runs again on
-        # every container restart, so a new appSecret re-keys all accounts.
-        systemd.services.docmost-sso-setup = mkIf ssoActive (lib.neo.mkSetupService {
-          inherit pkgs;
-          name = "docmost-sso-setup";
-          description = "Prepare Docmost accounts for tinyauth sign-in";
-          containers = ["docmost" "docmost-db" "docmost-sso"];
-          path = [pkgs.docker];
-          retryInterval = 10;
-          script = ''
-            set -euo pipefail
-            docker exec docmost-sso python3 /app/sso.py setup
-            docker exec -i docmost-db psql -U docmost -d docmost -q -v ON_ERROR_STOP=1 \
-              -v key="$(cat ${ssoKeyFile})" -v svc=${escapeShellArg serviceEmail} <<'SQL'
-            SET client_min_messages = warning;
-            CREATE EXTENSION IF NOT EXISTS pgcrypto;
-            INSERT INTO users (email, name, role, workspace_id, email_verified_at)
-            SELECT :'svc', 'Neo SSO', 'admin', w.id, now()
-            FROM (SELECT id FROM workspaces ORDER BY created_at LIMIT 1) w
-            WHERE NOT EXISTS (
-              SELECT 1 FROM users u WHERE u.email = :'svc' AND u.workspace_id = w.id
-            );
-            -- pgcrypto only reads $2a$; Docmost's $2b$ hashes are the same bcrypt.
-            UPDATE users SET password = crypt(p.pw, gen_salt('bf', 12))
-            FROM (
-              SELECT id, encode(hmac(lower(email), :'key', 'sha256'), 'hex') AS pw
-              FROM users WHERE deleted_at IS NULL
-            ) p
-            WHERE users.id = p.id
-              AND (
-                users.password IS NULL
-                OR users.password NOT LIKE '$2_$%'
-                OR overlay(users.password placing '$2a$' from 1 for 4)
-                  <> crypt(p.pw, overlay(users.password placing '$2a$' from 1 for 4))
+          # The SQL setup below reads the SSO key at runtime.
+          neo.core.secrets.templates = mkIf ssoActive {
+            "docmost-sso-key" = {
+              content = ssoKey;
+              restartUnits = ["docmost-sso-setup.service"];
+            };
+          };
+
+          # Fresh Docmost: create the workspace with the service account as owner.
+          # Existing workspace: add the service account as admin in SQL. Then set
+          # every account's password to HMAC(ssoKey, email) (pgcrypto, bcrypt like
+          # Docmost); accounts made before SSO switch over here. Runs again on
+          # every container restart, so a new appSecret re-keys all accounts.
+          systemd.services.docmost-sso-setup = mkIf ssoActive (lib.neo.mkSetupService {
+            inherit pkgs;
+            name = "docmost-sso-setup";
+            description = "Prepare Docmost accounts for tinyauth sign-in";
+            containers = ["docmost" "docmost-db" "docmost-sso"];
+            path = [pkgs.docker];
+            retryInterval = 10;
+            script = ''
+              set -euo pipefail
+              docker exec docmost-sso python3 /app/sso.py setup
+              docker exec -i docmost-db psql -U docmost -d docmost -q -v ON_ERROR_STOP=1 \
+                -v key="$(cat ${ssoKeyFile})" -v svc=${escapeShellArg serviceEmail} <<'SQL'
+              SET client_min_messages = warning;
+              CREATE EXTENSION IF NOT EXISTS pgcrypto;
+              INSERT INTO users (email, name, role, workspace_id, email_verified_at)
+              SELECT :'svc', 'Neo SSO', 'admin', w.id, now()
+              FROM (SELECT id FROM workspaces ORDER BY created_at LIMIT 1) w
+              WHERE NOT EXISTS (
+                SELECT 1 FROM users u WHERE u.email = :'svc' AND u.workspace_id = w.id
               );
-            SQL
-          '';
-        });
-      };
+              -- pgcrypto only reads $2a$; Docmost's $2b$ hashes are the same bcrypt.
+              UPDATE users SET password = crypt(p.pw, gen_salt('bf', 12))
+              FROM (
+                SELECT id, encode(hmac(lower(email), :'key', 'sha256'), 'hex') AS pw
+                FROM users WHERE deleted_at IS NULL
+              ) p
+              WHERE users.id = p.id
+                AND (
+                  users.password IS NULL
+                  OR users.password NOT LIKE '$2_$%'
+                  OR overlay(users.password placing '$2a$' from 1 for 4)
+                    <> crypt(p.pw, overlay(users.password placing '$2a$' from 1 for 4))
+                );
+              SQL
+            '';
+          });
+        }
+      ]);
     };
 }

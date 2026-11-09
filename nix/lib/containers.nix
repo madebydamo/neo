@@ -2,9 +2,86 @@
 # containers.* uses rank 300 so the group sits after skill (200) in the service form.
 {lib, ...}: let
   neoUi = (import ./ui.nix {inherit lib;}).libExtensions.ui.neo.ui;
+  inherit ((import ./activation/dir.nix {inherit lib;}).libExtensions.activate-dir.neo) mkEnsureDirs;
 in {
   libExtensions.containers = {
-    neo = {
+    neo = rec {
+      # Docker healthcheck flags for a container's extraOptions.
+      dockerHealthOptions = {
+        cmd,
+        interval,
+        timeout,
+        retries,
+        startPeriod ? null,
+      }:
+        [
+          "--health-cmd=${cmd}"
+          "--health-interval=${interval}"
+          "--health-timeout=${timeout}"
+          "--health-retries=${toString retries}"
+        ]
+        ++ lib.optional (startPeriod != null) "--health-start-period=${startPeriod}";
+
+      # Postgres container for one service: the container, its data directory and
+      # POSTGRES_PASSWORD through the secrets. A module fragment for mkMerge.
+      # The image and dataPath are tied to the data on disk: never change them
+      # for an existing install without a dump and restore.
+      # `health` takes the dockerHealthOptions arguments; cmd defaults to pg_isready.
+      mkPostgresSidecar = config: {
+        name,
+        image,
+        appdata,
+        db,
+        user ? db,
+        password ? null,
+        dataPath ? "/var/lib/postgresql/data",
+        dataDir ? "pgdata",
+        environment ? {},
+        health ? null,
+        extraOptions ? [],
+      }: {
+        systemd.services."docker-${name}".preStart = mkEnsureDirs config ["${appdata}/${dataDir}"];
+        neo.core.secrets.containerEnv = lib.optionalAttrs (password != null) {
+          ${name}.POSTGRES_PASSWORD = password;
+        };
+        virtualisation.oci-containers.containers.${name} = {
+          inherit image;
+          environment =
+            {
+              POSTGRES_DB = db;
+              POSTGRES_USER = user;
+            }
+            // environment;
+          volumes = ["${appdata}/${dataDir}:${dataPath}"];
+          extraOptions =
+            extraOptions
+            ++ lib.optionals (health != null) (dockerHealthOptions ({cmd = "pg_isready -U ${user} -d ${db}";} // health));
+          networks = ["internal"];
+        };
+      };
+
+      # Redis container for one service. Without appdata it keeps nothing on disk.
+      # A module fragment for mkMerge. `health` takes the dockerHealthOptions
+      # arguments; cmd defaults to redis-cli ping.
+      mkRedisSidecar = config: {
+        name,
+        image,
+        appdata ? null,
+        dataDir ? "redisdata",
+        cmd ? [],
+        health ? null,
+      }: {
+        systemd.services = lib.optionalAttrs (appdata != null) {
+          "docker-${name}".preStart = mkEnsureDirs config ["${appdata}/${dataDir}"];
+        };
+        virtualisation.oci-containers.containers.${name} = {
+          inherit image cmd;
+          volumes = lib.optional (appdata != null) "${appdata}/${dataDir}:/data";
+          extraOptions = lib.optionals (health != null) (dockerHealthOptions ({cmd = "redis-cli ping";} // health));
+          networks = ["internal"];
+        };
+      };
+
       # Declares a fixed set of container image options (containers.<name> : str).
       # Only the image string is overridable; keys cannot be added or removed from settings.
       # Optional `rank` (default 300) places the whole containers.* block among top-level siblings.

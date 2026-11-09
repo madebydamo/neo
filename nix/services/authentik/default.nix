@@ -62,99 +62,91 @@
           AUTHENTIK_BOOTSTRAP_PASSWORD = cfg.bootstrapPassword;
         };
     in {
-      config = mkIf cfg.enabled {
-        assertions =
-          lib.neo.requireSecrets "authentik" cfg [
-            {
-              name = "secretKey";
-              minLength = 50;
-            }
-            "dbPassword"
-          ]
-          ++ [
-            {
-              assertion = !(cfg.email.useTls && cfg.email.useSsl);
-              message = "neo.services.authentik.email: useTls and useSsl are mutually exclusive.";
-            }
-            {
-              assertion = cfg.containers.authentik == cfg.containers."authentik-worker";
-              message = "neo.services.authentik: containers.authentik and containers.authentik-worker must be the same image tag.";
-            }
+      config = mkIf cfg.enabled (mkMerge [
+        (lib.neo.mkPostgresSidecar config {
+          name = "authentik-db";
+          image = cfg.containers."authentik-db";
+          inherit appdata;
+          db = dbName;
+          user = dbUser;
+          password = dbPassword;
+          health = {
+            interval = "30s";
+            timeout = "5s";
+            retries = 5;
+            startPeriod = "20s";
+          };
+        })
+        {
+          assertions =
+            lib.neo.requireSecrets "authentik" cfg [
+              {
+                name = "secretKey";
+                minLength = 50;
+              }
+              "dbPassword"
+            ]
+            ++ [
+              {
+                assertion = !(cfg.email.useTls && cfg.email.useSsl);
+                message = "neo.services.authentik.email: useTls and useSsl are mutually exclusive.";
+              }
+              {
+                assertion = cfg.containers.authentik == cfg.containers."authentik-worker";
+                message = "neo.services.authentik: containers.authentik and containers.authentik-worker must be the same image tag.";
+              }
+            ];
+
+          systemd.services.docker-authentik.preStart = lib.neo.mkEnsureDirs config [
+            "${appdata}/data"
+            "${appdata}/templates"
+          ];
+          systemd.services.docker-authentik-worker.preStart = lib.neo.mkEnsureDirs config [
+            "${appdata}/data"
+            "${appdata}/templates"
+            "${appdata}/certs"
           ];
 
-        # Postgres 16 keeps its data directory at /var/lib/postgresql/data.
-        systemd.services.docker-authentik-db.preStart = lib.neo.mkEnsureDirs config [
-          "${appdata}/pgdata"
-        ];
-        systemd.services.docker-authentik.preStart = lib.neo.mkEnsureDirs config [
-          "${appdata}/data"
-          "${appdata}/templates"
-        ];
-        systemd.services.docker-authentik-worker.preStart = lib.neo.mkEnsureDirs config [
-          "${appdata}/data"
-          "${appdata}/templates"
-          "${appdata}/certs"
-        ];
+          neo.core.secrets.containerEnv = {
+            authentik = commonSecretEnv;
+            authentik-worker = commonSecretEnv;
+          };
 
-        neo.core.secrets.containerEnv = {
-          authentik-db.POSTGRES_PASSWORD = dbPassword;
-          authentik = commonSecretEnv;
-          authentik-worker = commonSecretEnv;
-        };
-
-        virtualisation.oci-containers.containers = {
-          authentik-db = {
-            image = cfg.containers."authentik-db";
-            environment = {
-              POSTGRES_DB = dbName;
-              POSTGRES_USER = dbUser;
+          virtualisation.oci-containers.containers = {
+            authentik = {
+              image = cfg.containers.authentik;
+              cmd = ["server"];
+              dependsOn = ["authentik-db"];
+              environment = commonEnv;
+              volumes = [
+                "${appdata}/data:/data"
+                "${appdata}/templates:/templates"
+              ];
+              extraOptions = [
+                runAs
+                "--shm-size=512m"
+              ];
+              networks = ["internal"];
             };
-            volumes = [
-              "${appdata}/pgdata:/var/lib/postgresql/data"
-            ];
-            extraOptions = [
-              "--health-cmd=pg_isready -U ${dbUser} -d ${dbName}"
-              "--health-interval=30s"
-              "--health-timeout=5s"
-              "--health-retries=5"
-              "--health-start-period=20s"
-            ];
-            networks = ["internal"];
-          };
 
-          authentik = {
-            image = cfg.containers.authentik;
-            cmd = ["server"];
-            dependsOn = ["authentik-db"];
-            environment = commonEnv;
-            volumes = [
-              "${appdata}/data:/data"
-              "${appdata}/templates:/templates"
-            ];
-            extraOptions = [
-              runAs
-              "--shm-size=512m"
-            ];
-            networks = ["internal"];
+            authentik-worker = {
+              image = cfg.containers."authentik-worker";
+              cmd = ["worker"];
+              dependsOn = ["authentik-db"];
+              environment = commonEnv;
+              volumes = [
+                "${appdata}/data:/data"
+                "${appdata}/templates:/templates"
+                "${appdata}/certs:/certs"
+              ];
+              extraOptions = [
+                runAs
+                "--shm-size=512m"
+              ];
+              networks = ["internal"];
+            };
           };
-
-          authentik-worker = {
-            image = cfg.containers."authentik-worker";
-            cmd = ["worker"];
-            dependsOn = ["authentik-db"];
-            environment = commonEnv;
-            volumes = [
-              "${appdata}/data:/data"
-              "${appdata}/templates:/templates"
-              "${appdata}/certs:/certs"
-            ];
-            extraOptions = [
-              runAs
-              "--shm-size=512m"
-            ];
-            networks = ["internal"];
-          };
-        };
-      };
+        }
+      ]);
     };
 }

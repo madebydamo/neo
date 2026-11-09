@@ -86,6 +86,9 @@ The build fails if a placeholder would end up in a container or unit `environmen
 | Function | Arguments | Returns |
 |----------|-----------|---------|
 | `toOciBindMounts` | List of `{ localPath, containerPath }` | List of `"host:container"` strings |
+| `mkPostgresSidecar` | `config`, `{ name, image, appdata, db, user ? db, password ? null, dataPath ? "/var/lib/postgresql/data", dataDir ? "pgdata", environment ? {}, health ? null, extraOptions ? [] }` | Module fragment for `mkMerge`: the Postgres container on `internal`, its data directory, `POSTGRES_PASSWORD` through the secrets |
+| `mkRedisSidecar` | `config`, `{ name, image, appdata ? null, dataDir ? "redisdata", cmd ? [], health ? null }` | Module fragment for `mkMerge`: the Redis container on `internal`; without `appdata` it keeps nothing on disk |
+| `dockerHealthOptions` | `{ cmd, interval, timeout, retries, startPeriod ? null }` | `--health-*` flags for `extraOptions` |
 | `linuxserverEnv` | `config` | `{ PUID; PGID; TZ; }` from `neo.core.uid`, `gid` and `timeZone`; merge into a container's `environment` with `//` |
 | `mkSetupService` | `{ pkgs, name, description, script, containers ? [], attachTo ? containers, after ? [], wants ? [], requires ? [], bindsTo ? [], partOf ? [], before ? [], wantedBy ? [], path ? [], environment ? {}, retryInterval ? 60, maxAttempts ? null, blocking ? false, serviceConfig ? {}, unitConfig ? {} }` | A `systemd.services.<name>` value. `After`/`Requires` on `docker-<c>` for each of `containers`; `docker-<c>` of `attachTo` wants it. `script` is one attempt under `bash -e`, retried every `retryInterval` s until exit 0 (`null` = one attempt, then `Restart=on-failure`); `maxAttempts` gives up. `RemainAfterExit` always; `Type=simple`, or `oneshot` with `blocking = true` |
 | `isSetupService` | A `systemd.services` value | bool; **internal** |
