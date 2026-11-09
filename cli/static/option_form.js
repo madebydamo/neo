@@ -510,15 +510,17 @@ function optionForm() {
     },
 
     toggleNestedListChoice(parentName, key, field, choice, checked) {
-      const obj = this.ensureAttrs(parentName);
-      const entry = Object.assign({}, obj[key] || {});
+      const container = Array.isArray(this.values[parentName])
+        ? this.ensureList(parentName)
+        : this.ensureAttrs(parentName);
+      const entry = Object.assign({}, container[key] || {});
       const list = Array.isArray(entry[field]) ? [...entry[field]] : [];
       const i = list.indexOf(choice);
       if (checked && i < 0) list.push(choice);
       if (!checked && i >= 0) list.splice(i, 1);
       entry[field] = list;
-      obj[key] = entry;
-      this.values[parentName] = { ...obj };
+      container[key] = entry;
+      this.touch(parentName);
     },
 
     resolveHelper(optionName, target) {
@@ -753,12 +755,34 @@ function optionForm() {
       this.values[name] = { ...obj };
     },
 
-    // Nested list inside attrsOf/listOf submodule entry
-    ensureNestedList(parentName, entryKey, fieldName) {
+    // ── Fields inside a submodule entry (attrsOf: key, listOf: index) ──
+
+    /** The entry object, or null; a list is padded up to the index. */
+    entryAt(parentName, entryKey) {
       const parent = this.values[parentName];
-      if (!parent || typeof parent !== 'object') return [];
-      const entry = parent[entryKey];
-      if (!entry || typeof entry !== 'object') return [];
+      if (Array.isArray(parent)) return this.ensureListEntry(parentName, entryKey);
+      const entry = (parent && typeof parent === 'object') ? parent[entryKey] : null;
+      return (entry && typeof entry === 'object') ? entry : null;
+    },
+
+    /** New outer object so Alpine re-renders a change made inside an entry. */
+    touch(parentName) {
+      const parent = this.values[parentName];
+      this.values[parentName] = Array.isArray(parent) ? [...parent] : { ...parent };
+    },
+
+    ensureListEntry(parentName, idx) {
+      const list = this.ensureList(parentName);
+      while (list.length <= idx) {
+        const elem = this.unwrapType(this.optType(parentName)?.elem);
+        list.push(this.defaultForType(elem || { kind: 'submodule' }));
+      }
+      return list[idx];
+    },
+
+    ensureNestedList(parentName, entryKey, fieldName) {
+      const entry = this.entryAt(parentName, entryKey);
+      if (!entry) return [];
       if (!Array.isArray(entry[fieldName])) entry[fieldName] = [];
       return entry[fieldName];
     },
@@ -768,21 +792,18 @@ function optionForm() {
       const ft = this.fieldType(parentName, fieldName);
       const elem = this.unwrapType(ft?.elem || ft);
       list.push(this.defaultForType(elem || { kind: 'str' }));
-      this.values[parentName] = { ...this.values[parentName] };
+      this.touch(parentName);
     },
 
     removeNestedListItem(parentName, entryKey, fieldName, idx) {
       const list = this.ensureNestedList(parentName, entryKey, fieldName);
       list.splice(idx, 1);
-      this.values[parentName] = { ...this.values[parentName] };
+      this.touch(parentName);
     },
 
-    // Nested attrsOf of scalars inside a submodule entry
     ensureNestedAttrs(parentName, entryKey, fieldName) {
-      const parent = this.values[parentName];
-      if (!parent || typeof parent !== 'object') return {};
-      const entry = parent[entryKey];
-      if (!entry || typeof entry !== 'object') return {};
+      const entry = this.entryAt(parentName, entryKey);
+      if (!entry) return {};
       if (!entry[fieldName] || typeof entry[fieldName] !== 'object' || Array.isArray(entry[fieldName])) {
         entry[fieldName] = {};
       }
@@ -797,40 +818,14 @@ function optionForm() {
       const ft = this.fieldType(parentName, fieldName);
       const elem = this.unwrapType(ft?.elem || { kind: 'str' });
       obj[key] = this.defaultForType(elem);
-      this.values[parentName] = { ...this.values[parentName] };
+      this.touch(parentName);
       if (inputEl) inputEl.value = '';
     },
 
     removeNestedAttrItem(parentName, entryKey, fieldName, key) {
       const obj = this.ensureNestedAttrs(parentName, entryKey, fieldName);
       delete obj[key];
-      this.values[parentName] = { ...this.values[parentName] };
-    },
-
-    // listOf submodule helpers (entry is index)
-    ensureListEntry(parentName, idx) {
-      const list = this.ensureList(parentName);
-      while (list.length <= idx) {
-        const elem = this.unwrapType(this.optType(parentName)?.elem);
-        list.push(this.defaultForType(elem || { kind: 'submodule' }));
-      }
-      return list[idx];
-    },
-
-    addNestedListItemAtIndex(parentName, idx, fieldName) {
-      const entry = this.ensureListEntry(parentName, idx);
-      if (!Array.isArray(entry[fieldName])) entry[fieldName] = [];
-      const ft = this.fieldType(parentName, fieldName);
-      const elem = this.unwrapType(ft?.elem || { kind: 'str' });
-      entry[fieldName].push(this.defaultForType(elem));
-      this.values[parentName] = [...this.values[parentName]];
-    },
-
-    removeNestedListItemAtIndex(parentName, idx, fieldName, itemIdx) {
-      const entry = this.ensureListEntry(parentName, idx);
-      if (!Array.isArray(entry[fieldName])) return;
-      entry[fieldName].splice(itemIdx, 1);
-      this.values[parentName] = [...this.values[parentName]];
+      this.touch(parentName);
     },
 
     revertAll() {

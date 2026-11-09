@@ -65,11 +65,11 @@
                                  x-model="values['{{../name}}'][idx]['{{name}}'][nidx]">
                         {{/if}}
                         <button type="button"
-                                @click="removeNestedListItemAtIndex('{{../name}}', idx, '{{name}}', nidx)"
+                                @click="removeNestedListItem('{{../name}}', idx, '{{name}}', nidx)"
                                 class="btn btn-ghost btn-sm btn-square shrink-0 text-base-content/50 hover:text-error" title="Remove" aria-label="Remove">✕</button>
                       </div>
                     </template>
-                    <button type="button" @click="addNestedListItemAtIndex('{{../name}}', idx, '{{name}}')"
+                    <button type="button" @click="addNestedListItem('{{../name}}', idx, '{{name}}')"
                             class="btn btn-ghost btn-xs text-primary px-1">+ Add</button>
                   </div>
                 {{/if}}

@@ -340,3 +340,62 @@ test('visibleWhen opt=a,b shows the field for any listed value', () => {
   assert.equal(form.isEntryFieldVisible('oauth', 'a', 'type=a,b'), true);
   assert.equal(form.isEntryFieldVisible('oauth', 'a', 'type=a,c'), false);
 });
+
+const entryOption = (kind) => ({
+  name: 'rows',
+  type: {
+    kind,
+    elem: {
+      kind: 'submodule',
+      fields: [
+        { name: 'ports', type: { kind: 'listOf', elem: { kind: 'port', min: 80 } } },
+        { name: 'labels', type: { kind: 'attrsOf', elem: { kind: 'str' } } },
+        { name: 'apps', type: { kind: 'listOf', elem: { kind: 'str' } } },
+      ],
+    },
+  },
+});
+
+test('fields inside an entry work the same for attrsOf keys and listOf indexes', () => {
+  loadWidgets();
+  for (const [kind, key, current] of [
+    ['attrsOf', 'a', { a: { ports: [], labels: {}, apps: [] } }],
+    ['listOf', 0, [{ ports: [], labels: {}, apps: [] }]],
+  ]) {
+    const form = makeForm({ options: [{ ...entryOption(kind), current }] });
+    const before = form.values.rows;
+    const entry = () => form.values.rows[key];
+
+    form.addNestedListItem('rows', key, 'ports');
+    assert.deepEqual(entry().ports, [80]);
+    assert.notEqual(form.values.rows, before, 'outer value replaced so Alpine re-renders');
+    assert.equal(Array.isArray(form.values.rows), kind === 'listOf');
+    form.removeNestedListItem('rows', key, 'ports', 0);
+    assert.deepEqual(entry().ports, []);
+
+    const input = { value: ' k ' };
+    form.addNestedAttrItem('rows', key, 'labels', input);
+    assert.deepEqual(entry().labels, { k: '' });
+    assert.equal(input.value, '');
+    form.removeNestedAttrItem('rows', key, 'labels', 'k');
+    assert.deepEqual(entry().labels, {});
+
+    form.toggleNestedListChoice('rows', key, 'apps', 'x', true);
+    assert.deepEqual(entry().apps, ['x']);
+    assert.equal(Array.isArray(form.values.rows), kind === 'listOf');
+    form.toggleNestedListChoice('rows', key, 'apps', 'x', false);
+    assert.deepEqual(entry().apps, []);
+  }
+});
+
+test('a list entry past the end is padded; a missing attrs entry is left alone', () => {
+  loadWidgets();
+  const list = makeForm({ options: [{ ...entryOption('listOf'), current: [] }] });
+  list.addNestedListItem('rows', 1, 'ports');
+  assert.equal(list.values.rows.length, 2);
+  assert.deepEqual(list.values.rows[1].ports, [80]);
+
+  const attrs = makeForm({ options: [{ ...entryOption('attrsOf'), current: {} }] });
+  attrs.addNestedListItem('rows', 'nope', 'ports');
+  assert.deepEqual(attrs.values.rows, {});
+});
