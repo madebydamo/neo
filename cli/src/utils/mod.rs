@@ -3,6 +3,7 @@
 //! Keep `crate::commands` for subcommand entry points only.
 
 pub mod command;
+pub mod fsutil;
 pub mod generation;
 pub mod locks;
 pub mod ops;

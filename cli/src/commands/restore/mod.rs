@@ -16,6 +16,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use toml_edit::DocumentMut;
 
+use crate::utils::fsutil::write_private;
 use crate::utils::secrets::{self, Node, Tree};
 use crate::utils::secrets_store::{decrypt_with_key, IDENTITY_FILE};
 
@@ -189,8 +190,7 @@ pub(crate) fn restore_identity(
     fs::create_dir_all(&ssh).with_context(|| format!("create {}", ssh.display()))?;
     let priv_path = ssh.join("ssh_host_ed25519_key");
     let pub_path = ssh.join("ssh_host_ed25519_key.pub");
-    fs::write(&priv_path, private)?;
-    fs::set_permissions(&priv_path, fs::Permissions::from_mode(0o600))?;
+    write_private(&priv_path, private.as_bytes())?;
     fs::write(&pub_path, format!("{}\n", public.trim()))?;
     fs::set_permissions(&pub_path, fs::Permissions::from_mode(0o644))?;
     Ok(true)

@@ -11,6 +11,7 @@ use toml_edit::DocumentMut;
 
 use crate::utils::command::{output_checked, output_with_stdin, shell_quote, stdout_checked};
 use crate::utils::execute_command;
+use crate::utils::fsutil::write_private;
 
 /// Prefix of the snapshots the backup service takes (backup.sh).
 pub const SNAPSHOT_PREFIX: &str = "neo-backup-";
@@ -624,8 +625,7 @@ impl<'a> Encrypted<'a> {
     /// `restic -r <repository>` with the password and, over SSH, the keys.
     fn restic(&self) -> Result<Command> {
         let pw = self.access.work.join("restic-password");
-        fs::write(&pw, &self.key.password)?;
-        fs::set_permissions(&pw, fs::Permissions::from_mode(0o600))?;
+        write_private(&pw, self.key.password.as_bytes())?;
         let dir = join_remote(&self.source.remote_path, &self.key.repository);
         let mut c = Command::new("restic");
         c.env("RESTIC_PASSWORD_FILE", &pw).arg("--no-cache");
