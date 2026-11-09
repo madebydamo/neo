@@ -7,15 +7,20 @@ Remote-Groups. The bridge then:
   1. invites + accepts new users through the Docmost API (members join the
      default "Everyone" group, so they can edit the shared spaces),
   2. syncs the workspace role from ADMINS / ADMIN_GROUPS,
-  3. logs the user in and redirects with Docmost's own authToken cookie.
+  3. adds the user to the Docmost group of each SYNC_GROUPS entry in Remote-Groups
+     (only ever adds; leaving the provider's group changes nothing in Docmost),
+  4. logs the user in and redirects with Docmost's own authToken cookie.
 
 Each user's password is HMAC(SSO_KEY, email): nobody types or sees it, and
 SWAG blocks Docmost's password endpoints. The service account that does the
 invites is created by `setup` (fresh workspace) or by docmost-sso-setup in SQL.
+While Neo's SQL on Docmost's database fails (a file in SQL_STATUS_DIR), sign-in
+is refused so the breakage gets noticed; sessions already open are not affected.
 Stdlib only; runs in a plain python image.
 
 Usage: sso.py            serve on PORT
        sso.py setup      create the workspace if Docmost has none (idempotent)
+       sso.py groups     create the SYNC_GROUPS groups in Docmost (idempotent)
 """
 
 import hashlib
@@ -39,6 +44,8 @@ LOGOUT_URL = os.environ.get("LOGOUT_URL", "")
 WORKSPACE_NAME = os.environ.get("WORKSPACE_NAME", "Docmost")
 ADMINS = {a.strip().lower() for a in os.environ.get("ADMINS", "").split(",") if a.strip()}
 ADMIN_GROUPS = {g.strip() for g in os.environ.get("ADMIN_GROUPS", "").split(",") if g.strip()}
+SYNC_GROUPS = [g.strip() for g in os.environ.get("SYNC_GROUPS", "").split(",") if g.strip()]
+SQL_STATUS_DIR = os.environ.get("SQL_STATUS_DIR", "")
 TIMEOUT = 15
 
 
@@ -182,20 +189,68 @@ def create_member(email, name, role, client_ip):
     return cookies
 
 
+def find_group(name):
+    # Docmost treats group names as case-insensitive; the query is a substring match.
+    for group in service.paged("/groups", {"query": name}):
+        if (group.get("name") or "").lower() == name.lower():
+            return group
+    return None
+
+
+def ensure_group(name):
+    group = find_group(name)
+    if group:
+        return group
+    try:
+        group = service.call("/groups/create", {"name": name, "description": "Members are added from the sign-in group of the same name."})
+    except DocmostError as e:
+        # Two sign-ins racing to create it: the other one won.
+        group = find_group(name) if e.status == 400 else None
+        if group is None:
+            raise
+        return group
+    log(f"created group {name}")
+    return group
+
+
+def sync_groups(user, groups):
+    for name in SYNC_GROUPS:
+        if name in groups:
+            service.call("/groups/members/add", {"groupId": ensure_group(name)["id"], "userIds": [user["id"]]})
+
+
+def failed_sql():
+    """Names of the Neo SQL jobs that last failed."""
+    try:
+        return sorted(os.listdir(SQL_STATUS_DIR)) if SQL_STATUS_DIR else []
+    except OSError:
+        return []
+
+
 def sign_in(username, email, name, groups, client_ip):
     """Return the Set-Cookie headers of a Docmost session for this user."""
+    failed = failed_sql()
+    if failed:
+        log(f"refused sign-in for {email}: SQL failed: {', '.join(failed)}")
+        raise PermissionError(
+            "Sign-in is blocked because Neo can no longer update Docmost's database, "
+            "probably after a Docmost update. Ask your admin to check the Docmost logs."
+        )
     role = wanted_role(username, email, groups)
     user = find_member(email)
     if user is None:
         # No admin rules: the first person to sign in administers the workspace.
         if role is None:
             role = "member" if has_human_members() else "admin"
-        return create_member(email, name, role, client_ip)
+        cookies = create_member(email, name, role, client_ip)
+        sync_groups(find_member(email), groups)
+        return cookies
     if user.get("deactivatedAt"):
         raise PermissionError("Your Docmost account is deactivated. Ask a workspace admin.")
     if role and user.get("role") not in ("owner", role):
         service.call("/workspace/members/change-role", {"userId": user["id"], "role": role})
         log(f"{email}: role {user.get('role')} -> {role}")
+    sync_groups(user, groups)
     # Docmost matches the stored spelling of the address.
     return login(user["email"], client_ip)
 
@@ -290,6 +345,12 @@ if __name__ == "__main__":
             setup()
         except (DocmostError, OSError) as e:
             sys.exit(f"docmost not ready: {e}")
+    elif sys.argv[1:] == ["groups"]:
+        try:
+            for group_name in SYNC_GROUPS:
+                ensure_group(group_name)
+        except (DocmostError, OSError) as e:
+            sys.exit(f"could not create groups: {e}")
     else:
         log(f"docmost-sso listening on :{PORT}")
         ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

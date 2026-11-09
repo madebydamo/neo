@@ -59,7 +59,7 @@
                 rank = 30;
                 description = ''
                   Sign tinyauth users straight into Docmost (no second login). Accounts are created on
-                  first visit and join the "Everyone" group, so all users can edit the shared spaces.
+                  first visit and join the "Everyone" group, so they can edit every space that group belongs to.
                   Docmost's own password, invite and setup pages are disabled. Needs tinyauth.
                 '';
                 ui = lib.neo.ui.mkUi {
@@ -72,7 +72,7 @@
                 default = [];
                 rank = 31;
                 description = ''
-                  Usernames or emails that become Docmost admins when they sign in.
+                  Usernames or emails that become Docmost admins when they sign in. Admins can manage every space, including renaming it and choosing who has access.
                   With this and Admin groups both empty, the first person to sign in becomes admin and you manage roles in Docmost; otherwise everyone else is a regular member.
                 '';
                 ui = lib.neo.ui.mkUi {
@@ -93,6 +93,21 @@
                   group = ssoGroup;
                   visibleWhen = "sso";
                   label = "Admin groups";
+                };
+              };
+              # Matched exactly against the groups tinyauth passes on (Remote-Groups).
+              syncGroups = mkOption {
+                type = types.listOf types.str;
+                default = [];
+                rank = 33;
+                description = ''
+                  Sign-in groups to copy into Docmost, so you can share a space with one of them. Each group is created with the same name, and its members join when they sign in, as normal members.
+                  This only ever adds: leaving a group at your provider keeps them in the Docmost group until you remove them there. For Microsoft Entra, use the group's display name.
+                '';
+                ui = lib.neo.ui.mkUi {
+                  group = ssoGroup;
+                  visibleWhen = "sso";
+                  label = "Groups to copy";
                 };
               };
               mcp = mkOption {
@@ -132,12 +147,13 @@
                 type = types.listOf types.str;
                 default =
                   ["docker-docmost" "docker-docmost-db" "docker-docmost-redis"]
-                  ++ optionals ssoActive ["docker-docmost-sso" "docmost-sso-setup"]
+                  ++ optionals ssoActive ["docker-docmost-sso" "docmost-sso-setup" "docmost-space-admins"]
                   ++ optionals mcpActive ["docker-docmost-mcp"];
                 internal = true;
-                description = "Systemd units of Docmost and, with tinyauth SSO, its sign-in bridge and MCP server.";
+                description = "Systemd units of Docmost and, with tinyauth SSO, its sign-in bridge, space admin sync and MCP server.";
               };
             }
+            // lib.neo.mkSystemdTimers (optionals ssoActive ["docmost-space-admins"])
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/docmost"
             // lib.neo.mkServiceMeta {
               category = "Files";
@@ -156,6 +172,11 @@
               notes = ''
                 Runs the official stack: the Docmost app, Postgres for workspace data and Redis for queues and sessions.
                 Neo sets APP_URL to the public HTTPS address. The health endpoint skips tinyauth; the UI stays behind it.
+                With single sign-on, workspace admins become admins of every space within about a minute, and lose that when they stop being workspace admins.
+                To give someone only one space: allow them just Docmost in tinyauth, remove "Everyone" from General after adding your own people to it, then add them to that space, directly after they signed in once, or through a group from Groups to copy.
+                Group membership is copied at sign-in, so someone who is already signed in joins a new group the next time they sign in.
+                All members can still see the names and emails of other members.
+                If Neo can no longer update Docmost's database, usually after a Docmost update, new sign-ins are blocked with a message until that is fixed. People already signed in stay signed in.
               '';
               replaces = ["Notion" "Confluence"];
               privacy = ["notes"];

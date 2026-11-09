@@ -23,6 +23,9 @@
         - `sso` (default on, needs tinyauth): `docmost-sso` bridge signs tinyauth users in on `/login`; accounts are created on first visit and join "Everyone" (writer in the default space)
         - Admin role from `admins` (usernames/emails) / `adminGroups` (OAuth groups), synced at each sign-in; both empty → first user becomes admin, roles left to the UI
         - `docmost-sso-setup` creates the workspace (service account `docmost-sso@neo.invalid` as owner) or adds that account as admin, and sets all passwords to HMAC(appSecret-derived key, email)
+        - `docmost-space-admins` (timer, each minute, with `sso`): workspace admins become admins of every non-personal space, in SQL with `added_by_id` = service account; only those grants are revoked when someone stops being a workspace admin. Removing someone from `admins` changes their workspace role at their next sign-in, so the grants go then
+        - `syncGroups`: OAuth group names (exact match on `Remote-Groups`) that `docmost-sso-setup` creates as Docmost groups; at each sign-in the bridge adds the user to those they are in. Additive only, membership in Docmost is never removed by Neo, and spaces are shared with these groups by hand
+        - Neo's SQL (`docmost-space-admins`, `docmost-sso-setup`) fails loudly: the error goes to the unit's journal, a marker in `/run/neo/docmost/` makes `docmost-sso` and `docmost-mcp` refuse every sign-in, and the next good run removes it. Open sessions (up to 90 days) and issued MCP tokens keep working
         - SWAG returns 403 for Docmost password/setup/invite-accept APIs and redirects their pages to `/login`; Docmost logout goes to tinyauth `/logout`
         - `mcp` (default on, needs `sso`): `docmost-mcp` serves MCP at `https://<subdomain>.<domain>/mcp` (tools: list_spaces, search_pages, list_pages, get_page, create_page, edit_page, update_page, move_page, delete_page, upload_file; Markdown in/out, with fixes for Docmost's table-header and math conversion bugs so get_page output can be written back unchanged; whole-page rewrites refuse pages with content Markdown cannot carry unless dropUnsupported; upload_file sends a url / base64 / text file through Docmost's /api/files/upload and appends it as an image, video, audio or attachment node, url fetches limited to public addresses) and is its own OAuth server (dynamic registration + PKCE). Only `/mcp/oauth/authorize` is behind tinyauth; the user approves the client there, then tools run as that Docmost user. Tokens are signed with an appSecret-derived key (1 h access, refresh up to 30 days)
 
@@ -43,11 +46,13 @@
         - Do not clear appdata without confirmation — destroys wiki and DB
         - Postgres 18 volume is `/var/lib/postgresql` (not `.../data`)
         - With `sso`, a Docmost account whose email differs from the tinyauth email is not matched: a new account is created
+        - "Sign-in is blocked" means Neo's SQL no longer fits Docmost's schema, usually after an image update: read `just logs docmost-space-admins` and `just logs docmost-sso-setup`, and fix the SQL in `default.nix`. Emergency access: `systemctl stop docmost-space-admins.timer docmost-sso-setup` and delete the files in `/run/neo/docmost/`
         - Changing `appSecret` re-keys all SSO passwords (setup unit reruns); sessions are invalidated
 
         ## Verification
         - Units active; `/api/health` returns 200; UI loads after tinyauth (302 to login when unauthenticated)
         - SSO: `just logs docmost-sso-setup` ends in "done"; `docker logs docmost-sso` shows `created <email>` on first sign-in
+        - Space admins: `just logs docmost-space-admins` has no errors; a workspace admin's `list_spaces` role is `admin`
         - MCP: `curl https://docmost.<domain>/.well-known/oauth-protected-resource/mcp` → 200 JSON; unauthenticated `POST /mcp` → 401 with `WWW-Authenticate: Bearer resource_metadata=…`; `docker logs docmost-mcp` shows `authorized '<client>' for <email>`
         - Connect a client: `claude mcp add --transport http docmost https://docmost.<domain>/mcp`, then `/mcp` → authenticate
       '';
