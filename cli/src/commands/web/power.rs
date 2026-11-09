@@ -57,16 +57,34 @@ pub fn schedule(action: PowerAction) {
     });
 }
 
+/// Kernel boot id: changes on every boot, so the browser can tell the restarted host
+/// from the one that is still going down.
+pub fn boot_id() -> String {
+    std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default()
+}
+
+/// `data-neo-await-boot` attribute: `static/reboot_watch.js` polls `/system/boot-id`
+/// and reloads the page once a different boot answers.
+pub fn await_boot_attr() -> String {
+    format!(r#"data-neo-await-boot="{}""#, escape_html(&boot_id()))
+}
+
 /// Notice shown while the host goes down.
 pub fn going_down_html(action: PowerAction, msg: &str) -> String {
-    let hint = match action {
-        PowerAction::Reboot => "The UI reconnects once the server is back.",
-        PowerAction::Poweroff => {
-            "The server stays off until it is powered on again (physically or via its management interface)."
-        }
+    let (attr, hint) = match action {
+        PowerAction::Reboot => (
+            await_boot_attr(),
+            "This page reloads once the server is back.",
+        ),
+        PowerAction::Poweroff => (
+            String::new(),
+            "The server stays off until it is powered on again (physically or via its management interface).",
+        ),
     };
     format!(
-        r#"<div role="alert" class="alert alert-warning text-sm"><span class="loading loading-spinner loading-sm"></span><span>{}</span></div><p class="text-xs opacity-70 mt-2">{hint}</p>"#,
+        r#"<div {attr}><div role="alert" class="alert alert-warning text-sm"><span class="loading loading-spinner loading-sm"></span><span data-neo-await-boot-msg>{}</span><span data-neo-await-boot-elapsed class="ml-auto tabular-nums opacity-70"></span></div><p class="text-xs opacity-70 mt-2">{hint}</p></div>"#,
         escape_html(msg)
     )
 }

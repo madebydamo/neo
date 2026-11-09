@@ -1,6 +1,6 @@
 //! Host power: restart / shut down (Settings tab) and boot into a generation (versioning).
-use rocket::post;
 use rocket::response::content::RawHtml;
+use rocket::{get, post};
 
 use crate::commands::web::locks::Blocked;
 use crate::commands::web::power::{
@@ -19,6 +19,12 @@ fn power_now(
     power::schedule(action);
     hold_until_down(lock);
     Ok(RawHtml(going_down_html(action, msg)))
+}
+
+/// Current kernel boot id, polled by `static/reboot_watch.js` while the host restarts.
+#[get("/system/boot-id")]
+pub fn system_boot_id() -> String {
+    power::boot_id()
 }
 
 #[post("/system/reboot")]
