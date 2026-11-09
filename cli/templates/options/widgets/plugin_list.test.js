@@ -44,21 +44,17 @@ const one = (url, prefix) => ({ url, prefix: prefix || '' });
 
 // ── URL helpers ──────────────────────────────────────────────────────────────
 
-test('pluginLabel: repository name for forges, last segment otherwise', () => {
+// The vectors the Rust test and the Nix check (nix/lib/plugin-check.nix) run too.
+const vectors = require('../../../src/utils/plugin_id_vectors.json');
+
+test('pluginLabel matches the shared id vectors', () => {
   const form = formWithPlugins();
-  assert.equal(form.pluginLabel('github:user/repo'), 'repo');
-  assert.equal(form.pluginLabel('github:user/repo/dev'), 'repo');
-  assert.equal(form.pluginLabel('git+https://host/a/b.git?ref=x'), 'b');
-  assert.equal(form.pluginLabel('path:/abs/plugin/'), 'plugin');
-  assert.equal(form.pluginLabel(''), '');
+  for (const [url, label] of vectors.labels) assert.equal(form.pluginLabel(url), label, url);
 });
 
-test('plSanitize matches utils::plugins::sanitize_id', () => {
+test('plSanitize matches the shared id vectors', () => {
   const form = formWithPlugins();
-  assert.equal(form.plSanitize('highsea.neo'), 'highsea-neo');
-  assert.equal(form.plSanitize('bielCrawler'), 'bielcrawler');
-  assert.equal(form.plSanitize('3d'), 'plugin-3d');
-  assert.equal(form.plSanitize('...'), 'plugin');
+  for (const [label, id] of vectors.ids) assert.equal(form.plSanitize(label), id, label);
 });
 
 test('plRefOf / plWithRef: forge path refs, ?ref= elsewhere, none for path:', () => {

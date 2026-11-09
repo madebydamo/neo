@@ -8,8 +8,8 @@
 //!
 //! The old form (a list of URLs) is still read; its ids come from the
 //! repository name, `-<index>` on a clash. The same rules live in
-//! `nix/lib/plugin.nix` and `templates/homeserver/modules/_plugins.nix`, so the
-//! flake input `plugin-<id>` is the same whichever form a config uses.
+//! `templates/homeserver/modules/_plugin-ids.nix`, so the flake input
+//! `plugin-<id>` is the same whichever form a config uses.
 //! Design: docs/design/plugin-instances.md.
 
 use toml_edit::{DocumentMut, Item, Table};
@@ -274,43 +274,42 @@ mod tests {
         }
     }
 
+    /// The vectors the Nix check (`nix/lib/plugin-check.nix`) and the widget test run too.
     #[test]
-    fn plugin_label_uses_repo_or_last_segment() {
-        assert_eq!(plugin_label("github:madebydamo/highsea.neo"), "highsea.neo");
-        assert_eq!(plugin_label("github:madebydamo/high_sea/prod"), "high_sea");
-        assert_eq!(
-            plugin_label("git+file:/home/me/high_sea?ref=main"),
-            "high_sea"
-        );
-        assert_eq!(plugin_label("path:/opt/plugins/portrait/"), "portrait");
-        assert_eq!(
-            plugin_label("git+https://github.com/me/portrait.git?ref=prod"),
-            "portrait"
-        );
-        assert_eq!(plugin_label("   "), "");
-    }
-
-    #[test]
-    fn sanitize_id_makes_valid_ids() {
-        assert_eq!(sanitize_id("highsea.neo"), "highsea-neo");
-        assert_eq!(sanitize_id("bielCrawler"), "bielcrawler");
-        assert_eq!(sanitize_id("high_sea"), "high-sea");
-        assert_eq!(sanitize_id("3d"), "plugin-3d");
-        assert_eq!(sanitize_id("..."), "plugin");
-        assert!(valid_id(&sanitize_id("Some Thing!")));
-    }
-
-    #[test]
-    fn list_ids_disambiguate_clashes_by_index() {
-        let urls = vec![
-            "github:a/portrait".to_string(),
-            "github:madebydamo/highsea.neo".to_string(),
-            "path:/x/portrait".to_string(),
-        ];
-        assert_eq!(
-            ids_for_urls(&urls),
-            vec!["portrait-0", "highsea-neo", "portrait-2"]
-        );
+    fn id_rules_match_the_shared_vectors() {
+        let vectors: serde_json::Value =
+            serde_json::from_str(include_str!("plugin_id_vectors.json")).unwrap();
+        let pairs = |key: &str| -> Vec<(String, String)> {
+            vectors[key]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| {
+                    (
+                        v[0].as_str().unwrap().to_string(),
+                        v[1].as_str().unwrap().to_string(),
+                    )
+                })
+                .collect()
+        };
+        for (url, label) in pairs("labels") {
+            assert_eq!(plugin_label(&url), label, "label of {url:?}");
+        }
+        for (label, id) in pairs("ids") {
+            assert_eq!(sanitize_id(&label), id, "id of {label:?}");
+            assert!(valid_id(&id));
+        }
+        for case in vectors["lists"].as_array().unwrap() {
+            let strings = |key: &str| -> Vec<String> {
+                case[key]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_str().unwrap().to_string())
+                    .collect()
+            };
+            assert_eq!(ids_for_urls(&strings("urls")), strings("ids"));
+        }
     }
 
     #[test]

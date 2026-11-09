@@ -1,0 +1,30 @@
+{
+  "_comment": "Plugin id rules exist in Nix, Rust and the plugin_list widget. All three run these vectors, so a flake input stays plugin-<id> whichever code computed the id.",
+  "labels": [
+    ["github:madebydamo/highsea.neo", "highsea.neo"],
+    ["github:madebydamo/high_sea/prod", "high_sea"],
+    ["github:user/repo", "repo"],
+    ["github:user/repo/dev", "repo"],
+    ["git+file:/home/me/high_sea?ref=main", "high_sea"],
+    ["git+https://github.com/me/portrait.git?ref=prod", "portrait"],
+    ["git+https://host/a/b.git?ref=x", "b"],
+    ["path:/opt/plugins/portrait/", "portrait"],
+    ["path:/abs/plugin/", "plugin"],
+    ["   ", ""],
+    ["", ""]
+  ],
+  "ids": [
+    ["highsea.neo", "highsea-neo"],
+    ["bielCrawler", "bielcrawler"],
+    ["high_sea", "high-sea"],
+    ["Some Thing!", "some-thing"],
+    ["3d", "plugin-3d"],
+    ["...", "plugin"]
+  ],
+  "lists": [
+    {
+      "urls": ["github:a/portrait", "github:madebydamo/highsea.neo", "path:/x/portrait"],
+      "ids": ["portrait-0", "highsea-neo", "portrait-2"]
+    }
+  ]
+}

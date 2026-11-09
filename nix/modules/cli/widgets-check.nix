@@ -6,7 +6,8 @@
         nativeBuildInputs = [pkgs.nodejs];
       } ''
         set -euo pipefail
-        mkdir -p cli/templates/options
+        mkdir -p cli/templates/options cli/src/utils
+        cp ${../../../cli/src/utils/plugin_id_vectors.json} cli/src/utils/plugin_id_vectors.json
         # Mirror `just test-widgets`: all of cli/static (widget hosts + standalone modules and their tests).
         cp -r ${../../../cli/static} cli/static
         chmod -R u+w cli/static
