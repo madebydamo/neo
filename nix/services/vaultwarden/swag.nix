@@ -8,56 +8,31 @@
     ...
   }: let
     cfg = config.neo.services.vaultwarden;
+    upstream = lib.neo.swagUpstream {
+      app = "vaultwarden";
+      port = cfg.port;
+    };
   in {
-    config.neo.services.vaultwarden.proxyConf = lib.mkDefault ''
-      server {
-        include /config/nginx/listen-https.conf;
-        http2 on;
-        server_name ${cfg.subdomain}.*;
-        include /config/nginx/ssl.conf;
-        include /config/nginx/geo-access.conf;
-        client_max_body_size 128M;
-
-        location / {
-          include /config/nginx/proxy.conf;
-          include /config/nginx/resolver.conf;
-          set $upstream_app vaultwarden;
-          set $upstream_port ${toString cfg.port};
-          set $upstream_proto http;
-          proxy_pass $upstream_proto://$upstream_app:$upstream_port;
-          ${lib.neo.authBlock config cfg}
-        }
+    config.neo.services.vaultwarden.proxyConf = lib.mkDefault (lib.neo.mkSubdomainProxyConf {
+      inherit config cfg;
+      upstream = "vaultwarden";
+      port = cfg.port;
+      maxBodySize = "128M";
+      extraLocations = ''
 
         location ~ ^(/vaultwarden)?/admin {
-          include /config/nginx/proxy.conf;
-          include /config/nginx/resolver.conf;
-          set $upstream_app vaultwarden;
-          set $upstream_port ${toString cfg.port};
-          set $upstream_proto http;
-          proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+          ${upstream}
           ${lib.neo.authBlock config cfg}
         }
 
         location ~ (/vaultwarden)?/api {
-          include /config/nginx/proxy.conf;
-          include /config/nginx/resolver.conf;
-          set $upstream_app vaultwarden;
-          set $upstream_port ${toString cfg.port};
-          set $upstream_proto http;
-          proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+          ${upstream}
         }
 
         location ~ (/vaultwarden)?/notifications/hub {
-          include /config/nginx/proxy.conf;
-          include /config/nginx/resolver.conf;
-          set $upstream_app vaultwarden;
-          set $upstream_port ${toString cfg.port};
-          set $upstream_proto http;
-          proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+          ${upstream}
         }
-
-        ${lib.neo.authLocations config cfg}
-      }
-    '';
+      '';
+    });
   };
 }

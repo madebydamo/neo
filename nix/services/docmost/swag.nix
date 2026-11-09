@@ -30,14 +30,10 @@
     '';
     auth = lib.neo.authBlock config cfg;
     authLoc = lib.neo.authLocations config cfg;
-    proxyCore = ''
-      include /config/nginx/proxy.conf;
-      include /config/nginx/resolver.conf;
-      set $upstream_app docmost;
-      set $upstream_port ${toString cfg.port};
-      set $upstream_proto http;
-      proxy_pass $upstream_proto://$upstream_app:$upstream_port;
-    '';
+    proxyCore = lib.neo.swagUpstream {
+      app = "docmost";
+      port = cfg.port;
+    };
     mcpCore = ''
       include /config/nginx/proxy.conf;
       include /config/nginx/resolver.conf;
@@ -76,57 +72,54 @@
         proxy_set_header Remote-Groups $groups;
       }
     '';
-    ssoConf = ''
-      server {
-        include /config/nginx/listen-https.conf;
-        http2 on;
-        server_name ${cfg.subdomain}.*;
-        include /config/nginx/ssl.conf;
-        # Wiki attachments / page assets can be large.
-        client_max_body_size 100M;
-        include /config/nginx/geo-access.conf;
-        # Streamproxy/rathole terminates on SWAG :8443 (PROXY protocol).
+    ssoConf = lib.neo.mkSwagServer {
+      inherit cfg;
+      # Wiki attachments / page assets can be large.
+      maxBodySize = "100M";
+      # Streamproxy/rathole terminates on SWAG :8443 (PROXY protocol).
+      extra = ''
         absolute_redirect off;
         port_in_redirect off;
+      '';
+      body = ''
+          location = /login {
+            ${auth}
+            try_files /__docmost_sso_no_such_file @docmost_sso;
+          }
 
-        location = /login {
-          ${auth}
-          try_files /__docmost_sso_no_such_file @docmost_sso;
-        }
+          location @docmost_sso {
+            internal;
+            include /config/nginx/proxy.conf;
+            include /config/nginx/resolver.conf;
+            set $upstream_app docmost-sso;
+            set $upstream_port 8080;
+            ${keyHeader.include}
+            proxy_set_header Remote-User $user;
+            proxy_set_header Remote-Email $email;
+            proxy_set_header Remote-Name $name;
+            proxy_set_header Remote-Groups $groups;
+            proxy_pass http://$upstream_app:$upstream_port;
+          }
 
-        location @docmost_sso {
-          internal;
-          include /config/nginx/proxy.conf;
-          include /config/nginx/resolver.conf;
-          set $upstream_app docmost-sso;
-          set $upstream_port 8080;
-          ${keyHeader.include}
-          proxy_set_header Remote-User $user;
-          proxy_set_header Remote-Email $email;
-          proxy_set_header Remote-Name $name;
-          proxy_set_header Remote-Groups $groups;
-          proxy_pass http://$upstream_app:$upstream_port;
-        }
+          # Password sign-in, setup and invite acceptance: only the bridge
+          # (straight to docmost:3000 on the internal network) may use these.
+          location ~ ^/api/(auth/(login|setup|change-password|forgot-password|password-reset)|workspace/invites/accept)$ {
+            return 403;
+          }
 
-        # Password sign-in, setup and invite acceptance: only the bridge
-        # (straight to docmost:3000 on the internal network) may use these.
-        location ~ ^/api/(auth/(login|setup|change-password|forgot-password|password-reset)|workspace/invites/accept)$ {
-          return 403;
-        }
+          # Their pages: back to tinyauth sign-in.
+          location ~ ^/(setup|signup|forgot-password|password-reset|invites)(/|$) {
+            return 302 /login;
+          }
 
-        # Their pages: back to tinyauth sign-in.
-        location ~ ^/(setup|signup|forgot-password|password-reset|invites)(/|$) {
-          return 302 /login;
-        }
+          ${lib.optionalString mcpActive mcpConf}
+          location / {
+        ${proxyCore} ${auth}
+          }
 
-        ${lib.optionalString mcpActive mcpConf}
-        location / {
-      ${proxyCore} ${auth}
-        }
-
-        ${authLoc}
-      }
-    '';
+          ${authLoc}
+      '';
+    };
   in {
     config.neo.core.secrets.templates = lib.mkIf (cfg.enabled && ssoActive) keyHeader.templates;
 

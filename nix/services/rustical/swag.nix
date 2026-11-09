@@ -43,15 +43,13 @@
     loginBody = lib.neo.secrets.swagSnippet config "rustical-sso-body" ''
       proxy_set_body "username=$user&password=${cfg.ssoPassword or ""}";
     '';
-    proxyCore = ''
-      include /config/nginx/proxy.conf;
-      include /config/nginx/resolver.conf;
-      set $upstream_app rustical;
-      set $upstream_port ${toString cfg.port};
-      set $upstream_proto http;
-      proxy_set_header X-Forwarded-Port 443;
-      proxy_pass $upstream_proto://$upstream_app:$upstream_port;
-    '';
+    proxyCore = lib.neo.swagUpstream {
+      app = "rustical";
+      port = cfg.port;
+      extra = ''
+        proxy_set_header X-Forwarded-Port 443;
+      '';
+    };
     corsHeaders = lib.optionalString (corsOrigin != null) ''
       add_header Access-Control-Allow-Origin "${corsOrigin}" always;
       add_header Access-Control-Allow-Methods "GET, PUT, POST, DELETE, PROPFIND, PROPPATCH, REPORT, OPTIONS, MKCOL, MKCALENDAR, COPY, MOVE" always;
@@ -98,14 +96,14 @@
     corsCarddavHomeRewrite = lib.optionalString (corsOrigin != null) ''
       location ~ ^/caldav/principal/(?<calino_principal>[^/]+) {
         ${corsOptionsPreflight}
-        include /config/nginx/proxy.conf;
-        include /config/nginx/resolver.conf;
-        set $upstream_app rustical;
-        set $upstream_port ${toString cfg.port};
-        set $upstream_proto http;
-        proxy_set_header X-Forwarded-Port 443;
-        proxy_set_header Accept-Encoding "";
-        proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+        ${lib.neo.swagUpstream {
+        app = "rustical";
+        port = cfg.port;
+        extra = ''
+          proxy_set_header X-Forwarded-Port 443;
+          proxy_set_header Accept-Encoding "";
+        '';
+      }}
         ${corsHeaders}
         sub_filter_types text/xml application/xml;
         sub_filter_once off;
@@ -123,87 +121,77 @@
         }
 
     '';
-    standardConf = ''
-      server {
-        include /config/nginx/listen-https.conf;
-        http2 on;
-        server_name ${cfg.subdomain}.*;
-        include /config/nginx/ssl.conf;
-        client_max_body_size 0;
-        include /config/nginx/geo-access.conf;
+    standardConf = lib.neo.mkSwagServer {
+      inherit cfg;
+      body = ''
+        ${corsDavLocation}
+          location = / {
+            ${davRootSkipAuth}
+        ${proxyCore} ${auth}
+          }
 
-      ${corsDavLocation}
-        location = / {
-          ${davRootSkipAuth}
-      ${proxyCore} ${auth}
-        }
+        ${davRootNamed}
+          location / {
+        ${proxyCore} ${auth}
+          }
 
-      ${davRootNamed}
-        location / {
-      ${proxyCore} ${auth}
-        }
-
-        ${authLoc}
-      }
-    '';
-    ssoConf = ''
-      server {
-        include /config/nginx/listen-https.conf;
-        http2 on;
-        server_name ${cfg.subdomain}.*;
-        include /config/nginx/ssl.conf;
-        client_max_body_size 0;
-        include /config/nginx/geo-access.conf;
-        # Streamproxy/rathole terminates on SWAG :8443 (PROXY protocol). Nginx
-        # would otherwise absolutize redirects as https://host:8443/...
+          ${authLoc}
+      '';
+    };
+    ssoConf = lib.neo.mkSwagServer {
+      inherit cfg;
+      # Streamproxy/rathole terminates on SWAG :8443 (PROXY protocol). Nginx
+      # would otherwise absolutize redirects as https://host:8443/...
+      extra = ''
         absolute_redirect off;
         port_in_redirect off;
+      '';
+      body = ''
+        ${corsDavLocation}
+          location = / {
+            ${davRootSkipAuth}
+            ${auth}
+            try_files /__rustical_sso_no_such_file @rustical_root;
+          }
 
-      ${corsDavLocation}
-        location = / {
-          ${davRootSkipAuth}
-          ${auth}
-          try_files /__rustical_sso_no_such_file @rustical_root;
-        }
+        ${davRootNamed}
 
-      ${davRootNamed}
+          location = /frontend {
+            ${auth}
+            try_files /__rustical_sso_no_such_file @rustical_root;
+          }
 
-        location = /frontend {
-          ${auth}
-          try_files /__rustical_sso_no_such_file @rustical_root;
-        }
+          location @rustical_root {
+            internal;
+            return 302 https://$http_host/frontend/login;
+          }
 
-        location @rustical_root {
-          internal;
-          return 302 https://$http_host/frontend/login;
-        }
+          location = /frontend/login {
+            ${auth}
+            try_files /__rustical_sso_no_such_file @rustical_sso;
+          }
 
-        location = /frontend/login {
-          ${auth}
-          try_files /__rustical_sso_no_such_file @rustical_sso;
-        }
+          location @rustical_sso {
+            internal;
+            include /config/nginx/proxy.conf;
+            include /config/nginx/resolver.conf;
+            set $upstream_app rustical;
+            set $upstream_port ${toString cfg.port};
+            set $upstream_proto http;
+            proxy_method POST;
+            proxy_set_header Content-Type application/x-www-form-urlencoded;
+            proxy_set_header X-Forwarded-Port 443;
+            ${loginBody.include}
+            proxy_pass $upstream_proto://$upstream_app:$upstream_port/frontend/login;
+          }
 
-        location @rustical_sso {
-          internal;
-          include /config/nginx/proxy.conf;
-          include /config/nginx/resolver.conf;
-          set $upstream_app rustical;
-          set $upstream_port ${toString cfg.port};
-          set $upstream_proto http;
-          proxy_method POST;
-          proxy_set_header Content-Type application/x-www-form-urlencoded;
-          proxy_set_header X-Forwarded-Port 443;
-          ${loginBody.include}
-          proxy_pass $upstream_proto://$upstream_app:$upstream_port/frontend/login;
-        }
+          location / {
+        ${proxyCore} ${auth}
+          }
 
-        location / {
-      ${proxyCore} ${auth}
-        }
-
-        ${authLoc}
-      }
-    '';
+          ${authLoc}
+      '';
+    };
   in {
     config.neo.core.secrets.templates = lib.mkIf (cfg.enabled && ssoEnabled) loginBody.templates;
 

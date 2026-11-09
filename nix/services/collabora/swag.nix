@@ -5,32 +5,28 @@
     lib,
     ...
   }: let
-    collaboraSubdomain = config.neo.services.collabora.subdomain;
+    cfg = config.neo.services.collabora;
+    upstream = lib.neo.swagUpstream {
+      app = "collabora";
+      port = 9980;
+      proxyConf = false;
+    };
   in {
-    config.neo.services.collabora.proxyConf = lib.mkDefault ''
-      server {
-        include /config/nginx/listen-https.conf;
-        http2 on;
-        server_name ${collaboraSubdomain}.*;
-        include /config/nginx/ssl.conf;
-        include /config/nginx/geo-access.conf;
+    config.neo.services.collabora.proxyConf = lib.mkDefault (lib.neo.mkSwagServer {
+      inherit cfg;
+      maxBodySize = null;
+      body = ''
         location / {
-          include /config/nginx/proxy.conf;
-          include /config/nginx/resolver.conf;
-          set $upstream_app collabora;
-          set $upstream_port 9980;
-          set $upstream_proto http;
-          proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+          ${lib.neo.swagUpstream {
+          app = "collabora";
+          port = 9980;
+        }}
           # proxy.conf already sets Host/Upgrade/Connection/X-Forwarded-*;
           # re-setting Upgrade would send "websocket, websocket" and break WS.
         }
 
         location ^~ /hosting/ {
-          include /config/nginx/resolver.conf;
-          set $upstream_app collabora;
-          set $upstream_port 9980;
-          set $upstream_proto http;
-          proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+          ${upstream}
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -38,22 +34,14 @@
         }
 
         location ^~ /browser/ {
-          include /config/nginx/resolver.conf;
-          set $upstream_app collabora;
-          set $upstream_port 9980;
-          set $upstream_proto http;
-          proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+          ${upstream}
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         }
 
         location ^~ /cool/ {
-          include /config/nginx/resolver.conf;
-          set $upstream_app collabora;
-          set $upstream_port 9980;
-          set $upstream_proto http;
-          proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+          ${upstream}
           proxy_http_version 1.1;
           proxy_set_header Upgrade $http_upgrade;
           proxy_set_header Connection "upgrade";
@@ -62,7 +50,7 @@
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
           proxy_set_header X-Forwarded-Proto $scheme;
         }
-      }
-    '';
+      '';
+    });
   };
 }

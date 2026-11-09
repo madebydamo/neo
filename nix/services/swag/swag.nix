@@ -7,17 +7,13 @@
   }: let
     cfg = config.neo.services.swag;
   in {
-    config.neo.services.swag.proxyConf = lib.mkDefault ''
-      server {
-        include /config/nginx/listen-https.conf;
-        http2 on;
-        server_name ${cfg.subdomain}.*;
-
+    config.neo.services.swag.proxyConf = lib.mkDefault (lib.neo.mkSwagServer {
+      inherit cfg;
+      extra = ''
         root /dashboard/www;
         index index.php;
-        include /config/nginx/ssl.conf;
-        client_max_body_size 0;
-        include /config/nginx/geo-access.conf;
+      '';
+      body = ''
         location / {
           try_files $uri $uri/ /index.php$is_args$args =404;
           ${lib.neo.authBlock config cfg}
@@ -32,7 +28,7 @@
         }
 
         ${lib.neo.authLocations config cfg}
-      }
-    '';
+      '';
+    });
   };
 }

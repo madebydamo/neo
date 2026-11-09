@@ -10,35 +10,29 @@
   }: let
     cfg = config.neo.services.hermes;
   in {
-    config.neo.services.hermes.proxyConf = lib.mkDefault ''
-      server {
-        include /config/nginx/listen-https.conf;
-        http2 on;
-        server_name ${cfg.subdomain}.*;
-        include /config/nginx/ssl.conf;
-        include /config/nginx/geo-access.conf;
-        client_max_body_size 0;
+    config.neo.services.hermes.proxyConf = lib.mkDefault (lib.neo.mkSwagServer {
+      inherit cfg;
+      body = ''
+          # Hermes form-auth landing page — auto-post internal basic_auth credentials.
+          # Gated by tinyauth; operators never see the Hermes login form.
+          location = /login {
+            default_type text/html;
+            charset utf-8;
+            add_header Cache-Control "no-store, no-cache, must-revalidate";
+            alias /config/www/hermes-autologin.html;
+            ${lib.neo.authBlock config cfg}
+          }
 
-        # Hermes form-auth landing page — auto-post internal basic_auth credentials.
-        # Gated by tinyauth; operators never see the Hermes login form.
-        location = /login {
-          default_type text/html;
-          charset utf-8;
-          add_header Cache-Control "no-store, no-cache, must-revalidate";
-          alias /config/www/hermes-autologin.html;
-          ${lib.neo.authBlock config cfg}
-        }
-
-        location / {
-          # proxy.conf already sets Upgrade + Connection via $connection_upgrade.
-          # Do NOT re-set Upgrade here: nginx appends duplicate values
-          # ("websocket, websocket") and uvicorn rejects with 426.
-          include /config/nginx/proxy.conf;
-          proxy_pass http://host.docker.internal:${toString cfg.dashboardPort}/;
-          ${lib.neo.authBlock config cfg}
-        }
-      ${lib.neo.authLocations config cfg}
-      }
-    '';
+          location / {
+            # proxy.conf already sets Upgrade + Connection via $connection_upgrade.
+            # Do NOT re-set Upgrade here: nginx appends duplicate values
+            # ("websocket, websocket") and uvicorn rejects with 426.
+            include /config/nginx/proxy.conf;
+            proxy_pass http://host.docker.internal:${toString cfg.dashboardPort}/;
+            ${lib.neo.authBlock config cfg}
+          }
+        ${lib.neo.authLocations config cfg}
+      '';
+    });
   };
 }

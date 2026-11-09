@@ -10,27 +10,13 @@
   }: let
     cfg = config.neo.services.registry;
   in {
-    config.neo.services.registry.proxyConf = lib.mkDefault ''
-      server {
-        include /config/nginx/listen-https.conf;
-        http2 on;
-        server_name ${cfg.subdomain}.*;
-        include /config/nginx/ssl.conf;
-        client_max_body_size 0;
-        chunked_transfer_encoding on;
-        include /config/nginx/geo-access.conf;
-
-        location / {
-          include /config/nginx/proxy.conf;
-          include /config/nginx/resolver.conf;
-          set $upstream_app registry;
-          set $upstream_port ${toString cfg.port};
-          set $upstream_proto http;
-          proxy_request_buffering off;
-          proxy_buffering off;
-          proxy_pass $upstream_proto://$upstream_app:$upstream_port;
-        }
-      }
-    '';
+    config.neo.services.registry.proxyConf = lib.mkDefault (lib.neo.mkSubdomainProxyConf {
+      inherit config cfg;
+      upstream = "registry";
+      port = cfg.port;
+      auth = false;
+      serverExtra = "  chunked_transfer_encoding on;\n";
+      locationExtra = "    proxy_request_buffering off;\n    proxy_buffering off;";
+    });
   };
 }
