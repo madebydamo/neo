@@ -40,7 +40,7 @@ use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
@@ -757,10 +757,7 @@ fn remove_marker_if_owned(guard_dir: &Path, unit: &str, holder_id: &str) {
 }
 
 fn now_epoch() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
+    super::command::now_secs() as i64
 }
 
 /// `HH:MM` in the host's local time zone.

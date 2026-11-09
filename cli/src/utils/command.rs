@@ -62,6 +62,22 @@ pub fn confirm(question: &str) -> Result<()> {
     Ok(())
 }
 
+/// Seconds since the epoch.
+pub fn now_secs() -> u64 {
+    epoch_secs(std::time::SystemTime::now())
+}
+
+/// A file's modification time in seconds since the epoch (0 when unknown).
+pub fn mtime_secs(meta: &std::fs::Metadata) -> u64 {
+    meta.modified().map(epoch_secs).unwrap_or(0)
+}
+
+fn epoch_secs(t: std::time::SystemTime) -> u64 {
+    t.duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
 /// Quote a string for safe copy-paste into a POSIX shell (bash/sh).
 ///
 /// Bare tokens stay unquoted when they only use safe characters; otherwise

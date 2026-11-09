@@ -4,7 +4,6 @@
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::UNIX_EPOCH;
 
 const SYSTEM_PROFILE: &str = "/nix/var/nix/profiles/system";
 const PROFILES_DIR: &str = "/nix/var/nix/profiles";
@@ -210,10 +209,7 @@ pub fn generation_links() -> Vec<GenerationLink> {
             continue;
         };
         let created = std::fs::symlink_metadata(e.path())
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
-            .map(|d| d.as_secs() as i64)
+            .map(|m| super::command::mtime_secs(&m) as i64)
             .unwrap_or(0);
         out.push(GenerationLink {
             number,
