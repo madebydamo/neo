@@ -64,10 +64,16 @@ window.neoUploadSettingsToml = function neoUploadSettingsToml(input) {
       });
     })
     .then(function (res) {
+      // 409: refused by an operation lock (toast, nothing to show in the card).
+      if (res.status === 409 && window.NeoLocks) {
+        return window.NeoLocks.handleFetch(res).then(function () {
+          return null;
+        });
+      }
       return res.text();
     })
     .then(function (html) {
-      if (status) status.innerHTML = html;
+      if (html != null && status) status.innerHTML = html;
     })
     .catch(function (err) {
       neoToast('Upload failed: ' + err, 'error');
