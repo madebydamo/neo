@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseSse, proposalIds, toolLabel } = require('./agent_chat.js');
+const { parseSse, proposalIds, toolLabel } = require('./agent_chat_core.js');
 
 test('parseSse splits complete frames and keeps the rest', () => {
   const buf =
@@ -45,7 +45,7 @@ const {
   formatDuration,
   toolCallsFromMessages,
   toolDetail,
-} = require('./agent_chat.js');
+} = require('./agent_chat_core.js');
 
 test('fuzzyScore matches subsequences and prefers word starts', () => {
   assert.ok(fuzzyScore('nxtc', 'nextcloud') > 0);
@@ -179,7 +179,7 @@ const {
   groupSessions,
   outcomeText,
   parseSavedRun,
-} = require('./agent_chat.js');
+} = require('./agent_chat_core.js');
 
 test('clockText formats elapsed time', () => {
   assert.equal(clockText(0), '0:00');
