@@ -1,9 +1,9 @@
 //! Start activation / update / generation-switch oneshots and return their monitor.
 use rocket::response::content::RawHtml;
 
-use crate::utils::command::sudo_command;
+use crate::utils::command::{output_checked, sudo_command};
 use crate::utils::locks::{LockSpec, OpInfo};
-use crate::utils::{execute_command, get_timestamp, GenerationMode, OperationKind, OperationLog};
+use crate::utils::{get_timestamp, GenerationMode, OperationKind, OperationLog};
 
 /// Seconds the spawned `neo` waits for the system lock (covers the probe → spawn gap
 /// and a just-finishing op); a real conflict is refused by [`probe`] before spawning.
@@ -11,7 +11,7 @@ const SPAWNED_LOCK_WAIT: &str = "30";
 
 use super::locks::{probe, Blocked};
 use super::ops::monitor::monitor_fragment;
-use super::ops::store::{find_recent_in_progress, gc_old_ops};
+use super::ops::store::{append_log, find_recent_in_progress, gc_old_ops, log_path};
 use super::util::{self, alert_html, AlertKind};
 
 /// An activation or generation switch is running (config must not move under it).
@@ -27,7 +27,7 @@ fn trigger_systemd_run(
     neo_args: &[&str],
     env_pairs: &[(&str, &str)],
     description: &str,
-) {
+) -> anyhow::Result<()> {
     let sudo_cmd = util::sudo_cmd();
     let nix_bin = util::nix_bin();
     let neo_bin = util::neo_bin();
@@ -62,7 +62,18 @@ fn trigger_systemd_run(
         &neo_bin,
     ]);
     run_cmd.args(neo_args);
-    let _ = execute_command(&mut run_cmd);
+    output_checked(&mut run_cmd, "systemd-run")?;
+    Ok(())
+}
+
+/// The child never started: end the op now, with the reason, instead of letting it
+/// look stuck until the trigger grace runs out.
+fn fail_if_not_started(op: &OperationLog, started: anyhow::Result<()>) {
+    if let Err(e) = started {
+        let msg = format!("{e:#}");
+        append_log(&log_path(op.id()), &msg);
+        op.write_state("failed", "spawn", Some(&msg), None);
+    }
 }
 
 fn alert(kind: AlertKind, msg: String) -> RawHtml<String> {
@@ -75,12 +86,13 @@ fn trigger_oneshot(kind: OperationKind, subcommand: &str, env_var: &str) -> RawH
     let op = OperationLog::new(kind, &ts);
     op.init_for_web_trigger(&ts);
     let suffix = op.suffix();
-    trigger_systemd_run(
+    let started = trigger_systemd_run(
         &format!("{subcommand}@{suffix}"),
         &[subcommand],
         &[(env_var, suffix)],
         &format!("Neo one-shot {subcommand} {suffix}"),
     );
+    fail_if_not_started(&op, started);
     RawHtml(monitor_fragment(op.id(), None))
 }
 
@@ -176,12 +188,13 @@ pub fn trigger_generation_switch(n: u64, mode: GenerationMode) -> Result<RawHtml
     );
 
     let n_s = n.to_string();
-    trigger_systemd_run(
+    let started = trigger_systemd_run(
         &format!("genswitch@{suffix}"),
         &["generation", mode_s, &n_s],
         &[("NEO_GENSWITCH_SUFFIX", op.suffix())],
         &format!("Neo generation {mode_s} {n}"),
     );
+    fail_if_not_started(&op, started);
 
     let what = match mode {
         GenerationMode::Boot => format!("Setting generation {n} as the boot default."),

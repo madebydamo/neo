@@ -6,7 +6,6 @@ use super::super::locks::{lock_attr, LockMode, Scope};
 use super::super::types::AppConfig;
 use super::super::util::{escape_attr, escape_html, proc, status_slot_oob};
 use super::status::{query_unit_status_blocking, UnitStatus};
-use crate::utils::command::sudo_command;
 
 pub use super::super::util::unit_name_valid;
 
@@ -184,19 +183,21 @@ pub fn schedule_unit_refresh_burst(unit: String, config: Arc<AppConfig>) {
     });
 }
 
-pub fn perform_unit_action(action: UnitAction, unit: &str) {
+/// Queue `systemctl <action> <unit>` without waiting for the job.
+pub async fn perform_unit_action(action: UnitAction, unit: &str) -> Result<(), String> {
     if !unit_name_valid(unit) {
-        return;
+        return Err(format!("invalid unit name: {unit}"));
     }
-    let _ = sudo_command()
-        .args([
-            "systemctl",
-            action.as_str(),
-            unit,
-            "--no-block",
-            "--no-ask-password",
-        ])
-        .status();
+    let what = format!("systemctl {} {unit}", action.as_str());
+    let mut cmd = proc::sudo();
+    cmd.args([
+        "systemctl",
+        action.as_str(),
+        unit,
+        "--no-block",
+        "--no-ask-password",
+    ]);
+    proc::run_ok(&mut cmd, &what).await.map(|_| ())
 }
 
 /// Change key for the WS watcher: ActiveState alone misses `running` → `exited`

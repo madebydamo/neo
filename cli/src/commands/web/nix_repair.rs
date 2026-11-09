@@ -28,12 +28,16 @@ pub fn start_store_verify_repair(config: Arc<AppConfig>) -> Result<String, Block
         &LockSpec::system_change(),
         OpInfo::new("repair", "Nix store repair").with_op_id(&id),
     )?;
-    let _ = fs::create_dir_all(OPERATIONS_DIR);
+    if let Err(e) = fs::create_dir_all(OPERATIONS_DIR) {
+        eprintln!("web: create {OPERATIONS_DIR}: {e}");
+    }
     write_state(&id, "in_progress", "starting", None);
-    let _ = fs::write(
+    if let Err(e) = fs::write(
         log_path(&id),
         format!("{id} store verify/repair triggered via web at {ts}\n"),
-    );
+    ) {
+        eprintln!("web: write repair log: {e}");
+    }
 
     let id_for_task = id.clone();
     tokio::spawn(async move {

@@ -6,9 +6,10 @@ use tokio::io::{AsyncReadExt, BufReader as AsyncBufReader};
 use tokio::process::Command as AsyncCommand;
 
 use super::super::types::AppConfig;
-use super::super::util::{docker_bin, proc, status_err, status_ok, status_pulling};
+use super::super::util::{docker_bin, status_err, status_ok, status_pulling};
 use super::control::{
-    broadcast_unit_update, broadcast_update_out, end_pull, schedule_unit_refresh_burst,
+    broadcast_unit_update, broadcast_update_out, end_pull, perform_unit_action,
+    schedule_unit_refresh_burst, UnitAction,
 };
 
 /// Push an error status for a container pull, clear in-flight, and refresh controls.
@@ -163,16 +164,14 @@ pub async fn run_container_pull(unit: String, cname: String, config: Arc<AppConf
             let (inner, title) = status_pulling("restarting…");
             push(inner, title);
 
-            let _ = proc::sudo()
-                .args([
-                    "systemctl",
-                    "restart",
+            if let Err(e) = perform_unit_action(UnitAction::Restart, &unit).await {
+                fail_pull(
                     &unit,
-                    "--no-block",
-                    "--no-ask-password",
-                ])
-                .status()
-                .await;
+                    &format!("pulled {img}, restart failed: {e}"),
+                    &config,
+                );
+                return;
+            }
 
             let (inner, title) = status_ok(&format!("updated {}", img));
             push(inner, title);

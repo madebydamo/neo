@@ -20,7 +20,8 @@ use crate::utils::locks::{LockSpec, OpInfo};
 /// Shared post-action path: kick systemctl, push OOB once, then burst-refresh while it settles.
 /// Buttons use hx-swap="none"; the returned OOB still updates the controls row.
 /// Refused (409) while the unit is locked, e.g. its service's data is being restored.
-fn unit_action_response(
+/// A failed systemctl shows in the row's status slot.
+async fn unit_action_response(
     action: UnitAction,
     unit: &str,
     config: &State<Arc<AppConfig>>,
@@ -32,30 +33,44 @@ fn unit_action_response(
         &LockSpec::unit(unit),
         OpInfo::new("unit", format!("systemctl {} {unit}", action.as_str())),
     )?;
-    perform_unit_action(action, unit);
+    let result = perform_unit_action(action, unit).await;
     drop(lock);
+    let out = match &result {
+        Ok(()) => update_out_oob(unit, "", ""),
+        Err(e) => {
+            let (inner, title) = status_err(e);
+            update_out_oob(unit, &inner, &title)
+        }
+    };
     let oob = unit_controls_oob_fragment(unit, config);
+    let _ = config.unit_updates.send(out.clone());
     let _ = config.unit_updates.send(oob.clone());
     schedule_unit_refresh_burst(unit.to_string(), Arc::clone(config));
-    Ok(RawHtml(oob))
+    Ok(RawHtml(format!("{out}{oob}")))
 }
 
 #[post("/unit/restart/<unit>")]
-pub fn unit_restart(
+pub async fn unit_restart(
     unit: &str,
     config: &State<Arc<AppConfig>>,
 ) -> Result<RawHtml<String>, Blocked> {
-    unit_action_response(UnitAction::Restart, unit, config)
+    unit_action_response(UnitAction::Restart, unit, config).await
 }
 
 #[post("/unit/start/<unit>")]
-pub fn unit_start(unit: &str, config: &State<Arc<AppConfig>>) -> Result<RawHtml<String>, Blocked> {
-    unit_action_response(UnitAction::Start, unit, config)
+pub async fn unit_start(
+    unit: &str,
+    config: &State<Arc<AppConfig>>,
+) -> Result<RawHtml<String>, Blocked> {
+    unit_action_response(UnitAction::Start, unit, config).await
 }
 
 #[post("/unit/stop/<unit>")]
-pub fn unit_stop(unit: &str, config: &State<Arc<AppConfig>>) -> Result<RawHtml<String>, Blocked> {
-    unit_action_response(UnitAction::Stop, unit, config)
+pub async fn unit_stop(
+    unit: &str,
+    config: &State<Arc<AppConfig>>,
+) -> Result<RawHtml<String>, Blocked> {
+    unit_action_response(UnitAction::Stop, unit, config).await
 }
 
 /// Kick off an async docker pull+restart. Returns immediately with OOB status +
