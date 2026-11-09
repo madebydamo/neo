@@ -104,5 +104,11 @@
     };
   }
 
-  return { esc: esc, toast: toast, store: store };
+  /** Run fn once the document is parsed (right away when it already is). */
+  function onReady(doc, fn) {
+    if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', fn);
+    else fn();
+  }
+
+  return { esc: esc, toast: toast, store: store, onReady: onReady };
 });

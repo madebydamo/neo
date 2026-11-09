@@ -102,9 +102,5 @@
     }).observe(host, { childList: true });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', watch);
-  } else {
-    watch();
-  }
+  window.NeoUtil.onReady(document, watch);
 })();

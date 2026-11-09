@@ -513,8 +513,7 @@
         }
       });
     };
-    if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start);
-    else start();
+    NeoUtil.onReady(doc, start);
     doc.addEventListener('visibilitychange', function () {
       if (doc.visibilityState === 'visible') live.forEach(function (m) { m.poke(); });
     });

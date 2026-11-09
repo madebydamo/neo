@@ -9,13 +9,13 @@
 //   and replaced over /ws/status whenever any process takes or drops a lock.
 // - A 409 answer (a route refused because of a lock) becomes an error toast.
 (function (root, factory) {
-  var api = factory();
+  var api = factory((root && root.NeoUtil) || require('./neo_util.js'));
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) {
     root.NeoLocks = api;
     api.autostart(root);
   }
-})(typeof window !== 'undefined' ? window : null, function () {
+})(typeof window !== 'undefined' ? window : null, function (NeoUtil) {
   'use strict';
 
   var UNIT_SUFFIX = /\.(service|target|timer|socket|mount|path|slice|scope)$/;
@@ -153,8 +153,7 @@
       ['htmx:afterSettle', 'htmx:oobAfterSwap', 'htmx:afterSwap'].forEach(function (ev) {
         doc.addEventListener(ev, schedule);
       });
-      if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', schedule);
-      else schedule();
+      NeoUtil.onReady(doc, schedule);
       // Alpine-rendered buttons (versioning tab) appear without an htmx swap.
       if (typeof win.MutationObserver === 'function') {
         var mo = new win.MutationObserver(function (records) {

@@ -629,8 +629,7 @@
         if (t && t.id === 'nav-services') render();
       });
     };
-    if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start);
-    else start();
+    NeoUtil.onReady(doc, start);
   }
 
   return { model: model, autostart: autostart, render: render, STORAGE_KEY: STORAGE_KEY };

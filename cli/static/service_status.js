@@ -10,14 +10,14 @@
 // batched `systemctl show` behind a few-second single-flight cache. Polls every
 // 15s while the tab is visible; pauses while hidden.
 (function (root, factory) {
-  var api = factory();
+  var api = factory((root && root.NeoUtil) || require('./neo_util.js'));
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) {
     root.NeoUnitHealth = api.health;
     root.NeoServiceStatus = api.dots;
     api.dots.autostart(root);
   }
-})(typeof window !== 'undefined' ? window : null, function () {
+})(typeof window !== 'undefined' ? window : null, function (NeoUtil) {
   'use strict';
 
   var BUSY = { activating: 1, deactivating: 1, reloading: 1, refreshing: 1 };
@@ -190,8 +190,7 @@
         // Next tick: never compete with first paint.
         win.setTimeout(dots.kick, 0);
       };
-      if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start);
-      else start();
+      NeoUtil.onReady(doc, start);
 
       doc.addEventListener('visibilitychange', function () {
         if (doc.visibilityState === 'visible') dots.kick();

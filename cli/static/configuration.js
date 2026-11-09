@@ -1071,11 +1071,7 @@ window.servicesGrid = function servicesGrid() {
     }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', start);
-  } else {
-    start();
-  }
+  window.NeoUtil.onReady(document, start);
 
   document.body.addEventListener('htmx:afterSwap', function (evt) {
     var t = evt.detail && evt.detail.target;
@@ -1136,9 +1132,5 @@ window.servicesGrid = function servicesGrid() {
     schedule();
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', start);
-  } else {
-    start();
-  }
+  window.NeoUtil.onReady(document, start);
 })();

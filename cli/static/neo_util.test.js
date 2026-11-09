@@ -59,3 +59,14 @@ test('store survives storage that throws', () => {
   assert.strictEqual(none.get('a'), null);
   none.set('a', '1');
 });
+
+test('onReady waits for a loading document and runs at once otherwise', () => {
+  let ran = 0;
+  let listener = null;
+  NeoUtil.onReady({ readyState: 'loading', addEventListener: (ev, fn) => { assert.strictEqual(ev, 'DOMContentLoaded'); listener = fn; } }, () => ran++);
+  assert.strictEqual(ran, 0);
+  listener();
+  assert.strictEqual(ran, 1);
+  NeoUtil.onReady({ readyState: 'complete' }, () => ran++);
+  assert.strictEqual(ran, 2);
+});
