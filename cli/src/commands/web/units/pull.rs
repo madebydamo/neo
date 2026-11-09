@@ -51,145 +51,127 @@ fn spawn_pull_pipe_reader(
     });
 }
 
-/// Background: docker inspect → pull (stream progress over WS) → systemctl restart.
-pub async fn run_container_pull(unit: String, cname: String, config: Arc<AppConfig>) {
-    let push = |inner: String, title: String| {
-        broadcast_update_out(&unit, &inner, &title, &config);
-    };
-
-    let docker = docker_bin();
-    let inspect = AsyncCommand::new(&docker)
-        .args(["inspect", "--format", "{{.Config.Image}}", &cname])
+/// The image a container runs; `Err` is the status message.
+async fn inspect_image(docker: &str, cname: &str) -> Result<String, String> {
+    let o = AsyncCommand::new(docker)
+        .args(["inspect", "--format", "{{.Config.Image}}", cname])
         .output()
-        .await;
-
-    let img = match inspect {
-        Ok(o) if o.status.success() => {
-            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            if s.is_empty() {
-                fail_pull(&unit, "no image from inspect", &config).await;
-                return;
-            }
-            s
-        }
-        Ok(o) => {
-            let err = String::from_utf8_lossy(&o.stderr);
-            fail_pull(&unit, &format!("inspect failed: {}", err.trim()), &config).await;
-            return;
-        }
-        Err(e) => {
-            fail_pull(&unit, &format!("docker error: {}", e), &config).await;
-            return;
-        }
-    };
-
-    {
-        let (inner, title) = status_pulling(&format!("pulling {}", img));
-        push(inner, title);
+        .await
+        .map_err(|e| format!("docker error: {e}"))?;
+    if !o.status.success() {
+        let err = String::from_utf8_lossy(&o.stderr);
+        return Err(format!("inspect failed: {}", err.trim()));
     }
+    let img = String::from_utf8_lossy(&o.stdout).trim().to_string();
+    if img.is_empty() {
+        return Err("no image from inspect".to_string());
+    }
+    Ok(img)
+}
 
-    let mut child = match AsyncCommand::new(&docker)
-        .args(["pull", &img])
+/// `docker pull`, streaming progress to the unit's status slot; `Err` is the status message.
+async fn pull_image(
+    docker: &str,
+    img: &str,
+    unit: &str,
+    config: &Arc<AppConfig>,
+) -> Result<(), String> {
+    let mut child = AsyncCommand::new(docker)
+        .args(["pull", img])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true)
         .spawn()
-    {
-        Ok(c) => c,
-        Err(e) => {
-            fail_pull(&unit, &format!("pull spawn: {}", e), &config).await;
-            return;
-        }
-    };
+        .map_err(|e| format!("pull spawn: {e}"))?;
 
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-    let (line_tx, mut line_rx) = tokio::sync::mpsc::channel::<String>(16);
-
-    if let Some(pipe) = stdout {
+    let (line_tx, line_rx) = tokio::sync::mpsc::channel::<String>(16);
+    if let Some(pipe) = child.stdout.take() {
         spawn_pull_pipe_reader(pipe, line_tx.clone());
     }
-    if let Some(pipe) = stderr {
+    if let Some(pipe) = child.stderr.take() {
         spawn_pull_pipe_reader(pipe, line_tx);
     }
-
-    let unit_p = unit.clone();
-    let config_p = Arc::clone(&config);
-    let img_p = img.clone();
-    let progress_task = tokio::spawn(async move {
-        let started = Instant::now();
-        let mut last_emit = Instant::now() - Duration::from_secs(1);
-        let mut last_line = format!("pulling {}", img_p);
-        let mut ticker = tokio::time::interval(Duration::from_millis(500));
-        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        loop {
-            tokio::select! {
-                msg = line_rx.recv() => {
-                    match msg {
-                        Some(line) => {
-                            last_line = if line.len() > 80 {
-                                format!("{}…", &line[..77])
-                            } else {
-                                line
-                            };
-                            if last_emit.elapsed() >= Duration::from_millis(350) {
-                                let (inner, title) = status_pulling(&last_line);
-                                broadcast_update_out(&unit_p, &inner, &title, &config_p);
-                                last_emit = Instant::now();
-                            }
-                        }
-                        None => break,
-                    }
-                }
-                _ = ticker.tick() => {
-                    // Heartbeat so a quiet pull still shows the UI is alive.
-                    if last_emit.elapsed() >= Duration::from_secs(2) {
-                        let secs = started.elapsed().as_secs();
-                        let msg = format!("pulling {} ({}s)", img_p, secs);
-                        let (inner, title) = status_pulling(&msg);
-                        broadcast_update_out(&unit_p, &inner, &title, &config_p);
-                        last_emit = Instant::now();
-                    }
-                }
-            }
-        }
-    });
+    let progress_task = tokio::spawn(report_pull_progress(
+        line_rx,
+        unit.to_string(),
+        img.to_string(),
+        Arc::clone(config),
+    ));
 
     let status = child.wait().await;
     // Drop senders finished with pipes; wait for progress UI task.
     let _ = progress_task.await;
-
     match status {
-        Ok(s) if s.success() => {
-            let (inner, title) = status_pulling("restarting…");
-            push(inner, title);
+        Ok(s) if s.success() => Ok(()),
+        Ok(s) => Err(format!("pull exit {}", s.code().unwrap_or(-1))),
+        Err(e) => Err(format!("pull wait: {e}")),
+    }
+}
 
-            if let Err(e) = perform_unit_action(UnitAction::Restart, &unit).await {
-                fail_pull(
-                    &unit,
-                    &format!("pulled {img}, restart failed: {e}"),
-                    &config,
-                )
-                .await;
-                return;
+/// Throttled progress lines, with a heartbeat so a quiet pull still shows the UI is alive.
+async fn report_pull_progress(
+    mut lines: tokio::sync::mpsc::Receiver<String>,
+    unit: String,
+    img: String,
+    config: Arc<AppConfig>,
+) {
+    let started = Instant::now();
+    let mut last_emit = Instant::now() - Duration::from_secs(1);
+    let mut ticker = tokio::time::interval(Duration::from_millis(500));
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        tokio::select! {
+            msg = lines.recv() => {
+                let Some(line) = msg else { break };
+                let line = if line.len() > 80 {
+                    format!("{}…", &line[..77])
+                } else {
+                    line
+                };
+                if last_emit.elapsed() >= Duration::from_millis(350) {
+                    let (inner, title) = status_pulling(&line);
+                    broadcast_update_out(&unit, &inner, &title, &config);
+                    last_emit = Instant::now();
+                }
             }
+            _ = ticker.tick() => {
+                if last_emit.elapsed() >= Duration::from_secs(2) {
+                    let secs = started.elapsed().as_secs();
+                    let (inner, title) = status_pulling(&format!("pulling {img} ({secs}s)"));
+                    broadcast_update_out(&unit, &inner, &title, &config);
+                    last_emit = Instant::now();
+                }
+            }
+        }
+    }
+}
 
-            let (inner, title) = status_ok(&format!("updated {}", img));
-            push(inner, title);
+/// Background: docker inspect → pull (stream progress over WS) → systemctl restart.
+pub async fn run_container_pull(unit: String, cname: String, config: Arc<AppConfig>) {
+    let push = |msg: &str| {
+        let (inner, title) = status_pulling(msg);
+        broadcast_update_out(&unit, &inner, &title, &config);
+    };
+    let docker = docker_bin();
+    let pulled = async {
+        let img = inspect_image(&docker, &cname).await?;
+        push(&format!("pulling {img}"));
+        pull_image(&docker, &img, &unit, &config).await?;
+        push("restarting…");
+        perform_unit_action(UnitAction::Restart, &unit)
+            .await
+            .map_err(|e| format!("pulled {img}, restart failed: {e}"))?;
+        Ok::<_, String>(img)
+    }
+    .await;
+    match pulled {
+        Ok(img) => {
+            let (inner, title) = status_ok(&format!("updated {img}"));
+            broadcast_update_out(&unit, &inner, &title, &config);
             end_pull(&config, &unit);
             broadcast_unit_update(&unit, &config).await;
             schedule_unit_refresh_burst(unit, config);
         }
-        Ok(s) => {
-            fail_pull(
-                &unit,
-                &format!("pull exit {}", s.code().unwrap_or(-1)),
-                &config,
-            )
-            .await;
-        }
-        Err(e) => {
-            fail_pull(&unit, &format!("pull wait: {}", e), &config).await;
-        }
+        Err(e) => fail_pull(&unit, &e, &config).await,
     }
 }
