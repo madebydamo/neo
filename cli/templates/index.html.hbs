@@ -147,6 +147,10 @@
     {{!-- Store repair / update progress from the nav error banner (static/op_monitor.js). --}}
     {{> partials/changes_modal title="Nix store repair"}}
 
+    {{!-- A refused request toasts here (static/locks.js). No #neo-locks: this page has no
+         status socket, so a list of holders would go stale and keep buttons disabled. --}}
+    <div id="toast-host" class="toast toast-top toast-end z-[60] fixed top-4 right-4"></div>
+
     {{!-- Sidebar group rename / ungroup and layout reset (static/sidebar_layout.js). --}}
     <dialog id="sidebar-group-dialog" class="modal modal-bottom sm:modal-middle">
       <form method="dialog" class="modal-box max-w-sm">
@@ -178,6 +182,7 @@
     <script src="/static/neo_util.js"></script>
     <script src="/static/service_status.js"></script>
     <script src="/static/sidebar_layout.js"></script>
+    <script src="/static/locks.js"></script>
     <script src="/static/op_monitor.js"></script>
     <script src="/static/neo.js"></script>
   </body>
