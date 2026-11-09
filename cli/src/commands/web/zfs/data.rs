@@ -72,6 +72,47 @@ struct Banner {
     html: String,
 }
 
+fn pending_banner(p: &str) -> Banner {
+    let target = p
+        .split('|')
+        .nth(1)
+        .and_then(|m| m.split('=').nth(1))
+        .unwrap_or(p);
+    Banner {
+        tone: "alert-warning",
+        html: format!(
+            r##"<span>Restore to <span class="font-mono">{}</span> runs at the next boot.</span>
+<span class="flex gap-1 ml-auto"><button type="button" class="btn btn-xs btn-error" hx-post="/versioning/zfs/reboot"{lk} hx-target="#{CARD_ID}" hx-swap="outerHTML" hx-confirm="Reboot the server now and restore all Neo data?">Reboot now</button>
+<button type="button" class="btn btn-xs" hx-post="/versioning/zfs/cancel"{lk_sh} hx-target="#{CARD_ID}" hx-swap="outerHTML">Cancel</button></span>"##,
+            escape_html(target),
+            lk = system_lock_attr(LockMode::Exclusive),
+            lk_sh = system_lock_attr(LockMode::Shared),
+        ),
+    }
+}
+
+fn result_banner(r: &str) -> Banner {
+    let mut parts = r.splitn(3, '|');
+    let status = parts.next().unwrap_or("");
+    let ts = parts.next().unwrap_or("");
+    let detail = parts.next().unwrap_or("");
+    let (tone, head) = if status == "ok" {
+        ("alert-success", "Last restore succeeded")
+    } else {
+        ("alert-error", "Last restore failed")
+    };
+    Banner {
+        tone,
+        html: format!(
+            r##"<span>{head} ({when}): <span class="font-mono">{detail}</span></span>
+<button type="button" class="btn btn-xs btn-ghost ml-auto" hx-post="/versioning/zfs/dismiss"{lk} hx-target="#{CARD_ID}" hx-swap="outerHTML">Dismiss</button>"##,
+            when = escape_html(&ts_display(ts)),
+            detail = escape_html(detail),
+            lk = system_lock_attr(LockMode::Shared),
+        ),
+    }
+}
+
 pub async fn render_card(notice: Option<(&'static str, String)>) -> String {
     let Some((pool, live)) = restore_target() else {
         // Not a disko/ZFS machine: nothing to show.
@@ -84,44 +125,9 @@ pub async fn render_card(notice: Option<(&'static str, String)>) -> String {
     }
 
     let pending = get_property(&pool, PROP_RESTORE).await.ok().flatten();
-    if let Some(p) = &pending {
-        let target = p
-            .split('|')
-            .nth(1)
-            .and_then(|m| m.split('=').nth(1))
-            .unwrap_or(p);
-        banners.push(Banner {
-            tone: "alert-warning",
-            html: format!(
-                r##"<span>Restore to <span class="font-mono">{}</span> runs at the next boot.</span>
-<span class="flex gap-1 ml-auto"><button type="button" class="btn btn-xs btn-error" hx-post="/versioning/zfs/reboot"{lk} hx-target="#{CARD_ID}" hx-swap="outerHTML" hx-confirm="Reboot the server now and restore all Neo data?">Reboot now</button>
-<button type="button" class="btn btn-xs" hx-post="/versioning/zfs/cancel"{lk_sh} hx-target="#{CARD_ID}" hx-swap="outerHTML">Cancel</button></span>"##,
-                escape_html(target),
-                lk = system_lock_attr(LockMode::Exclusive),
-                lk_sh = system_lock_attr(LockMode::Shared),
-            ),
-        });
-    }
+    banners.extend(pending.as_deref().map(pending_banner));
     if let Some(r) = get_property(&pool, PROP_RESULT).await.ok().flatten() {
-        let mut parts = r.splitn(3, '|');
-        let status = parts.next().unwrap_or("");
-        let ts = parts.next().unwrap_or("");
-        let detail = parts.next().unwrap_or("");
-        let (tone, head) = if status == "ok" {
-            ("alert-success", "Last restore succeeded")
-        } else {
-            ("alert-error", "Last restore failed")
-        };
-        banners.push(Banner {
-            tone,
-            html: format!(
-                r##"<span>{head} ({when}): <span class="font-mono">{detail}</span></span>
-<button type="button" class="btn btn-xs btn-ghost ml-auto" hx-post="/versioning/zfs/dismiss"{lk} hx-target="#{CARD_ID}" hx-swap="outerHTML">Dismiss</button>"##,
-                when = escape_html(&ts_display(ts)),
-                detail = escape_html(detail),
-                lk = system_lock_attr(LockMode::Shared),
-            ),
-        });
+        banners.push(result_banner(&r));
     }
 
     let sudo = sudo_cmd();
