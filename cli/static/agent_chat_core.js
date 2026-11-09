@@ -411,7 +411,10 @@
     };
   }
 
+  var KIND_LABEL = { service: 'App', option: 'Setting', guide: 'Guide', privacy: 'Privacy' };
+
   var api = {
+    KIND_LABEL: KIND_LABEL,
     clockText: clockText,
     relativeTime: relativeTime,
     countdownText: countdownText,
