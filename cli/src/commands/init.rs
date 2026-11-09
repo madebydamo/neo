@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 use toml_edit::DocumentMut;
 
+use crate::utils::settings::str_at;
 use crate::utils::{git_cmd, has_staged_changes, neo_cli_get, resolve_template, template};
 
 pub fn init(
@@ -96,11 +97,7 @@ pub fn init(
 }
 
 fn core_git_get<'a>(config: &'a DocumentMut, key: &str) -> Option<&'a str> {
-    config
-        .get("core")?
-        .get("git")?
-        .get(key)?
-        .as_str()
+    str_at(config, &["core", "git", key])
         .map(str::trim)
         .filter(|s| !s.is_empty())
 }

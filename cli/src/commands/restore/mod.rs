@@ -21,6 +21,7 @@ use crate::utils::execute_command;
 use crate::utils::fsutil::write_private;
 use crate::utils::secrets::{self, Node, Tree};
 use crate::utils::secrets_store::{decrypt_with_key, IDENTITY_FILE};
+use crate::utils::settings::{item_at, recorded_host_key};
 
 pub mod backup;
 pub(crate) mod local;
@@ -147,8 +148,7 @@ pub(crate) fn under(target: &Path, abs: &str) -> PathBuf {
 }
 
 pub(crate) fn int_setting(doc: &DocumentMut, key: &str, default: i64) -> i64 {
-    doc.get("core")
-        .and_then(|c| c.get(key))
+    item_at(doc, &["core", key])
         .and_then(|v| v.as_integer())
         .unwrap_or(default)
 }
@@ -160,12 +160,7 @@ pub(crate) fn access_tokens(
     key: Option<&Path>,
 ) -> Result<Option<String>> {
     let mut tokens: Vec<(String, String)> = Vec::new();
-    if let Some(t) = doc
-        .get("core")
-        .and_then(|c| c.get("git"))
-        .and_then(|g| g.get("tokens"))
-        .and_then(|t| t.as_table_like())
-    {
+    if let Some(t) = item_at(doc, &["core", "git", "tokens"]).and_then(|t| t.as_table_like()) {
         for (k, v) in t.iter() {
             if let Some(s) = v.as_str() {
                 tokens.push((k.to_string(), s.to_string()));
@@ -222,11 +217,7 @@ pub(crate) fn restore_identity(
     ) else {
         bail!("{IDENTITY_FILE} does not hold ssh_host_ed25519_key(_pub)");
     };
-    let recorded = doc
-        .get("core")
-        .and_then(|c| c.get("secrets"))
-        .and_then(|s| s.get("hostKey"))
-        .and_then(|k| k.as_str());
+    let recorded = recorded_host_key(doc);
     let short = |k: &str| k.split_whitespace().take(2).collect::<Vec<_>>().join(" ");
     if let Some(r) = recorded {
         if short(r) != short(public) {

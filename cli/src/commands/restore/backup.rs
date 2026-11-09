@@ -12,6 +12,7 @@ use toml_edit::DocumentMut;
 use crate::utils::command::{output_checked, output_with_stdin, shell_quote, stdout_checked};
 use crate::utils::execute_command;
 use crate::utils::fsutil::write_private;
+use crate::utils::settings::{bool_at, item_at, str_at};
 
 /// Prefix of the snapshots the backup service takes (backup.sh).
 pub const SNAPSHOT_PREFIX: &str = "neo-backup-";
@@ -56,14 +57,6 @@ pub struct Source {
     pub ssh_key: String,
 }
 
-fn str_at<'a>(doc: &'a DocumentMut, path: &[&str]) -> Option<&'a str> {
-    let mut item = doc.as_item();
-    for p in path {
-        item = item.get(p)?;
-    }
-    item.as_str()
-}
-
 /// neo.core.volumes.root (default /var/neo).
 pub fn volumes_root(doc: &DocumentMut) -> String {
     str_at(doc, &["core", "volumes", "root"])
@@ -78,16 +71,34 @@ pub fn hostname(doc: &DocumentMut) -> String {
         .to_string()
 }
 
+pub fn backup_enabled(doc: &DocumentMut) -> bool {
+    bool_at(doc, &["services", "backup", "enabled"]).unwrap_or(false)
+}
+
+/// The enabled tables of `services.backup.destinations`. Configs from before
+/// `destinations` (migration 015) are one destination named `main`.
+pub fn enabled_destinations(doc: &DocumentMut) -> Vec<(&str, &toml_edit::Item)> {
+    let Some(b) = item_at(doc, &["services", "backup"]) else {
+        return Vec::new();
+    };
+    match b.get("destinations").and_then(|d| d.as_table_like()) {
+        Some(dests) => dests
+            .iter()
+            .filter(|(_, d)| d.get("enabled").and_then(|v| v.as_bool()) != Some(false))
+            .collect(),
+        None => vec![("main", b)],
+    }
+}
+
 impl Source {
     /// The enabled backup destinations in settings.toml, in the order a restore
     /// tries them: by `priority`, then name (the backup's own run order,
-    /// nix/services/backup). Empty when backup is off. Configs from before
-    /// `destinations` (migration 015) are one destination named `main`.
+    /// nix/services/backup). Empty when backup is off.
     pub fn from_settings(doc: &DocumentMut) -> Result<Vec<Source>> {
-        let Some(b) = doc.get("services").and_then(|s| s.get("backup")) else {
+        let Some(b) = item_at(doc, &["services", "backup"]) else {
             return Ok(Vec::new());
         };
-        if !b.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false) {
+        if !backup_enabled(doc) {
             return Ok(Vec::new());
         }
         let root = volumes_root(doc);
@@ -97,20 +108,12 @@ impl Source {
             .unwrap_or(&root)
             .to_string();
         let mut found = Vec::new();
-        match b.get("destinations").and_then(|d| d.as_table_like()) {
-            Some(dests) => {
-                for (name, d) in dests.iter() {
-                    if d.get("enabled").and_then(|v| v.as_bool()) == Some(false) {
-                        continue;
-                    }
-                    let priority = d
-                        .get("priority")
-                        .and_then(|v| v.as_integer())
-                        .unwrap_or(100);
-                    found.push((priority, Self::destination(doc, name, d, &source_dir)?));
-                }
-            }
-            None => found.push((0, Self::destination(doc, "main", b, &source_dir)?)),
+        for (name, d) in enabled_destinations(doc) {
+            let priority = d
+                .get("priority")
+                .and_then(|v| v.as_integer())
+                .unwrap_or(100);
+            found.push((priority, Self::destination(doc, name, d, &source_dir)?));
         }
         found.sort_by(|(pa, a), (pb, b)| pa.cmp(pb).then_with(|| a.name.cmp(&b.name)));
         Ok(found.into_iter().map(|(_, s)| s).collect())

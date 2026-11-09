@@ -17,25 +17,11 @@ const ROTATE_UNIT: &str = "backup-rotate-key.service";
 /// Start backup-rotate-key.service: new data key, new repository, full backup,
 /// old repository removed (backup.sh). It waits for a running backup.
 pub fn rotate_key(doc: &DocumentMut, dry_run: bool, sudo_cmd: &str) -> Result<()> {
-    let b = doc.get("services").and_then(|s| s.get("backup"));
-    let enabled = b
-        .and_then(|b| b.get("enabled"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    let is_encrypted = |d: &toml_edit::Item| {
-        d.get("enabled").and_then(|v| v.as_bool()) != Some(false)
-            && d.get("format").and_then(|v| v.as_str()) == Some("encrypted")
-    };
-    // Every encrypted destination gets a new key; configs from before
-    // `destinations` have the format at the top.
-    let encrypted = match b
-        .and_then(|b| b.get("destinations"))
-        .and_then(|d| d.as_table_like())
-    {
-        Some(dests) => dests.iter().any(|(_, d)| is_encrypted(d)),
-        None => b.is_some_and(is_encrypted),
-    };
-    if !enabled || !encrypted {
+    // Every encrypted destination gets a new key.
+    let encrypted = backup::enabled_destinations(doc)
+        .iter()
+        .any(|(_, d)| d.get("format").and_then(|v| v.as_str()) == Some("encrypted"));
+    if !backup::backup_enabled(doc) || !encrypted {
         bail!("only the encrypted backup has a key: add a destination with format = \"encrypted\" and apply first");
     }
     if dry_run {

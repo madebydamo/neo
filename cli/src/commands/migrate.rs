@@ -163,12 +163,7 @@ fn absorb_retired_service_table(doc: &mut DocumentMut, svc_item: &Item) {
 
     // Server-side config path → neo-cli.server (004 also handles legacy top-level configPath).
     if let Some(v) = svc.get("configPath") {
-        let already = doc
-            .get("neo-cli")
-            .and_then(|t| t.get("server"))
-            .and_then(|t| t.as_table())
-            .map(|t| t.contains_key("configPath"))
-            .unwrap_or(false);
+        let already = profile_has_key(doc, "server", "configPath");
         if !already {
             insert_dotted(doc, "neo-cli.server.configPath", v.clone());
         }
@@ -212,18 +207,8 @@ fn migrate_004_neo_cli_profiles(doc: &mut DocumentMut) {
         let localish = is_local_config_path(&path);
         let serverish = is_server_config_path(&path);
 
-        let has_local = doc
-            .get("neo-cli")
-            .and_then(|t| t.get("local"))
-            .and_then(|t| t.as_table())
-            .map(|t| t.contains_key("configPath"))
-            .unwrap_or(false);
-        let has_server = doc
-            .get("neo-cli")
-            .and_then(|t| t.get("server"))
-            .and_then(|t| t.as_table())
-            .map(|t| t.contains_key("configPath"))
-            .unwrap_or(false);
+        let has_local = profile_has_key(doc, "local", "configPath");
+        let has_server = profile_has_key(doc, "server", "configPath");
 
         if serverish && !localish {
             if !has_server {

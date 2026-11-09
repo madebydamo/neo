@@ -15,16 +15,9 @@ use super::{
 };
 use crate::utils::command::{confirm, is_root};
 use crate::utils::execute_command;
+use crate::utils::settings::{disko_enabled, str_at};
 
 pub const WORK_DIR: &str = "/root/neo-restore";
-
-fn str_at<'a>(doc: &'a DocumentMut, path: &[&str]) -> Option<&'a str> {
-    let mut item = doc.as_item();
-    for p in path {
-        item = item.get(p)?;
-    }
-    item.as_str()
-}
 
 fn capture(cmd: &mut Command) -> Result<String> {
     let out = cmd
@@ -193,11 +186,7 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         .parse()
         .context("parse settings.toml")?;
 
-    let disko_on = doc
-        .get("disko")
-        .and_then(|d| d.get("enabled"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let disko_on = disko_enabled(&doc);
     // With Disko the target is always made fresh (a rerun after a failure
     // finds the last attempt still mounted). Without it, what is mounted is
     // the target.
@@ -271,11 +260,7 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     let pool = str_at(&doc, &["disko", "poolName"])
         .unwrap_or("zroot")
         .to_string();
-    let config_path = doc
-        .get("neo-cli")
-        .and_then(|n| n.get("server"))
-        .and_then(|s| s.get("configPath"))
-        .and_then(|p| p.as_str())
+    let config_path = str_at(&doc, &["neo-cli", "server", "configPath"])
         .unwrap_or(DEFAULT_CONFIG_PATH)
         .to_string();
     let config_rel = config_path

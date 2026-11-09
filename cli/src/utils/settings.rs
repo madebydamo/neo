@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use std::path::Path;
-use toml_edit::DocumentMut;
+use toml_edit::{DocumentMut, Item, Table};
 
 /// Load baked default settings (if any) and overlay the user file at `path`.
 pub fn load_or_default_settings(path: &Path) -> Result<DocumentMut> {
@@ -33,12 +33,48 @@ fn baked_default_settings() -> Result<String> {
     }
 }
 
+/// The item at a dotted path, e.g. `&["core", "ssh", "authorizedKeys"]`.
+pub fn item_at<'a>(doc: &'a DocumentMut, path: &[&str]) -> Option<&'a Item> {
+    let mut item = doc.as_item();
+    for p in path {
+        item = item.get(p)?;
+    }
+    Some(item)
+}
+
+pub fn str_at<'a>(doc: &'a DocumentMut, path: &[&str]) -> Option<&'a str> {
+    item_at(doc, path)?.as_str()
+}
+
+pub fn bool_at(doc: &DocumentMut, path: &[&str]) -> Option<bool> {
+    item_at(doc, path)?.as_bool()
+}
+
+/// The table at `key`, created (or replacing a value that is no table) if needed.
+pub fn ensure_table<'a>(parent: &'a mut Table, key: &str) -> Option<&'a mut Table> {
+    let item = parent.entry(key).or_insert(Item::None);
+    if !item.is_table() {
+        *item = Item::Table(Table::new());
+    }
+    item.as_table_mut()
+}
+
 /// `[disko] enabled` (ZFS disk layout instead of the plain filesystem).
 pub fn disko_enabled(doc: &DocumentMut) -> bool {
-    doc.get("disko")
-        .and_then(|t| t.get("enabled"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
+    bool_at(doc, &["disko", "enabled"]).unwrap_or(false)
+}
+
+/// Every entry of `core.ssh.authorizedKeys`.
+pub fn authorized_keys(doc: &DocumentMut) -> Vec<&str> {
+    item_at(doc, &["core", "ssh", "authorizedKeys"])
+        .and_then(|k| k.as_array())
+        .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
+        .unwrap_or_default()
+}
+
+/// The host key recorded in `core.secrets.hostKey`.
+pub fn recorded_host_key(doc: &DocumentMut) -> Option<&str> {
+    str_at(doc, &["core", "secrets", "hostKey"])
 }
 
 fn merge_into(base: &mut DocumentMut, overlay: &DocumentMut) {
@@ -66,5 +102,30 @@ fn merge_into(base: &mut DocumentMut, overlay: &DocumentMut) {
                 base.insert(k, v.clone());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn navigates_dotted_paths() {
+        let doc: DocumentMut = "[a.b]\ns = \"x\"\nt = true\n".parse().unwrap();
+        assert_eq!(str_at(&doc, &["a", "b", "s"]), Some("x"));
+        assert_eq!(bool_at(&doc, &["a", "b", "t"]), Some(true));
+        assert_eq!(str_at(&doc, &["a", "b", "t"]), None);
+        assert!(item_at(&doc, &["a", "nope", "s"]).is_none());
+    }
+
+    #[test]
+    fn ensure_table_creates_and_replaces() {
+        let mut doc: DocumentMut = "a = 1\n[b]\nkeep = 2\n".parse().unwrap();
+        ensure_table(doc.as_table_mut(), "a").unwrap();
+        assert!(doc["a"].is_table());
+        ensure_table(doc.as_table_mut(), "b").unwrap();
+        assert_eq!(doc["b"]["keep"].as_integer(), Some(2));
+        ensure_table(doc.as_table_mut(), "c").unwrap();
+        assert!(doc["c"].is_table());
     }
 }

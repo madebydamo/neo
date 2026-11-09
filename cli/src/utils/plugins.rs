@@ -171,10 +171,7 @@ pub fn plugins_are_tables(doc: &DocumentMut) -> bool {
 /// Write `core.plugins` as `[core.plugins.<id>]` tables (empty prefix left out).
 /// Entries already present keep their table, so an edited URL is a one-line change.
 pub fn write_plugins(doc: &mut DocumentMut, entries: &[PluginEntry]) {
-    if !doc.get("core").is_some_and(|c| c.is_table()) {
-        doc.insert("core", Item::Table(Table::new()));
-    }
-    let Some(core) = doc.get_mut("core").and_then(|c| c.as_table_mut()) else {
+    let Some(core) = super::settings::ensure_table(doc.as_table_mut(), "core") else {
         return;
     };
     if entries.is_empty() {

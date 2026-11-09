@@ -11,13 +11,14 @@ use anyhow::{bail, Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use toml_edit::{value, DocumentMut, Item, Table};
+use toml_edit::{value, DocumentMut};
 
 use super::command::{
     check_output, env_or, output_checked, output_with_stdin, root_command, sudo_bin,
 };
 use super::fsutil::{write_private, TempDir};
 use super::secrets::{self, Backend, Node, Tree};
+use super::settings::{authorized_keys, ensure_table, recorded_host_key};
 use super::{git_cmd, sort_document_alphabetically};
 
 pub const IDENTITY_FILE: &str = "identity.sops.yaml";
@@ -52,18 +53,10 @@ fn normalize_ed25519(line: &str) -> Option<String> {
 
 /// Admin recipients: every ssh-ed25519 key in core.ssh.authorizedKeys.
 pub fn admin_keys(doc: &DocumentMut) -> Vec<String> {
-    let mut keys: Vec<String> = doc
-        .get("core")
-        .and_then(|c| c.get("ssh"))
-        .and_then(|s| s.get("authorizedKeys"))
-        .and_then(|k| k.as_array())
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str())
-                .filter_map(normalize_ed25519)
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut keys: Vec<String> = authorized_keys(doc)
+        .into_iter()
+        .filter_map(normalize_ed25519)
+        .collect();
     keys.sort();
     keys.dedup();
     keys
@@ -71,18 +64,11 @@ pub fn admin_keys(doc: &DocumentMut) -> Vec<String> {
 
 /// Authorized keys that can log in but not decrypt (not ssh-ed25519).
 pub fn ignored_keys(doc: &DocumentMut) -> Vec<String> {
-    doc.get("core")
-        .and_then(|c| c.get("ssh"))
-        .and_then(|s| s.get("authorizedKeys"))
-        .and_then(|k| k.as_array())
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str())
-                .filter(|k| normalize_ed25519(k).is_none())
-                .map(String::from)
-                .collect()
-        })
-        .unwrap_or_default()
+    authorized_keys(doc)
+        .into_iter()
+        .filter(|k| normalize_ed25519(k).is_none())
+        .map(String::from)
+        .collect()
 }
 
 /// The machine's public host key: from this machine, else the one recorded in settings.
@@ -90,24 +76,14 @@ pub fn host_key(doc: &DocumentMut) -> Option<String> {
     fs::read_to_string(env_or("NEO_HOST_PUBLIC_KEY", HOST_PUB))
         .ok()
         .and_then(|s| normalize_ed25519(s.trim()))
-        .or_else(|| {
-            doc.get("core")
-                .and_then(|c| c.get("secrets"))
-                .and_then(|s| s.get("hostKey"))
-                .and_then(|k| k.as_str())
-                .and_then(normalize_ed25519)
-        })
+        .or_else(|| recorded_host_key(doc).and_then(normalize_ed25519))
 }
 
 fn record_host_key(doc: &mut DocumentMut, host: &str) {
-    if !doc.get("core").is_some_and(|c| c.is_table()) {
-        doc.insert("core", Item::Table(Table::new()));
+    let secrets = ensure_table(doc.as_table_mut(), "core").and_then(|c| ensure_table(c, "secrets"));
+    if let Some(secrets) = secrets {
+        secrets.insert("hostKey", value(host));
     }
-    let core = doc["core"].as_table_mut().expect("core table");
-    if !core.get("secrets").is_some_and(|s| s.is_table()) {
-        core.insert("secrets", Item::Table(Table::new()));
-    }
-    core["secrets"]["hostKey"] = value(host);
 }
 
 /// Encrypt a tree to the given ssh-ed25519 recipients (no private key needed).
