@@ -12,7 +12,7 @@
   var watchedUnits = [];
 
   function neoSendUnitWatch(op, units) {
-    if (!wsWrapper || !units || !units.length) return;
+    if (!wsWrapper || !units) return;
     try {
       wsWrapper.send(JSON.stringify({ op: op, units: units }));
     } catch (e) {}
