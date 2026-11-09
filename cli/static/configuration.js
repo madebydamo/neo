@@ -907,10 +907,17 @@ window.servicesGrid = function servicesGrid() {
       wrap.className = 'flex flex-col w-full';
       var lab = document.createElement('label');
       lab.className = 'label py-1';
-      lab.innerHTML = '<span class="label-text text-sm">' +
-        (inp.label || inp.name) +
-        (inp.required === false ? '' : ' <span class="text-error">*</span>') +
-        '</span>';
+      // Helpers may come from plugins: the label is text, never markup.
+      var labText = document.createElement('span');
+      labText.className = 'label-text text-sm';
+      labText.textContent = inp.label || inp.name;
+      if (inp.required !== false) {
+        var mark = document.createElement('span');
+        mark.className = 'text-error';
+        mark.textContent = ' *';
+        labText.appendChild(mark);
+      }
+      lab.appendChild(labText);
       wrap.appendChild(lab);
       var el;
       if (inp.type === 'bool') {
