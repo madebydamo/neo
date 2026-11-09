@@ -1,0 +1,14 @@
+{{!-- Card on the Settings tab that opens a core section; the icon is the block.
+     Params: url, title, slug, summary, tone (full classes, so Tailwind sees them). --}}
+<button type="button"
+        class="group flex items-start gap-3 rounded-box border border-base-300 bg-base-100 p-4 text-left cursor-pointer transition-[border-color,box-shadow] hover:border-primary/50 hover:shadow-md"
+        hx-get="{{url}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true">
+  <span class="w-10 h-10 shrink-0 rounded-xl {{tone}} flex items-center justify-center">
+    {{> @partial-block}}
+  </span>
+  <span class="min-w-0 flex-1">
+    <span class="flex items-center gap-2"><span class="font-semibold">{{title}}</span><span class="font-mono text-[11px] text-base-content/40">{{slug}}</span></span>
+    <span class="block text-xs text-base-content/60 mt-0.5 leading-snug">{{summary}}</span>
+  </span>
+  <svg class="w-5 h-5 mt-2.5 shrink-0 text-base-content/30 group-hover:text-primary group-hover:translate-x-0.5 transition" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.2 14.8a.75.75 0 010-1.06L10.94 10 7.2 6.26a.75.75 0 111.06-1.06l4.27 4.27a.75.75 0 010 1.06L8.26 14.8a.75.75 0 01-1.06 0z" clip-rule="evenodd"/></svg>
+</button>
