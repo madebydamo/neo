@@ -154,13 +154,6 @@ pub async fn render_card(notice: Option<(&'static str, String)>) -> String {
         ]),
     );
 
-    for b in &banners {
-        html.push_str(&format!(
-            r#"<div role="alert" class="alert alert-soft {} py-2 px-3 text-xs flex flex-wrap gap-2 items-center">{}</div>"#,
-            b.tone, b.html
-        ));
-    }
-
     if let (Some(run), Some(boot)) = (running_gen, boot_gen) {
         if run != boot {
             banners.push(Banner {
@@ -168,6 +161,13 @@ pub async fn render_card(notice: Option<(&'static str, String)>) -> String {
                 html: format!("<span>Running system generation {run}; the next boot starts generation {boot}.</span>"),
             });
         }
+    }
+
+    for b in &banners {
+        html.push_str(&format!(
+            r#"<div role="alert" class="alert alert-soft {} py-2 px-3 text-xs flex flex-wrap gap-2 items-center">{}</div>"#,
+            b.tone, b.html
+        ));
     }
 
     let ctx = RowCtx {
