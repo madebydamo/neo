@@ -132,6 +132,13 @@ pub enum Status {
     Failed,
 }
 
+impl Status {
+    /// Waiting for the user (a failed save can be tried again).
+    pub fn is_actionable(&self) -> bool {
+        matches!(self, Status::Pending | Status::Failed)
+    }
+}
+
 /// What the card shows for one change.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ChangeView {

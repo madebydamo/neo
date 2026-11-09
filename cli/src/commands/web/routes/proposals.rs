@@ -103,7 +103,7 @@ async fn card_ctx(config: &AppConfig, p: Option<Proposal>) -> CardContext {
         match p {
             Some(p) => CardContext {
                 found: true,
-                pending: p.status == Status::Pending || p.status == Status::Failed,
+                pending: p.status.is_actionable(),
                 done: matches!(p.status, Status::Saved | Status::Applied | Status::Rejected),
                 id: p.id,
                 summary: p.summary,
@@ -160,9 +160,7 @@ async fn save(
 
 #[post("/proposals/<id>/save", data = "<form>")]
 pub async fn proposal_save(config: &State<Arc<AppConfig>>, id: &str, form: Asked) -> Template {
-    let Some(p) =
-        proposals::get(id).filter(|p| p.status == Status::Pending || p.status == Status::Failed)
-    else {
+    let Some(p) = proposals::get(id).filter(|p| p.status.is_actionable()) else {
         return card(config, proposals::get(id)).await;
     };
     let p = match save(config, &p, &asked(form)).await {
@@ -185,9 +183,7 @@ pub async fn proposal_apply(
     form: Asked,
     meta: Metadata<'_>,
 ) -> RawHtml<String> {
-    let Some(p) =
-        proposals::get(id).filter(|p| p.status == Status::Pending || p.status == Status::Failed)
-    else {
+    let Some(p) = proposals::get(id).filter(|p| p.status.is_actionable()) else {
         return render_card(&meta, config, proposals::get(id), String::new()).await;
     };
     if let Err((s, m)) = save(config, &p, &asked(form)).await {
@@ -243,9 +239,7 @@ async fn render_card(
 #[post("/proposals/<id>/reject")]
 pub async fn proposal_reject(config: &State<Arc<AppConfig>>, id: &str) -> Template {
     let p = proposals::get(id)
-        .filter(|p| {
-            p.status == Status::Pending || p.status == Status::Failed || p.status == Status::Stale
-        })
+        .filter(|p| p.status.is_actionable() || p.status == Status::Stale)
         .and_then(|_| proposals::set_status(id, Status::Rejected, "Rejected. Nothing was changed."))
         .or_else(|| proposals::get(id));
     card(config, p).await
