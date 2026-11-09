@@ -7,15 +7,11 @@
     ...
   }: let
     cfg = config.neo.services.karakeep;
-    domain = config.neo.services.swag.domain or null;
-    publicUrl =
-      if domain != null && domain != "" && (cfg.subdomain or null) != null
-      then "https://${cfg.subdomain}.${domain}"
-      else "https://karakeep.<domain>";
+    publicUrl = lib.defaultTo "https://karakeep.<domain>" (lib.neo.publicUrl config cfg);
   in {
     config.neo.services.karakeep.skill.conf = lib.neo.mkServiceSkill {
       service = "karakeep";
-      inherit cfg domain;
+      inherit config;
       description = "Karakeep bookmarks, lists, tags, search, CLI";
       tags = ["neo" "karakeep" "bookmarks" "2nd-brain"];
       title = "Neo · Karakeep";

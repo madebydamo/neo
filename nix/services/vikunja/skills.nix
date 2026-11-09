@@ -7,15 +7,11 @@
   }: let
     cfg = config.neo.services.vikunja;
     appdata = cfg.appdata;
-    domain = config.neo.services.swag.domain or null;
-    publicUrl =
-      if domain != null && domain != "" && (cfg.subdomain or null) != null
-      then "https://${cfg.subdomain}.${domain}"
-      else "https://<subdomain>.<domain>";
+    publicUrl = lib.defaultTo "https://<subdomain>.<domain>" (lib.neo.publicUrl config cfg);
   in {
     config.neo.services.vikunja.skill.conf = lib.neo.mkServiceSkill {
       service = "vikunja";
-      inherit cfg domain;
+      inherit config;
       description = "Vikunja task manager (self-hosted Todoist)";
       tags = ["neo" "vikunja" "tasks" "todo"];
       title = "Neo · Vikunja";

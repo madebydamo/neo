@@ -9,8 +9,7 @@
     with lib; let
       cfg = config.neo.services.nextcloud;
       appdata = cfg.appdata;
-      domain = config.neo.services.swag.domain;
-      nextcloudUrl = "${cfg.subdomain}.${domain}";
+      nextcloudUrl = lib.neo.publicHost config cfg;
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-nextcloud-db.preStart = lib.neo.mkEnsureDirs config [

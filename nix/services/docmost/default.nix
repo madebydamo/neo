@@ -66,7 +66,7 @@
             docmost = {
               image = cfg.containers.docmost;
               environment = {
-                APP_URL = "https://${cfg.subdomain}.${domain}";
+                APP_URL = lib.neo.publicUrl config cfg;
                 REDIS_URL = "redis://docmost-redis:6379";
               };
               volumes = [
@@ -83,7 +83,7 @@
                 DOCMOST_URL = "http://docmost:${toString cfg.port}";
                 SERVICE_EMAIL = serviceEmail;
                 MAIL_DOMAIN = domain;
-                LOGOUT_URL = "https://${tinyauthCfg.subdomain}.${domain}/logout";
+                LOGOUT_URL = "${lib.neo.publicUrl config tinyauthCfg}/logout";
                 ADMINS = concatStringsSep "," cfg.admins;
                 ADMIN_GROUPS = concatStringsSep "," cfg.adminGroups;
               };
@@ -96,7 +96,7 @@
               cmd = ["python3" "/app/mcp.py"];
               environment = {
                 PORT = toString mcpPort;
-                PUBLIC_URL = "https://${cfg.subdomain}.${domain}";
+                PUBLIC_URL = lib.neo.publicUrl config cfg;
                 # sso.py (sign-in, Docmost login) reads these (keys: containerEnv).
                 DOCMOST_URL = "http://docmost:${toString cfg.port}";
                 SERVICE_EMAIL = serviceEmail;

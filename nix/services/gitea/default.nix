@@ -8,15 +8,12 @@
     with lib; let
       cfg = config.neo.services.gitea;
       appdata = cfg.appdata;
-      domain = config.neo.services.swag.domain or null;
       rootUrl =
         if cfg.rootUrl != null && cfg.rootUrl != ""
         then cfg.rootUrl
         else if (cfg.customDomains or []) != []
         then "https://${builtins.head cfg.customDomains}"
-        else if domain != null && domain != ""
-        then "https://${cfg.subdomain}.${domain}"
-        else "http://localhost:${toString cfg.port}";
+        else lib.defaultTo "http://localhost:${toString cfg.port}" (lib.neo.publicUrl config cfg);
       rootHost = let
         stripped = lib.removePrefix "https://" (lib.removePrefix "http://" rootUrl);
       in

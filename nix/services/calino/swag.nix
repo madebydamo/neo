@@ -35,7 +35,7 @@
     cfg = config.neo.services.calino;
     auth = lib.neo.authBlock config cfg;
     authLoc = lib.neo.authLocations config cfg;
-    calinoOrigin = "https://${cfg.subdomain}.${config.neo.services.swag.domain}";
+    calinoOrigin = lib.neo.publicUrl config cfg;
   in {
     config.neo.services.calino.proxyConf = lib.mkDefault ''
       # ALLOWED_ORIGINS = [ ${calinoOrigin} ]; empty Origin tolerated.

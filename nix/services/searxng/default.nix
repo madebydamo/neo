@@ -8,7 +8,6 @@
     with lib; let
       cfg = config.neo.services.searxng;
       appdata = cfg.appdata;
-      domain = config.neo.services.swag.domain;
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-searxng-redis.preStart = lib.neo.mkEnsureDirs config [
@@ -40,7 +39,7 @@
           searxng = {
             image = cfg.containers.searxng;
             environment = {
-              SEARXNG_BASE_URL = "https://${cfg.subdomain}.${domain}";
+              SEARXNG_BASE_URL = lib.neo.publicUrl config cfg;
               TZ = config.neo.core.timeZone;
             };
             volumes = [

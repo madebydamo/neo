@@ -3,9 +3,28 @@
 {lib, ...}: let
   neoUi = (import ../ui.nix {inherit lib;}).libExtensions.ui.neo.ui;
   inherit (neoUi.groups) access advanced;
+  publicHost = config: cfg: let
+    domain = config.neo.services.swag.domain or null;
+    subdomain = cfg.subdomain or null;
+  in
+    if domain == null || domain == "" || subdomain == null || subdomain == ""
+    then null
+    else "${subdomain}.${domain}";
 in {
   libExtensions.reverseProxy = {
     neo = {
+      # A service's public host name (photos.example.com), from its subdomain and
+      # the SWAG domain. Null until both are set. Ignores customDomains.
+      inherit publicHost;
+
+      # The same as an https:// URL, or null.
+      publicUrl = config: cfg: let
+        host = publicHost config cfg;
+      in
+        if host == null
+        then null
+        else "https://${host}";
+
       mkReverseProxyOptions = {
         subdomain ? null,
         auth ? null,

@@ -10,7 +10,6 @@
     with lib; let
       cfg = config.neo.services.karakeep;
       appdata = cfg.appdata;
-      domain = config.neo.services.swag.domain;
     in {
       config = mkIf cfg.enabled {
         assertions = lib.neo.requireSecrets "karakeep" cfg ["nextauthSecret" "meiliMasterKey"];
@@ -69,7 +68,7 @@
             image = cfg.containers.karakeep;
             environment = {
               DATA_DIR = "/data";
-              NEXTAUTH_URL = "https://${cfg.subdomain}.${domain}";
+              NEXTAUTH_URL = lib.neo.publicUrl config cfg;
               MEILI_ADDR = "http://karakeep-meilisearch:7700";
               BROWSER_WEB_URL = "http://karakeep-chrome:9222";
               DISABLE_SIGNUPS = boolToString cfg.disableSignups;

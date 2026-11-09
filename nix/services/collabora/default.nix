@@ -10,8 +10,8 @@
       cfgNextcloud = config.neo.services.nextcloud;
       cfg = config.neo.services.collabora;
       domain = config.neo.services.swag.domain;
-      nextcloudUrl = "${cfgNextcloud.subdomain}.${domain}";
-      collaboraUrl = "${cfg.subdomain}.${domain}";
+      nextcloudUrl = lib.neo.publicHost config cfgNextcloud;
+      collaboraUrl = lib.neo.publicHost config cfg;
       # WOPI allowlist hosts: primary Nextcloud FQDN plus every customDomain.
       nextcloudHosts =
         unique

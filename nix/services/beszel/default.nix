@@ -22,7 +22,7 @@
             {
               TZ = config.neo.core.timeZone;
               SHARE_ALL_SYSTEMS = "true";
-              APP_URL = "https://${cfg.subdomain}.${config.neo.services.swag.domain}";
+              APP_URL = lib.neo.publicUrl config cfg;
             }
             // optionalAttrs cfg.enableSingleUserSystem {
               AUTO_LOGIN = "not-that-important@example.com";

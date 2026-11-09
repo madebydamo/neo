@@ -10,11 +10,7 @@
     with lib; let
       cfg = config.neo.services.mealie;
       appdata = cfg.appdata;
-      domain = config.neo.services.swag.domain or null;
-      publicHost =
-        if (cfg.subdomain or "") == "" || domain == null || domain == ""
-        then ""
-        else "${cfg.subdomain}.${domain}";
+      publicHost = lib.defaultTo "" (lib.neo.publicHost config cfg);
     in {
       config = mkIf cfg.enabled {
         assertions = [

@@ -9,8 +9,7 @@
   }:
     with lib; let
       cfg = config.neo.services.vikunja;
-      domain = config.neo.services.swag.domain or "localhost";
-      publicHost = "${cfg.subdomain}.${domain}";
+      publicHost = lib.neo.publicHost config cfg;
       appdata = cfg.appdata;
     in {
       config = mkIf cfg.enabled (mkMerge [

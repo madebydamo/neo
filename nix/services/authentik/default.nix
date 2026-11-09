@@ -11,14 +11,11 @@
     with lib; let
       cfg = config.neo.services.authentik;
       appdata = cfg.appdata;
-      domain = config.neo.services.swag.domain or null;
       # Public origin for absolute links (emails, embedded outpost, OIDC issuer hints).
       publicUrl =
         if (cfg.customDomains or []) != []
         then "https://${builtins.head cfg.customDomains}"
-        else if cfg.subdomain != null && domain != null && domain != ""
-        then "https://${cfg.subdomain}.${domain}"
-        else null;
+        else lib.neo.publicUrl config cfg;
       dbUser = "authentik";
       dbName = "authentik";
       dbPassword =

@@ -7,14 +7,11 @@
   }:
     with lib; let
       cfg = config.neo.services.vaultwarden;
-      domain = config.neo.services.swag.domain or null;
       # Public origin: WebAuthn/FIDO2, attachments and email links all derive from DOMAIN.
       publicUrl =
         if (cfg.customDomains or []) != []
         then "https://${builtins.head cfg.customDomains}"
-        else if domain != null && domain != ""
-        then "https://${cfg.subdomain}.${domain}"
-        else null;
+        else lib.neo.publicUrl config cfg;
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-vaultwarden.preStart = lib.neo.mkEnsureDirs config [

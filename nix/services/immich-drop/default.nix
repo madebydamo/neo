@@ -8,7 +8,6 @@
     with lib; let
       cfg = config.neo.services.immich-drop;
       immichCfg = config.neo.services.immich;
-      domain = config.neo.services.swag.domain;
     in {
       config = mkIf cfg.enabled {
         assertions = lib.neo.requireSecrets "immich-drop" cfg ["sessionSecret"];
@@ -26,10 +25,10 @@
           immich-drop = {
             image = cfg.containers."immich-drop";
             environment = {
-              IMMICH_BASE_URL = "https://${immichCfg.subdomain}.${domain}/api";
+              IMMICH_BASE_URL = "${lib.neo.publicUrl config immichCfg}/api";
               IMMICH_ALBUM_NAME = "dead-drop";
               PUBLIC_UPLOAD_PAGE_ENABLED = "false";
-              PUBLIC_BASE_URL = "https://${cfg.subdomain}.${domain}";
+              PUBLIC_BASE_URL = lib.neo.publicUrl config cfg;
               CHUNKED_UPLOADS_ENABLED = "true";
               CHUNK_SIZE_MB = "95";
             };

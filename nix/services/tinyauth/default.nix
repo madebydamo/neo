@@ -240,7 +240,7 @@
           image = cfg.containers.tinyauth;
           environment =
             {
-              TINYAUTH_APPURL = "https://${cfg.subdomain}.${domain}";
+              TINYAUTH_APPURL = lib.neo.publicUrl config cfg;
               TINYAUTH_AUTH_USERS = concatStringsSep "," cfg.users;
               TINYAUTH_SERVER_PORT = toString cfg.port;
               TINYAUTH_AUTH_SESSIONEXPIRY = toString cfg.sessionExpiry;

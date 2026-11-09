@@ -22,7 +22,6 @@
     cfg = config.neo.services.rustical;
     tinyauthCfg = config.neo.services.tinyauth or {};
     calinoCfg = config.neo.services.calino or {};
-    domain = config.neo.services.swag.domain or null;
     ssoEnabled =
       cfg.auth.enabled
       && (tinyauthCfg.enabled or false)
@@ -30,12 +29,8 @@
       != null
       && cfg.ssoPassword != "";
     corsOrigin =
-      if
-        (calinoCfg.enabled or false)
-        && (calinoCfg.subdomain or null) != null
-        && domain != null
-        && domain != ""
-      then "https://${calinoCfg.subdomain}.${domain}"
+      if calinoCfg.enabled or false
+      then lib.neo.publicUrl config calinoCfg
       else null;
     auth = lib.neo.authBlock config cfg;
     authLoc = lib.neo.authLocations config cfg;

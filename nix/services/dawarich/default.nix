@@ -10,13 +10,9 @@
     with lib; let
       cfg = config.neo.services.dawarich;
       appdata = cfg.appdata;
-      domain = config.neo.services.swag.domain or null;
       dbUser = "dawarich";
       dbName = "dawarich";
-      publicHost =
-        if cfg.subdomain == null || domain == null
-        then ""
-        else "${cfg.subdomain}.${domain}";
+      publicHost = lib.defaultTo "" (lib.neo.publicHost config cfg);
       # Production rejects Host values that are not listed. Healthchecks use 127.0.0.1.
       applicationHosts = concatStringsSep "," (unique (
         ["localhost" "127.0.0.1" "::1" publicHost] ++ (cfg.customDomains or [])

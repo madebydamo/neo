@@ -9,7 +9,6 @@
     with lib; let
       cfg = config.neo.services.activepieces;
       appdata = cfg.appdata;
-      domain = config.neo.services.swag.domain;
       inherit (lib.neo.secrets) isPlaceholder;
     in {
       config = mkIf cfg.enabled (mkMerge [
@@ -54,7 +53,7 @@
               image = cfg.containers.activepieces;
               environment = {
                 AP_ENVIRONMENT = "prod";
-                AP_FRONTEND_URL = "https://${cfg.subdomain}.${domain}";
+                AP_FRONTEND_URL = lib.neo.publicUrl config cfg;
                 AP_CONTAINER_TYPE = "WORKER_AND_APP";
                 AP_EXECUTION_MODE = "UNSANDBOXED";
                 AP_DB_TYPE = "POSTGRES";

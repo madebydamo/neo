@@ -8,7 +8,6 @@
     with lib; let
       cfg = config.neo.services.paperless;
       appdata = cfg.appdata;
-      domain = config.neo.services.swag.domain;
     in {
       config = mkIf cfg.enabled (mkMerge [
         (lib.neo.mkPostgresSidecar config {
@@ -58,7 +57,7 @@
                 PAPERLESS_DBUSER = "paperless_user";
                 PAPERLESS_TIME_ZONE = config.neo.core.timeZone;
                 PAPERLESS_OCR_LANGUAGE = "deu+eng";
-                PAPERLESS_CSRF_TRUSTED_ORIGINS = "https://${cfg.subdomain}.${domain}";
+                PAPERLESS_CSRF_TRUSTED_ORIGINS = lib.neo.publicUrl config cfg;
               };
               volumes = [
                 "${appdata}/data:/usr/src/paperless/data"
