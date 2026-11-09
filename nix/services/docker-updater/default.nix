@@ -36,12 +36,7 @@
       updateScript = pkgs.writeShellScript "neo-docker-update" ''
         set -euo pipefail
         JQ=${pkgs.jq}/bin/jq
-        run_id=$(date -u +%Y%m%dT%H%M%SZ)-$$
-        started_at=$(date -Iseconds)
-        mkdir -p ${dockerHistoryDir}
-        hist=${dockerHistoryDir}/$run_id.json
-        log_file=${dockerHistoryDir}/$run_id.log
-        exec > >(tee -a "$log_file") 2>&1
+        ${lib.neo.updaterRunPrelude dockerHistoryDir}
         updates_json='[]'
         changed=0
         failed=0
@@ -234,20 +229,7 @@
       config = mkIf cfg.enabled {
         environment.systemPackages = optional supervise rollbackScript;
 
-        system.activationScripts.neo-docker-updater-history = lib.neo.mkEnsureDirs config [
-          {
-            dirPath = updaterPaths.stateDir;
-            mode = "0775";
-            user = "homeserver";
-            group = "homeserver";
-          }
-          {
-            dirPath = dockerHistoryDir;
-            mode = "0775";
-            user = "homeserver";
-            group = "homeserver";
-          }
-        ];
+        system.activationScripts.neo-docker-updater-history = lib.neo.mkUpdaterHistoryDirs config [updaterPaths.stateDir dockerHistoryDir];
 
         systemd.services.neo-docker-updater = {
           description = "Pull updated Docker images for neo services and restart containers";

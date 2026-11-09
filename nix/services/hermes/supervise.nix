@@ -162,25 +162,10 @@
 
       neo.core.secrets.templates."hermes-supervise.env".env = superviseSecretEnv;
 
-      system.activationScripts.neo-updater-state = lib.neo.mkEnsureDirs config [
-        {
-          dirPath = updaterStateDir;
-          mode = "0775";
-          user = "homeserver";
-          group = "homeserver";
-        }
-        {
-          dirPath = updaterPaths.dockerHistoryDir;
-          mode = "0775";
-          user = "homeserver";
-          group = "homeserver";
-        }
-        {
-          dirPath = updaterPaths.systemHistoryDir;
-          mode = "0775";
-          user = "homeserver";
-          group = "homeserver";
-        }
+      system.activationScripts.neo-updater-state = lib.neo.mkUpdaterHistoryDirs config [
+        updaterStateDir
+        updaterPaths.dockerHistoryDir
+        updaterPaths.systemHistoryDir
       ];
 
       systemd.services.neo-hermes-supervise-system-update = {

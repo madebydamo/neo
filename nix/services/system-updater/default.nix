@@ -38,20 +38,7 @@
       # crate builds) are not recompiled after each scheduled GC.
       nix.settings.keep-outputs = lib.mkIf (cfg.garbageCollectOlderThan != null) true;
 
-      system.activationScripts.neo-system-updater-history = lib.neo.mkEnsureDirs config [
-        {
-          dirPath = updaterPaths.stateDir;
-          mode = "0775";
-          user = "homeserver";
-          group = "homeserver";
-        }
-        {
-          dirPath = systemHistoryDir;
-          mode = "0775";
-          user = "homeserver";
-          group = "homeserver";
-        }
-      ];
+      system.activationScripts.neo-system-updater-history = lib.neo.mkUpdaterHistoryDirs config [updaterPaths.stateDir systemHistoryDir];
 
       systemd.services.neo-auto-update = {
         description = "Auto update and activate nixos config with neo";
@@ -71,12 +58,7 @@
         restartIfChanged = false;
         script =
           ''
-            run_id=$(date -u +%Y%m%dT%H%M%SZ)-$$
-            started_at=$(date -Iseconds)
-            mkdir -p ${systemHistoryDir}
-            hist=${systemHistoryDir}/$run_id.json
-            log_file=${systemHistoryDir}/$run_id.log
-            exec > >(tee -a "$log_file") 2>&1
+            ${lib.neo.updaterRunPrelude systemHistoryDir}
             before=$(readlink /nix/var/nix/profiles/system || echo none)
             after=none
             running=none
