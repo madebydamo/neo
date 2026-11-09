@@ -3,29 +3,7 @@
   <div id="nav-error" class="alert alert-error m-2 text-sm flex flex-col gap-2" hx-swap-oob="true">
     <span class="whitespace-pre-wrap"><strong>Eval error{{#if error_kind}} ({{error_kind}}){{/if}}:</strong> {{error}}</span>
     <div class="flex flex-wrap gap-1">
-      {{#if can_store_repair}}
-        <button type="button"
-                class="btn btn-xs btn-warning"
-                hx-post="/nix/repair" data-neo-lock="system"
-                hx-target="#changes-body"
-                hx-swap="innerHTML"
-                hx-confirm="Run sudo nix-store --verify --repair?"
-                hx-on::after-request="NeoOpMonitor.changesAfterRequest(event, 'Nix store repair')">
-          Repair store
-        </button>
-      {{/if}}
-      {{#if can_flake_update}}
-        <button type="button"
-                class="btn btn-xs btn-info"
-                hx-post="/flake/update" data-neo-lock="system"
-                hx-target="#changes-body"
-                hx-swap="innerHTML"
-                hx-confirm="Run flake update + template refresh?"
-                hx-on::after-request="NeoOpMonitor.changesAfterRequest(event, 'Update')">
-          Update inputs
-        </button>
-      {{/if}}
-      <button class="btn btn-sm btn-ghost" onclick="location.reload()">Reload</button>
+      {{> partials/eval_error_actions size="btn-xs" reload_size="btn-sm" repair_label="Repair store" update_label="Update inputs" repair_confirm="Run sudo nix-store --verify --repair?" update_confirm="Run flake update + template refresh?"}}
     </div>
   </div>
 {{else}}

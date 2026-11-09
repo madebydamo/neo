@@ -51,29 +51,7 @@
             <div class="font-semibold">Evaluation failed{{#if error_kind}} <span class="font-normal opacity-70">({{error_kind}})</span>{{/if}}</div>
             <div class="mt-1 text-xs whitespace-pre-wrap break-words font-mono opacity-80 max-h-48 overflow-auto">{{error}}</div>
             <div class="mt-3 flex flex-wrap gap-2">
-              {{#if can_store_repair}}
-                <button type="button"
-                        class="btn btn-sm btn-warning"
-                        hx-post="/nix/repair" data-neo-lock="system"
-                        hx-target="#changes-body"
-                        hx-swap="innerHTML"
-                        hx-confirm="Run sudo nix-store --verify --repair? This can take a few minutes."
-                        hx-on::after-request="NeoOpMonitor.changesAfterRequest(event, 'Nix store repair')">
-                  Repair Nix store
-                </button>
-              {{/if}}
-              {{#if can_flake_update}}
-                <button type="button"
-                        class="btn btn-sm btn-info"
-                        hx-post="/flake/update" data-neo-lock="system"
-                        hx-target="#changes-body"
-                        hx-swap="innerHTML"
-                        hx-confirm="Run flake update + template refresh?"
-                        hx-on::after-request="NeoOpMonitor.changesAfterRequest(event, 'Update')">
-                  Update flake inputs
-                </button>
-              {{/if}}
-              <button class="btn btn-sm btn-ghost" onclick="location.reload()">Reload</button>
+              {{> partials/eval_error_actions size="btn-sm" reload_size="btn-sm" repair_label="Repair Nix store" update_label="Update flake inputs" repair_confirm="Run sudo nix-store --verify --repair? This can take a few minutes." update_confirm="Run flake update + template refresh?"}}
             </div>
           </div>
         </div>
@@ -218,22 +196,7 @@
     {{!-- Live operation-lock holders (static/locks.js); replaced over /ws/status. --}}
     <div id="neo-locks" hidden hx-get="/locks" hx-trigger="load" hx-swap="outerHTML"></div>
 
-    {{!-- Shared dialog for changes / activation / update / repair output. Callers set the
-         first <h3> (title) and fill #changes-body. --}}
-    <dialog id="changes-modal" class="modal modal-bottom sm:modal-middle">
-      <div class="modal-box neo-changes-modal-box max-w-4xl p-0 flex flex-col w-full">
-        <div class="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b border-base-300 shrink-0">
-          <h3 id="changes-modal-title" class="font-semibold text-lg min-w-0 truncate">Pending changes</h3>
-          <form method="dialog">
-            <button type="submit" class="btn btn-sm btn-ghost btn-square" aria-label="Close">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5" aria-hidden="true"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
-            </button>
-          </form>
-        </div>
-        <div id="changes-body" class="px-4 sm:px-6 py-4 min-h-0 flex-1 overflow-auto"></div>
-      </div>
-      <form method="dialog" class="modal-backdrop"><button>close</button></form>
-    </dialog>
+    {{> partials/changes_modal title="Pending changes"}}
 
     {{!-- Unit logs. The output panel is filled by NeoOpMonitor.logPane (same as activation / update). --}}
     <dialog id="logs-dialog" class="modal modal-bottom sm:modal-middle">

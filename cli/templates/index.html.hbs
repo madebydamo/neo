@@ -145,20 +145,7 @@
     </div>
 
     {{!-- Store repair / update progress from the nav error banner (static/op_monitor.js). --}}
-    <dialog id="changes-modal" class="modal modal-bottom sm:modal-middle">
-      <div class="modal-box neo-changes-modal-box max-w-4xl p-0 flex flex-col w-full">
-        <div class="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b border-base-300 shrink-0">
-          <h3 id="changes-modal-title" class="font-semibold text-lg min-w-0 truncate">Nix store repair</h3>
-          <form method="dialog">
-            <button type="submit" class="btn btn-sm btn-ghost btn-square" aria-label="Close">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5" aria-hidden="true"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
-            </button>
-          </form>
-        </div>
-        <div id="changes-body" class="px-4 sm:px-6 py-4 min-h-0 flex-1 overflow-auto"></div>
-      </div>
-      <form method="dialog" class="modal-backdrop"><button>close</button></form>
-    </dialog>
+    {{> partials/changes_modal title="Nix store repair"}}
 
     {{!-- Sidebar group rename / ungroup and layout reset (static/sidebar_layout.js). --}}
     <dialog id="sidebar-group-dialog" class="modal modal-bottom sm:modal-middle">
