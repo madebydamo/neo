@@ -1935,11 +1935,7 @@
       c.setAttribute('data-reloaded', '1');
       if ((c.getAttribute('data-services') || '').split(/\s+/).indexOf(svc) >= 0) hit = true;
     });
-    if (!hit) return;
-    if (window.neoConfirmLeaveConfigForm && !window.neoConfirmLeaveConfigForm()) return;
-    if (typeof htmx !== 'undefined') {
-      htmx.ajax('GET', '/configuration/option/' + encodeURIComponent(svc), { target: '#config-content', swap: 'innerHTML' });
-    }
+    if (hit) window.NeoUtil.reloadPane();
   });
 
   root.NeoAgent = {

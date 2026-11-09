@@ -70,3 +70,18 @@ test('onReady waits for a loading document and runs at once otherwise', () => {
   NeoUtil.onReady({ readyState: 'complete' }, () => ran++);
   assert.strictEqual(ran, 2);
 });
+
+test('reloadPane loads the pane URL into the content area', () => {
+  const calls = [];
+  globalThis.htmx = { ajax: (...args) => calls.push(args) };
+  globalThis.document = { getElementById: () => ({ dataset: { loadUrl: '/configuration/option/a' } }) };
+  try {
+    assert.strictEqual(NeoUtil.reloadPane(), true);
+    assert.deepStrictEqual(calls, [['GET', '/configuration/option/a', { target: '#config-content', swap: 'innerHTML' }]]);
+    globalThis.document = { getElementById: () => null };
+    assert.strictEqual(NeoUtil.reloadPane(), false);
+  } finally {
+    delete globalThis.htmx;
+    delete globalThis.document;
+  }
+});

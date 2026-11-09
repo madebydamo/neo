@@ -889,13 +889,7 @@ function optionForm() {
           window.neoToast('Settings saved', 'success');
           // Keep success feedback visible before the pane reload (nix re-eval).
           await new Promise((r) => setTimeout(r, 900));
-          const loadUrl = pane?.dataset?.loadUrl;
-          if (loadUrl) {
-            htmx.ajax('GET', loadUrl, {
-              target: '#config-content',
-              swap: 'innerHTML',
-            });
-          } else {
+          if (!window.NeoUtil.reloadPane()) {
             setTimeout(() => { if (this.saveFlash === 'ok') this.saveFlash = ''; }, 1500);
           }
         } else {

@@ -127,5 +127,26 @@
     } catch (e) {}
   }
 
-  return { esc: esc, toast: toast, store: store, onReady: onReady, markStandalone: markStandalone };
+  /**
+   * Reload the open option pane from the server. The leave guard in
+   * configuration.js asks once when the form holds unsaved edits, so callers
+   * do not confirm themselves.
+   * @returns {boolean} false when there is no pane to reload
+   */
+  function reloadPane() {
+    var pane = document.getElementById('options-pane');
+    var url = pane && pane.dataset && pane.dataset.loadUrl;
+    if (!url || typeof htmx === 'undefined') return false;
+    htmx.ajax('GET', url, { target: '#config-content', swap: 'innerHTML' });
+    return true;
+  }
+
+  return {
+    esc: esc,
+    toast: toast,
+    store: store,
+    onReady: onReady,
+    markStandalone: markStandalone,
+    reloadPane: reloadPane,
+  };
 });
