@@ -639,22 +639,20 @@ fn running_since(events: &[(i64, Option<u64>)], gens: &[GenIn], running: u64) ->
     since.or_else(|| gens.iter().find(|g| g.number == running).map(|g| g.created))
 }
 
-/// Build the complete view: rows (newest first), lanes, links and status.
-pub fn build_tree(input: &TreeInput) -> TreeView {
-    let limit = input.limit.max(1);
+/// A commit and the generation it recorded + built share a row, up to `limit` rows.
+/// The bool: more rows exist beyond them.
+fn window_rows(
+    input: &TreeInput,
+    limit: usize,
+    links: &Links,
+    sys_nodes: &[SysNode],
+) -> (Vec<RowRef>, bool) {
     let commits = &input.commits;
-    let links = link_generations(commits, &input.gens, &input.reflog, input.system_available);
-
-    // System nodes newest first.
-    let mut sys_nodes = system_lineage(&input.gens, &input.events);
-    sys_nodes.reverse();
     let sys_index: HashMap<String, usize> = sys_nodes
         .iter()
         .enumerate()
         .map(|(i, n)| (n.id(), i))
         .collect();
-
-    // A commit and the generation it recorded + built share a row.
     let commit_index: HashMap<&str, usize> = commits
         .iter()
         .enumerate()
@@ -687,14 +685,15 @@ pub fn build_tree(input: &TreeInput) -> TreeView {
     }
     let has_more = rows.len() > cut;
     rows.truncate(cut);
+    (rows, has_more)
+}
 
-    let pending = input.dirty && !input.head.is_empty();
+/// Config DAG nodes, with the pending worktree on top when `pending`.
+fn config_dag(input: &TreeInput, rows: &[RowRef], pending: bool) -> Vec<DagNode> {
     let offset = usize::from(pending);
-
-    // Lanes: config DAG.
-    let mut cfg_nodes: Vec<DagNode> = Vec::new();
+    let mut nodes: Vec<DagNode> = Vec::new();
     if pending {
-        cfg_nodes.push(DagNode {
+        nodes.push(DagNode {
             row: 0,
             id: WORKTREE_ID.to_string(),
             parents: vec![input.head.clone()],
@@ -702,31 +701,36 @@ pub fn build_tree(input: &TreeInput) -> TreeView {
     }
     for (r, row) in rows.iter().enumerate() {
         if let Some(ci) = row.commit {
-            let c = &commits[ci];
-            cfg_nodes.push(DagNode {
+            let c = &input.commits[ci];
+            nodes.push(DagNode {
                 row: r + offset,
                 id: c.id.clone(),
                 parents: c.parents.clone(),
             });
         }
     }
-    let cfg = assign_lanes(&cfg_nodes);
+    nodes
+}
 
-    // Lanes: system DAG (parents outside the window stay open).
-    let mut sys_dag: Vec<DagNode> = Vec::new();
+/// System DAG nodes (parents outside the window stay open).
+fn system_dag(rows: &[RowRef], sys_nodes: &[SysNode], offset: usize) -> Vec<DagNode> {
+    let mut nodes: Vec<DagNode> = Vec::new();
     for (r, row) in rows.iter().enumerate() {
         if let Some(si) = row.sys {
             let n = &sys_nodes[si];
-            sys_dag.push(DagNode {
+            nodes.push(DagNode {
                 row: r + offset,
                 id: n.id(),
                 parents: n.parent().cloned().into_iter().collect(),
             });
         }
     }
-    let sys = assign_lanes(&sys_dag);
+    nodes
+}
 
-    // Status.
+/// Running / boot generations and how the running system relates to HEAD.
+fn status_view(input: &TreeInput, links: &Links) -> StatusView {
+    let commits = &input.commits;
     let running = input.gens.iter().find(|g| g.is_running).map(|g| g.number);
     let boot = input.gens.iter().find(|g| g.is_current).map(|g| g.number);
     let commit_time: HashMap<&str, i64> = commits
@@ -783,8 +787,7 @@ pub fn build_tree(input: &TreeInput) -> TreeView {
     } else {
         StatusKind::Unknown
     };
-    let running_commit_id = running_commit.as_ref().map(|(c, _)| c.id.clone());
-    let status = StatusView {
+    StatusView {
         kind,
         running,
         next_boot: boot.filter(|b| Some(*b) != running),
@@ -792,27 +795,156 @@ pub fn build_tree(input: &TreeInput) -> TreeView {
         running_commit_time: running_commit.as_ref().and_then(|(_, t)| *t),
         head_generation: head_gen,
         running_since: running.and_then(|r| running_since(&input.events, &input.gens, r)),
-    };
+    }
+}
 
-    // Newest generation number at each point, for "branched" (rollback) flags.
-    let newest_before = |created: i64| {
-        input
+fn commit_view(
+    c: &CommitIn,
+    input: &TreeInput,
+    links: &Links,
+    running_commit: Option<&str>,
+    lane: usize,
+) -> CommitView {
+    let (generation, gen_state) = match links.by_commit.get(&c.id) {
+        Some((n, st)) => (Some(*n), Some(*st)),
+        None => (c.generation, None),
+    };
+    CommitView {
+        id: c.id.clone(),
+        short: short(&c.id),
+        parents: c.parents.clone(),
+        subject: c.subject.clone(),
+        kind: commit_kind(&c.subject),
+        timestamp: c.timestamp,
+        branches: c.branches.clone(),
+        is_tip: !c.branches.is_empty(),
+        is_head: c.id == input.head,
+        is_running_config: running_commit == Some(c.id.as_str()),
+        generation,
+        gen_state,
+        changes: c.changes.clone(),
+        lane,
+    }
+}
+
+/// What a row of the system column needs from the whole lineage.
+struct SysCx<'a> {
+    input: &'a TreeInput,
+    links: &'a Links,
+    sys_nodes: &'a [SysNode],
+    latest_switch: Option<usize>,
+}
+
+impl SysCx<'_> {
+    /// Newest generation number before `created`, for "branched" (rollback) flags.
+    fn newest_before(&self, created: i64) -> Option<u64> {
+        self.input
             .gens
             .iter()
             .filter(|g| g.created < created)
             .map(|g| g.number)
             .max()
-    };
-    let latest_switch = sys_nodes
+    }
+
+    fn view(&self, si: usize, lane: usize) -> SysView {
+        let (input, links, sys_nodes) = (self.input, self.links, self.sys_nodes);
+        let n = &sys_nodes[si];
+        let id = n.id();
+        match n {
+            SysNode::Gen {
+                number,
+                created,
+                parent,
+            } => {
+                let g = input.gens.iter().find(|g| g.number == *number);
+                let parent_gen = parent.as_ref().and_then(|p| {
+                    if let Some(num) = p.strip_prefix('g') {
+                        num.parse().ok()
+                    } else {
+                        sys_nodes.iter().find_map(|s| match s {
+                            SysNode::Switch { to, .. } if &s.id() == p => Some(*to),
+                            _ => None,
+                        })
+                    }
+                });
+                let identical_to = g.and_then(|g| {
+                    input
+                        .gens
+                        .iter()
+                        .filter(|o| {
+                            o.number < g.number && !g.target.is_empty() && o.target == g.target
+                        })
+                        .map(|o| o.number)
+                        .min()
+                });
+                SysView::Generation {
+                    id,
+                    number: *number,
+                    created: *created,
+                    is_running: g.is_some_and(|g| g.is_running),
+                    is_boot: g.is_some_and(|g| g.is_current),
+                    built_from: links.by_gen.get(number).map(|l| CommitRef {
+                        id: l.commit.clone(),
+                        short: short(&l.commit),
+                        how: l.how,
+                    }),
+                    parent_gen,
+                    branched: parent_gen
+                        .zip(self.newest_before(*created))
+                        .is_some_and(|(p, newest)| p != newest),
+                    identical_to,
+                    lane,
+                }
+            }
+            SysNode::Switch { time, to, from, .. } => SysView::Switch {
+                id,
+                time: *time,
+                to: *to,
+                from: *from,
+                rollback: from.is_some_and(|f| *to < f),
+                is_latest: self.latest_switch == Some(si),
+                lane,
+            },
+        }
+    }
+}
+
+/// The newest switch, when no generation came after it and its target still runs.
+fn latest_switch(sys_nodes: &[SysNode], running: Option<u64>) -> Option<usize> {
+    sys_nodes
         .iter()
         .position(|n| matches!(n, SysNode::Switch { .. }))
         .filter(|&i| {
-            // No newer generation created after it, and its target still runs.
             sys_nodes[..i]
                 .iter()
                 .all(|n| !matches!(n, SysNode::Gen { .. }))
                 && matches!(&sys_nodes[i], SysNode::Switch { to, .. } if Some(*to) == running)
-        });
+        })
+}
+
+/// Build the complete view: rows (newest first), lanes, links and status.
+pub fn build_tree(input: &TreeInput) -> TreeView {
+    let limit = input.limit.max(1);
+    let commits = &input.commits;
+    let links = link_generations(commits, &input.gens, &input.reflog, input.system_available);
+
+    // System nodes newest first.
+    let mut sys_nodes = system_lineage(&input.gens, &input.events);
+    sys_nodes.reverse();
+
+    let (rows, has_more) = window_rows(input, limit, &links, &sys_nodes);
+    let pending = input.dirty && !input.head.is_empty();
+    let offset = usize::from(pending);
+    let cfg = assign_lanes(&config_dag(input, &rows, pending));
+    let sys = assign_lanes(&system_dag(&rows, &sys_nodes, offset));
+    let status = status_view(input, &links);
+    let running_commit = status.running_commit.as_ref().map(|c| c.id.as_str());
+    let sys_cx = SysCx {
+        input,
+        links: &links,
+        sys_nodes: &sys_nodes,
+        latest_switch: latest_switch(&sys_nodes, status.running),
+    };
 
     let mut out_rows: Vec<RowView> = Vec::with_capacity(rows.len() + offset);
     if pending {
@@ -828,87 +960,12 @@ pub fn build_tree(input: &TreeInput) -> TreeView {
     for row in &rows {
         let commit = row.commit.map(|ci| {
             let c = &commits[ci];
-            let (generation, gen_state) = match links.by_commit.get(&c.id) {
-                Some((n, st)) => (Some(*n), Some(*st)),
-                None => (c.generation, None),
-            };
-            CommitView {
-                id: c.id.clone(),
-                short: short(&c.id),
-                parents: c.parents.clone(),
-                subject: c.subject.clone(),
-                kind: commit_kind(&c.subject),
-                timestamp: c.timestamp,
-                branches: c.branches.clone(),
-                is_tip: !c.branches.is_empty(),
-                is_head: c.id == input.head,
-                is_running_config: running_commit_id.as_deref() == Some(c.id.as_str()),
-                generation,
-                gen_state,
-                changes: c.changes.clone(),
-                lane: cfg.lane_of.get(&c.id).copied().unwrap_or(0),
-            }
+            let lane = cfg.lane_of.get(&c.id).copied().unwrap_or(0);
+            commit_view(c, input, &links, running_commit, lane)
         });
         let system = row.sys.map(|si| {
-            let n = &sys_nodes[si];
-            let id = n.id();
-            let lane = sys.lane_of.get(&id).copied().unwrap_or(0);
-            match n {
-                SysNode::Gen {
-                    number,
-                    created,
-                    parent,
-                } => {
-                    let g = input.gens.iter().find(|g| g.number == *number);
-                    let parent_gen = parent.as_ref().and_then(|p| {
-                        if let Some(num) = p.strip_prefix('g') {
-                            num.parse().ok()
-                        } else {
-                            sys_nodes.iter().find_map(|s| match s {
-                                SysNode::Switch { to, .. } if &s.id() == p => Some(*to),
-                                _ => None,
-                            })
-                        }
-                    });
-                    let identical_to = g.and_then(|g| {
-                        input
-                            .gens
-                            .iter()
-                            .filter(|o| {
-                                o.number < g.number && !g.target.is_empty() && o.target == g.target
-                            })
-                            .map(|o| o.number)
-                            .min()
-                    });
-                    SysView::Generation {
-                        id,
-                        number: *number,
-                        created: *created,
-                        is_running: g.is_some_and(|g| g.is_running),
-                        is_boot: g.is_some_and(|g| g.is_current),
-                        built_from: links.by_gen.get(number).map(|l| CommitRef {
-                            id: l.commit.clone(),
-                            short: short(&l.commit),
-                            how: l.how,
-                        }),
-                        parent_gen,
-                        branched: parent_gen
-                            .zip(newest_before(*created))
-                            .is_some_and(|(p, newest)| p != newest),
-                        identical_to,
-                        lane,
-                    }
-                }
-                SysNode::Switch { time, to, from, .. } => SysView::Switch {
-                    id,
-                    time: *time,
-                    to: *to,
-                    from: *from,
-                    rollback: from.is_some_and(|f| *to < f),
-                    is_latest: latest_switch == Some(si),
-                    lane,
-                },
-            }
+            let lane = sys.lane_of.get(&sys_nodes[si].id()).copied().unwrap_or(0);
+            sys_cx.view(si, lane)
         });
         let time = commit
             .as_ref()
