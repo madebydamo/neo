@@ -159,6 +159,7 @@ function updateWarmIndicators() {
     } else {
       btn.classList.remove('warm');
     }
+    refreshSidebarHref(btn);
   });
 }
 
@@ -316,13 +317,24 @@ function openTabUrlFor(subOrKey, domain) {
   return serviceRootUrl(subOrKey, domain);
 }
 
-// Public handler for sidebar clicks (supports shift/ctrl/cmd+click to open in new tab)
+// Sidebar items are real <a href> links: ctrl/cmd/shift/middle click, long-press
+// menus and drag-to-tab are left to the browser, which opens them the same way
+// in every browser (a window.open() from a modified click is not: Safari ignored
+// it). refreshSidebarHref keeps the href on the warm iframe's URL.
+function refreshSidebarHref(btn) {
+  if (!btn || !btn.dataset) return;
+  const url = openTabUrlFor(btn.dataset.sub, btn.dataset.domain);
+  if (url) btn.setAttribute('href', url);
+  else btn.removeAttribute('href');
+}
+
+// Public handler for sidebar clicks: a plain click loads the service in the viewer.
 function handleSidebarClick(e, subOrKey, domain, btn) {
-  if (e.shiftKey || e.ctrlKey || e.metaKey) {
-    const url = openTabUrlFor(subOrKey, domain);
-    if (url) window.open(url, '_blank');
+  if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.button > 0) {
+    refreshSidebarHref(btn);
     return;
   }
+  e.preventDefault();
 
   loadService(subOrKey, domain, btn);
   // Free up the viewport after picking a service on mobile.
@@ -480,6 +492,8 @@ if (sidebar) {
   sidebar.addEventListener('contextmenu', (e) => {
     const btn = e.target.closest('.svc-btn');
     if (!btn) return;
+    // macOS ctrl+click is a right click: show the link menu (Open in New Tab).
+    if (e.ctrlKey) return;
 
     let key = btn.dataset.sub;
     if (key === 'neo') key = '__config';
@@ -487,6 +501,10 @@ if (sidebar) {
       e.preventDefault();
       hardEvictService(key);
     }
+  });
+  // Middle click opens the link natively, but only if the href is current.
+  sidebar.addEventListener('pointerdown', (e) => {
+    refreshSidebarHref(e.target.closest('.svc-btn'));
   });
 }
 

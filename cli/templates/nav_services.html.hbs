@@ -39,7 +39,12 @@
 {{/if}}
 
 {{#each services}}
-  <button
+  {{!-- A real link so ctrl/cmd/middle click open a new tab natively (neo.js keeps
+       the href current); a plain click loads the viewer. Order and groups:
+       static/sidebar_layout.js. --}}
+  <a
+    {{#if domain}}href="https://{{subdomain}}.{{domain}}/"{{/if}}
+    draggable="false"
     class="nav-btn svc-btn w-12 h-11 rounded-xl flex-shrink-0 flex items-center justify-center text-base-content/80 hover:text-base-content"
     title="{{name}} (https://{{subdomain}}.{{domain}})"
     data-sub="{{subdomain}}"
@@ -49,7 +54,7 @@
     onclick="handleSidebarClick(event, '{{subdomain}}', '{{domain}}', this)">
     <div class="relative w-8 h-8 flex items-center justify-center">
       {{#if icon}}
-        <img src="{{icon}}" class="w-8 h-8 object-contain" alt=""
+        <img src="{{icon}}" class="w-8 h-8 object-contain" alt="" draggable="false"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
         <span class="hidden text-3xl leading-none">⚙</span>
       {{else}}
@@ -68,7 +73,7 @@
         {{initials}}
       </span>
     </div>
-  </button>
+  </a>
 {{/each}}
 
 {{#unless services}}

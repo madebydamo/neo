@@ -56,6 +56,12 @@
              class="flex flex-col items-center gap-y-1.5 w-full">
           <span class="loading loading-spinner loading-xs opacity-40 mt-2" title="Loading services…"></span>
         </div>
+        {{!-- Shown by sidebar_layout.js once this browser has a custom order. --}}
+        <button type="button" id="sidebar-reset"
+                class="hidden mt-auto pt-3 btn btn-ghost btn-xs btn-square opacity-40 hover:opacity-100"
+                title="Reset sidebar order and groups" aria-label="Reset sidebar order and groups">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 102.2-5.3M4.5 4.5v4h4"/></svg>
+        </button>
       </aside>
 
       <!-- Main viewer area -->
@@ -110,6 +116,7 @@
               <div class="text-lg font-semibold tracking-tight">Pick a service</div>
               <p class="text-sm text-base-content/60 mt-1 md:hidden">Open the menu and choose a service to load its web UI here.</p>
               <p class="text-sm text-base-content/60 mt-1 hidden md:block">Choose a service on the left to load its web UI here.</p>
+              <p class="text-xs text-base-content/45 mt-3">Drag icons to reorder them, drop one on another to make a group. <span class="md:hidden">Touch and hold to start dragging.</span> Saved in this browser.</p>
               <p id="welcome-domain" class="text-[11px] text-base-content/40 mt-4">Loading domain…</p>
             </div>
           </div>
@@ -153,7 +160,36 @@
       <form method="dialog" class="modal-backdrop"><button>close</button></form>
     </dialog>
 
+    {{!-- Sidebar group rename / ungroup and layout reset (static/sidebar_layout.js). --}}
+    <dialog id="sidebar-group-dialog" class="modal modal-bottom sm:modal-middle">
+      <form method="dialog" class="modal-box max-w-sm">
+        <h3 class="font-semibold text-lg">Group</h3>
+        <label class="form-control w-full mt-3">
+          <span class="label-text text-sm mb-1">Name</span>
+          <input name="name" type="text" maxlength="40" autocomplete="off" class="input input-bordered w-full" />
+        </label>
+        <div class="modal-action flex-wrap">
+          <button type="submit" value="ungroup" class="btn btn-ghost btn-sm mr-auto">Ungroup</button>
+          <button type="submit" value="cancel" class="btn btn-ghost btn-sm" formnovalidate>Cancel</button>
+          <button type="submit" value="save" class="btn btn-primary btn-sm">Save</button>
+        </div>
+      </form>
+      <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+    <dialog id="sidebar-reset-dialog" class="modal modal-bottom sm:modal-middle">
+      <form method="dialog" class="modal-box max-w-sm">
+        <h3 class="font-semibold text-lg">Reset the sidebar?</h3>
+        <p class="text-sm text-base-content/70 mt-2">Your order and groups in this browser are removed and the default order comes back.</p>
+        <div class="modal-action">
+          <button type="submit" value="cancel" class="btn btn-ghost btn-sm">Cancel</button>
+          <button type="submit" value="reset" class="btn btn-warning btn-sm">Reset</button>
+        </div>
+      </form>
+      <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
     <script src="/static/service_status.js"></script>
+    <script src="/static/sidebar_layout.js"></script>
     <script src="/static/op_monitor.js"></script>
     <script src="/static/neo.js"></script>
   </body>
