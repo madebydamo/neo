@@ -67,6 +67,16 @@
     return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
   }
 
+  /** Local YYYY-MM-DD HH:MM:SS for a unix timestamp (seconds). */
+  function fullTime(ts) {
+    if (!ts) return '';
+    var d = new Date(ts * 1000);
+    return (
+      d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+      ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds())
+    );
+  }
+
   function sameCalendarDay(ts, nowTs) {
     if (!ts) return false;
     var d = new Date(ts * 1000);
@@ -173,6 +183,7 @@
     edgePath: edgePath,
     dayKey: dayKey,
     clockTime: clockTime,
+    fullTime: fullTime,
     sameCalendarDay: sameCalendarDay,
     relTime: relTime,
     quickTime: quickTime,

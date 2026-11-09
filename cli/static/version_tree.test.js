@@ -97,3 +97,9 @@ test('quickTime keeps clock-only today and adds relative age otherwise', () => {
   assert.equal(VT.quickTime(0, now), '');
   assert.equal(VT.quickTime(null, now), '');
 });
+
+test('fullTime pads every field and is empty without a timestamp', () => {
+  const ts = new Date(2026, 0, 2, 3, 4, 5).getTime() / 1000;
+  assert.equal(VT.fullTime(ts), '2026-01-02 03:04:05');
+  assert.equal(VT.fullTime(0), '');
+});
