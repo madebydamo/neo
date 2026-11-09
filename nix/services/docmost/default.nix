@@ -37,7 +37,8 @@
       config = mkIf cfg.enabled {
         assertions = [
           {
-            assertion = secretSet cfg.appSecret && (builtins.stringLength cfg.appSecret) >= 32;
+            # An encrypted value is only checked for presence (its text is a placeholder).
+            assertion = secretSet cfg.appSecret && (lib.neo.secrets.isPlaceholder cfg.appSecret || (builtins.stringLength cfg.appSecret) >= 32);
             message = "neo.services.docmost: appSecret must be at least 32 characters when enabled.";
           }
           {
