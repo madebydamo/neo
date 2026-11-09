@@ -377,7 +377,7 @@ fn run(cli: Cli) -> Result<()> {
         Commands::Web => web(web_settings_path, nix_cmd, &config_path),
         Commands::Edit => edit(&config_path, dry_run),
         Commands::Git | Commands::Lg => git(&config_path, dry_run),
-        Commands::DockerUpdate { container } => docker_update(&container),
+        Commands::DockerUpdate { container } => docker_update(&container, sudo_cmd),
         Commands::Generation { action } => match action {
             Some(GenerationAction::List) => generation_list(dry_run, sudo_cmd),
             Some(GenerationAction::Switch { n }) => generation_switch(n, dry_run, sudo_cmd),

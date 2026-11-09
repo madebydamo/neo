@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use toml_edit::DocumentMut;
 
+use crate::utils::command::output_checked;
 use crate::utils::{disko_enabled, format_command};
 
 pub fn generate_hardware(config_path: &str, config: &DocumentMut, dry_run: bool) -> Result<()> {
@@ -20,15 +21,7 @@ pub fn generate_hardware(config_path: &str, config: &DocumentMut, dry_run: bool)
     }
     let display = format_command(&cmd);
     println!("→ {display}");
-    let output = cmd
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .output()
-        .with_context(|| format!("failed to spawn: {display}"))?;
-    if !output.status.success() {
-        let stderr = std::string::String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Command failed: {display}\nStderr: {stderr}");
-    }
+    let output = output_checked(&mut cmd, &display)?;
     fs::write(
         Path::new(config_path).join("hardware-configuration.nix"),
         output.stdout,
