@@ -124,7 +124,9 @@ systemd.services.docker-myapp.preStart = lib.concatStringsSep "\n" [
 
 | Function | Arguments | Returns |
 |----------|-----------|---------|
-| `mkSubdomainProxyConf` | `{ config, cfg, upstream ? null, port ? null, proto ? "http", proxyPass ? null, maxBodySize ? "0", auth ? true, includeResolver ? (proxyPass == null), geo ? true }`. Give `upstream` + `port`, or `proxyPass` (full URL). `maxBodySize = null` omits `client_max_body_size`; `"0"` is unlimited | Full nginx `server { … }` block for `<subdomain>.*` with listen, SSL, geo, `proxy.conf`, resolver and tinyauth |
+| `mkSubdomainProxyConf` | `{ config, cfg, upstream ? null, port ? null, proto ? "http", proxyPass ? null, maxBodySize ? "0", auth ? true, includeResolver ? (proxyPass == null), geo ? true, serverExtra ? "", locationExtra ? "", extraLocations ? "" }`. Give `upstream` + `port`, or `proxyPass` (full URL). `maxBodySize = null` omits `client_max_body_size`; `"0"` is unlimited | Full nginx `server { … }` block for `<subdomain>.*` with listen, SSL, geo, `proxy.conf`, resolver and tinyauth |
+| `mkSwagServer` | `{ cfg, maxBodySize ? "0", geo ? true, extra ? "", body }`. `extra`: more server-level directives; `body`: the locations | The `server { … }` wrapper, for a vhost that needs its own locations |
+| `swagUpstream` | `{ app, port, proto ? "http", proxyConf ? true, extra ? "" }`. `extra` goes before `proxy_pass`; `proxyConf = false` is for a location that sets its own headers | Lines of a location body that proxy to a container |
 | `authBlock` | `config: cfg:` | Location-level tinyauth include, or `""` when `cfg.auth.enabled` is false or tinyauth is off |
 | `authLocations` | `config: cfg:` | Server-level `/tinyauth` include, or `""` |
 | `getProxiedServices` | `config` | Enabled services with a non-null `subdomain` |

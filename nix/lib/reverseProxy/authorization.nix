@@ -69,6 +69,48 @@
         }
       '';
 
+      # Lines of a location body that proxies to a container on the internal
+      # network. Variables make nginx resolve the name at request time, so SWAG
+      # starts while the container is down.
+      # `extra` goes before proxy_pass. proxyConf = false skips proxy.conf, for a
+      # location that sets its own headers (nginx appends, it does not override).
+      swagUpstream = {
+        app,
+        port,
+        proto ? "http",
+        proxyConf ? true,
+        extra ? "",
+      }:
+        lib.optionalString proxyConf "include /config/nginx/proxy.conf;\n"
+        + "include /config/nginx/resolver.conf;\n"
+        + "set $upstream_app ${app};\n"
+        + "set $upstream_port ${toString port};\n"
+        + "set $upstream_proto ${proto};\n"
+        + extra
+        + "proxy_pass $upstream_proto://$upstream_app:$upstream_port;\n";
+
+      # The server block every vhost shares: TLS, HTTP/2, geo rules, body limit.
+      # `extra` holds more server-level directives and `body` the locations.
+      mkSwagServer = {
+        cfg,
+        maxBodySize ? "0",
+        geo ? true,
+        extra ? "",
+        body,
+      }:
+        "server {\n"
+        + "  include /config/nginx/listen-https.conf;\n"
+        + "  http2 on;\n"
+        + "  server_name ${cfg.subdomain}.*;\n"
+        + "  include /config/nginx/ssl.conf;\n"
+        + lib.optionalString (maxBodySize != null) "\n  client_max_body_size ${maxBodySize};\n"
+        + lib.optionalString geo "  include /config/nginx/geo-access.conf;\n"
+        + extra
+        + "\n"
+        + body
+        + "\n"
+        + "}\n";
+
       # Standard SWAG subdomain vhost: TLS + proxy.conf + optional tinyauth + geo.
       mkSubdomainProxyConf = {
         config,
@@ -81,6 +123,10 @@
         auth ? true,
         includeResolver ? (proxyPass == null),
         geo ? true,
+        # Extra nginx server-level directives (e.g. add_header), before `location /`.
+        serverExtra ? "",
+        # Extra directives in `location /`, after proxy_pass.
+        locationExtra ? "",
         # Extra nginx server-block text (e.g. location blocks), after `location /`.
         extraLocations ? "",
       }: let
@@ -92,14 +138,6 @@
           if auth
           then authLocations config cfg
           else "";
-        geoLine =
-          if geo
-          then "  include /config/nginx/geo-access.conf;\n"
-          else "";
-        bodySize =
-          if maxBodySize == null
-          then ""
-          else "\n  client_max_body_size ${maxBodySize};\n";
         resolverLine = lib.optionalString includeResolver "    include /config/nginx/resolver.conf;\n";
         pass =
           if proxyPass != null
@@ -110,25 +148,21 @@
             + "    set $upstream_proto ${proto};\n"
             + "    proxy_pass $upstream_proto://$upstream_app:$upstream_port;";
       in
-        "server {\n"
-        + "  include /config/nginx/listen-https.conf;\n"
-        + "  http2 on;\n"
-        + "  server_name ${cfg.subdomain}.*;\n"
-        + "  include /config/nginx/ssl.conf;\n"
-        + bodySize
-        + geoLine
-        + "\n"
-        + "  location / {\n"
-        + "    include /config/nginx/proxy.conf;\n"
-        + resolverLine
-        + pass
-        + ab
-        + "\n"
-        + "  }\n"
-        + al
-        + extraLocations
-        + "\n"
-        + "}\n";
+        mkSwagServer {
+          inherit cfg maxBodySize geo;
+          extra = serverExtra;
+          body =
+            "  location / {\n"
+            + "    include /config/nginx/proxy.conf;\n"
+            + resolverLine
+            + pass
+            + lib.optionalString (locationExtra != "") "\n${locationExtra}"
+            + ab
+            + "\n"
+            + "  }\n"
+            + al
+            + extraLocations;
+        };
     };
   };
 }
