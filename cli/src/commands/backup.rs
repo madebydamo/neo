@@ -2,14 +2,13 @@
 //! backup from elsewhere (docs/design/backup-restore.md §3).
 
 use anyhow::{bail, Context, Result};
-use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use toml_edit::DocumentMut;
 
 use crate::commands::restore::backup::{self, Access, Source};
 use crate::commands::restore::local::{commit_uncommitted, remote_url};
 use crate::commands::restore::remote::default_key;
+use crate::utils::command::root_command;
 use crate::utils::execute_command;
 use crate::utils::fsutil::TempDir;
 
@@ -43,19 +42,12 @@ pub fn rotate_key(doc: &DocumentMut, dry_run: bool, sudo_cmd: &str) -> Result<()
         println!("DRY-RUN: would start {ROTATE_UNIT}");
         return Ok(());
     }
-    let root = fs::read_to_string("/proc/self/status")
-        .unwrap_or_default()
-        .lines()
-        .any(|l| l.starts_with("Uid:") && l.split_whitespace().nth(1) == Some("0"));
-    let mut cmd = if root {
-        Command::new("systemctl")
-    } else {
-        let mut c = Command::new(sudo_cmd);
-        c.arg("systemctl");
-        c
-    };
-    execute_command(cmd.args(["start", "--no-block", ROTATE_UNIT]))
-        .context("start the key rotation (is the encrypted backup applied on this machine?)")?;
+    execute_command(root_command("systemctl", sudo_cmd, false).args([
+        "start",
+        "--no-block",
+        ROTATE_UNIT,
+    ]))
+    .context("start the key rotation (is the encrypted backup applied on this machine?)")?;
     println!("Key rotation started: each encrypted destination gets a new key and a full backup with it, then its old backup is deleted.");
     println!("It runs in the background (journalctl -fu {ROTATE_UNIT}); the old backup stays usable until it is done.");
     Ok(())

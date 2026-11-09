@@ -13,7 +13,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use toml_edit::{value, DocumentMut, Item, Table};
 
-use super::command::{check_output, env_or, output_checked, output_with_stdin, sudo_command};
+use super::command::{
+    check_output, env_or, output_checked, output_with_stdin, root_command, sudo_bin,
+};
 use super::fsutil::{write_private, TempDir};
 use super::secrets::{self, Backend, Node, Tree};
 use super::{git_cmd, sort_document_alphabetically};
@@ -32,27 +34,9 @@ fn root_helper() -> Option<String> {
     Path::new(&p).is_file().then_some(p)
 }
 
-fn is_root() -> bool {
-    // SAFETY-free: read our uid from /proc instead of libc.
-    fs::read_to_string("/proc/self/status")
-        .ok()
-        .and_then(|s| {
-            s.lines()
-                .find(|l| l.starts_with("Uid:"))
-                .and_then(|l| l.split_whitespace().nth(1).map(|u| u == "0"))
-        })
-        .unwrap_or(false)
-}
-
 /// Run the root helper (directly as root, else `sudo -n`).
 fn helper_output(helper: &str, args: &[&str]) -> Result<Vec<u8>> {
-    let mut cmd = if is_root() {
-        Command::new(helper)
-    } else {
-        let mut c = sudo_command();
-        c.arg(helper);
-        c
-    };
+    let mut cmd = root_command(helper, &sudo_bin(), true);
     let what = format!("{helper} {}", args.first().copied().unwrap_or(""));
     Ok(output_checked(cmd.args(args), &what)?.stdout)
 }

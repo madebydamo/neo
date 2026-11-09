@@ -31,6 +31,25 @@ pub fn sudo_command() -> Command {
     c
 }
 
+pub fn is_root() -> bool {
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    unsafe { libc::geteuid() == 0 }
+}
+
+/// `program` directly as root, else through `sudo` (`-n` when nobody can answer
+/// a password prompt).
+pub fn root_command(program: &str, sudo: &str, non_interactive: bool) -> Command {
+    if is_root() {
+        return Command::new(program);
+    }
+    let mut c = Command::new(sudo);
+    if non_interactive {
+        c.arg("-n");
+    }
+    c.arg(program);
+    c
+}
+
 /// Quote a string for safe copy-paste into a POSIX shell (bash/sh).
 ///
 /// Bare tokens stay unquoted when they only use safe characters; otherwise

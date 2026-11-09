@@ -14,6 +14,7 @@ use super::{
     access_tokens, int_setting, restore_identity, under, DataSource, RestoreArgs,
     DEFAULT_CONFIG_PATH,
 };
+use crate::utils::command::is_root;
 use crate::utils::execute_command;
 
 pub const WORK_DIR: &str = "/root/neo-restore";
@@ -125,7 +126,7 @@ fn cap_arc() {
 }
 
 pub fn run(args: &RestoreArgs) -> Result<()> {
-    if unsafe { libc::geteuid() } != 0 {
+    if !is_root() {
         bail!("run neo restore as root on the machine to restore, or pass --host root@<machine> from another computer");
     }
     if !args.target.is_dir() {
