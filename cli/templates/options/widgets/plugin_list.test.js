@@ -87,9 +87,11 @@ test('plRepoKey ignores branches', () => {
 
 // ── init ─────────────────────────────────────────────────────────────────────
 
-test('init: a legacy list becomes id-keyed entries', () => {
-  const form = formWithPlugins({ current: ['github:a/portrait', 'github:b/highsea.neo', 'path:/x/portrait'] });
-  assert.deepEqual(form.values.plugins, {
+// Not through init: the form's normalizeValue already turns a list into the default
+// table there, and migration 014 leaves no list in settings.toml.
+test('plNormalize: a legacy list becomes id-keyed entries', () => {
+  const form = formWithPlugins();
+  assert.deepEqual(form.plNormalize(['github:a/portrait', 'github:b/highsea.neo', 'path:/x/portrait']), {
     'portrait-0': one('github:a/portrait'),
     'highsea-neo': one('github:b/highsea.neo'),
     'portrait-2': one('path:/x/portrait'),

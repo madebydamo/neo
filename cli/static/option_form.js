@@ -256,19 +256,7 @@ function optionForm() {
       const raw = document.getElementById('options-seed')?.textContent || '[]';
       let opts = [];
       try { opts = JSON.parse(raw); } catch (e) { opts = []; }
-
-      this.optionsByName = {};
-      this.uiState = {};
-      opts.forEach((o) => {
-        this.optionsByName[o.name] = o;
-        const hasCurrent = (o.current !== undefined && o.current !== null);
-        const source = hasCurrent ? o.current : o.default;
-        const v = this.normalizeValue(o, source);
-        this.values[o.name] = v;
-        this.defaults[o.name] = this.normalizeValue(o, o.default);
-        this.originals[o.name] = this.cloneValue(v);
-        this.hadCurrent[o.name] = hasCurrent;
-      });
+      this.seedOptions(opts);
 
       const pane = document.getElementById('options-pane');
       this.serviceName = (pane?.dataset?.service)
@@ -283,6 +271,22 @@ function optionForm() {
       // not a user edit — recapture originals so leave/dirty stays clean.
       Object.keys(this.values || {}).forEach((k) => {
         this.originals[k] = this.cloneValue(this.values[k]);
+      });
+    },
+
+    /** Form state from the option list the server rendered. */
+    seedOptions(opts) {
+      this.optionsByName = {};
+      this.uiState = {};
+      opts.forEach((o) => {
+        this.optionsByName[o.name] = o;
+        const hasCurrent = (o.current !== undefined && o.current !== null);
+        const source = hasCurrent ? o.current : o.default;
+        const v = this.normalizeValue(o, source);
+        this.values[o.name] = v;
+        this.defaults[o.name] = this.normalizeValue(o, o.default);
+        this.originals[o.name] = this.cloneValue(v);
+        this.hadCurrent[o.name] = hasCurrent;
       });
     },
 
@@ -834,6 +838,25 @@ function optionForm() {
       Object.keys(origs).forEach((k) => this.revertField(k));
     },
 
+    /** What a save writes: widget payloads, plus every other value off its default. */
+    collectSave() {
+      const toSave = {};
+      Object.keys(this.values || {}).forEach((k) => {
+        const w = neoWidget(this.optUi(k)?.widget);
+        if (w && typeof w.prepareSave === 'function') {
+          const prepared = w.prepareSave.call(this, k);
+          if (prepared !== undefined) {
+            toSave[k] = prepared;
+          }
+          return;
+        }
+        if (!this.isAtDefault(k)) {
+          toSave[k] = this.values[k];
+        }
+      });
+      return toSave;
+    },
+
     async save() {
       if (this.saveBusy) return;
       const svc = this.serviceName || 'service';
@@ -855,20 +878,7 @@ function optionForm() {
         return;
       }
 
-      const toSave = {};
-      Object.keys(this.values || {}).forEach((k) => {
-        const w = neoWidget(this.optUi(k)?.widget);
-        if (w && typeof w.prepareSave === 'function') {
-          const prepared = w.prepareSave.call(this, k);
-          if (prepared !== undefined) {
-            toSave[k] = prepared;
-          }
-          return;
-        }
-        if (!this.isAtDefault(k)) {
-          toSave[k] = this.values[k];
-        }
-      });
+      const toSave = this.collectSave();
 
       this.saveBusy = true;
       this.saveFlash = '';
