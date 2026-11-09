@@ -20,9 +20,7 @@ window.versioningPage = function versioningPage() {
     return n < 10 ? '0' + n : String(n);
   }
 
-  function toast(msg, type) {
-    if (typeof window.neoToast === 'function') window.neoToast(msg, type || 'info');
-  }
+  var toast = window.neoToast;
 
   function store(key, val) {
     try {

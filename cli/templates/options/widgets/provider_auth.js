@@ -249,17 +249,13 @@
           provider: row.id,
         });
         this.uiState[optionName].oauth = { loading: false, ...(body.status || body) };
-        if (typeof window.neoToast === 'function') {
-          window.neoToast(body.status?.logged_in ? 'OAuth refreshed' : 'OAuth not connected', 'success');
-        }
+        window.neoToast(body.status?.logged_in ? 'OAuth refreshed' : 'OAuth not connected', 'success');
       } catch (e) {
         this.uiState[optionName].oauth = {
           ...(this.uiState[optionName].oauth || {}),
           error: String(e.message || e),
         };
-        if (typeof window.neoToast === 'function') {
-          window.neoToast(String(e.message || e), 'error');
-        }
+        window.neoToast(String(e.message || e), 'error');
       } finally {
         this.oauthBusy = { ...this.oauthBusy, [optionName]: false };
       }
@@ -277,9 +273,7 @@
       const row = this.paRow(optionName);
       if (!row?.hasOauth) return;
       if (row.oauthFlow === 'external') {
-        if (typeof window.neoToast === 'function') {
-          window.neoToast('This provider uses an external CLI on the homeserver.', 'info');
-        }
+        window.neoToast('This provider uses an external CLI on the homeserver.', 'info');
         return this.paLoadOauthStatus(optionName);
       }
       this.oauthBusy = { ...this.oauthBusy, [optionName]: true };
@@ -339,9 +333,7 @@
           if (dlg.status === 'approved') {
             this.paStopPoll(optionName);
             await this.paLoadOauthStatus(optionName);
-            if (typeof window.neoToast === 'function') {
-              window.neoToast('OAuth login complete', 'success');
-            }
+            window.neoToast('OAuth login complete', 'success');
           } else if (dlg.status === 'error' || dlg.status === 'expired' || dlg.status === 'denied') {
             this.paStopPoll(optionName);
           }
@@ -372,9 +364,7 @@
         this.uiState[optionName].dlg = { ...dlg };
         if (dlg.status === 'approved') {
           await this.paLoadOauthStatus(optionName);
-          if (typeof window.neoToast === 'function') {
-            window.neoToast('OAuth login complete', 'success');
-          }
+          window.neoToast('OAuth login complete', 'success');
         }
       } catch (e) {
         this.uiState[optionName].dlg = {

@@ -856,9 +856,7 @@ function optionForm() {
       if (invalid.length) {
         this.saveFlash = 'err';
         this.saveError = invalid[0] + (invalid.length > 1 ? ` (+${invalid.length - 1} more)` : '');
-        if (typeof window.neoToast === 'function') {
-          window.neoToast(('Fix before saving — ' + this.saveError).slice(0, 240), 'error');
-        }
+        window.neoToast(('Fix before saving — ' + this.saveError).slice(0, 240), 'error');
         return;
       }
 
@@ -893,9 +891,7 @@ function optionForm() {
           });
           this.saveBusy = false;
           this.saveFlash = 'ok';
-          if (typeof window.neoToast === 'function') {
-            window.neoToast('Settings saved', 'success');
-          }
+          window.neoToast('Settings saved', 'success');
           // Keep success feedback visible before the pane reload (nix re-eval).
           await new Promise((r) => setTimeout(r, 900));
           const loadUrl = pane?.dataset?.loadUrl;
@@ -912,17 +908,13 @@ function optionForm() {
           this.saveBusy = false;
           this.saveFlash = 'err';
           this.saveError = (txt || ('HTTP ' + res.status)).slice(0, 240);
-          if (typeof window.neoToast === 'function') {
-            window.neoToast(this.saveError, 'error');
-          }
+          window.neoToast(this.saveError, 'error');
         }
       } catch (e) {
         this.saveBusy = false;
         this.saveFlash = 'err';
         this.saveError = String(e);
-        if (typeof window.neoToast === 'function') {
-          window.neoToast(this.saveError.slice(0, 240), 'error');
-        }
+        window.neoToast(this.saveError.slice(0, 240), 'error');
       }
     }
   };

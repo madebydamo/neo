@@ -18,47 +18,6 @@
 })();
 
 /**
- * Show a transient DaisyUI alert toast outside #config-content.
- * @param {string} message
- * @param {'success'|'error'|'info'|'warning'} [type]
- */
-window.neoToast = function neoToast(message, type) {
-  var host = document.getElementById('toast-host');
-  if (!host) return;
-  var kind = type || 'info';
-  var alertClass =
-    kind === 'success'
-      ? 'alert-success'
-      : kind === 'error'
-        ? 'alert-error'
-        : kind === 'warning'
-          ? 'alert-warning'
-          : 'alert-info';
-  var el = document.createElement('div');
-  el.className = 'alert ' + alertClass + ' shadow-lg text-sm max-w-sm';
-  el.setAttribute('role', 'status');
-
-  var msg = document.createElement('span');
-  msg.textContent = String(message == null ? '' : message);
-  el.appendChild(msg);
-
-  var dismiss = document.createElement('button');
-  dismiss.type = 'button';
-  dismiss.className = 'btn btn-ghost btn-xs btn-circle';
-  dismiss.setAttribute('aria-label', 'Dismiss');
-  dismiss.textContent = '✕';
-  dismiss.addEventListener('click', function () {
-    if (el.parentNode) el.parentNode.removeChild(el);
-  });
-  el.appendChild(dismiss);
-
-  host.appendChild(el);
-  setTimeout(function () {
-    if (el.parentNode) el.parentNode.removeChild(el);
-  }, 4000);
-};
-
-/**
  * Download working-tree settings.toml without navigating this document.
  * A plain <a href="/settings/download"> would replace the page when this UI
  * is embedded in the navigator iframe (or when the attachment is blocked).
@@ -85,9 +44,7 @@ window.neoDownloadSettingsToml = function neoDownloadSettingsToml() {
       }, 1000);
     })
     .catch(function (err) {
-      if (typeof neoToast === 'function') {
-        neoToast('Download failed: ' + err, 'error');
-      }
+      neoToast('Download failed: ' + err, 'error');
       if (status) {
         status.innerHTML = '<div class="alert alert-error text-sm">Download failed</div>';
       }
@@ -125,9 +82,7 @@ window.neoUploadSettingsToml = function neoUploadSettingsToml(input) {
       if (status) status.innerHTML = html;
     })
     .catch(function (err) {
-      if (typeof neoToast === 'function') {
-        neoToast('Upload failed: ' + err, 'error');
-      }
+      neoToast('Upload failed: ' + err, 'error');
       if (status) {
         status.innerHTML = '<div class="alert alert-error text-sm">Upload failed</div>';
       }

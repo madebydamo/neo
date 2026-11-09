@@ -9,3 +9,12 @@ test('esc escapes markup and treats null as empty', () => {
   assert.strictEqual(NeoUtil.esc(undefined), '');
   assert.strictEqual(NeoUtil.esc(0), '0');
 });
+
+test('toast does nothing without a host', () => {
+  globalThis.document = { getElementById: () => null };
+  try {
+    NeoUtil.toast('hello', 'error');
+  } finally {
+    delete globalThis.document;
+  }
+});
