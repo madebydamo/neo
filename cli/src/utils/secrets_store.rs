@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use toml_edit::{value, DocumentMut, Item, Table};
 
+use super::command::{check_output, output_checked, output_with_stdin};
 use super::secrets::{self, Backend, Node, Tree};
 use super::{git_cmd, sort_document_alphabetically};
 
@@ -52,24 +53,15 @@ fn is_root() -> bool {
 
 /// Run the root helper (directly as root, else `sudo -n`).
 fn helper_output(helper: &str, args: &[&str]) -> Result<Vec<u8>> {
-    let out = if is_root() {
-        Command::new(helper).args(args).output()
+    let mut cmd = if is_root() {
+        Command::new(helper)
     } else {
-        Command::new(env_or("SUDO_BINARY_PATH", "sudo"))
-            .arg("-n")
-            .arg(helper)
-            .args(args)
-            .output()
-    }
-    .with_context(|| format!("run {helper}"))?;
-    if !out.status.success() {
-        bail!(
-            "{helper} {} failed: {}",
-            args.first().copied().unwrap_or(""),
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-    Ok(out.stdout)
+        let mut c = Command::new(env_or("SUDO_BINARY_PATH", "sudo"));
+        c.arg("-n").arg(helper);
+        c
+    };
+    let what = format!("{helper} {}", args.first().copied().unwrap_or(""));
+    Ok(output_checked(cmd.args(args), &what)?.stdout)
 }
 
 /// `ssh-ed25519 <base64>` without the comment (what age expects).
@@ -146,8 +138,8 @@ pub fn encrypt(tree: &Tree, recipients: &[String]) -> Result<String> {
     if recipients.is_empty() {
         bail!("no recipients to encrypt to");
     }
-    let mut child = Command::new(sops_bin())
-        .args([
+    let out = output_with_stdin(
+        Command::new(sops_bin()).args([
             "encrypt",
             "--age",
             &recipients.join(","),
@@ -156,24 +148,11 @@ pub fn encrypt(tree: &Tree, recipients: &[String]) -> Result<String> {
             "--output-type",
             "yaml",
             "/dev/stdin",
-        ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("run sops encrypt (is sops installed?)")?;
-    child
-        .stdin
-        .take()
-        .context("sops stdin")?
-        .write_all(secrets::emit(tree).as_bytes())?;
-    let out = child.wait_with_output()?;
-    if !out.status.success() {
-        bail!(
-            "sops encrypt failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
+        ]),
+        secrets::emit(tree).as_bytes(),
+        "sops encrypt",
+    )?;
+    let out = check_output(out, "sops encrypt")?;
     String::from_utf8(out.stdout).context("sops output is not UTF-8")
 }
 
@@ -244,16 +223,12 @@ pub fn decrypt_with_key(path: &Path, key: Option<&Path>) -> Result<Tree> {
     if let Some(k) = key {
         cmd.env("SOPS_AGE_SSH_PRIVATE_KEY_FILE", k);
     }
-    let out = cmd
-        .output()
-        .context("run sops decrypt (is sops installed?)")?;
-    if !out.status.success() {
-        bail!(
-            "sops decrypt of {} failed (is your ssh-ed25519 key a recipient?): {}",
-            path.display(),
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
+    let out = output_checked(&mut cmd, "sops decrypt").with_context(|| {
+        format!(
+            "decrypt {} (is your ssh-ed25519 key a recipient?)",
+            path.display()
+        )
+    })?;
     let v: serde_json::Value =
         serde_json::from_slice(&out.stdout).context("parse decrypted secrets")?;
     json_to_tree(&v)

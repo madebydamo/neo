@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use toml_edit::DocumentMut;
 
-use crate::utils::command::shell_quote;
+use crate::utils::command::{output_checked, output_with_stdin, shell_quote, stdout_checked};
 use crate::utils::execute_command;
 
 /// Prefix of the snapshots the backup service takes (backup.sh).
@@ -390,24 +390,16 @@ impl Access {
         let Location::Ssh { dest, .. } = &source.location else {
             bail!("sftp needs an SSH backup");
         };
-        use std::io::Write as _;
-        let mut child = Command::new("sftp")
-            .arg("-q")
-            .arg("-S")
-            .arg(self.ssh_wrapper(source)?)
-            .args(["-b", "-"])
-            .arg(dest)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .context("run sftp")?;
-        child
-            .stdin
-            .take()
-            .context("sftp stdin")?
-            .write_all(batch.as_bytes())?;
-        Ok(child.wait_with_output()?)
+        output_with_stdin(
+            Command::new("sftp")
+                .arg("-q")
+                .arg("-S")
+                .arg(self.ssh_wrapper(source)?)
+                .args(["-b", "-"])
+                .arg(dest),
+            batch.as_bytes(),
+            "sftp",
+        )
     }
 
     /// Whether `path` exists at the backup.
@@ -449,19 +441,7 @@ impl Access {
 
     /// Run a command where the backup is (over SSH, or here) and capture stdout.
     pub fn output(&self, source: &Source, argv: &[&str]) -> Result<String> {
-        let mut cmd = self.command(source, argv);
-        let out = cmd
-            .stderr(Stdio::piped())
-            .output()
-            .with_context(|| format!("run {}", argv.join(" ")))?;
-        if !out.status.success() {
-            bail!(
-                "{} failed: {}",
-                argv.join(" "),
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
-        }
-        Ok(String::from_utf8_lossy(&out.stdout).to_string())
+        stdout_checked(&mut self.command(source, argv), &argv.join(" "))
     }
 
     fn command(&self, source: &Source, argv: &[&str]) -> Command {
@@ -666,18 +646,11 @@ impl<'a> Encrypted<'a> {
 
     /// The newest snapshot: (time, size line).
     pub fn latest(&self) -> Result<String> {
-        let out = self
-            .restic()?
-            .args(["snapshots", "--tag", "neo", "--latest", "1", "--json"])
-            .stderr(Stdio::piped())
-            .output()
-            .context("run restic (is it installed?)")?;
-        if !out.status.success() {
-            bail!(
-                "restic snapshots failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
-        }
+        let out = output_checked(
+            self.restic()?
+                .args(["snapshots", "--tag", "neo", "--latest", "1", "--json"]),
+            "restic snapshots",
+        )?;
         let v: serde_json::Value =
             serde_json::from_slice(&out.stdout).context("parse restic snapshots")?;
         let snap = v
@@ -714,19 +687,10 @@ impl<'a> Encrypted<'a> {
     /// Folders of the newest snapshot that look like a config repo
     /// (settings.toml next to .git), shortest first.
     fn config_repos(&self) -> Result<Vec<String>> {
-        let out = self
-            .restic()?
-            .args(["ls", "latest", "--tag", "neo"])
-            .stderr(Stdio::piped())
-            .output()
-            .context("run restic ls")?;
-        if !out.status.success() {
-            bail!(
-                "restic ls failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
-        }
-        let text = String::from_utf8_lossy(&out.stdout);
+        let text = stdout_checked(
+            self.restic()?.args(["ls", "latest", "--tag", "neo"]),
+            "restic ls",
+        )?;
         let paths: std::collections::HashSet<&str> = text.lines().collect();
         let mut found: Vec<String> = paths
             .iter()

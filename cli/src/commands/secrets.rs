@@ -12,6 +12,7 @@ use std::fs;
 use std::process::Command;
 
 use crate::commands::web::nix::registry::{EXTRACT_LIB, EXTRACT_SECRET_PATHS};
+use crate::utils::command::output_checked;
 use crate::utils::secrets::{self, Backend};
 use crate::utils::secrets_store::{Store, IDENTITY_FILE};
 
@@ -32,20 +33,15 @@ pub fn secret_paths(config_path: &str, nix_cmd: &str) -> Result<Vec<Vec<String>>
         extractor.display(),
         repo.display()
     );
-    let out = Command::new(nix_cmd)
-        .args(["--extra-experimental-features", "nix-command flakes"])
-        .args(["eval", "--json", "--impure", "--expr", &expr])
-        .output()
-        .context("run nix eval for secret paths")?;
+    let out = output_checked(
+        Command::new(nix_cmd)
+            .args(["--extra-experimental-features", "nix-command flakes"])
+            .args(["eval", "--json", "--impure", "--expr", &expr]),
+        "nix eval of secret paths",
+    );
     let _ = fs::remove_dir_all(&dir);
-    if !out.status.success() {
-        bail!(
-            "nix eval of secret paths failed:\n{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-    }
     let raw: RawPaths =
-        serde_json::from_slice(&out.stdout).context("parse secret paths from nix eval")?;
+        serde_json::from_slice(&out?.stdout).context("parse secret paths from nix eval")?;
     if raw.paths.is_empty() {
         bail!("no secret settings found in the config flake (evaluation problem?)");
     }

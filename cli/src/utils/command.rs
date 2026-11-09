@@ -1,9 +1,10 @@
 //! Shell quoting, process execution, and thin git/nix wrappers.
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use std::ffi::OsStr;
+use std::io::Write;
 use std::os::unix::process::ExitStatusExt;
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 
 /// Quote a string for safe copy-paste into a POSIX shell (bash/sh).
 ///
@@ -99,6 +100,55 @@ pub fn execute_command(cmd: &mut Command) -> Result<()> {
     Ok(())
 }
 
+/// `out` when the command succeeded, else `{what} failed: {stderr}`.
+pub fn check_output(out: Output, what: &str) -> Result<Output> {
+    if !out.status.success() {
+        bail!(
+            "{what} failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(out)
+}
+
+/// Run `cmd` capturing its output; failing to start it or a non-zero exit is an error.
+/// Commands whose exit code carries meaning (not found, merge conflict) check it themselves.
+pub fn output_checked(cmd: &mut Command, what: &str) -> Result<Output> {
+    let out = cmd
+        .output()
+        .with_context(|| format!("run {what} (is it installed?)"))?;
+    check_output(out, what)
+}
+
+/// [`output_checked`], returning stdout as text (not trimmed).
+pub fn stdout_checked(cmd: &mut Command, what: &str) -> Result<String> {
+    let out = output_checked(cmd, what)?;
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Run `cmd` with `input` on stdin and capture its output. The exit status is
+/// left to the caller ([`check_output`]): a command that stops reading early
+/// reports why there, not as a broken pipe here.
+pub fn output_with_stdin(cmd: &mut Command, input: &[u8], what: &str) -> Result<Output> {
+    let mut child = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("run {what} (is it installed?)"))?;
+    let mut stdin = child.stdin.take().context("stdin of the child")?;
+    // From another thread: a child that fills its stdout before reading all of
+    // its stdin would otherwise wait for us forever.
+    std::thread::scope(|s| {
+        s.spawn(move || {
+            let _ = stdin.write_all(input);
+        });
+        child
+            .wait_with_output()
+            .with_context(|| format!("wait for {what}"))
+    })
+}
+
 pub fn run_nix(config_path: &str, nix_cmd: &str, args: &[&str]) -> Result<()> {
     execute_command(
         Command::new(nix_cmd)
@@ -173,7 +223,33 @@ pub fn get_current_branch(config_path: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::write_flake_args;
+    use super::*;
+
+    fn sh(script: &str) -> Command {
+        let mut c = Command::new("sh");
+        c.args(["-c", script]);
+        c
+    }
+
+    #[test]
+    fn checked_output_reports_stderr() {
+        assert_eq!(stdout_checked(&mut sh("echo ok"), "t").unwrap(), "ok\n");
+        let e = stdout_checked(&mut sh("echo boom >&2; exit 3"), "thing").unwrap_err();
+        assert_eq!(e.to_string(), "thing failed: boom");
+        let e = output_checked(&mut Command::new("/nonexistent/x"), "x").unwrap_err();
+        assert!(e.to_string().contains("is it installed"));
+    }
+
+    #[test]
+    fn stdin_is_fed_without_deadlock() {
+        // More than a pipe buffer in both directions.
+        let input = vec![b'x'; 1 << 20];
+        let out = output_with_stdin(&mut sh("cat"), &input, "cat").unwrap();
+        assert_eq!(out.stdout.len(), input.len());
+        // A child that ignores its stdin only reports its own status.
+        let out = output_with_stdin(&mut sh("exit 7"), &input, "t").unwrap();
+        assert_eq!(out.status.code(), Some(7));
+    }
 
     #[test]
     fn write_flake_runs_impure_so_path_exists_can_see_the_checkout() {

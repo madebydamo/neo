@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use super::backup::{self, Access, Location, Source};
 use super::local::{commit_uncommitted, remote_url, WORK_DIR};
 use super::RestoreArgs;
-use crate::utils::command::shell_quote;
+use crate::utils::command::{shell_quote, stdout_checked};
 use crate::utils::execute_command;
 
 const UNIT: &str = "neo-restore";
@@ -115,25 +115,20 @@ fn kexec(host: &str) -> Result<()> {
     let tmp = env::temp_dir().join(format!("neo-restore-fake-{}", std::process::id()));
     fs::create_dir_all(&tmp)?;
     fs::write(tmp.join("system"), "x86_64-linux")?;
-    let out = Command::new("nix")
-        .args([
-            "--extra-experimental-features",
-            "nix-command",
-            "store",
-            "add-path",
-        ])
-        .arg(&tmp)
-        .args(["--name", "neo-restore-placeholder"])
-        .output()
-        .context("nix store add-path")?;
+    let out = stdout_checked(
+        Command::new("nix")
+            .args([
+                "--extra-experimental-features",
+                "nix-command",
+                "store",
+                "add-path",
+            ])
+            .arg(&tmp)
+            .args(["--name", "neo-restore-placeholder"]),
+        "nix store add-path",
+    );
     let _ = fs::remove_dir_all(&tmp);
-    if !out.status.success() {
-        bail!(
-            "nix store add-path failed: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-    }
-    let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let p = out?.trim().to_string();
     let mut anywhere = Command::new("nixos-anywhere");
     anywhere.args([
         "--phases",
