@@ -3,7 +3,7 @@
 use anyhow::{bail, Context, Result};
 
 use crate::utils::generation::{list_system_generations, switch_system_generation, GenerationMode};
-use crate::utils::ops::{OperationKind, OperationLog};
+use crate::utils::ops::{OpStatus, OperationKind, OperationLog};
 
 pub fn generation_list(dry_run: bool, sudo_cmd: &str) -> Result<()> {
     if dry_run {
@@ -48,18 +48,18 @@ fn run_generation_op(n: u64, mode: GenerationMode, dry_run: bool, sudo_cmd: &str
         OperationLog::new(OperationKind::Generation, &suf)
             .with_extra(serde_json::json!({ "generation": n, "mode": mode_s }))
     });
-    let track = |status: &str, phase: &str, err: Option<&str>| {
+    let track = |status: OpStatus, phase: &str, err: Option<&str>| {
         if let Some(op) = &op {
             op.write_state(status, phase, err, None);
         }
     };
-    track("in_progress", "starting", None);
+    track(OpStatus::InProgress, "starting", None);
     let _tee = op.as_ref().and_then(|op| op.capture_stdio());
-    track("in_progress", "nix-env-switch-generation", None);
+    track(OpStatus::InProgress, "nix-env-switch-generation", None);
 
     match switch_system_generation(n, mode, sudo_cmd) {
         Ok(()) => {
-            track("success", "completed", None);
+            track(OpStatus::Success, "completed", None);
             match mode {
                 GenerationMode::Switch => println!("Switched to generation {n}"),
                 GenerationMode::Boot => println!("Boot default set to generation {n}"),
@@ -67,7 +67,7 @@ fn run_generation_op(n: u64, mode: GenerationMode, dry_run: bool, sudo_cmd: &str
             Ok(())
         }
         Err(e) => {
-            track("failed", "switch-failed", Some(&format!("{e:#}")));
+            track(OpStatus::Failed, "switch-failed", Some(&format!("{e:#}")));
             Err(e).with_context(|| format!("generation {mode_s} {n}"))
         }
     }

@@ -11,6 +11,7 @@
 //!
 //! The client reconnects with `?offset=<to>` after a drop (e.g. neo-web restarting
 //! during a switch) and continues exactly where it left off.
+use crate::utils::ops::OpStatus;
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
@@ -65,7 +66,7 @@ pub fn state_message(kind: OperationKind, id: &str, v: &Value) -> Value {
     let phase = str_field(v, "phase");
     let steps = kind.steps();
     let last = steps.len().saturating_sub(1);
-    let step = if status == "success" {
+    let step = if status == OpStatus::Success.as_str() {
         last
     } else {
         kind.step_index(phase).min(last)

@@ -5,6 +5,8 @@ use std::time::Duration;
 use rocket::{get, State};
 use rocket_ws::{Channel, Message, WebSocket};
 
+use crate::utils::ops::OpStatus;
+
 use crate::commands::web::action_bar::action_bar_oob_async;
 use crate::commands::web::locks::locks_oob_element;
 use crate::commands::web::types::AppConfig;
@@ -228,7 +230,7 @@ pub fn ws_op(ws: WebSocket, id: &str, offset: Option<u64>) -> Channel<'static> {
                     _ = tick.tick() => {
                         let terminal = match read_state_message(&id) {
                             Some((raw, msg)) => {
-                                let done = msg["status"] != "in_progress";
+                                let done = msg["status"] != OpStatus::InProgress.as_str();
                                 if raw != last_raw {
                                     last_raw = raw;
                                     if !send(&mut stream, &msg).await {

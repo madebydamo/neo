@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use super::git::dirty_state;
 use super::ops::kind::id_timestamp;
-use super::ops::store::{find_recent_in_progress, gc_old_ops};
+use super::ops::store::{gc_old_ops, running_ops};
 use super::types::AppConfig;
 use super::util::{escape_html, op_id_ok, proc};
 use crate::utils::OperationKind;
@@ -20,10 +20,7 @@ const SHOWN_OPS: [(OperationKind, &str, &str); 3] = [
 fn action_bar_signature(config: &AppConfig) -> String {
     gc_old_ops();
     let busy = config.eval_busy.load(Ordering::Relaxed);
-    let ops: Vec<String> = SHOWN_OPS
-        .iter()
-        .map(|(k, _, _)| find_recent_in_progress(*k).unwrap_or_default())
-        .collect();
+    let ops = running_ops(SHOWN_OPS.map(|(k, _, _)| k)).map(Option::unwrap_or_default);
     let d = dirty_state(config);
     let dirty = d.settings_dirty || d.worktree_dirty;
     format!("{busy}|{}|{dirty}", ops.join("|"))
@@ -51,9 +48,12 @@ fn progress_button(kind: OperationKind, kind_label: &str, id: &str, btn_class: &
 /// Uses a single dirty_state pass for pending + reset.
 fn render_action_bar_dynamic_inner(config: &AppConfig) -> String {
     let d = dirty_state(config);
-    let running = SHOWN_OPS.iter().find_map(|&(kind, label, class)| {
-        find_recent_in_progress(kind).map(|id| progress_button(kind, label, &id, class))
-    });
+    let running = SHOWN_OPS
+        .iter()
+        .zip(running_ops(SHOWN_OPS.map(|(k, _, _)| k)))
+        .find_map(|(&(kind, label, class), id)| {
+            id.map(|id| progress_button(kind, label, &id, class))
+        });
     let pending = if let Some(button) = running {
         button
     } else if d.worktree_dirty || d.settings_dirty {

@@ -13,6 +13,7 @@ use crate::commands::web::ops::store::{
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::{nix_bin, proc};
 use crate::utils::locks::{LockSpec, OpInfo};
+use crate::utils::ops::OpStatus;
 use crate::utils::{get_timestamp, OperationKind, OPERATIONS_DIR};
 
 /// Start a background store verify+repair. Returns the operation id.
@@ -31,7 +32,7 @@ pub fn start_store_verify_repair(config: Arc<AppConfig>) -> Result<String, Block
     if let Err(e) = fs::create_dir_all(OPERATIONS_DIR) {
         eprintln!("web: create {OPERATIONS_DIR}: {e}");
     }
-    write_state(&id, "in_progress", "starting", None);
+    write_state(&id, OpStatus::InProgress, "starting", None);
     if let Err(e) = fs::write(
         log_path(&id),
         format!("{id} store verify/repair triggered via web at {ts}\n"),
@@ -48,7 +49,7 @@ pub fn start_store_verify_repair(config: Arc<AppConfig>) -> Result<String, Block
 }
 
 async fn run_store_verify_repair(config: Arc<AppConfig>, id: String) {
-    write_state(&id, "in_progress", "nix-store-verify-repair", None);
+    write_state(&id, OpStatus::InProgress, "nix-store-verify-repair", None);
     let log_file = log_path(&id);
     // Prefer the same nix binary neo-web uses when available.
     let nix_store = {
@@ -80,7 +81,7 @@ async fn run_store_verify_repair(config: Arc<AppConfig>, id: String) {
         Err(e) => {
             let msg = format!("failed to spawn store repair: {e}");
             append_log(&log_file, &msg);
-            write_state(&id, "failed", "spawn", Some(&msg));
+            write_state(&id, OpStatus::Failed, "spawn", Some(&msg));
             return;
         }
     };
@@ -114,7 +115,7 @@ async fn run_store_verify_repair(config: Arc<AppConfig>, id: String) {
     match status {
         Ok(st) if st.success() => {
             append_log(&log_file, "nix-store --verify --repair completed OK");
-            write_state(&id, "in_progress", "refresh-repl", None);
+            write_state(&id, OpStatus::InProgress, "refresh-repl", None);
             // Restart the persistent repl and warm extracts so the UI can recover.
             {
                 let mut ev = config.evaluator.lock().await;
@@ -133,7 +134,7 @@ async fn run_store_verify_repair(config: Arc<AppConfig>, id: String) {
                         append_log(&log_file, &format!("repl refresh failed: {e:#}"));
                         write_state(
                             &id,
-                            "failed",
+                            OpStatus::Failed,
                             "refresh-repl",
                             Some(&format!("store repair OK but repl refresh failed: {e:#}")),
                         );
@@ -145,18 +146,18 @@ async fn run_store_verify_repair(config: Arc<AppConfig>, id: String) {
                 let mut cache = config.schema_cache.write().await;
                 cache.invalidate_all();
             }
-            write_state(&id, "success", "complete", None);
+            write_state(&id, OpStatus::Success, "complete", None);
             append_log(&log_file, "repair job complete");
         }
         Ok(st) => {
             let msg = format!("nix-store repair exited with status {st}");
             append_log(&log_file, &msg);
-            write_state(&id, "failed", "nix-store-verify-repair", Some(&msg));
+            write_state(&id, OpStatus::Failed, "nix-store-verify-repair", Some(&msg));
         }
         Err(e) => {
             let msg = format!("wait on nix-store failed: {e}");
             append_log(&log_file, &msg);
-            write_state(&id, "failed", "nix-store-verify-repair", Some(&msg));
+            write_state(&id, OpStatus::Failed, "nix-store-verify-repair", Some(&msg));
         }
     }
 }

@@ -2,18 +2,19 @@
 //! Used by activation, update, genswitch, and nix-store repair jobs.
 
 use std::fs;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
+use crate::utils::command::{mtime_secs, now_secs};
 use crate::utils::locks::{Holder, LockManager};
 pub use crate::utils::ops::{append_log, log_path, state_path};
-use crate::utils::ops::{operations_dir, write_op_state, OperationKind};
+use crate::utils::ops::{operations_dir, write_op_state, OpStatus, OperationKind};
 
 /// How long a web-triggered op may stay in phase `triggered` before the child
 /// process has taken its lock (systemd-run handoff + short lock wait).
 const TRIGGER_GRACE_SECS: u64 = 120;
 
 /// Write op state (no branch / start time / extra fields).
-pub fn write_state(id: &str, status: &str, phase: &str, err: Option<&str>) {
+pub fn write_state(id: &str, status: OpStatus, phase: &str, err: Option<&str>) {
     write_op_state(id, status, phase, err, None, None, None);
 }
 
@@ -67,7 +68,7 @@ fn mark_op_aborted(id: &str, last_phase: &str) {
     let err = format!("no longer running (last phase: {last_phase}); aborted or crashed");
     write_op_state(
         id,
-        "failed",
+        OpStatus::Failed,
         "aborted",
         Some(&err),
         branch,
@@ -84,103 +85,73 @@ fn mark_op_aborted(id: &str, last_phase: &str) {
     );
 }
 
+/// An op whose state file says `in_progress`.
+struct RunningOp {
+    id: String,
+    kind: OperationKind,
+    phase: String,
+    mtime: u64,
+}
+
+/// Every op with `status = in_progress`, whatever its process is doing.
+fn in_progress_ops() -> Vec<RunningOp> {
+    let Ok(rd) = fs::read_dir(operations_dir()) else {
+        return Vec::new();
+    };
+    rd.flatten()
+        .filter_map(|e| {
+            let name = e.file_name();
+            let id = name.to_str()?.strip_suffix(".json")?.to_string();
+            let kind = OperationKind::from_id(&id)?;
+            let mtime = mtime_secs(&e.metadata().ok()?);
+            let s = fs::read_to_string(e.path()).ok()?;
+            let v: serde_json::Value = serde_json::from_str(&s).ok()?;
+            let in_progress = OpStatus::InProgress.as_str();
+            (v.get("status").and_then(|x| x.as_str()) == Some(in_progress)).then(|| RunningOp {
+                id,
+                kind,
+                phase: v
+                    .get("phase")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                mtime,
+            })
+        })
+        .collect()
+}
+
 /// Finish in-progress ops whose lock holder is gone (Ctrl+C / crash / killed unit).
 /// Safe to call often: only rewrites state when something is actually stale.
 pub fn reap_stale_ops() {
-    let dir = operations_dir();
-    if !dir.exists() {
-        return;
-    }
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
+    let now = now_secs();
     let holders = LockManager::system().holders();
-    let Ok(rd) = fs::read_dir(&dir) else {
-        return;
-    };
-    for e in rd.flatten() {
-        let name = e.file_name();
-        let name = name.to_string_lossy();
-        if !name.ends_with(".json") {
-            continue;
+    for op in in_progress_ops() {
+        if !op_still_running(&op.id, op.kind, &op.phase, op.mtime, now, &holders) {
+            mark_op_aborted(&op.id, &op.phase);
         }
-        let id = name.trim_end_matches(".json");
-        let Some(kind) = OperationKind::from_id(id) else {
-            continue;
-        };
-        let Ok(meta) = e.metadata() else {
-            continue;
-        };
-        let mtime = meta
-            .modified()
-            .ok()
-            .map(|t| t.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs())
-            .unwrap_or(0);
-        let Ok(s) = fs::read_to_string(e.path()) else {
-            continue;
-        };
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) else {
-            continue;
-        };
-        if v.get("status").and_then(|x| x.as_str()) != Some("in_progress") {
-            continue;
-        }
-        let phase = v.get("phase").and_then(|x| x.as_str()).unwrap_or("");
-        if op_still_running(id, kind, phase, mtime, now, &holders) {
-            continue;
-        }
-        mark_op_aborted(id, phase);
     }
+}
+
+/// Most recent in-progress op of each `kind` (within the last hour), `None` where
+/// none runs. Stale ops are reaped once, before looking.
+pub fn running_ops<const N: usize>(kinds: [OperationKind; N]) -> [Option<String>; N] {
+    // Drop aborted CLI/web jobs before we advertise them as still running.
+    reap_stale_ops();
+    let now = now_secs();
+    let ops = in_progress_ops();
+    kinds.map(|kind| {
+        ops.iter()
+            .filter(|op| op.kind == kind && now <= op.mtime + 3600)
+            .max_by_key(|op| op.mtime)
+            .map(|op| op.id.clone())
+    })
 }
 
 /// Most recent in-progress op of `kind` (within the last hour).
 pub fn find_recent_in_progress(kind: OperationKind) -> Option<String> {
-    // Drop aborted CLI/web jobs before we advertise them as still running.
-    reap_stale_ops();
-
-    let prefix = format!("{}_", kind.prefix());
-    let dir = operations_dir();
-    if !dir.exists() {
-        return None;
-    }
-    let mut best: Option<(String, u64)> = None;
-    if let Ok(rd) = fs::read_dir(&dir) {
-        for e in rd.flatten() {
-            let name = e.file_name();
-            let name = name.to_string_lossy();
-            if !(name.ends_with(".json") && name.starts_with(&prefix)) {
-                continue;
-            }
-            let Ok(meta) = e.metadata() else { continue };
-            let Ok(mtime) = meta.modified() else { continue };
-            let t = mtime
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
-            if now > t + 3600 {
-                continue;
-            }
-            let Ok(s) = fs::read_to_string(e.path()) else {
-                continue;
-            };
-            let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) else {
-                continue;
-            };
-            if v.get("status").and_then(|x| x.as_str()) != Some("in_progress") {
-                continue;
-            }
-            if best.as_ref().is_none_or(|&(_, bt)| t > bt) {
-                let id = name.trim_end_matches(".json").to_string();
-                best = Some((id, t));
-            }
-        }
-    }
-    best.map(|(id, _)| id)
+    let [id] = running_ops([kind]);
+    id
 }
 
 /// Drop ops older than 7 days, then keep only the 10 newest files.
@@ -193,22 +164,12 @@ pub fn gc_old_ops() {
     if !dir.exists() {
         return;
     }
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
+    let now = now_secs();
     if let Ok(rd) = fs::read_dir(&dir) {
         for e in rd.flatten() {
-            let p = e.path();
             if let Ok(meta) = e.metadata() {
-                if let Ok(mtime) = meta.modified() {
-                    let t = mtime
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs();
-                    if now > t + 7 * 86400 {
-                        let _ = fs::remove_file(&p);
-                    }
+                if now > mtime_secs(&meta) + 7 * 86400 {
+                    let _ = fs::remove_file(e.path());
                 }
             }
         }

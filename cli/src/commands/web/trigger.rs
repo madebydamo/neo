@@ -3,6 +3,7 @@ use rocket::response::content::RawHtml;
 
 use crate::utils::command::{output_checked, sudo_command};
 use crate::utils::locks::{LockSpec, OpInfo};
+use crate::utils::ops::OpStatus;
 use crate::utils::{get_timestamp, GenerationMode, OperationKind, OperationLog};
 
 /// Seconds the spawned `neo` waits for the system lock (covers the probe → spawn gap
@@ -11,13 +12,14 @@ const SPAWNED_LOCK_WAIT: &str = "30";
 
 use super::locks::{probe, Blocked};
 use super::ops::monitor::monitor_fragment;
-use super::ops::store::{append_log, find_recent_in_progress, gc_old_ops, log_path};
+use super::ops::store::{append_log, gc_old_ops, log_path, running_ops};
 use super::util::{self, alert_html, AlertKind};
 
 /// An activation or generation switch is running (config must not move under it).
 pub fn is_activation_in_progress() -> bool {
-    find_recent_in_progress(OperationKind::Activation).is_some()
-        || find_recent_in_progress(OperationKind::Generation).is_some()
+    running_ops([OperationKind::Activation, OperationKind::Generation])
+        .iter()
+        .any(Option::is_some)
 }
 
 /// Launch `neo <args…>` as a detached oneshot under homeserver via systemd-run.
@@ -72,12 +74,24 @@ fn fail_if_not_started(op: &OperationLog, started: anyhow::Result<()>) {
     if let Err(e) = started {
         let msg = format!("{e:#}");
         append_log(&log_path(op.id()), &msg);
-        op.write_state("failed", "spawn", Some(&msg), None);
+        op.write_state(OpStatus::Failed, "spawn", Some(&msg), None);
     }
 }
 
 fn alert(kind: AlertKind, msg: String) -> RawHtml<String> {
     RawHtml(alert_html(kind, &msg))
+}
+
+/// An alert when one of `kinds` runs: its message, with `{id}` for the op id.
+fn refuse_if_running<const N: usize>(
+    tone: AlertKind,
+    kinds: [(OperationKind, &str); N],
+) -> Option<RawHtml<String>> {
+    let ids = running_ops(kinds.map(|(kind, _)| kind));
+    kinds
+        .iter()
+        .zip(ids)
+        .find_map(|((_, msg), id)| id.map(|id| alert(tone, msg.replace("{id}", &id))))
 }
 
 /// `neo activate` / `neo update` oneshot, tracked as a fresh op log.
@@ -104,17 +118,20 @@ pub fn probe_system_change(kind: &str, label: &str) -> Result<(), Blocked> {
 pub fn trigger_activation() -> Result<RawHtml<String>, Blocked> {
     gc_old_ops();
     probe_system_change("activation", "Activation")?;
-    if let Some(id) = find_recent_in_progress(OperationKind::Activation) {
-        return Ok(alert(
-            AlertKind::Error,
-            format!("Another activation {id} in progress (or auto-update). Wait."),
-        ));
-    }
-    if let Some(id) = find_recent_in_progress(OperationKind::Generation) {
-        return Ok(alert(
-            AlertKind::Error,
-            format!("Generation switch {id} in progress. Wait."),
-        ));
+    if let Some(refused) = refuse_if_running(
+        AlertKind::Error,
+        [
+            (
+                OperationKind::Activation,
+                "Another activation {id} in progress (or auto-update). Wait.",
+            ),
+            (
+                OperationKind::Generation,
+                "Generation switch {id} in progress. Wait.",
+            ),
+        ],
+    ) {
+        return Ok(refused);
     }
     Ok(trigger_oneshot(
         OperationKind::Activation,
@@ -127,23 +144,21 @@ pub fn trigger_activation() -> Result<RawHtml<String>, Blocked> {
 pub fn trigger_update() -> Result<RawHtml<String>, Blocked> {
     gc_old_ops();
     probe_system_change("update", "Update")?;
-    if let Some(id) = find_recent_in_progress(OperationKind::Activation) {
-        return Ok(alert(
-            AlertKind::Info,
-            format!("Activation {id} in progress — cannot update"),
-        ));
-    }
-    if let Some(id) = find_recent_in_progress(OperationKind::Update) {
-        return Ok(alert(
-            AlertKind::Info,
-            format!("Update {id} already in progress"),
-        ));
-    }
-    if let Some(id) = find_recent_in_progress(OperationKind::Generation) {
-        return Ok(alert(
-            AlertKind::Info,
-            format!("Generation switch {id} in progress — cannot update"),
-        ));
+    if let Some(refused) = refuse_if_running(
+        AlertKind::Info,
+        [
+            (
+                OperationKind::Activation,
+                "Activation {id} in progress — cannot update",
+            ),
+            (OperationKind::Update, "Update {id} already in progress"),
+            (
+                OperationKind::Generation,
+                "Generation switch {id} in progress — cannot update",
+            ),
+        ],
+    ) {
+        return Ok(refused);
     }
     Ok(trigger_oneshot(
         OperationKind::Update,
@@ -157,17 +172,20 @@ pub fn trigger_update() -> Result<RawHtml<String>, Blocked> {
 pub fn trigger_generation_switch(n: u64, mode: GenerationMode) -> Result<RawHtml<String>, Blocked> {
     gc_old_ops();
     probe_system_change("generation", "Generation switch")?;
-    if let Some(id) = find_recent_in_progress(OperationKind::Activation) {
-        return Ok(alert(
-            AlertKind::Error,
-            format!("Activation {id} in progress — cannot switch generation"),
-        ));
-    }
-    if let Some(id) = find_recent_in_progress(OperationKind::Generation) {
-        return Ok(alert(
-            AlertKind::Error,
-            format!("Generation switch {id} already in progress"),
-        ));
+    if let Some(refused) = refuse_if_running(
+        AlertKind::Error,
+        [
+            (
+                OperationKind::Activation,
+                "Activation {id} in progress — cannot switch generation",
+            ),
+            (
+                OperationKind::Generation,
+                "Generation switch {id} already in progress",
+            ),
+        ],
+    ) {
+        return Ok(refused);
     }
 
     let ts = get_timestamp();
@@ -177,7 +195,7 @@ pub fn trigger_generation_switch(n: u64, mode: GenerationMode) -> Result<RawHtml
     let op = OperationLog::new(OperationKind::Generation, &suffix);
     op.init_for_web_trigger(&ts);
     op.write_state_extra(
-        "in_progress",
+        OpStatus::InProgress,
         "triggered",
         None,
         None,

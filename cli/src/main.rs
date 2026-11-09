@@ -437,7 +437,12 @@ fn try_acquire_command_lock(
         Err(e) => {
             let msg = e.to_string();
             if let Some(op) = web_op {
-                op.write_state("failed", "locked", Some(&msg), None);
+                op.write_state(
+                    crate::utils::ops::OpStatus::Failed,
+                    "locked",
+                    Some(&msg),
+                    None,
+                );
             }
             if matches!(command, Commands::Init)
                 && init_skippable_while_system_locked(&e, config_path)

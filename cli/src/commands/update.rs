@@ -1,6 +1,7 @@
 use anyhow::Result;
 use toml_edit::DocumentMut;
 
+use crate::utils::ops::OpStatus;
 use crate::utils::{
     resolve_suffix, resolve_template, run_nix, run_write_flake, template, OperationKind,
     OperationLog,
@@ -26,7 +27,7 @@ pub fn update(
 
     let suffix = resolve_suffix(update_suffix, "NEO_UPDATE_SUFFIX");
     let op = OperationLog::new(OperationKind::Update, &suffix);
-    op.write_state("in_progress", "starting", None, None);
+    op.write_state(OpStatus::InProgress, "starting", None, None);
     let _tee = op.capture_stdio();
 
     // Roll back the files the previous template provided and apply the
@@ -46,7 +47,7 @@ pub fn update(
     op.step("migrate", || {
         run_nix(config_path, nix_cmd, &["run", ".#neo", "--", "migrate"])
     })?;
-    op.write_state("success", "complete", None, None);
+    op.write_state(OpStatus::Success, "complete", None, None);
     println!("Flake updated and migrated in {}", config_path);
     Ok(())
 }

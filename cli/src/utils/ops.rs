@@ -25,10 +25,28 @@ pub fn log_path(id: &str) -> PathBuf {
     operations_dir().join(format!("{id}.log"))
 }
 
+/// `status` of an op's JSON state (the web UI reads the same strings).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OpStatus {
+    InProgress,
+    Success,
+    Failed,
+}
+
+impl OpStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            OpStatus::InProgress => "in_progress",
+            OpStatus::Success => "success",
+            OpStatus::Failed => "failed",
+        }
+    }
+}
+
 /// Single writer for op JSON state used by both [`OperationLog`] and the web store.
 pub fn write_op_state(
     id: &str,
-    status: &str,
+    status: OpStatus,
     phase: &str,
     err: Option<&str>,
     branch: Option<&str>,
@@ -38,7 +56,7 @@ pub fn write_op_state(
     let _ = fs::create_dir_all(operations_dir());
     let mut s = serde_json::json!({
         "id": id,
-        "status": status,
+        "status": status.as_str(),
         "phase": phase,
         "log_path": log_path(id).to_string_lossy(),
     });
@@ -136,14 +154,20 @@ impl OperationLog {
         &self.suffix
     }
 
-    pub fn write_state(&self, status: &str, phase: &str, err: Option<&str>, branch: Option<&str>) {
+    pub fn write_state(
+        &self,
+        status: OpStatus,
+        phase: &str,
+        err: Option<&str>,
+        branch: Option<&str>,
+    ) {
         self.write_state_extra(status, phase, err, branch, None);
     }
 
     /// Like [`write_state`] with optional extra JSON fields (e.g. generation number).
     pub fn write_state_extra(
         &self,
-        status: &str,
+        status: OpStatus,
         phase: &str,
         err: Option<&str>,
         branch: Option<&str>,
@@ -169,7 +193,7 @@ impl OperationLog {
 
     /// Write an "in_progress" marker for the given phase (before running the step body).
     pub fn record_step(&self, phase: &str) {
-        self.write_state("in_progress", phase, None, None);
+        self.write_state(OpStatus::InProgress, phase, None, None);
     }
 
     /// Execute `f` as the body of `phase`: first records "in_progress"/phase, then on any
@@ -180,7 +204,7 @@ impl OperationLog {
         match f() {
             Ok(v) => Ok(v),
             Err(e) => {
-                self.write_state("failed", phase, Some(&format!("{e:#}")), None);
+                self.write_state(OpStatus::Failed, phase, Some(&format!("{e:#}")), None);
                 Err(e)
             }
         }
@@ -189,7 +213,7 @@ impl OperationLog {
     /// Write the initial "triggered" state used by the web trigger path (before systemd-run
     /// hands off to the real `neo activate` / `neo update` which will overwrite with "starting").
     pub fn init_for_web_trigger(&self, ts: &str) {
-        self.write_state("in_progress", "triggered", None, None);
+        self.write_state(OpStatus::InProgress, "triggered", None, None);
         let _ = fs::write(
             log_path(&self.id),
             format!("{} triggered via web at {}\n", self.id, ts),

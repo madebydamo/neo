@@ -3,6 +3,7 @@ use clap::ValueEnum;
 use std::process::{Command, Stdio};
 
 use crate::utils::command::TOPLEVEL_ATTR;
+use crate::utils::ops::OpStatus;
 use crate::utils::{
     format_command, get_current_branch, git_cmd, has_staged_changes, record_generation_in_commit,
     resolve_suffix, run_nix, run_write_flake, OperationKind, OperationLog,
@@ -46,22 +47,27 @@ pub fn activate(
     let suffix = resolve_suffix(activation_suffix, "NEO_ACTIVATION_SUFFIX");
     let op = OperationLog::new(OperationKind::Activation, &suffix)
         .with_extra(serde_json::json!({ "activation_mode": mode_s }));
-    op.write_state("in_progress", "starting", None, None);
+    op.write_state(OpStatus::InProgress, "starting", None, None);
     let _tee = op.capture_stdio();
 
     op.step("write-flake", || run_write_flake(config_path, nix_cmd))?;
-    op.write_state("in_progress", "write-flake-done", None, None);
+    op.write_state(OpStatus::InProgress, "write-flake-done", None, None);
 
     op.step("toplevel-build", || {
         run_nix(config_path, nix_cmd, &["build", TOPLEVEL_ATTR])
     })?;
-    op.write_state("in_progress", "toplevel-built", None, None);
+    op.write_state(OpStatus::InProgress, "toplevel-built", None, None);
 
     let branches = prepare_branches(config_path, &op, &suffix)?;
     let activation_branch = branches.activation.as_str();
     let has_changes = branches.has_changes;
 
-    op.write_state("in_progress", "pre-rebuild", None, Some(activation_branch));
+    op.write_state(
+        OpStatus::InProgress,
+        "pre-rebuild",
+        None,
+        Some(activation_branch),
+    );
     clear_stale_rebuild_unit(config_path, sudo_cmd);
     let mut rebuild = Command::new(sudo_cmd);
     rebuild
@@ -85,7 +91,7 @@ pub fn activate(
             code, activation_branch
         );
         op.write_state(
-            "failed",
+            OpStatus::Failed,
             "rebuild-failed",
             Some(&format!("exit code {}", code)),
             None,
@@ -114,7 +120,7 @@ pub fn activate(
     // reboot_pending: boot mode leaves the profile pointer ahead of /run/current-system.
     let reboot_pending = mode == ActivationMode::Boot;
     op.write_state_extra(
-        "success",
+        OpStatus::Success,
         phase,
         None,
         Some(activation_branch),
@@ -185,11 +191,16 @@ fn prepare_branches(config_path: &str, op: &OperationLog, suffix: &str) -> Resul
     if let Err(e) = git_cmd(config_path, &["switch", "-C", &branches.activation]) {
         branches.drop_build_branch(config_path);
         let _ = git_cmd(config_path, &["switch", &orig_branch]);
-        op.write_state("failed", "branch-failed", Some(&format!("{e:#}")), None);
+        op.write_state(
+            OpStatus::Failed,
+            "branch-failed",
+            Some(&format!("{e:#}")),
+            None,
+        );
         return Err(e);
     }
     op.write_state(
-        "in_progress",
+        OpStatus::InProgress,
         "branches-created",
         None,
         Some(&branches.activation),
