@@ -4,68 +4,10 @@
 # plugin flake; a plugin that exports `neoPlugin` (flakeModules.plugin) gets a
 # `plugin` module argument so it can be imported again under a prefix.
 #
-# normalize/label/sanitize are mirrored in templates/homeserver/modules/_plugins.nix
-# (inputs are decided before the neo input exists) and cli/src/commands/web/plugins.rs.
+# label/sanitize/fromList/normalize live in the deploy template, whose flake
+# inputs are decided before the neo input exists.
 {lib, ...}: let
-  # Repository name for forge refs (github:o/r[/branch]), else the last path segment.
-  label = url: let
-    trimmed = lib.trim url;
-    noQuery = lib.head (builtins.split "[?#]" trimmed);
-    path = lib.removeSuffix "/" noQuery;
-    prefixes = ["git+file:" "git+https://" "git+http://" "https://" "http://" "path:" "github:" "gitlab:" "sourcehut:"];
-    prefix = lib.findFirst (p: lib.hasPrefix p path) "" prefixes;
-    rest = lib.removePrefix prefix path;
-    segments = lib.filter (s: s != "") (lib.splitString "/" rest);
-    forge = lib.any (p: lib.hasPrefix p trimmed) ["github:" "gitlab:" "sourcehut:"];
-    name =
-      if forge && lib.length segments >= 2
-      then lib.elemAt segments 1
-      else if segments != []
-      then lib.last segments
-      else trimmed;
-  in
-    lib.removeSuffix ".git" name;
-
-  # Plugin id from a label: lowercase [a-z0-9-], no leading digit.
-  sanitize = s: let
-    parts = lib.filter (p: builtins.isString p && p != "") (builtins.split "[^a-z0-9]+" (lib.toLower s));
-    joined = lib.concatStringsSep "-" parts;
-  in
-    if joined == ""
-    then "plugin"
-    else if builtins.match "[0-9].*" joined != null
-    then "plugin-${joined}"
-    else joined;
-
-  # Legacy list form: ids from the repository name, `-<index>` on a clash.
-  fromList = urls: let
-    ids = map (u: sanitize (label u)) urls;
-    clash = id: lib.length (lib.filter (x: x == id) ids) > 1;
-  in
-    lib.listToAttrs (lib.imap0 (i: url: let
-        id = lib.elemAt ids i;
-      in {
-        name =
-          if clash id
-          then "${id}-${toString i}"
-          else id;
-        value = {
-          inherit url;
-          prefix = "";
-        };
-      })
-      urls);
-
-  # core.plugins as written in settings.toml (list or table) → { <id> = { url; prefix; }; }
-  normalize = v:
-    if builtins.isList v
-    then fromList v
-    else
-      lib.mapAttrs (_: p: {
-        url = p.url or "";
-        prefix = p.prefix or "";
-      })
-      v;
+  inherit (import ../../templates/homeserver/modules/_plugin-ids.nix {inherit lib;}) label sanitize fromList normalize;
 
   # The `plugin` module argument of one instance.
   mkInstance = {
