@@ -248,3 +248,56 @@ test('log pane discard drops text without jumping back to follow', () => {
   assert.equal(ui.log.textContent, '');
   assert.equal(ui.jump.hidden, false);
 });
+
+function changesDom({ open = false, bodyHtml = '' } = {}) {
+  const heading = { textContent: '' };
+  const modal = { open, shown: 0, querySelector: () => heading, showModal() { this.shown++; this.open = true; } };
+  const body = { innerHTML: bodyHtml };
+  const doc = { getElementById: (id) => (id === 'changes-modal' ? modal : id === 'changes-body' ? body : null) };
+  return { heading, modal, body, doc };
+}
+
+test('changesAfterRequest opens the dialog only after success', () => {
+  const dom = changesDom();
+  globalThis.document = dom.doc;
+  try {
+    m.changesAfterRequest({ detail: { successful: false } }, 'Update');
+    assert.equal(dom.modal.shown, 0);
+    m.changesAfterRequest({ detail: { successful: true } }, 'Update');
+    assert.equal(dom.modal.shown, 1);
+    assert.equal(dom.heading.textContent, 'Update');
+    // Already open: showModal would throw on a real dialog.
+    m.changesAfterRequest({ detail: { successful: true } }, 'Again');
+    assert.equal(dom.modal.shown, 1);
+    assert.equal(dom.heading.textContent, 'Again');
+  } finally {
+    delete globalThis.document;
+  }
+});
+
+test('changesAfterRequest with ifFilled needs output in the body', () => {
+  const dom = changesDom({ bodyHtml: '  ' });
+  globalThis.document = dom.doc;
+  try {
+    m.changesAfterRequest({ detail: { successful: true } }, 'Activation', true);
+    assert.equal(dom.modal.shown, 0);
+    dom.body.innerHTML = '<div></div>';
+    m.changesAfterRequest({ detail: { successful: true } }, 'Activation', true);
+    assert.equal(dom.modal.shown, 1);
+  } finally {
+    delete globalThis.document;
+  }
+});
+
+test('openChanges replaces the body when given content', () => {
+  const dom = changesDom({ bodyHtml: 'old' });
+  globalThis.document = dom.doc;
+  try {
+    m.openChanges('T');
+    assert.equal(dom.body.innerHTML, 'old');
+    m.openChanges('T', 'new');
+    assert.equal(dom.body.innerHTML, 'new');
+  } finally {
+    delete globalThis.document;
+  }
+});

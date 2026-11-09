@@ -77,7 +77,7 @@
                 hx-post="/proposals/{{id}}/apply" hx-target="#proposal-{{id}}" hx-swap="outerHTML"
                 hx-include="#proposal-{{id}} [data-neo-ask]" data-neo-ask-save
                 data-neo-lock="system"
-                hx-on::after-request="if(!event.detail.successful)return;var c=document.getElementById('changes-body');if(!c||!c.innerHTML.trim())return;var m=document.getElementById('changes-modal');if(m){m.querySelector('h3').textContent='Activation';m.showModal();}">
+                hx-on::after-request="NeoOpMonitor.changesAfterRequest(event, 'Activation', true)">
           Save &amp; apply
         </button>
         <button type="button" class="btn btn-sm"

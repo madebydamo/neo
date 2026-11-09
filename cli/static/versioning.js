@@ -22,14 +22,7 @@ window.versioningPage = function versioningPage() {
 
   /** Output of a POST (activation monitor, alerts) in the shared dialog. */
   function openModal(title, html) {
-    var m = document.getElementById('changes-modal');
-    var body = document.getElementById('changes-body');
-    if (!m || !body) return;
-    var h = m.querySelector('h3');
-    if (h) h.textContent = title;
-    body.innerHTML = html;
-    if (typeof htmx !== 'undefined' && htmx.process) htmx.process(body);
-    if (!m.open) m.showModal();
+    window.NeoOpMonitor.openChanges(title, html);
   }
 
   var SPINNER = '<div class="flex justify-center py-8"><span class="loading loading-spinner loading-sm opacity-50"></span></div>';

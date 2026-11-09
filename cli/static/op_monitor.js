@@ -520,6 +520,37 @@
     win.addEventListener('online', function () { live.forEach(function (m) { m.poke(); }); });
   }
 
+  /** Show the shared dialog under `title`, optionally with new body content. */
+  function openChanges(title, html) {
+    var modal = document.getElementById('changes-modal');
+    if (!modal) return;
+    var heading = modal.querySelector('h3');
+    if (heading) heading.textContent = title;
+    if (html !== undefined) {
+      var body = document.getElementById('changes-body');
+      if (body) {
+        body.innerHTML = html;
+        if (typeof htmx !== 'undefined' && htmx.process) htmx.process(body);
+      }
+    }
+    if (!modal.open) modal.showModal();
+  }
+
+  /**
+   * hx-on::after-request of a button whose output lands in #changes-body. Inline
+   * rather than a document listener: htmx fires it on the button, and a button
+   * its own swap replaced (proposal card) no longer bubbles to the document.
+   * @param {boolean} [ifFilled] only when the request put something in the body
+   */
+  function changesAfterRequest(event, title, ifFilled) {
+    if (!event.detail.successful) return;
+    if (ifFilled) {
+      var body = document.getElementById('changes-body');
+      if (!body || !body.innerHTML.trim()) return;
+    }
+    openChanges(title);
+  }
+
   /** Reopen the shared dialog on the op that was running before a reload. */
   function resume(win) {
     var id = pendingResume(win);
@@ -541,6 +572,8 @@
     logPane: logPane,
     autostart: autostart,
     resume: resume,
+    openChanges: openChanges,
+    changesAfterRequest: changesAfterRequest,
     Monitor: Monitor,
   };
 });

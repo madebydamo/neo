@@ -58,7 +58,7 @@
                         hx-target="#changes-body"
                         hx-swap="innerHTML"
                         hx-confirm="Run sudo nix-store --verify --repair? This can take a few minutes."
-                        hx-on::after-request="if(!event.detail.successful)return;var m=document.getElementById('changes-modal');if(m){m.querySelector('h3').textContent='Nix store repair';m.showModal();}">
+                        hx-on::after-request="NeoOpMonitor.changesAfterRequest(event, 'Nix store repair')">
                   Repair Nix store
                 </button>
               {{/if}}
@@ -69,7 +69,7 @@
                         hx-target="#changes-body"
                         hx-swap="innerHTML"
                         hx-confirm="Run flake update + template refresh?"
-                        hx-on::after-request="if(!event.detail.successful)return;var m=document.getElementById('changes-modal');if(m){m.querySelector('h3').textContent='Update';m.showModal();}">
+                        hx-on::after-request="NeoOpMonitor.changesAfterRequest(event, 'Update')">
                   Update flake inputs
                 </button>
               {{/if}}
@@ -144,7 +144,7 @@
             <button type="button"
                     hx-post="/flake/update" data-neo-lock="system" hx-target="#changes-body" hx-swap="innerHTML"
                     hx-confirm="Run flake update + template refresh?"
-                    hx-on::after-request="if(!event.detail.successful)return;var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Update';m.showModal();"
+                    hx-on::after-request="NeoOpMonitor.changesAfterRequest(event, 'Update')"
                     class="btn btn-sm btn-ghost gap-1.5 px-2 lg:px-3"
                     title="Update flake inputs and refresh the template">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M12 4v10M7.5 9.5L12 14l4.5-4.5"/><path d="M5 17v1.5A1.5 1.5 0 006.5 20h11a1.5 1.5 0 001.5-1.5V17"/></svg>
@@ -153,7 +153,7 @@
             <button type="button"
                     hx-post="/actions/activate" data-neo-lock="system" hx-target="#changes-body" hx-swap="innerHTML"
                     hx-confirm="Trigger full activation now (via service)?"
-                    hx-on::after-request="if(!event.detail.successful)return;var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Activation';m.showModal();"
+                    hx-on::after-request="NeoOpMonitor.changesAfterRequest(event, 'Activation')"
                     class="btn btn-sm btn-primary gap-1.5 px-2.5 sm:px-3"
                     title="Build and switch to the current configuration">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4" aria-hidden="true"><path d="M8 5.6v12.8a1 1 0 001.5.9l10.2-6.4a1 1 0 000-1.7L9.5 4.7A1 1 0 008 5.6z"/></svg>
