@@ -17,7 +17,6 @@
       cfg = config.neo.services.docmost;
       appdata = cfg.appdata;
       domain = config.neo.services.swag.domain;
-      secretSet = v: v != null && v != "";
       dbPassword = cfg.dbPassword or "";
       tinyauthCfg = config.neo.services.tinyauth;
       ssoActive = cfg.sso && cfg.auth.enabled && tinyauthCfg.enabled;
@@ -35,16 +34,12 @@
       mcpPort = 8081; # Must match swag.nix.
     in {
       config = mkIf cfg.enabled {
-        assertions = [
+        assertions = lib.neo.requireSecrets "docmost" cfg [
           {
-            # An encrypted value is only checked for presence (its text is a placeholder).
-            assertion = secretSet cfg.appSecret && (lib.neo.secrets.isPlaceholder cfg.appSecret || (builtins.stringLength cfg.appSecret) >= 32);
-            message = "neo.services.docmost: appSecret must be at least 32 characters when enabled.";
+            name = "appSecret";
+            minLength = 32;
           }
-          {
-            assertion = secretSet cfg.dbPassword;
-            message = "neo.services.docmost: dbPassword must be set when enabled.";
-          }
+          "dbPassword"
         ];
 
         # Postgres 18 official image expects the volume at /var/lib/postgresql (not .../data).

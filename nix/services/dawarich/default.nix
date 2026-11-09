@@ -11,8 +11,6 @@
       cfg = config.neo.services.dawarich;
       appdata = cfg.appdata;
       domain = config.neo.services.swag.domain or null;
-      secretSet = v: v != null && v != "";
-      inherit (lib.neo.secrets) isPlaceholder;
       dbUser = "dawarich";
       dbName = "dawarich";
       publicHost =
@@ -24,11 +22,11 @@
         ["localhost" "127.0.0.1" "::1" publicHost] ++ (cfg.customDomains or [])
       ));
       dbPassword =
-        if secretSet cfg.dbPassword
+        if lib.neo.isSet cfg.dbPassword
         then cfg.dbPassword
         else "";
       secretKeyBase =
-        if secretSet cfg.secretKeyBase
+        if lib.neo.isSet cfg.secretKeyBase
         then cfg.secretKeyBase
         else "";
       # Shared by the web process and the worker. Sidekiq adds its own concurrency.
@@ -55,25 +53,23 @@
       };
     in {
       config = mkIf cfg.enabled {
-        assertions = [
-          {
-            assertion = publicHost != "";
-            message = "neo.services.dawarich: subdomain and services.swag.domain must be set when enabled.";
-          }
-          {
-            # An encrypted value is only checked for presence (its text is a placeholder).
-            assertion = secretSet cfg.secretKeyBase && (isPlaceholder cfg.secretKeyBase || (cfg.secretKeyBase != "CHANGE_ME" && (stringLength cfg.secretKeyBase) >= 32));
-            message = "neo.services.dawarich: secretKeyBase must be at least 32 characters when enabled (use the Generate helper; not CHANGE_ME).";
-          }
-          {
-            assertion = secretSet cfg.dbPassword;
-            message = "neo.services.dawarich: dbPassword must be set when enabled.";
-          }
-          {
-            assertion = cfg.containers.dawarich == cfg.containers."dawarich-sidekiq";
-            message = "neo.services.dawarich: containers.dawarich and containers.dawarich-sidekiq must be the same image tag.";
-          }
-        ];
+        assertions =
+          lib.neo.requireSecrets "dawarich" cfg ["dbPassword"]
+          ++ [
+            {
+              assertion = publicHost != "";
+              message = "neo.services.dawarich: subdomain and services.swag.domain must be set when enabled.";
+            }
+            {
+              # An encrypted value is only checked for presence (its text is a placeholder).
+              assertion = lib.neo.isSet cfg.secretKeyBase && (cfg.secretKeyBase != "CHANGE_ME" && lib.neo.secrets.isLongEnough 32 cfg.secretKeyBase);
+              message = "neo.services.dawarich: secretKeyBase must be at least 32 characters when enabled (use the Generate helper; not CHANGE_ME).";
+            }
+            {
+              assertion = cfg.containers.dawarich == cfg.containers."dawarich-sidekiq";
+              message = "neo.services.dawarich: containers.dawarich and containers.dawarich-sidekiq must be the same image tag.";
+            }
+          ];
 
         # Postgres 17 keeps its data directory at /var/lib/postgresql/data.
         systemd.services.docker-dawarich-db.preStart = lib.neo.mkEnsureDirs config [

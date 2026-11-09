@@ -25,23 +25,22 @@
     # Only pin model.* when the operator set them. Omitting keys leaves config.yaml
     # free for OAuth / prior values (Nix merge preserves user keys it does not declare).
     # Hermes managed mode still blocks dashboard saves.
-    nonEmpty = v: v != null && v != "";
     llm = cfg.llm;
 
     modelSection =
-      (lib.optionalAttrs (nonEmpty llm.model) {
+      (lib.optionalAttrs (lib.neo.isSet llm.model) {
         default = llm.model;
       })
-      // (lib.optionalAttrs (nonEmpty llm.provider) {
+      // (lib.optionalAttrs (lib.neo.isSet llm.provider) {
         provider = llm.provider;
       })
-      // (lib.optionalAttrs (nonEmpty llm.baseUrl) {
+      // (lib.optionalAttrs (lib.neo.isSet llm.baseUrl) {
         base_url = llm.baseUrl;
       })
       # The key itself comes from the env (lib.neo.mkHermesLlmEnv → hermes.env).
       # config.yaml is deep-merged, so an empty api_key clears an inline key an
       # older generation wrote there; an empty key counts as unset upstream.
-      // (lib.optionalAttrs (nonEmpty llm.provider && llm.provider == "custom" && nonEmpty llm.apiKey) {
+      // (lib.optionalAttrs (lib.neo.isSet llm.provider && llm.provider == "custom" && lib.neo.isSet llm.apiKey) {
         key_env = lib.neo.hermesCustomKeyEnv;
         api_key = "";
       });

@@ -10,25 +10,18 @@
       cfg = config.neo.services.activepieces;
       appdata = cfg.appdata;
       domain = config.neo.services.swag.domain;
-      secretSet = v: v != null && v != "";
       inherit (lib.neo.secrets) isPlaceholder;
     in {
       config = mkIf cfg.enabled {
-        assertions = [
-          {
-            # An encrypted value is only checked for presence (its text is a placeholder).
-            assertion = secretSet cfg.encryptionKey && (isPlaceholder cfg.encryptionKey || builtins.match "[A-Za-z0-9]{32}" cfg.encryptionKey != null);
-            message = "neo.services.activepieces: encryptionKey must be exactly 32 alphanumeric characters (openssl rand -hex 16).";
-          }
-          {
-            assertion = secretSet cfg.jwtSecret;
-            message = "neo.services.activepieces: jwtSecret must be set when enabled (use the Generate helper in the Neo UI).";
-          }
-          {
-            assertion = secretSet cfg.dbPassword;
-            message = "neo.services.activepieces: dbPassword must be set when enabled (use the Generate helper in the Neo UI).";
-          }
-        ];
+        assertions =
+          lib.neo.requireSecrets "activepieces" cfg ["jwtSecret" "dbPassword"]
+          ++ [
+            {
+              # An encrypted value is only checked for presence (its text is a placeholder).
+              assertion = lib.neo.isSet cfg.encryptionKey && (isPlaceholder cfg.encryptionKey || builtins.match "[A-Za-z0-9]{32}" cfg.encryptionKey != null);
+              message = "neo.services.activepieces: encryptionKey must be exactly 32 alphanumeric characters (openssl rand -hex 16).";
+            }
+          ];
 
         systemd.services.docker-activepieces-db.preStart = lib.neo.mkEnsureDirs config [
           "${appdata}/pgdata"

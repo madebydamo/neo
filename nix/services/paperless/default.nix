@@ -9,13 +9,12 @@
       cfg = config.neo.services.paperless;
       appdata = cfg.appdata;
       domain = config.neo.services.swag.domain;
-      secretSet = v: v != null && v != "";
     in {
       config = mkIf cfg.enabled {
         # paperless-ngx 3.0+ raises ImproperlyConfigured without a real secret key.
         assertions = [
           {
-            assertion = secretSet cfg.secretKey && cfg.secretKey != "change-me";
+            assertion = lib.neo.isSet cfg.secretKey && cfg.secretKey != "change-me";
             message = "neo.services.paperless: secretKey must be set to a unique value when enabled (use the Generate helper; not the default \"change-me\").";
           }
         ];

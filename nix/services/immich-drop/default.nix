@@ -9,15 +9,9 @@
       cfg = config.neo.services.immich-drop;
       immichCfg = config.neo.services.immich;
       domain = config.neo.services.swag.domain;
-      secretSet = v: v != null && v != "";
     in {
       config = mkIf cfg.enabled {
-        assertions = [
-          {
-            assertion = secretSet cfg.sessionSecret;
-            message = "neo.services.immich-drop: sessionSecret is required when enabled (use the Generate helper).";
-          }
-        ];
+        assertions = lib.neo.requireSecrets "immich-drop" cfg ["sessionSecret"];
 
         neo.core.secrets.containerEnv.immich-drop = mkIf (cfg.sessionSecret != null) (
           {SESSION_SECRET = cfg.sessionSecret;}

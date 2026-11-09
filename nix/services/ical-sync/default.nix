@@ -12,7 +12,6 @@
       swagEnabled = config.neo.services.swag.enabled or false;
       hasSubscriptions = cfg.subscriptions != [];
 
-      nonempty = v: v != null && v != "";
       calendarNames = map (s: s.calendar) cfg.subscriptions;
       validCalendarId = s: builtins.match "[A-Za-z0-9_-]+" s != null;
 
@@ -127,19 +126,19 @@
       config = mkIf cfg.enabled {
         assertions = [
           {
-            assertion = !hasSubscriptions || nonempty cfg.caldavUrl;
+            assertion = !hasSubscriptions || lib.neo.isSet cfg.caldavUrl;
             message = "neo.services.ical-sync: caldavUrl must be set when subscriptions are configured (enable RustiCal or set a CalDAV base URL).";
           }
           {
-            assertion = !hasSubscriptions || nonempty cfg.user;
+            assertion = !hasSubscriptions || lib.neo.isSet cfg.user;
             message = "neo.services.ical-sync: user must be set when subscriptions are configured (RustiCal principal id).";
           }
           {
-            assertion = !hasSubscriptions || nonempty cfg.password;
+            assertion = !hasSubscriptions || lib.neo.isSet cfg.password;
             message = "neo.services.ical-sync: password must be set when subscriptions are configured (RustiCal app token from the web UI).";
           }
           {
-            assertion = all (s: nonempty s.calendar && nonempty s.url) cfg.subscriptions;
+            assertion = all (s: lib.neo.isSet s.calendar && lib.neo.isSet s.url) cfg.subscriptions;
             message = "neo.services.ical-sync: each subscription needs a calendar name and an iCal URL.";
           }
           {

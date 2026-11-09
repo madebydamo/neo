@@ -77,7 +77,7 @@ On an encrypted config, a secret option evaluates to a placeholder (`@NEO_SECRET
 - **Files:** `neo.core.secrets.templates."<name>" = { content = "…${cfg.secret}…"; owner; group; mode ? "0400"; restartUnits ? []; copies ? []; };` (or `env = { … }` for an env file). Read it from `config.neo.core.secrets.templates."<name>".path`; `copies` writes the same file to paths the app expects (for example in appdata). DynamicUser units take it with `LoadCredential`.
 - **Derived values:** never hash or encode a secret in Nix. Use `lib.neo.secrets.sha256 s`, `lib.neo.secrets.base64 s` (computed when the system activates) and `lib.neo.secrets.jsonString s` (a quoted JSON string, for JSON or JS files).
 - **SWAG lines with a secret** (an `Authorization` header, for example): `let snip = lib.neo.secrets.swagSnippet config "myapp-auth" "proxy_set_header Authorization \"Bearer ${cfg.token}\";"; in` put `${snip.include}` in the proxy conf and set `neo.core.secrets.templates = snip.templates;`.
-- A required-secret assertion (`cfg.secret != null && cfg.secret != ""`) works unchanged: a placeholder is never empty.
+- **Required secrets:** `assertions = lib.neo.requireSecrets "myapp" cfg [ "dbPassword" { name = "secretKey"; minLength = 50; hint ? …; } ];`. A placeholder counts as set, and the length is only checked on a plain value (`lib.neo.secrets.isLongEnough n v`, for your own rules). `lib.neo.isSet v` is the plain "neither null nor empty" test.
 
 The build fails if a placeholder would end up in a container or unit `environment` or in `/etc` text. Rendered files live under `lib.neo.secretsDir` (`/run/neo-secrets`); use the `.path` of a template rather than building paths yourself.
 

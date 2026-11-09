@@ -21,8 +21,37 @@
 #   };
 {lib, ...}: {
   libExtensions.secrets = {
-    neo = {
+    neo = rec {
       secretsDir = "/run/neo-secrets";
+
+      # True for a value that was filled in: neither null nor empty.
+      # A placeholder (encrypted secret) counts as filled in.
+      isSet = v: v != null && v != "";
+
+      # Assertions for the secrets a service cannot start without. Each entry is
+      # an option name, or { name; minLength ? null; hint ? "use the Generate helper"; }.
+      #   assertions = lib.neo.requireSecrets "myapp" cfg [ "dbPassword" { name = "secretKey"; minLength = 50; } ];
+      requireSecrets = service: cfg:
+        map (spec: let
+          entry =
+            {
+              minLength = null;
+              hint = "use the Generate helper";
+            }
+            // (
+              if builtins.isString spec
+              then {name = spec;}
+              else spec
+            );
+          value = cfg.${entry.name};
+        in {
+          assertion = isSet value && (entry.minLength == null || secrets.isLongEnough entry.minLength value);
+          message = "neo.services.${service}: ${entry.name} must ${
+            if entry.minLength == null
+            then "be set"
+            else "be at least ${toString entry.minLength} characters"
+          } when enabled (${entry.hint}).";
+        });
 
       mkSecretOption = {
         rank ? null,
@@ -44,6 +73,10 @@
         mkPlaceholder = path: "${placeholderPrefix}${path}@";
 
         isPlaceholder = v: builtins.isString v && lib.hasPrefix placeholderPrefix v;
+
+        # Length check that an encrypted value passes: its text is a placeholder,
+        # so only the real secret could be measured, and that happens at activation.
+        isLongEnough = n: v: isPlaceholder v || builtins.stringLength v >= n;
 
         # True when a string (any config text) still carries a placeholder
         # (also the JSON variant below).

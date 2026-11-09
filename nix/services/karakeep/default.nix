@@ -11,19 +11,9 @@
       cfg = config.neo.services.karakeep;
       appdata = cfg.appdata;
       domain = config.neo.services.swag.domain;
-      secretSet = v: v != null && v != "";
     in {
       config = mkIf cfg.enabled {
-        assertions = [
-          {
-            assertion = secretSet cfg.nextauthSecret;
-            message = "neo.services.karakeep: nextauthSecret must be set when enabled (use the Generate helper in the Neo UI).";
-          }
-          {
-            assertion = secretSet cfg.meiliMasterKey;
-            message = "neo.services.karakeep: meiliMasterKey must be set when enabled (use the Generate helper in the Neo UI).";
-          }
-        ];
+        assertions = lib.neo.requireSecrets "karakeep" cfg ["nextauthSecret" "meiliMasterKey"];
 
         systemd.services.docker-karakeep.preStart = lib.neo.mkEnsureDirs config [
           "${appdata}/data"
@@ -41,7 +31,7 @@
               NEXTAUTH_SECRET = cfg.nextauthSecret or "";
               MEILI_MASTER_KEY = cfg.meiliMasterKey or "";
             }
-            // optionalAttrs (secretSet cfg.openaiApiKey) {
+            // optionalAttrs (lib.neo.isSet cfg.openaiApiKey) {
               OPENAI_API_KEY = cfg.openaiApiKey;
             };
         };

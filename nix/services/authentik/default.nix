@@ -19,12 +19,10 @@
         else if cfg.subdomain != null && domain != null && domain != ""
         then "https://${cfg.subdomain}.${domain}"
         else null;
-      secretSet = v: v != null && v != "";
-      inherit (lib.neo.secrets) isPlaceholder;
       dbUser = "authentik";
       dbName = "authentik";
       dbPassword =
-        if secretSet cfg.dbPassword
+        if lib.neo.isSet cfg.dbPassword
         then cfg.dbPassword
         else "";
       # Image default user is authentik (1000). Use the neo uid/gid so appdata ownership matches.
@@ -48,7 +46,7 @@
           AUTHENTIK_EMAIL__TIMEOUT = toString cfg.email.timeout;
           AUTHENTIK_EMAIL__FROM = cfg.email.from;
         }
-        // optionalAttrs (secretSet cfg.bootstrapEmail) {
+        // optionalAttrs (lib.neo.isSet cfg.bootstrapEmail) {
           AUTHENTIK_BOOTSTRAP_EMAIL = cfg.bootstrapEmail;
         };
       # Secret part of commonEnv: rendered env file per container (neo.core.secrets).
@@ -60,30 +58,29 @@
         // optionalAttrs (cfg.email.host != "") {
           AUTHENTIK_EMAIL__PASSWORD = cfg.email.password;
         }
-        // optionalAttrs (secretSet cfg.bootstrapPassword) {
+        // optionalAttrs (lib.neo.isSet cfg.bootstrapPassword) {
           AUTHENTIK_BOOTSTRAP_PASSWORD = cfg.bootstrapPassword;
         };
     in {
       config = mkIf cfg.enabled {
-        assertions = [
-          {
-            # An encrypted value is only checked for presence (its text is a placeholder).
-            assertion = secretSet cfg.secretKey && (isPlaceholder cfg.secretKey || (stringLength cfg.secretKey) >= 50);
-            message = "neo.services.authentik: secretKey must be at least 50 characters when enabled (use the Generate helper).";
-          }
-          {
-            assertion = secretSet cfg.dbPassword;
-            message = "neo.services.authentik: dbPassword must be set when enabled.";
-          }
-          {
-            assertion = !(cfg.email.useTls && cfg.email.useSsl);
-            message = "neo.services.authentik.email: useTls and useSsl are mutually exclusive.";
-          }
-          {
-            assertion = cfg.containers.authentik == cfg.containers."authentik-worker";
-            message = "neo.services.authentik: containers.authentik and containers.authentik-worker must be the same image tag.";
-          }
-        ];
+        assertions =
+          lib.neo.requireSecrets "authentik" cfg [
+            {
+              name = "secretKey";
+              minLength = 50;
+            }
+            "dbPassword"
+          ]
+          ++ [
+            {
+              assertion = !(cfg.email.useTls && cfg.email.useSsl);
+              message = "neo.services.authentik.email: useTls and useSsl are mutually exclusive.";
+            }
+            {
+              assertion = cfg.containers.authentik == cfg.containers."authentik-worker";
+              message = "neo.services.authentik: containers.authentik and containers.authentik-worker must be the same image tag.";
+            }
+          ];
 
         # Postgres 16 keeps its data directory at /var/lib/postgresql/data.
         systemd.services.docker-authentik-db.preStart = lib.neo.mkEnsureDirs config [
