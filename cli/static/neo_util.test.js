@@ -97,3 +97,10 @@ test('readJson returns the body and rejects with the best message', async () => 
   await assert.rejects(NeoUtil.readJson(res(false, 502, notJson)), /^Error: Request failed \(502\)\.$/);
   await assert.rejects(NeoUtil.readJson(res(true, 200, notJson), 'Broken'), /^Error: Broken \(200\)\.$/);
 });
+
+test('isContentSwap: the content area, or the pane inside it', () => {
+  assert.strictEqual(NeoUtil.isContentSwap({ id: 'config-content' }), true);
+  assert.strictEqual(NeoUtil.isContentSwap({ id: 'options-pane', closest: () => ({}) }), true);
+  assert.strictEqual(NeoUtil.isContentSwap({ id: 'options-pane', closest: () => null }), false);
+  assert.strictEqual(NeoUtil.isContentSwap({ id: 'other', closest: () => ({}) }), false);
+});

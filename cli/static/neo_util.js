@@ -158,6 +158,14 @@
     );
   }
 
+  /** Did an htmx swap into this target replace the page content or the option pane? */
+  function isContentSwap(target) {
+    return (
+      target.id === 'config-content' ||
+      !!(target.closest && target.closest('#config-content') && target.id === 'options-pane')
+    );
+  }
+
   return {
     esc: esc,
     toast: toast,
@@ -166,5 +174,6 @@
     markStandalone: markStandalone,
     reloadPane: reloadPane,
     readJson: readJson,
+    isContentSwap: isContentSwap,
   };
 });
