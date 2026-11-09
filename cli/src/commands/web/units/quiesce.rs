@@ -59,24 +59,30 @@ async fn wait_units_stopped(units: &[String], timeout: Duration) -> Result<(), S
     }
 }
 
+/// Starting a target pulls in all its units, so it only comes back when every unit
+/// was up: a unit the operator stopped stays down, the others start one by one.
+fn restart_target(target_was_active: bool, units: usize, running: usize) -> bool {
+    target_was_active && running == units
+}
+
 /// What [`quiesce`] stopped. [`Quiesced::restart`] undoes it on every path.
 #[must_use]
 pub struct Quiesced {
     to_restart: Vec<String>,
     group: Option<String>,
-    target_was_active: bool,
+    restart_target: bool,
 }
 
 impl Quiesced {
     /// Anything to start again (for a status message).
     pub fn will_start(&self) -> bool {
-        self.target_was_active || !self.to_restart.is_empty()
+        self.restart_target || !self.to_restart.is_empty()
     }
 
     /// Release the start guards and start what was running.
     pub async fn restart(self, lock: &mut LockGuard, config: &AppConfig) {
         lock.release_unit_guards();
-        if let (Some(t), true) = (&self.group, self.target_was_active) {
+        if let (Some(t), true) = (&self.group, self.restart_target) {
             if let Err(e) = systemctl(UnitAction::Start, t).await {
                 eprintln!("web: start {t}: {e}");
             }
@@ -105,14 +111,16 @@ pub async fn quiesce(
         .cloned()
         .collect();
     let group = group.map(str::to_string);
+    let to_restart = units_currently_running(&units).await;
+    let target_was_active = match &group {
+        Some(t) => !units_currently_running(std::slice::from_ref(t))
+            .await
+            .is_empty(),
+        None => false,
+    };
     let quiesced = Quiesced {
-        to_restart: units_currently_running(&units).await,
-        target_was_active: match &group {
-            Some(t) => !units_currently_running(std::slice::from_ref(t))
-                .await
-                .is_empty(),
-            None => false,
-        },
+        restart_target: restart_target(target_was_active, units.len(), to_restart.len()),
+        to_restart,
         group: group.clone(),
     };
 
@@ -141,7 +149,14 @@ pub async fn quiesce(
 
 #[cfg(test)]
 mod tests {
-    use super::unit_was_running;
+    use super::{restart_target, unit_was_running};
+
+    #[test]
+    fn target_comes_back_only_when_no_unit_was_stopped() {
+        assert!(restart_target(true, 2, 2));
+        assert!(!restart_target(true, 2, 1));
+        assert!(!restart_target(false, 2, 2));
+    }
 
     #[test]
     fn unit_was_running_only_up_states() {
