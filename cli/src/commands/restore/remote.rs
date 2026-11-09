@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use super::backup::{self, Access, Location, Source};
 use super::local::{commit_uncommitted, remote_url, WORK_DIR};
-use super::RestoreArgs;
+use super::{DataSource, RestoreArgs};
 use crate::utils::command::{shell_quote, stdout_checked};
 use crate::utils::execute_command;
 use crate::utils::fsutil::TempDir;
@@ -243,8 +243,8 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
         }
         None => None,
     };
-    let from_backup_repo = args.repo.is_empty();
-    if let (true, Some((_, source))) = (from_backup_repo, &from_backup) {
+    let repo = args.repo.as_deref();
+    if let (None, Some((_, source))) = (repo, &from_backup) {
         let access = Access {
             identities: args
                 .backup_key
@@ -264,25 +264,14 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
         let _ = fs::remove_dir_all(tmp.join("backup"));
         commit_uncommitted(&local)?;
     } else {
-        execute_command(
-            Command::new("git")
-                .args(["clone", "-q", &args.repo])
-                .arg(&local),
-        )?;
+        let repo = repo.context("give the config repo, or --from-backup <backup>")?;
+        execute_command(Command::new("git").args(["clone", "-q", repo]).arg(&local))?;
     }
-    let origin = match &args.origin {
-        Some(o) => o.clone(),
-        None if from_backup_repo => remote_url(&local),
-        None if Path::new(&args.repo).is_dir() => Command::new("git")
-            .arg("-C")
-            .arg(&args.repo)
-            .args(["remote", "get-url", "origin"])
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-            .unwrap_or_default(),
-        None => args.repo.clone(),
+    let origin = match (&args.origin, repo) {
+        (Some(o), _) => o.clone(),
+        (None, None) => remote_url(&local),
+        (None, Some(r)) if Path::new(r).is_dir() => remote_url(Path::new(r)),
+        (None, Some(r)) => r.to_string(),
     };
 
     // An installer already? Otherwise kexec into one (the disk is not touched).
@@ -370,7 +359,7 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
     if let Some(d) = &args.disk {
         cmd.extend(["--disk".into(), shell_quote(d)]);
     }
-    if !args.data {
+    if args.data == DataSource::None {
         cmd.extend(["--data".into(), "none".into()]);
     }
     if let Some(p) = &args.data_from {

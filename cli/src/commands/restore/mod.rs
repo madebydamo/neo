@@ -26,49 +26,85 @@ pub(crate) mod remote;
 
 const DEFAULT_CONFIG_PATH: &str = "/var/neo/DATA/AppData/configuration";
 
-#[derive(Debug, Clone, Default)]
+/// What the data of the restored machine comes from.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum DataSource {
+    #[default]
+    Backup,
+    None,
+}
+
+#[derive(clap::Args, Debug, Clone)]
 pub struct RestoreArgs {
-    /// Config repository; empty: taken out of `from_backup`.
-    pub repo: String,
-    /// A backup location (`user@host:folder`, `ssh://…`, a local folder)
-    /// instead of the one in the settings.
+    /// Config repository (git URL or local checkout; HEAD is restored).
+    /// Leave it out with --from-backup to use the copy in the backup.
+    #[arg(required_unless_present = "from_backup")]
+    pub repo: Option<String>,
+    /// Restore from this backup instead of the one in the settings:
+    /// user@host:folder (relative to the home folder),
+    /// ssh://user@host:port/folder, or a local folder (a mounted disk).
+    /// An encrypted backup opens with --key.
+    #[arg(long, value_name = "BACKUP")]
     pub from_backup: Option<String>,
-    pub target: PathBuf,
-    pub key: Option<PathBuf>,
-    pub config: String,
-    pub no_install: bool,
-    /// Run on this machine (root@IP) from a client.
+    /// Restore that machine from here (root@IP[:PORT]). nixos-anywhere boots it
+    /// into an installer first when it runs another system.
+    #[arg(long)]
     pub host: Option<String>,
-    /// New disko.mainDisk.
+    /// Disk to install onto (sets disko.mainDisk), e.g. /dev/disk/by-id/….
+    #[arg(long)]
     pub disk: Option<String>,
-    /// Restore the data from the configured backup (false: --data none).
-    pub data: bool,
-    /// Read a files backup from this folder instead of the configured place.
+    /// Admin ssh-ed25519 private key (default: ~/.ssh/id_ed25519).
+    #[arg(long)]
+    pub key: Option<PathBuf>,
+    /// `backup`: data from the backup configured in the repo; `none`: empty.
+    #[arg(long, value_enum, default_value_t)]
+    pub data: DataSource,
+    /// Read a plain-files backup from this folder (e.g. a mounted disk).
+    #[arg(long)]
     pub data_from: Option<PathBuf>,
-    /// Extra key for the backup login.
+    /// Another key that may log in to the backup.
+    #[arg(long)]
     pub backup_key: Option<PathBuf>,
+    /// Keep the repo's hardware-configuration.nix instead of generating one.
+    #[arg(long)]
     pub keep_hardware: bool,
-    pub yes: bool,
-    pub reboot: bool,
-    /// Preflight and plan only.
+    /// Only check and print the plan.
+    #[arg(long)]
     pub check: bool,
-    /// Remote of the restored repo (default: the repo URL).
-    pub origin: Option<String>,
-    /// Delete --key when done (remote mode copies it into the installer's RAM).
-    pub shred_key: bool,
-    /// Flake ref of the neo that runs on the target (remote mode).
+    /// Do not ask before erasing the disk.
+    #[arg(long)]
+    pub yes: bool,
+    /// Reboot into the restored system when done.
+    #[arg(long)]
+    pub reboot: bool,
+    /// Root of the target system.
+    #[arg(long, default_value = "/mnt")]
+    pub target: PathBuf,
+    /// nixosConfigurations entry to install.
+    #[arg(long, default_value = "neo")]
+    pub config: String,
+    /// Only clone the repo and restore the host key.
+    #[arg(long)]
+    pub no_install: bool,
+    /// Neo flake ref to run on the target (remote mode).
+    #[arg(long)]
     pub neo: Option<String>,
+    /// Remote of the restored repo ("" for none; default: the repo URL).
+    #[arg(long, hide = true)]
+    pub origin: Option<String>,
+    /// Delete --key when done.
+    #[arg(long, hide = true)]
+    pub shred_key: bool,
 }
 
 pub fn restore(args: &RestoreArgs, dry_run: bool) -> Result<()> {
     if dry_run {
         println!(
             "DRY-RUN: would restore {} {}",
-            if args.repo.is_empty() {
-                args.from_backup.as_deref().unwrap_or("-")
-            } else {
-                &args.repo
-            },
+            args.repo
+                .as_deref()
+                .or(args.from_backup.as_deref())
+                .unwrap_or("-"),
             args.host
                 .as_deref()
                 .map(|h| format!("on {h}"))

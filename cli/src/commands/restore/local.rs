@@ -11,7 +11,8 @@ use toml_edit::DocumentMut;
 
 use super::backup::{self, Access, Format, Source};
 use super::{
-    access_tokens, int_setting, restore_identity, under, RestoreArgs, DEFAULT_CONFIG_PATH,
+    access_tokens, int_setting, restore_identity, under, DataSource, RestoreArgs,
+    DEFAULT_CONFIG_PATH,
 };
 use crate::utils::execute_command;
 
@@ -152,7 +153,7 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
                 work: work.join("backup"),
             };
             let source = backup::detect(&access, Source::from_location(spec)?)?;
-            let repo = if args.repo.is_empty() {
+            let repo = if args.repo.is_none() {
                 let out = work.join("from-backup");
                 let _ = fs::remove_dir_all(&out);
                 println!(
@@ -171,8 +172,10 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     };
     let repo_url = match from_backup.as_ref().and_then(|(_, r)| r.as_ref()) {
         Some(r) => r.display().to_string(),
-        None if args.repo.is_empty() => bail!("give the config repo, or --from-backup <backup>"),
-        None => args.repo.clone(),
+        None => args
+            .repo
+            .clone()
+            .context("give the config repo, or --from-backup <backup>")?,
     };
     // Remote of the installed repo: the backup's copy keeps its own.
     let origin = match (
@@ -181,7 +184,7 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     ) {
         (Some(o), _) => o.clone(),
         (None, Some(r)) => remote_url(r),
-        (None, None) => args.repo.clone(),
+        (None, None) => repo_url.clone(),
     };
 
     // 1. Clone (HEAD only: uncommitted changes in a source checkout are not restored).
@@ -295,12 +298,13 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         .map(str::to_string);
 
     // Every backup destination, in the order they are tried.
-    let sources: Vec<Source> = match (&from_backup, args.data) {
+    let with_data = args.data == DataSource::Backup;
+    let sources: Vec<Source> = match (&from_backup, with_data) {
         (_, false) => Vec::new(),
         (Some((s, _)), true) => vec![s.clone()],
         (None, true) => Source::from_settings(&doc)?,
     };
-    if args.data && sources.is_empty() && args.data_from.is_none() {
+    if with_data && sources.is_empty() && args.data_from.is_none() {
         bail!("the backup is off in this config: restore without data (--data none), or point --data-from at a copy");
     }
     let mut identities = Vec::new();

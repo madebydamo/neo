@@ -122,67 +122,7 @@ enum Commands {
     /// NixOS installer as root, or from another computer with --host
     /// (docs/RESTORE.md).
     #[command(arg_required_else_help = true)]
-    Restore {
-        /// Config repository (git URL or local checkout; HEAD is restored).
-        /// Leave it out with --from-backup to use the copy in the backup.
-        #[arg(required_unless_present = "from_backup")]
-        repo: Option<String>,
-        /// Restore from this backup instead of the one in the settings:
-        /// user@host:folder (relative to the home folder),
-        /// ssh://user@host:port/folder, or a local folder (a mounted disk).
-        /// An encrypted backup opens with --key.
-        #[arg(long, value_name = "BACKUP")]
-        from_backup: Option<String>,
-        /// Restore that machine from here (root@IP[:PORT]). nixos-anywhere boots it
-        /// into an installer first when it runs another system.
-        #[arg(long)]
-        host: Option<String>,
-        /// Disk to install onto (sets disko.mainDisk), e.g. /dev/disk/by-id/….
-        #[arg(long)]
-        disk: Option<String>,
-        /// Admin ssh-ed25519 private key (default: ~/.ssh/id_ed25519).
-        #[arg(long)]
-        key: Option<PathBuf>,
-        /// `backup`: data from the backup configured in the repo; `none`: empty.
-        #[arg(long, default_value = "backup", value_parser = ["backup", "none"])]
-        data: String,
-        /// Read a plain-files backup from this folder (e.g. a mounted disk).
-        #[arg(long)]
-        data_from: Option<PathBuf>,
-        /// Another key that may log in to the backup.
-        #[arg(long)]
-        backup_key: Option<PathBuf>,
-        /// Keep the repo's hardware-configuration.nix instead of generating one.
-        #[arg(long)]
-        keep_hardware: bool,
-        /// Only check and print the plan.
-        #[arg(long)]
-        check: bool,
-        /// Do not ask before erasing the disk.
-        #[arg(long)]
-        yes: bool,
-        /// Reboot into the restored system when done.
-        #[arg(long)]
-        reboot: bool,
-        /// Root of the target system.
-        #[arg(long, default_value = "/mnt")]
-        target: PathBuf,
-        /// nixosConfigurations entry to install.
-        #[arg(long, default_value = "neo")]
-        config: String,
-        /// Only clone the repo and restore the host key.
-        #[arg(long)]
-        no_install: bool,
-        /// Neo flake ref to run on the target (remote mode).
-        #[arg(long)]
-        neo: Option<String>,
-        /// Remote of the restored repo ("" for none; default: the repo URL).
-        #[arg(long, hide = true)]
-        origin: Option<String>,
-        /// Delete --key when done.
-        #[arg(long, hide = true)]
-        shred_key: bool,
-    },
+    Restore(commands::restore::RestoreArgs),
     /// Secret settings kept outside settings.toml.
     Secrets {
         #[command(subcommand)]
@@ -281,7 +221,7 @@ fn run(cli: Cli) -> Result<()> {
     // On a full install, run as homeserver so configPath ownership and git identity match.
     // `restore` writes into a mounted target (host key, repo) and needs root.
     // `backup` reads a backup with the caller's keys or starts a unit via sudo.
-    let needs_root = matches!(command, Commands::Restore { .. } | Commands::Backup { .. });
+    let needs_root = matches!(command, Commands::Restore(_) | Commands::Backup { .. });
     if etc_settings.exists() && env::var("USER").unwrap_or_default() != "homeserver" && !needs_root
     {
         let sudo_bin = cli.sudo_path.as_deref().unwrap_or("sudo");
@@ -384,48 +324,7 @@ fn run(cli: Cli) -> Result<()> {
             Some(GenerationAction::Boot { n }) => generation_boot(n, dry_run, sudo_cmd),
             None => generation_help(),
         },
-        Commands::Restore {
-            repo,
-            from_backup,
-            host,
-            disk,
-            key,
-            data,
-            data_from,
-            backup_key,
-            keep_hardware,
-            check,
-            yes,
-            reboot,
-            target,
-            config,
-            no_install,
-            neo,
-            origin,
-            shred_key,
-        } => commands::restore::restore(
-            &commands::restore::RestoreArgs {
-                repo: repo.unwrap_or_default(),
-                from_backup,
-                target,
-                key,
-                config,
-                no_install,
-                host,
-                disk,
-                data: data == "backup",
-                data_from,
-                backup_key,
-                keep_hardware,
-                yes,
-                reboot,
-                check,
-                origin,
-                shred_key,
-                neo,
-            },
-            dry_run,
-        ),
+        Commands::Restore(args) => commands::restore::restore(&args, dry_run),
         Commands::Secrets { action } => match action {
             SecretsAction::Split => commands::secrets::split(&config_path, dry_run, nix_cmd),
             SecretsAction::Enable => commands::secrets::enable(&config_path, dry_run, nix_cmd),
@@ -508,7 +407,7 @@ fn command_lock(command: &Commands) -> Option<(LockSpec, OpInfo, Option<Operatio
         | Commands::Git
         | Commands::Lg
         | Commands::Generation { .. }
-        | Commands::Restore { .. }
+        | Commands::Restore(_)
         | Commands::Backup { .. } => None,
     }
 }
