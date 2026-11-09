@@ -108,6 +108,8 @@ impl OperationKind {
 pub struct OperationLog {
     id: String,
     suffix: String,
+    /// JSON fields carried by every state this op writes.
+    extra: Option<serde_json::Value>,
 }
 
 impl OperationLog {
@@ -116,7 +118,14 @@ impl OperationLog {
         OperationLog {
             id: format!("{}_{}", kind.prefix(), suffix),
             suffix: suffix.to_string(),
+            extra: None,
         }
+    }
+
+    /// Fields to keep in every state this op writes (mode, generation number).
+    pub fn with_extra(mut self, extra: serde_json::Value) -> Self {
+        self.extra = Some(extra);
+        self
     }
 
     pub fn id(&self) -> &str {
@@ -140,6 +149,13 @@ impl OperationLog {
         branch: Option<&str>,
         extra: Option<serde_json::Value>,
     ) {
+        let extra = match (self.extra.clone(), extra) {
+            (Some(serde_json::Value::Object(mut base)), Some(serde_json::Value::Object(more))) => {
+                base.extend(more);
+                Some(serde_json::Value::Object(base))
+            }
+            (base, more) => more.or(base),
+        };
         write_op_state(
             &self.id,
             status,

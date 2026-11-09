@@ -44,134 +44,25 @@ pub fn activate(
     }
 
     let suffix = resolve_suffix(activation_suffix, "NEO_ACTIVATION_SUFFIX");
-    let op = OperationLog::new(OperationKind::Activation, &suffix);
-    op.write_state_extra(
-        "in_progress",
-        "starting",
-        None,
-        None,
-        Some(serde_json::json!({ "activation_mode": mode_s })),
-    );
+    let op = OperationLog::new(OperationKind::Activation, &suffix)
+        .with_extra(serde_json::json!({ "activation_mode": mode_s }));
+    op.write_state("in_progress", "starting", None, None);
     let _tee = op.capture_stdio();
 
     op.step("write-flake", || run_write_flake(config_path, nix_cmd))?;
-    op.write_state_extra(
-        "in_progress",
-        "write-flake-done",
-        None,
-        None,
-        Some(serde_json::json!({ "activation_mode": mode_s })),
-    );
+    op.write_state("in_progress", "write-flake-done", None, None);
 
     op.step("toplevel-build", || {
         run_nix(config_path, nix_cmd, &["build", TOPLEVEL_ATTR])
     })?;
-    op.write_state_extra(
-        "in_progress",
-        "toplevel-built",
-        None,
-        None,
-        Some(serde_json::json!({ "activation_mode": mode_s })),
-    );
+    op.write_state("in_progress", "toplevel-built", None, None);
 
-    let activation_branch = format!("activation_{}", suffix);
-    let build_branch = format!("build_{}", suffix);
-    let orig_branch = get_current_branch(config_path).unwrap_or_else(|_| "master".to_string());
+    let branches = prepare_branches(config_path, &op, &suffix)?;
+    let activation_branch = branches.activation.as_str();
+    let has_changes = branches.has_changes;
 
-    op.step("git-add", || git_cmd(config_path, &["add", "."]))?;
-    let has_changes = has_staged_changes(config_path);
-    // The build branch only carries the commit over to the activation branch.
-    let drop_build_branch = || {
-        if has_changes {
-            let _ = git_cmd(config_path, &["branch", "-D", &build_branch]);
-        }
-    };
-    if has_changes {
-        op.step("build-branch", || {
-            git_cmd(config_path, &["switch", "-C", &build_branch])
-        })?;
-        op.step("build-commit", || {
-            git_cmd(
-                config_path,
-                &["commit", "-m", &format!("Build: {}", suffix)],
-            )
-        })?;
-    }
-
-    if let Err(e) = git_cmd(config_path, &["switch", "-C", &activation_branch]) {
-        drop_build_branch();
-        let _ = git_cmd(config_path, &["switch", &orig_branch]);
-        op.write_state_extra(
-            "failed",
-            "branch-failed",
-            Some(&format!("{e:#}")),
-            None,
-            Some(serde_json::json!({ "activation_mode": mode_s })),
-        );
-        return Err(e);
-    }
-    op.write_state_extra(
-        "in_progress",
-        "branches-created",
-        None,
-        Some(&activation_branch),
-        Some(serde_json::json!({ "activation_mode": mode_s })),
-    );
-
-    if has_changes {
-        op.step("amend-add", || git_cmd(config_path, &["add", "."]))?;
-        op.step("amend-commit", || {
-            git_cmd(
-                config_path,
-                &[
-                    "commit",
-                    "--amend",
-                    "-m",
-                    &format!("Activation: {}", activation_branch),
-                ],
-            )
-        })?;
-    }
-
-    op.write_state_extra(
-        "in_progress",
-        "pre-rebuild",
-        None,
-        Some(&activation_branch),
-        Some(serde_json::json!({ "activation_mode": mode_s })),
-    );
-    // Best-effort clear of a leftover nixos-rebuild transient unit. The unit is
-    // only loaded while a switch is in flight (or leftover failed); when it is
-    // not loaded, systemctl prints "Unit … not loaded" on stderr. Status is
-    // already ignored — also silence stdio so those lines do not pollute the
-    // activation log/UI on every successful activate.
-    let rebuild_unit = "nixos-rebuild-switch-to-configuration.service";
-    let unit_loaded = Command::new(sudo_cmd)
-        .current_dir(config_path)
-        .args([
-            "systemctl",
-            "show",
-            "-p",
-            "LoadState",
-            "--value",
-            rebuild_unit,
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .is_some_and(|s| s.trim() == "loaded");
-    if unit_loaded {
-        for action in ["reset-failed", "stop"] {
-            let _ = Command::new(sudo_cmd)
-                .current_dir(config_path)
-                .args(["systemctl", action, rebuild_unit])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-        }
-    }
+    op.write_state("in_progress", "pre-rebuild", None, Some(activation_branch));
+    clear_stale_rebuild_unit(config_path, sudo_cmd);
     let mut rebuild = Command::new(sudo_cmd);
     rebuild
         .current_dir(config_path)
@@ -187,18 +78,17 @@ pub fn activate(
 
     // Exit 4: the rebuild succeeded with warnings (common for user session reloads on switch).
     let warnings = code == 4;
-    drop_build_branch();
+    branches.drop_build_branch(config_path);
     if !status.success() && !warnings {
         println!(
             "nixos-rebuild failed (non-zero exit {}). Keeping {} branch+checkout (check 'systemctl --failed' and logs).",
             code, activation_branch
         );
-        op.write_state_extra(
+        op.write_state(
             "failed",
             "rebuild-failed",
             Some(&format!("exit code {}", code)),
             None,
-            Some(serde_json::json!({ "activation_mode": mode_s })),
         );
         anyhow::bail!("Command failed: {display} (exit {code})");
     }
@@ -227,13 +117,10 @@ pub fn activate(
         "success",
         phase,
         None,
-        Some(&activation_branch),
-        Some(serde_json::json!({
-            "activation_mode": mode_s,
-            "reboot_pending": reboot_pending,
-        })),
+        Some(activation_branch),
+        Some(serde_json::json!({ "reboot_pending": reboot_pending })),
     );
-    record_gen_after_activate(config_path, &activation_branch, has_changes);
+    record_gen_after_activate(config_path, activation_branch, has_changes);
     match mode {
         ActivationMode::Switch => {
             println!(
@@ -259,6 +146,105 @@ pub fn activate(
         }
     }
     Ok(())
+}
+
+/// The branches one activation commits to.
+struct Branches {
+    activation: String,
+    /// Only carries the commit over to the activation branch.
+    build: String,
+    has_changes: bool,
+}
+
+impl Branches {
+    fn drop_build_branch(&self, config_path: &str) {
+        if self.has_changes {
+            let _ = git_cmd(config_path, &["branch", "-D", &self.build]);
+        }
+    }
+}
+
+/// Commit the working tree (when it changed) and check out the activation branch.
+fn prepare_branches(config_path: &str, op: &OperationLog, suffix: &str) -> Result<Branches> {
+    let orig_branch = get_current_branch(config_path).unwrap_or_else(|_| "master".to_string());
+    op.step("git-add", || git_cmd(config_path, &["add", "."]))?;
+    let branches = Branches {
+        activation: format!("activation_{suffix}"),
+        build: format!("build_{suffix}"),
+        has_changes: has_staged_changes(config_path),
+    };
+    if branches.has_changes {
+        op.step("build-branch", || {
+            git_cmd(config_path, &["switch", "-C", &branches.build])
+        })?;
+        op.step("build-commit", || {
+            git_cmd(config_path, &["commit", "-m", &format!("Build: {suffix}")])
+        })?;
+    }
+
+    if let Err(e) = git_cmd(config_path, &["switch", "-C", &branches.activation]) {
+        branches.drop_build_branch(config_path);
+        let _ = git_cmd(config_path, &["switch", &orig_branch]);
+        op.write_state("failed", "branch-failed", Some(&format!("{e:#}")), None);
+        return Err(e);
+    }
+    op.write_state(
+        "in_progress",
+        "branches-created",
+        None,
+        Some(&branches.activation),
+    );
+
+    if branches.has_changes {
+        op.step("amend-add", || git_cmd(config_path, &["add", "."]))?;
+        op.step("amend-commit", || {
+            git_cmd(
+                config_path,
+                &[
+                    "commit",
+                    "--amend",
+                    "-m",
+                    &format!("Activation: {}", branches.activation),
+                ],
+            )
+        })?;
+    }
+    Ok(branches)
+}
+
+/// Best-effort clear of a leftover nixos-rebuild transient unit. The unit is
+/// only loaded while a switch is in flight (or leftover failed); when it is
+/// not loaded, systemctl prints "Unit … not loaded" on stderr. Status is
+/// already ignored — also silence stdio so those lines do not pollute the
+/// activation log/UI on every successful activate.
+fn clear_stale_rebuild_unit(config_path: &str, sudo_cmd: &str) {
+    let rebuild_unit = "nixos-rebuild-switch-to-configuration.service";
+    let unit_loaded = Command::new(sudo_cmd)
+        .current_dir(config_path)
+        .args([
+            "systemctl",
+            "show",
+            "-p",
+            "LoadState",
+            "--value",
+            rebuild_unit,
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .is_some_and(|s| s.trim() == "loaded");
+    if unit_loaded {
+        for action in ["reset-failed", "stop"] {
+            let _ = Command::new(sudo_cmd)
+                .current_dir(config_path)
+                .args(["systemctl", action, rebuild_unit])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+    }
 }
 
 /// Embed generation number in the activation commit message (no sidecar files).

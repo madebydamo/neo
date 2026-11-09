@@ -44,18 +44,13 @@ fn run_generation_op(n: u64, mode: GenerationMode, dry_run: bool, sudo_cmd: &str
     }
 
     // When triggered from the web UI via systemd-run, track progress under /tmp/neo-activations.
-    let op = std::env::var("NEO_GENSWITCH_SUFFIX")
-        .ok()
-        .map(|suf| OperationLog::new(OperationKind::Generation, &suf));
+    let op = std::env::var("NEO_GENSWITCH_SUFFIX").ok().map(|suf| {
+        OperationLog::new(OperationKind::Generation, &suf)
+            .with_extra(serde_json::json!({ "generation": n, "mode": mode_s }))
+    });
     let track = |status: &str, phase: &str, err: Option<&str>| {
         if let Some(op) = &op {
-            op.write_state_extra(
-                status,
-                phase,
-                err,
-                None,
-                Some(serde_json::json!({ "generation": n, "mode": mode_s })),
-            );
+            op.write_state(status, phase, err, None);
         }
     };
     track("in_progress", "starting", None);
