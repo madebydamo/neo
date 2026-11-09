@@ -41,7 +41,9 @@ mod save;
 mod store;
 
 use check::*;
+#[cfg(test)]
 use plan::*;
+#[cfg(test)]
 use save::*;
 use store::*;
 
