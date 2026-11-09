@@ -880,11 +880,7 @@ pub fn restore_into(
             if !sent.success() || !recv.success() {
                 bail!("zfs send/recv of {full} failed");
             }
-            execute_command(
-                Command::new("mount")
-                    .args(["-t", "zfs", "-o", "zfsutil", local_dataset])
-                    .arg(target_root),
-            )?;
+            super::mount_zfs(local_dataset, target_root)?;
             // The backup's copy of the config repo: the one from git is installed.
             let cfg = target_root.join(config_rel);
             if cfg.exists() {

@@ -10,7 +10,7 @@ use toml_edit::DocumentMut;
 
 use super::backup::{self, Access, Format, Source};
 use super::{
-    access_tokens, int_setting, restore_identity, under, DataSource, RestoreArgs,
+    access_tokens, int_setting, mount_zfs, restore_identity, under, DataSource, RestoreArgs,
     DEFAULT_CONFIG_PATH,
 };
 use crate::utils::command::{confirm, is_root};
@@ -52,11 +52,7 @@ fn is_mountpoint(p: &Path) -> bool {
 /// ZFS receive left it unmounted.
 fn reset_data_root(data_root: &Path, dataset: Option<&str>) -> Result<()> {
     if let (Some(ds), false) = (dataset, is_mountpoint(data_root)) {
-        execute_command(
-            Command::new("mount")
-                .args(["-t", "zfs", "-o", "zfsutil", ds])
-                .arg(data_root),
-        )?;
+        mount_zfs(ds, data_root)?;
     }
     for entry in fs::read_dir(data_root)? {
         let path = entry?.path();
