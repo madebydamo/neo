@@ -221,13 +221,18 @@ pub fn output_with_stdin(cmd: &mut Command, input: &[u8], what: &str) -> Result<
     })
 }
 
+/// `nix` with flakes turned on, whatever the machine's own nix.conf says.
+pub fn nix_command(nix_cmd: &str) -> Command {
+    let mut c = Command::new(nix_cmd);
+    c.args(["--extra-experimental-features", "nix-command flakes"]);
+    c
+}
+
+/// The attribute `neo build` and `neo activate` build first.
+pub const TOPLEVEL_ATTR: &str = ".#nixosConfigurations.neo.config.system.build.toplevel";
+
 pub fn run_nix(config_path: &str, nix_cmd: &str, args: &[&str]) -> Result<()> {
-    execute_command(
-        Command::new(nix_cmd)
-            .current_dir(config_path)
-            .args(["--extra-experimental-features", "nix-command flakes"])
-            .args(args),
-    )
+    execute_command(nix_command(nix_cmd).current_dir(config_path).args(args))
 }
 
 /// `nix run --impure .#write-flake`.

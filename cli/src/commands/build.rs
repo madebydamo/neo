@@ -1,6 +1,7 @@
 use anyhow::Result;
 use toml_edit::DocumentMut;
 
+use crate::utils::command::TOPLEVEL_ATTR;
 use crate::utils::{
     disko_enabled, get_timestamp, git_cmd, has_staged_changes, run_nix, run_write_flake,
 };
@@ -22,14 +23,7 @@ pub fn build(config_path: &str, config: &DocumentMut, dry_run: bool, nix_cmd: &s
         return Ok(());
     }
     run_write_flake(config_path, nix_cmd)?;
-    run_nix(
-        config_path,
-        nix_cmd,
-        &[
-            "build",
-            ".#nixosConfigurations.neo.config.system.build.toplevel",
-        ],
-    )?;
+    run_nix(config_path, nix_cmd, &["build", TOPLEVEL_ATTR])?;
     run_nix(config_path, nix_cmd, &["build", &vm])?;
     git_cmd(config_path, &["add", "."])?;
     if has_staged_changes(config_path) {

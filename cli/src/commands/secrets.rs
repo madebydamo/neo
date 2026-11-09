@@ -9,10 +9,9 @@
 
 use anyhow::{bail, Context, Result};
 use std::fs;
-use std::process::Command;
 
 use crate::commands::web::nix::registry::{EXTRACT_LIB, EXTRACT_SECRET_PATHS};
-use crate::utils::command::output_checked;
+use crate::utils::command::{nix_command, output_checked};
 use crate::utils::fsutil::TempDir;
 use crate::utils::secrets::{self, Backend};
 use crate::utils::secrets_store::{Store, IDENTITY_FILE};
@@ -34,9 +33,7 @@ pub fn secret_paths(config_path: &str, nix_cmd: &str) -> Result<Vec<Vec<String>>
         repo.display()
     );
     let out = output_checked(
-        Command::new(nix_cmd)
-            .args(["--extra-experimental-features", "nix-command flakes"])
-            .args(["eval", "--json", "--impure", "--expr", &expr]),
+        nix_command(nix_cmd).args(["eval", "--json", "--impure", "--expr", &expr]),
         "nix eval of secret paths",
     )?;
     let raw: RawPaths =

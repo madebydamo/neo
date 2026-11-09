@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use clap::ValueEnum;
 use std::process::{Command, Stdio};
 
+use crate::utils::command::TOPLEVEL_ATTR;
 use crate::utils::{
     format_command, get_current_branch, git_cmd, has_staged_changes, record_generation_in_commit,
     resolve_suffix, run_nix, run_write_flake, OperationKind, OperationLog,
@@ -63,14 +64,7 @@ pub fn activate(
     );
 
     op.step("toplevel-build", || {
-        run_nix(
-            config_path,
-            nix_cmd,
-            &[
-                "build",
-                ".#nixosConfigurations.neo.config.system.build.toplevel",
-            ],
-        )
+        run_nix(config_path, nix_cmd, &["build", TOPLEVEL_ATTR])
     })?;
     op.write_state_extra(
         "in_progress",

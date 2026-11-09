@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use super::backup::{self, Access, Source};
 use super::local::{commit_uncommitted, default_origin, remote_url, stage_repo, WORK_DIR};
 use super::{DataSource, RestoreArgs, DEFAULT_TARGET};
-use crate::utils::command::{confirm, shell_quote, stdout_checked};
+use crate::utils::command::{confirm, nix_command, shell_quote, stdout_checked};
 use crate::utils::execute_command;
 use crate::utils::fsutil::TempDir;
 
@@ -184,10 +184,9 @@ impl Target {
     }
 
     /// `nix copy` / `nix flake archive` to the installer's store.
-    fn nix_to_store(&self, features: &str, args: &[&str]) -> Command {
-        let mut c = Command::new("nix");
-        c.args(["--extra-experimental-features", features])
-            .args(args)
+    fn nix_to_store(&self, args: &[&str]) -> Command {
+        let mut c = nix_command("nix");
+        c.args(args)
             .args(["--no-check-sigs", "--to"])
             .arg(format!("ssh-ng://{}", self.host))
             .env("NIX_SSHOPTS", self.ssh_opts(true).join(" "));
@@ -200,13 +199,8 @@ impl Target {
         let tmp = TempDir::new("neo-restore-fake")?;
         fs::write(tmp.join("system"), "x86_64-linux")?;
         let out = stdout_checked(
-            Command::new("nix")
-                .args([
-                    "--extra-experimental-features",
-                    "nix-command",
-                    "store",
-                    "add-path",
-                ])
+            nix_command("nix")
+                .args(["store", "add-path"])
                 .arg(tmp.path())
                 .args(["--name", "neo-restore-placeholder"]),
             "nix store add-path",
@@ -264,16 +258,13 @@ impl Target {
     /// target, or a flake ref run there.
     fn neo(&self, args: &RestoreArgs, repo: &Path) -> Result<String> {
         if let Some(r) = &args.neo {
-            return Ok(format!(
-                "nix --extra-experimental-features 'nix-command flakes' run {}#neo --",
-                shell_quote(r)
-            ));
+            return Ok(nix_run_neo(r));
         }
         if let Ok(pkg) = env::var("NEO_PACKAGE") {
             if pkg.starts_with("/nix/store/") && Path::new(&pkg).exists() {
                 println!("Copying this neo to {} …", self.host);
                 let copied = self
-                    .nix_to_store("nix-command", &["copy"])
+                    .nix_to_store(&["copy"])
                     .arg(&pkg)
                     .status()
                     .context("nix copy")?;
@@ -283,10 +274,7 @@ impl Target {
                 println!("! nix copy failed, running the neo pinned in the repo instead");
             }
         }
-        Ok(format!(
-            "nix --extra-experimental-features 'nix-command flakes' run {}#neo --",
-            shell_quote(&pinned_neo(repo))
-        ))
+        Ok(nix_run_neo(&pinned_neo(repo)))
     }
 
     /// Repo and admin key into the installer's RAM.
@@ -342,7 +330,7 @@ impl Target {
     fn copy_inputs(&self, repo: &Path) -> Result<()> {
         println!("Copying the config's inputs to {} …", self.host);
         let archived = self
-            .nix_to_store("nix-command flakes", &["flake", "archive"])
+            .nix_to_store(&["flake", "archive"])
             .arg(repo)
             .status()
             .context("nix flake archive")?;
@@ -392,6 +380,14 @@ impl Target {
             None => bail!("lost the connection to {host}; the restore may still run: ssh {host} journalctl -fu {UNIT}"),
         }
     }
+}
+
+/// The shell words on the target that run neo from a flake.
+fn nix_run_neo(flake_ref: &str) -> String {
+    format!(
+        "nix --extra-experimental-features 'nix-command flakes' run {}#neo --",
+        shell_quote(flake_ref)
+    )
 }
 
 /// The neo revision the config's flake.lock pins (github inputs), else the default.
