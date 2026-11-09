@@ -13,7 +13,7 @@
     <div class="flex items-center gap-x-2 gap-y-1 flex-wrap min-w-0">
       <h1 class="text-lg sm:text-2xl font-semibold tracking-tight font-mono truncate min-w-0">{{service}}</h1>
       {{#if units}}
-        {{!-- Filled from live unit state by configuration.js (neoUnitSummary). --}}
+        {{!-- Filled from live unit state by unit_watch.js (unitSummary). --}}
         <button type="button" class="badge badge-sm badge-ghost gap-1.5 cursor-pointer"
                 data-unit-summary
                 @click="setPaneTab('status')"

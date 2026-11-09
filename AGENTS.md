@@ -193,7 +193,7 @@ Reference consumers: `nix/services/tinyauth/option.nix` (`access` + `ui.choices 
 
 Fields of a submodule entry render once: `options/entry_field` (`parent`, `accessor`, `target_key`), used by `attrs_of` and `list_of`, so secrets, `visibleWhen` and helpers work in both. Inputs use `options/secret_toggle` and `options/helper_button`. Page chrome: `partials/head_meta`, `partials/changes_modal`, `partials/eval_error_actions`, `partials/core_card`, `partials/section_heading`. Handlebars partials take hash params; a class passed in one must be written out in full so Tailwind sees it.
 
-Scripts share `static/neo_util.js` (`NeoUtil`, loaded first on both pages): `esc`, `store('local'|'session')` (storage that never throws), `onReady`, `markStandalone`, `reloadPane` (the leave guard asks, so callers do not confirm), `readJson(res, fallback)`, and the global `neoToast`. Buttons whose output lands in `#changes-body` use `hx-on::after-request="NeoOpMonitor.changesAfterRequest(event, 'Title')"`. Widget tests run in the real `option_form.js` through `widgets/test/harness.js`.
+Scripts share `static/neo_util.js` (`NeoUtil`, loaded first on both pages): `esc`, `store('local'|'session')` (storage that never throws), `onReady`, `markStandalone`, `reloadPane` (the leave guard asks, so callers do not confirm), `readJson(res, fallback)`, `h(tag, props, ...children)` (element builder), `isContentSwap(target)`, and the global `neoToast`. Buttons whose output lands in `#changes-body` use `hx-on::after-request="NeoOpMonitor.changesAfterRequest(event, 'Title')"`. Widget tests run in the real `option_form.js` through `widgets/test/harness.js`.
 
 ### Loading feedback
 

@@ -1,7 +1,7 @@
 // Service health: one shared summarizer + page-wide status dots.
 //
 // NeoUnitHealth.summarize(entries) folds per-unit health (server-derived from
-// systemd properties, else ActiveState) into one service state. The option pane (configuration.js unitSummary) and the services grid /
+// systemd properties, else ActiveState) into one service state. The option pane (unit_watch.js unitSummary) and the services grid /
 // navigator dots both call it, so they always agree.
 //
 // Dots: any element with data-service-status="<name>" data-units="a b"
