@@ -11,7 +11,7 @@ use crate::commands::web::locks::{try_lock, Blocked};
 use crate::commands::web::settings::discard_pending_changes;
 use crate::commands::web::trigger::trigger_activation;
 use crate::commands::web::types::AppConfig;
-use crate::commands::web::util::{alert_html, changes_actions_row, config_dir, proc, AlertKind};
+use crate::commands::web::util::{alert_html, changes_actions_row, proc, AlertKind};
 use crate::utils::locks::{LockSpec, OpInfo};
 
 #[get("/changes/action-bar")]
@@ -30,7 +30,7 @@ const ALL_APPLIED: &str = r#"<div class="flex flex-col items-center text-center 
 /// every changed file (tracked and untracked) against the last activation (`HEAD`).
 #[get("/changes/summary")]
 pub async fn changes_summary(config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    let dir = config_dir(&config.settings_path);
+    let dir = config.config_dir();
     match proc::blocking(move || summary_html(&dir)).await {
         Ok(html) => html,
         Err(e) => RawHtml(alert_html(AlertKind::Error, &e)),

@@ -226,7 +226,7 @@ pub fn load(config_path: &str, limit: usize, sudo_cmd: &str) -> TreeView {
         commits,
         head,
         head_generation,
-        dirty: !config_path.is_empty() && is_worktree_dirty(config_path),
+        dirty: !config_path.is_empty() && is_worktree_dirty(std::path::Path::new(config_path)),
         system_available,
         system_message: (!system_available).then(|| {
             "This machine has no NixOS system profile (local or development setup).".to_string()

@@ -2,14 +2,6 @@ use std::path::{Path, PathBuf};
 
 use crate::utils::command::{env_or, sudo_bin};
 
-/// Parent directory of settings.toml (config repo root).
-pub fn config_dir(settings_path: &Path) -> PathBuf {
-    settings_path
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| PathBuf::from("."))
-}
-
 /// neo-web state directory (version notes, proposals): systemd's `$STATE_DIRECTORY` (neo-web),
 /// else `$XDG_STATE_HOME/neo` or `~/.local/state/neo` (local / dev runs).
 pub fn state_dir() -> Option<PathBuf> {

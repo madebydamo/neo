@@ -17,9 +17,7 @@ use crate::commands::web::trigger::{
     is_activation_in_progress, trigger_activation, trigger_generation_switch,
 };
 use crate::commands::web::types::AppConfig;
-use crate::commands::web::util::{
-    branch_ok, config_dir, escape_html, generation_ok, proc, rev_ok, sudo_cmd,
-};
+use crate::commands::web::util::{branch_ok, escape_html, generation_ok, proc, rev_ok, sudo_cmd};
 use crate::commands::web::version_tree;
 use crate::commands::web::version_tree::notes::NoteTarget;
 use crate::utils::locks::{LockSpec, OpInfo};
@@ -37,7 +35,7 @@ pub async fn versioning_tree(
     config: &State<Arc<AppConfig>>,
     limit: Option<usize>,
 ) -> RawJson<String> {
-    let dir = config_dir(&config.settings_path);
+    let dir = config.config_dir();
     let dir_str = dir.to_str().unwrap_or(".").to_string();
     let limit = limit.unwrap_or(version_tree::PAGE);
     let sudo = sudo_cmd();
@@ -94,12 +92,11 @@ pub async fn versioning_services(config: &State<Arc<AppConfig>>, rev: &str) -> R
     if !rev_ok(rev) {
         return RawJson(serde_json::json!({"error": "invalid rev"}).to_string());
     }
-    let dir = config_dir(&config.settings_path);
+    let dir = config.config_dir();
     let rev = rev.to_string();
-    let services =
-        proc::blocking(move || enabled_services_at_rev(dir.to_str().unwrap_or("."), &rev))
-            .await
-            .and_then(|r| r);
+    let services = proc::blocking(move || enabled_services_at_rev(&dir, &rev))
+        .await
+        .and_then(|r| r);
     match services {
         Ok(s) => RawJson(serde_json::to_string(&s).unwrap_or_else(|_| "{}".to_string())),
         Err(e) => RawJson(serde_json::json!({"error": e}).to_string()),
@@ -112,7 +109,7 @@ pub async fn versioning_diff(config: &State<Arc<AppConfig>>, a: &str, b: &str) -
     if !rev_ok(a) || !rev_ok(b) {
         return RawHtml(r#"<div class="text-error text-sm">invalid revision</div>"#.to_string());
     }
-    let dir = config_dir(&config.settings_path);
+    let dir = config.config_dir();
     let (a, b) = (a.to_string(), b.to_string());
     match proc::blocking(move || diff_html(&dir, &a, &b)).await {
         Ok(html) => html,
@@ -124,8 +121,7 @@ pub async fn versioning_diff(config: &State<Arc<AppConfig>>, a: &str, b: &str) -
 }
 
 fn diff_html(dir: &Path, a: &str, b: &str) -> RawHtml<String> {
-    let dir_str = dir.to_str().unwrap_or(".");
-    let revs = resolve_rev(dir_str, a).and_then(|ra| Ok((ra, resolve_rev(dir_str, b)?)));
+    let revs = resolve_rev(dir, a).and_then(|ra| Ok((ra, resolve_rev(dir, b)?)));
     let (ra, rb) = match revs {
         Ok(r) => r,
         Err(e) => {
@@ -188,15 +184,14 @@ fn activate_rev(config: &AppConfig, rev: &str) -> Result<RawHtml<String>, Blocke
             "<span class=\"text-error text-xs\">activation already in progress</span>".to_string(),
         ));
     }
-    let dir = config_dir(&config.settings_path);
-    let dir_str = dir.to_str().unwrap_or(".");
-    if is_worktree_dirty(dir_str) {
+    let dir = config.config_dir();
+    if is_worktree_dirty(&dir) {
         return Ok(RawHtml(
             "<span class=\"text-error text-xs\">working tree dirty — cannot activate from history</span>"
                 .to_string(),
         ));
     }
-    let branch = match activation_branch_for_rev(dir_str, rev) {
+    let branch = match activation_branch_for_rev(&dir, rev) {
         Ok(Some(b)) if branch_ok(&b) => b,
         Ok(None) => {
             return Ok(RawHtml(
@@ -216,7 +211,7 @@ fn activate_rev(config: &AppConfig, rev: &str) -> Result<RawHtml<String>, Blocke
             )));
         }
     };
-    if let Err(e) = git_cmd(dir_str, &["switch", &branch]) {
+    if let Err(e) = git_cmd(dir.to_str().unwrap_or("."), &["switch", &branch]) {
         return Ok(RawHtml(format!(
             r#"<span class="text-error text-xs">checkout failed: {}</span>"#,
             escape_html(&e.to_string())

@@ -30,9 +30,9 @@ pub fn activation_tips(dir: &Path) -> HashMap<String, Vec<String>> {
 }
 
 /// Resolve a safe-looking rev to a full commit id via shell git.
-pub fn resolve_rev(config_path: &str, rev: &str) -> Result<String, String> {
+pub fn resolve_rev(dir: &Path, rev: &str) -> Result<String, String> {
     let out = git_stdout(
-        Path::new(config_path),
+        dir,
         &["rev-parse", "--verify", &format!("{}^{{commit}}", rev)],
     )?;
     let id = out.trim().to_string();
@@ -43,12 +43,9 @@ pub fn resolve_rev(config_path: &str, rev: &str) -> Result<String, String> {
 }
 
 /// Parse enabled/disabled services from `settings.toml` at `rev`.
-pub fn enabled_services_at_rev(config_path: &str, rev: &str) -> Result<ServicesAtRev, String> {
-    resolve_rev(config_path, rev)?;
-    let raw = git_stdout(
-        Path::new(config_path),
-        &["show", &format!("{}:settings.toml", rev)],
-    )?;
+pub fn enabled_services_at_rev(dir: &Path, rev: &str) -> Result<ServicesAtRev, String> {
+    resolve_rev(dir, rev)?;
+    let raw = git_stdout(dir, &["show", &format!("{}:settings.toml", rev)])?;
     let doc: DocumentMut = raw
         .parse()
         .map_err(|e| format!("parse settings.toml at {}: {e}", rev))?;
@@ -78,9 +75,9 @@ pub fn enabled_services_at_rev(config_path: &str, rev: &str) -> Result<ServicesA
 }
 
 /// Prefer an activation branch name that points at `rev` (full or short sha).
-pub fn activation_branch_for_rev(config_path: &str, rev: &str) -> Result<Option<String>, String> {
-    let full = resolve_rev(config_path, rev)?;
-    Ok(activation_tips(Path::new(config_path))
+pub fn activation_branch_for_rev(dir: &Path, rev: &str) -> Result<Option<String>, String> {
+    let full = resolve_rev(dir, rev)?;
+    Ok(activation_tips(dir)
         .remove(&full)
         .and_then(|names| names.into_iter().next()))
 }

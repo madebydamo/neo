@@ -2,7 +2,6 @@
 use std::path::Path;
 
 use super::super::types::AppConfig;
-use super::super::util::config_dir;
 use super::plumbing::git_dirty;
 
 /// Combined dirty flags for action-bar / changes UI (one pass of git checks).
@@ -13,7 +12,7 @@ pub struct DirtyState {
 
 /// Run settings + worktree dirty checks.
 pub fn dirty_state(cfg: &AppConfig) -> DirtyState {
-    let dir = config_dir(&cfg.settings_path);
+    let dir = cfg.config_dir();
     let settings_dirty = git_dirty(&dir, Some("settings.toml"));
     let worktree_dirty = git_dirty(&dir, None);
     DirtyState {
@@ -22,6 +21,6 @@ pub fn dirty_state(cfg: &AppConfig) -> DirtyState {
     }
 }
 
-pub fn is_worktree_dirty(config_path: &str) -> bool {
-    git_dirty(Path::new(config_path), None)
+pub fn is_worktree_dirty(dir: &Path) -> bool {
+    git_dirty(dir, None)
 }

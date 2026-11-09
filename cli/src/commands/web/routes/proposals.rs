@@ -21,7 +21,7 @@ use crate::commands::web::proposals::{
 };
 use crate::commands::web::settings::edit::{apply_edit, Edit};
 use crate::commands::web::types::AppConfig;
-use crate::commands::web::util::{config_dir, proc, Htmx};
+use crate::commands::web::util::{proc, Htmx};
 
 #[derive(Serialize)]
 pub struct ProposalCreated {
@@ -87,7 +87,7 @@ struct CardContext {
 }
 
 async fn has_pending_changes(config: &AppConfig) -> bool {
-    let dir = config_dir(&config.settings_path);
+    let dir = config.config_dir();
     proc::blocking(move || collect_changes(&dir, DiffRange::Worktree).is_ok_and(|s| !s.is_empty()))
         .await
         .unwrap_or(false)
