@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.swag;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.swag.skill.conf = lib.neo.mkServiceSkill {
       service = "swag";
-      inherit cfg domain;
+      inherit config;
       description = "SWAG reverse proxy, TLS, proxy-confs, certificates, dashboard, geo";
       tags = ["neo" "swag" "nginx" "tls" "dashboard" "goaccess" "geoip" "dbip"];
       title = "Neo · SWAG (edge reverse proxy)";

@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.backup;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.backup.skill.conf = lib.neo.mkServiceSkill {
       service = "backup";
-      inherit cfg domain;
+      inherit config;
       description = "Backup of Neo data over SSH or to a disk: plain files, encrypted (restic), or ZFS snapshots";
       tags = ["neo" "backup"];
       body = ''

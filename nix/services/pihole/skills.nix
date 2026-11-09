@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.pihole;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.pihole.skill.conf = lib.neo.mkServiceSkill {
       service = "pihole";
-      inherit cfg domain;
+      inherit config;
       description = "Pi-hole DNS, blocklists, web admin password";
       tags = ["neo" "pihole" "dns"];
       body = ''

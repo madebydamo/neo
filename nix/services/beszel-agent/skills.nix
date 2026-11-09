@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.beszel-agent;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.beszel-agent.skill.conf = lib.neo.mkServiceSkill {
       service = "beszel-agent";
-      inherit cfg domain;
+      inherit config;
       description = "Beszel metrics agent to hub";
       tags = ["neo" "beszel" "monitoring"];
       body = ''

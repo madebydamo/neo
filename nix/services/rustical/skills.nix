@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.rustical;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.rustical.skill.conf = lib.neo.mkServiceSkill {
       service = "rustical";
-      inherit cfg domain;
+      inherit config;
       description = "RustiCal CalDAV/CardDAV calendars and contacts";
       tags = ["neo" "rustical" "caldav" "carddav" "calendar"];
       title = "Neo · RustiCal";

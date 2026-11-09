@@ -139,7 +139,7 @@ systemd.services.docker-myapp.preStart = lib.concatStringsSep "\n" [
 
 | Function | Arguments | Returns |
 |----------|-----------|---------|
-| `mkServiceSkill` | `{ service, cfg, description, body, domain ? null, name ? "neo-${service}", category ? "neo", tags ? ["neo" service], title ? null, includeCredentialsFooter ? true, references ? {}, scripts ? {} }` | Value for `skill.conf`: `{ name, description, category, tags, references, scripts, content }` |
+| `mkServiceSkill` | `{ service, config ? null, cfg ? config.neo.services.${service}, description, body, domain ? swag domain from config, name ? "neo-${service}", category ? "neo", tags ? ["neo" service], title ? null, includeCredentialsFooter ? true, references ? {}, scripts ? {} }` | Value for `skill.conf`: `{ name, description, category, tags, references, scripts, content }` |
 | `mkSkillMd` | `{ name, description, body, category ? "neo", tags ? [], version ? "1.0.0", platforms ? ["linux"], requiresToolsets ? ["terminal"], cfg ? null, domain ? null, service ? null, title ? null, includeCredentialsFooter ? true, includeDerived ? true }` | Complete `SKILL.md` text (frontmatter, derived sections, body, footer) |
 | `mkSkillDerivedSection` | `{ cfg ? null, domain ? null, service ? null }` | "About" + "Live config" + ops cheatsheet markdown |
 | `skillPublicUrl` | `{ subdomain, domain }` | `https://<subdomain>.<domain>` or a placeholder |

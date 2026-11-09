@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.bentopdf;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.bentopdf.skill.conf = lib.neo.mkServiceSkill {
       service = "bentopdf";
-      inherit cfg domain;
+      inherit config;
       description = "BentoPDF client-side PDF tools, hidden tools config";
       tags = ["neo" "bentopdf" "pdf" "documents"];
       title = "Neo · BentoPDF";

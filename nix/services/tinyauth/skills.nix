@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.tinyauth;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.tinyauth.skill.conf = lib.neo.mkServiceSkill {
       service = "tinyauth";
-      inherit cfg domain;
+      inherit config;
       description = "tinyauth edge SSO, users, publicPaths";
       tags = ["neo" "tinyauth" "auth"];
       title = "Neo · tinyauth (forward auth)";

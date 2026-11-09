@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.paperless;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.paperless.skill.conf = lib.neo.mkServiceSkill {
       service = "paperless";
-      inherit cfg domain;
+      inherit config;
       description = "Paperless-ngx documents, OCR, API";
       tags = ["neo" "paperless" "documents"];
       title = "Neo · Paperless-ngx";

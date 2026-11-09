@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.streamproxy;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.streamproxy.skill.conf = lib.neo.mkServiceSkill {
       service = "streamproxy";
-      inherit cfg domain;
+      inherit config;
       description = "Public IP sharing: nginx stream SNI + rathole server";
       tags = ["neo" "streamproxy" "edge"];
       title = "Neo · Streamproxy";

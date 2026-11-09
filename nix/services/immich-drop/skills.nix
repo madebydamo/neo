@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.immich-drop;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.immich-drop.skill.conf = lib.neo.mkServiceSkill {
       service = "immich-drop";
-      inherit cfg domain;
+      inherit config;
       description = "Immich public drop / invite uploads";
       tags = ["neo" "immich" "upload"];
       body = ''

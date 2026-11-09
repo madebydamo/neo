@@ -6,11 +6,10 @@
     ...
   }: let
     cfg = config.neo.services.mealie;
-    domain = config.neo.services.swag.domain or null;
   in {
     config.neo.services.mealie.skill.conf = lib.neo.mkServiceSkill {
       service = "mealie";
-      inherit cfg domain;
+      inherit config cfg;
       description = "Mealie recipes, meal plans, shopping lists, API";
       tags = ["neo" "mealie" "recipes" "food"];
       title = "Neo · Mealie";

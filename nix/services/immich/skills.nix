@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.immich;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.immich.skill.conf = lib.neo.mkServiceSkill {
       service = "immich";
-      inherit cfg domain;
+      inherit config;
       description = "Immich photos, API keys, libraries";
       tags = ["neo" "immich" "photos"];
       body = ''

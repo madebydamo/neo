@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.stirling-pdf;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.stirling-pdf.skill.conf = lib.neo.mkServiceSkill {
       service = "stirling-pdf";
-      inherit cfg domain;
+      inherit config;
       description = "Stirling PDF tools, OCR, login, appdata";
       tags = ["neo" "stirling-pdf" "pdf" "documents"];
       title = "Neo · Stirling PDF";

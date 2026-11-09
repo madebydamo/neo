@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.isponsorblocktv;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.isponsorblocktv.skill.conf = lib.neo.mkServiceSkill {
       service = "isponsorblocktv";
-      inherit cfg domain;
+      inherit config;
       description = "iSponsorBlockTV YouTube ad skip on TVs";
       tags = ["neo" "youtube" "tv"];
       body = ''

@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services."ical-sync";
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services."ical-sync".skill.conf = lib.neo.mkServiceSkill {
       service = "ical-sync";
-      inherit cfg domain;
+      inherit config;
       description = "iCal feed sync into CalDAV via vdirsyncer";
       tags = ["neo" "ical-sync" "vdirsyncer" "caldav" "calendar"];
       body = ''

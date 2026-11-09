@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.webtop;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.webtop.skill.conf = lib.neo.mkServiceSkill {
       service = "webtop";
-      inherit cfg domain;
+      inherit config;
       description = "Browser full desktop (LinuxServer Webtop)";
       tags = ["neo" "webtop" "desktop"];
       title = "Neo · Webtop";

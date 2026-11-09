@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.filebrowser;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.filebrowser.skill.conf = lib.neo.mkServiceSkill {
       service = "filebrowser";
-      inherit cfg domain;
+      inherit config;
       description = "Filebrowser web file manager mounts";
       tags = ["neo" "filebrowser" "files"];
       body = ''

@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.activepieces;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.activepieces.skill.conf = lib.neo.mkServiceSkill {
       service = "activepieces";
-      inherit cfg domain;
+      inherit config;
       description = "Activepieces flows, webhooks, pieces";
       tags = ["neo" "activepieces" "automation"];
       title = "Neo · Activepieces";

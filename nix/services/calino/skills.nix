@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.calino;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.calino.skill.conf = lib.neo.mkServiceSkill {
       service = "calino";
-      inherit cfg domain;
+      inherit config;
       description = "Calino browser CalDAV calendar client";
       tags = ["neo" "calino" "caldav" "calendar"];
       title = "Neo · Calino";

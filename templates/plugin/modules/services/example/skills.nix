@@ -9,11 +9,10 @@
   }: let
     name = plugin.name "example";
     cfg = config.neo.services.${name};
-    domain = config.neo.services.swag.domain or null;
   in {
     config.neo.services.${name}.skill.conf = lib.neo.mkServiceSkill {
       service = name;
-      inherit cfg domain;
+      inherit config;
       description = "Example static page served by nginx";
       tags = ["neo" "example"];
       title = "Neo · Example${plugin.label}";

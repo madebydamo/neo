@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.rathole;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.rathole.skill.conf = lib.neo.mkServiceSkill {
       service = "rathole";
-      inherit cfg domain;
+      inherit config;
       description = "Rathole client tunnel to public edge";
       tags = ["neo" "rathole" "tunnel"];
       body = ''

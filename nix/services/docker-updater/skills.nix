@@ -5,13 +5,11 @@
     lib,
     ...
   }: let
-    cfg = config.neo.services.docker-updater;
-    domain = config.neo.services.swag.domain or null;
     updaterDir = "${config.neo.core.volumes.appdata}/updater";
   in {
     config.neo.services.docker-updater.skill.conf = lib.neo.mkServiceSkill {
       service = "docker-updater";
-      inherit cfg domain;
+      inherit config;
       description = "Pull newer OCI images for declared containers";
       tags = ["neo" "docker" "updates"];
       body = ''

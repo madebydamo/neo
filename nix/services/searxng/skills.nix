@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.searxng;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.searxng.skill.conf = lib.neo.mkServiceSkill {
       service = "searxng";
-      inherit cfg domain;
+      inherit config;
       description = "SearXNG metasearch";
       tags = ["neo" "searxng" "search"];
       body = ''

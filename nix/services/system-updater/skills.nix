@@ -5,13 +5,11 @@
     lib,
     ...
   }: let
-    cfg = config.neo.services.system-updater;
-    domain = config.neo.services.swag.domain or null;
     updaterDir = "${config.neo.core.volumes.appdata}/updater";
   in {
     config.neo.services.system-updater.skill.conf = lib.neo.mkServiceSkill {
       service = "system-updater";
-      inherit cfg domain;
+      inherit config;
       description = "Scheduled neo update/activate and GC";
       tags = ["neo" "updates"];
       body = ''

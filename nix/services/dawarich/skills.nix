@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.dawarich;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.dawarich.skill.conf = lib.neo.mkServiceSkill {
       service = "dawarich";
-      inherit cfg domain;
+      inherit config;
       description = "Dawarich location history, map, trips, tracking API";
       tags = ["neo" "dawarich" "location" "map"];
       title = "Neo · Dawarich";

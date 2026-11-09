@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.syncthing;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.syncthing.skill.conf = lib.neo.mkServiceSkill {
       service = "syncthing";
-      inherit cfg domain;
+      inherit config;
       description = "Syncthing peer sync and GUI";
       tags = ["neo" "syncthing"];
       body = ''

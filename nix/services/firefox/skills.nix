@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.firefox;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.firefox.skill.conf = lib.neo.mkServiceSkill {
       service = "firefox";
-      inherit cfg domain;
+      inherit config;
       description = "Browser Firefox desktop (LinuxServer)";
       tags = ["neo" "firefox" "browser" "desktop"];
       title = "Neo · Firefox";

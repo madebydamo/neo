@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.dufs;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.dufs.skill.conf = lib.neo.mkServiceSkill {
       service = "dufs";
-      inherit cfg domain;
+      inherit config;
       description = "Dufs file server and WebDAV";
       tags = ["neo" "dufs" "files" "webdav"];
       title = "Neo · Dufs";

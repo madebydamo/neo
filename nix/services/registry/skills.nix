@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.registry;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.registry.skill.conf = lib.neo.mkServiceSkill {
       service = "registry";
-      inherit cfg domain;
+      inherit config;
       description = "Private Docker/OCI image registry";
       tags = ["neo" "registry" "docker" "containers"];
       title = "Neo · Registry";

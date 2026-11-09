@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.neo;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.neo.skill.conf = lib.neo.mkServiceSkill {
       service = "neo";
-      inherit cfg domain;
+      inherit config;
       description = "Neo web UI, settings.toml, activate, CLI";
       tags = ["neo" "core" "cli"];
       title = "Neo · Control plane (web UI + CLI)";

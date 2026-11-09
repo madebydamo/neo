@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.authentik;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.authentik.skill.conf = lib.neo.mkServiceSkill {
       service = "authentik";
-      inherit cfg domain;
+      inherit config;
       description = "Authentik identity provider, SSO, OIDC/SAML apps, users, groups";
       tags = ["neo" "authentik" "sso" "oidc" "identity"];
       title = "Neo · Authentik";

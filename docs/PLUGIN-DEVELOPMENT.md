@@ -211,7 +211,7 @@ Work through every item. Each one exists because it is easy to forget.
 
 **`skills.nix`** ([details](#skillsnix))
 
-- [ ] `config.neo.services.<name>.skill.conf = lib.neo.mkServiceSkill { service; inherit cfg domain; description; body; };`
+- [ ] `config.neo.services.<name>.skill.conf = lib.neo.mkServiceSkill { service; inherit config; description; body; };`
 - [ ] The body names only settings keys that exist (`services.<name>.<option>`), and real units, paths and URLs.
 
 **Verify** ([details](#verify-on-the-host))
@@ -452,12 +452,10 @@ Hermes, Neo's AI assistant, gets one skill per enabled service that sets `skill.
 {...}: {
   neoPlugin.modules.myapp-skills = {config, lib, plugin, ...}: let
     name = plugin.name "myapp";
-    cfg = config.neo.services.${name};
-    domain = config.neo.services.swag.domain or null;
   in {
     config.neo.services.${name}.skill.conf = lib.neo.mkServiceSkill {
       service = name;
-      inherit cfg domain;
+      inherit config;
       description = "MyApp notes server";
       tags = ["neo" "myapp" "notes"];
       body = ''

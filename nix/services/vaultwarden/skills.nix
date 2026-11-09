@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.vaultwarden;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.vaultwarden.skill.conf = lib.neo.mkServiceSkill {
       service = "vaultwarden";
-      inherit cfg domain;
+      inherit config;
       description = "Vaultwarden Bitwarden-compatible vault + admin";
       tags = ["neo" "vaultwarden" "passwords"];
       body = ''

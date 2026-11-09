@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.docmost;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.docmost.skill.conf = lib.neo.mkServiceSkill {
       service = "docmost";
-      inherit cfg domain;
+      inherit config;
       description = "Docmost wiki, pages, workspaces";
       tags = ["neo" "docmost" "wiki" "docs"];
       title = "Neo · Docmost";

@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.changedetection;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.changedetection.skill.conf = lib.neo.mkServiceSkill {
       service = "changedetection";
-      inherit cfg domain;
+      inherit config;
       description = "Website change detection and alerts";
       tags = ["neo" "changedetection"];
       body = ''

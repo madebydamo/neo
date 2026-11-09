@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.nextcloud;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.nextcloud.skill.conf = lib.neo.mkServiceSkill {
       service = "nextcloud";
-      inherit cfg domain;
+      inherit config;
       description = "Nextcloud files, occ, Collabora, DB";
       tags = ["neo" "nextcloud" "files"];
       body = ''

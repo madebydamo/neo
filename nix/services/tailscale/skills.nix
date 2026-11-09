@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.tailscale;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.tailscale.skill.conf = lib.neo.mkServiceSkill {
       service = "tailscale";
-      inherit cfg domain;
+      inherit config;
       description = "Tailscale mesh VPN and tailscaled";
       tags = ["neo" "tailscale" "vpn"];
       body = ''

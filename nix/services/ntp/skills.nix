@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.ntp;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.ntp.skill.conf = lib.neo.mkServiceSkill {
       service = "ntp";
-      inherit cfg domain;
+      inherit config;
       description = "LAN chrony NTP service";
       tags = ["neo" "ntp" "time"];
       body = ''

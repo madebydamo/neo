@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.vpn;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.vpn.skill.conf = lib.neo.mkServiceSkill {
       service = "vpn";
-      inherit cfg domain;
+      inherit config;
       description = "Gluetun shared WireGuard outbound VPN";
       tags = ["neo" "vpn" "gluetun"];
       body = ''

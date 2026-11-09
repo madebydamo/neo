@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.collabora;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.collabora.skill.conf = lib.neo.mkServiceSkill {
       service = "collabora";
-      inherit cfg domain;
+      inherit config;
       description = "Collabora Online office for Nextcloud";
       tags = ["neo" "collabora" "nextcloud"];
       body = ''

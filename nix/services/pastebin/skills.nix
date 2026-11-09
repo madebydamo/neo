@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.pastebin;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.pastebin.skill.conf = lib.neo.mkServiceSkill {
       service = "pastebin";
-      inherit cfg domain;
+      inherit config;
       description = "Minimal pastebin (wantguns/bin)";
       tags = ["neo" "pastebin"];
       title = "Neo · Pastebin (bin)";

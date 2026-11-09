@@ -4,13 +4,10 @@
     config,
     lib,
     ...
-  }: let
-    cfg = config.neo.services.gitea;
-    domain = config.neo.services.swag.domain or null;
-  in {
+  }: {
     config.neo.services.gitea.skill.conf = lib.neo.mkServiceSkill {
       service = "gitea";
-      inherit cfg domain;
+      inherit config;
       description = "Self-hosted Gitea Git forge";
       tags = ["neo" "gitea" "git"];
       title = "Neo · Gitea";

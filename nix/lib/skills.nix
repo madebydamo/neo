@@ -298,11 +298,18 @@ in {
       '';
 
       # Convenience: full skill.conf attr for a neo.services.<name> entry.
-      # skills.nix typically only needs: service, cfg, domain, description, body.
+      # skills.nix typically only needs: service, config, description, body.
+      # cfg and domain come from config unless passed (a skill that also reads
+      # them may still bind and pass its own).
       mkServiceSkill = {
         service,
-        cfg,
-        domain ? null,
+        config ? null,
+        cfg ? config.neo.services.${service},
+        domain ? (
+          if config != null
+          then config.neo.services.swag.domain or null
+          else null
+        ),
         description,
         name ? "neo-${service}",
         category ? "neo",
