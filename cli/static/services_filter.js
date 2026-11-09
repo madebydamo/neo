@@ -1,7 +1,7 @@
 // services_filter.js
 // Pure matching predicate for the Services tab (search + status/category/plugin
 // source filters). No DOM access, so it is shared as-is between the live UI
-// (configuration.js: servicesGrid()) and its Node unit tests via require().
+// (services_grid.js) and its Node unit tests via require().
 //
 // A "card" is the plain-data shape read off a `[data-svc]` element's dataset;
 // `cardFromDataset` adapts a DOMStringMap (or any {enabled,cat,pluginIds,search}
