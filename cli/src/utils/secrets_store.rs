@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use toml_edit::{value, DocumentMut, Item, Table};
 
-use super::command::{check_output, output_checked, output_with_stdin};
+use super::command::{check_output, env_or, output_checked, output_with_stdin, sudo_command};
 use super::fsutil::{write_private, TempDir};
 use super::secrets::{self, Backend, Node, Tree};
 use super::{git_cmd, sort_document_alphabetically};
@@ -22,13 +22,6 @@ pub const IDENTITY_FILE: &str = "identity.sops.yaml";
 pub const SOPS_CONFIG: &str = ".sops.yaml";
 const HOST_PUB: &str = "/etc/ssh/ssh_host_ed25519_key.pub";
 const ROOT_HELPER: &str = "/run/current-system/sw/bin/neo-secrets-root";
-
-fn env_or(var: &str, default: &str) -> String {
-    std::env::var(var)
-        .ok()
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| default.to_string())
-}
 
 fn sops_bin() -> String {
     env_or("SOPS_BINARY_PATH", "sops")
@@ -56,8 +49,8 @@ fn helper_output(helper: &str, args: &[&str]) -> Result<Vec<u8>> {
     let mut cmd = if is_root() {
         Command::new(helper)
     } else {
-        let mut c = Command::new(env_or("SUDO_BINARY_PATH", "sudo"));
-        c.arg("-n").arg(helper);
+        let mut c = sudo_command();
+        c.arg(helper);
         c
     };
     let what = format!("{helper} {}", args.first().copied().unwrap_or(""));

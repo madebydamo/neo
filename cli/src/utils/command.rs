@@ -6,6 +6,31 @@ use std::io::Write;
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Command, Output, Stdio};
 
+/// `value` when set and non-empty, else `default`.
+pub fn non_empty_or(value: Option<String>, default: &str) -> String {
+    value
+        .filter(|p| !p.is_empty())
+        .unwrap_or_else(|| default.to_string())
+}
+
+/// `$var` when set and non-empty, else `default`.
+pub fn env_or(var: &str, default: &str) -> String {
+    non_empty_or(std::env::var(var).ok(), default)
+}
+
+/// The sudo binary: `$SUDO_BINARY_PATH`, else `sudo` from the PATH.
+pub fn sudo_bin() -> String {
+    env_or("SUDO_BINARY_PATH", "sudo")
+}
+
+/// `sudo -n`: fails at once when a rule is missing, for anything that runs
+/// without a terminal to ask on.
+pub fn sudo_command() -> Command {
+    let mut c = Command::new(sudo_bin());
+    c.arg("-n");
+    c
+}
+
 /// Quote a string for safe copy-paste into a POSIX shell (bash/sh).
 ///
 /// Bare tokens stay unquoted when they only use safe characters; otherwise

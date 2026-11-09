@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use crate::utils::command::{env_or, sudo_bin};
+
 /// Parent directory of settings.toml (config repo root).
 pub fn config_dir(settings_path: &Path) -> PathBuf {
     settings_path
@@ -25,20 +27,8 @@ pub fn state_dir() -> Option<PathBuf> {
     Some(PathBuf::from(home).join(".local/state/neo"))
 }
 
-/// `value` when set and non-empty, else `default`.
-fn non_empty_or(value: Option<String>, default: &str) -> String {
-    value
-        .filter(|p| !p.is_empty())
-        .unwrap_or_else(|| default.to_string())
-}
-
-/// `$var` when set and non-empty, else `default`.
-fn env_or(var: &str, default: &str) -> String {
-    non_empty_or(std::env::var(var).ok(), default)
-}
-
 pub fn sudo_cmd() -> String {
-    env_or("SUDO_BINARY_PATH", "sudo")
+    sudo_bin()
 }
 
 pub fn nix_bin() -> String {
@@ -88,7 +78,8 @@ pub fn systemctl_bin() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{docker_bin, non_empty_or, static_dir, template_dir};
+    use super::{docker_bin, static_dir, template_dir};
+    use crate::utils::command::non_empty_or;
 
     #[test]
     fn docker_bin_default_is_nixos_system_path_not_bare_name() {
