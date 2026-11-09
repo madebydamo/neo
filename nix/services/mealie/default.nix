@@ -29,7 +29,6 @@
 
         virtualisation.oci-containers.containers.mealie = {
           image = cfg.containers.mealie;
-          autoStart = true;
           environment =
             lib.neo.linuxserverEnv config
             // {

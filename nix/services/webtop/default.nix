@@ -14,7 +14,6 @@
 
         virtualisation.oci-containers.containers.webtop = {
           image = cfg.containers.webtop;
-          autoStart = true;
           environment =
             lib.neo.linuxserverEnv config
             // {

@@ -86,7 +86,6 @@
           {
             vpn = {
               image = cfg.image;
-              autoStart = true;
               capabilities = {
                 NET_ADMIN = true;
               };

@@ -31,7 +31,6 @@
         virtualisation.oci-containers.containers = {
           immich-drop = {
             image = cfg.containers."immich-drop";
-            autoStart = true;
             environment = {
               IMMICH_BASE_URL = "https://${immichCfg.subdomain}.${domain}/api";
               IMMICH_ALBUM_NAME = "dead-drop";

@@ -15,7 +15,6 @@
         ];
         virtualisation.oci-containers.containers.beszel-agent = {
           image = cfg.containers."beszel-agent";
-          autoStart = true;
           volumes = [
             "${config.neo.core.volumes.appdata}/beszel-agent:/var/lib/beszel-agent"
             "/var/run/docker.sock:/var/run/docker.sock:ro"

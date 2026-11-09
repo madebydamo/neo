@@ -28,7 +28,6 @@
 
         virtualisation.oci-containers.containers.vaultwarden = {
           image = cfg.containers.vaultwarden;
-          autoStart = true;
           environment =
             {
               ROCKET_ADDRESS = "0.0.0.0";

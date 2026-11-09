@@ -39,7 +39,6 @@
 
         virtualisation.oci-containers.containers.${name} = {
           image = cfg.containers.${name};
-          autoStart = true;
           environment = lib.neo.linuxserverEnv config;
           volumes = [
             "${appdata}:/config"

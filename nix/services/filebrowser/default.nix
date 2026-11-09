@@ -35,7 +35,6 @@
             TZ = config.neo.core.timeZone;
           };
           image = cfg.containers.filebrowser;
-          autoStart = true;
           volumes =
             [
               "${config.neo.core.volumes.appdata}/filebrowser/config:/config"

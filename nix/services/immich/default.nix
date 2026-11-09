@@ -22,7 +22,6 @@
         virtualisation.oci-containers.containers = {
           immich-server = {
             image = cfg.containers."immich-server";
-            autoStart = true;
             environment = {
               DB_HOSTNAME = "immich-database";
               REDIS_HOSTNAME = "immich-redis";
@@ -36,7 +35,6 @@
 
           immich-machine-learning = {
             image = cfg.containers."immich-machine-learning";
-            autoStart = true;
             volumes = [
               "${config.neo.core.volumes.appdata}/immich/cache:/cache"
             ];
@@ -45,7 +43,6 @@
 
           immich-redis = {
             image = cfg.containers."immich-redis";
-            autoStart = true;
             extraOptions = [
               "--health-cmd=redis-cli ping"
               "--health-interval=10s"
@@ -57,7 +54,6 @@
 
           immich-database = {
             image = cfg.containers."immich-database";
-            autoStart = true;
             environment = {
               POSTGRES_PASSWORD = "postgres";
               POSTGRES_USER = "postgres";

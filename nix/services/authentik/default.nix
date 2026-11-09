@@ -108,7 +108,6 @@
         virtualisation.oci-containers.containers = {
           authentik-db = {
             image = cfg.containers."authentik-db";
-            autoStart = true;
             environment = {
               POSTGRES_DB = dbName;
               POSTGRES_USER = dbUser;
@@ -128,7 +127,6 @@
 
           authentik = {
             image = cfg.containers.authentik;
-            autoStart = true;
             cmd = ["server"];
             dependsOn = ["authentik-db"];
             environment = commonEnv;
@@ -145,7 +143,6 @@
 
           authentik-worker = {
             image = cfg.containers."authentik-worker";
-            autoStart = true;
             cmd = ["worker"];
             dependsOn = ["authentik-db"];
             environment = commonEnv;

@@ -238,7 +238,6 @@
 
         virtualisation.oci-containers.containers.tinyauth = {
           image = cfg.containers.tinyauth;
-          autoStart = true;
           environment =
             {
               TINYAUTH_APPURL = "https://${cfg.subdomain}.${domain}";
@@ -262,7 +261,6 @@
 
         virtualisation.oci-containers.containers.tinyauth-entra = mkIf entraEnabled {
           image = cfg.containers.tinyauth-entra;
-          autoStart = true;
           cmd = ["python3" "/app/entra_userinfo.py"];
           environment.PORT = toString entraBridgePort;
           volumes = ["${./entra_userinfo.py}:/app/entra_userinfo.py:ro"];

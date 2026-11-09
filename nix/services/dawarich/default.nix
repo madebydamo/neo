@@ -97,7 +97,6 @@
         virtualisation.oci-containers.containers = {
           dawarich-redis = {
             image = cfg.containers."dawarich-redis";
-            autoStart = true;
             # Upstream RDB snapshots. AOF is off so a crash can drop the newest jobs.
             cmd = [
               "redis-server"
@@ -125,7 +124,6 @@
 
           dawarich-db = {
             image = cfg.containers."dawarich-db";
-            autoStart = true;
             environment = {
               POSTGRES_DB = dbName;
               POSTGRES_USER = dbUser;
@@ -147,7 +145,6 @@
 
           dawarich = {
             image = cfg.containers.dawarich;
-            autoStart = true;
             # Image ENTRYPOINT is `bundle exec`. The web script migrates, seeds, then execs the command.
             entrypoint = "web-entrypoint.sh";
             cmd = ["bin/rails" "server" "-p" "3000" "-b" "::"];
@@ -177,7 +174,6 @@
 
           dawarich-sidekiq = {
             image = cfg.containers."dawarich-sidekiq";
-            autoStart = true;
             # Script waits for Postgres, then runs Sidekiq. It ignores cmd.
             entrypoint = "sidekiq-entrypoint.sh";
             dependsOn = ["dawarich" "dawarich-db" "dawarich-redis"];

@@ -39,7 +39,6 @@
         virtualisation.oci-containers.containers = {
           nextcloud-db = {
             image = cfg.containers."nextcloud-db";
-            autoStart = true;
             cmd = [
               "--transaction-isolation=READ-COMMITTED"
               "--log-bin=binlog"
@@ -59,13 +58,11 @@
 
           nextcloud-redis = {
             image = cfg.containers."nextcloud-redis";
-            autoStart = true;
             networks = ["internal"];
           };
 
           nextcloud = {
             image = cfg.containers."nextcloud";
-            autoStart = true;
             environment = {
               MYSQL_HOST = "nextcloud-db";
               MYSQL_DATABASE = "nextcloud";
@@ -85,7 +82,6 @@
 
           nextcloud-cron = {
             image = cfg.containers."nextcloud-cron";
-            autoStart = true;
             entrypoint = "/cron.sh";
             environment = {
               MYSQL_HOST = "nextcloud-db";

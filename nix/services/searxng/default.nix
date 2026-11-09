@@ -24,7 +24,6 @@
         virtualisation.oci-containers.containers = {
           searxng-redis = {
             image = cfg.containers."searxng-redis";
-            autoStart = true;
             cmd = [
               "valkey-server"
               "--save"
@@ -40,7 +39,6 @@
 
           searxng = {
             image = cfg.containers.searxng;
-            autoStart = true;
             environment = {
               SEARXNG_BASE_URL = "https://${cfg.subdomain}.${domain}";
               TZ = config.neo.core.timeZone;

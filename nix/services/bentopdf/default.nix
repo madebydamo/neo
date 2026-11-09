@@ -16,7 +16,6 @@
       config = mkIf cfg.enabled {
         virtualisation.oci-containers.containers.bentopdf = {
           image = cfg.containers.bentopdf;
-          autoStart = true;
           environment.PORT = toString cfg.port;
           volumes = ["${runtimeConfig}:/usr/share/nginx/html/config.json:ro"];
           networks = ["internal"];

@@ -45,7 +45,6 @@
         virtualisation.oci-containers.containers = {
           paperless-redis = {
             image = cfg.containers."paperless-redis";
-            autoStart = true;
             volumes = [
               "${appdata}/redisdata:/data"
             ];
@@ -54,7 +53,6 @@
 
           paperless-db = {
             image = cfg.containers."paperless-db";
-            autoStart = true;
             environment = {
               POSTGRES_DB = "paperless";
               POSTGRES_USER = "paperless_user";
@@ -67,7 +65,6 @@
 
           paperless = {
             image = cfg.containers.paperless;
-            autoStart = true;
             environment = {
               PAPERLESS_REDIS = "redis://paperless-redis:6379";
               PAPERLESS_DBHOST = "paperless-db";

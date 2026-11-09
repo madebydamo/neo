@@ -276,7 +276,6 @@
 
           virtualisation.oci-containers.containers.swag = {
             image = cfg.containers.swag;
-            autoStart = true;
             environment =
               lib.neo.linuxserverEnv config
               // {

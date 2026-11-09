@@ -14,7 +14,6 @@
 
         virtualisation.oci-containers.containers.pastebin = {
           image = cfg.containers.pastebin;
-          autoStart = true;
           environment = {
             BIN_PORT = toString cfg.port;
             BIN_LIMITS = ''{form="16 MiB"}'';

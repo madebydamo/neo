@@ -12,7 +12,6 @@
       config = mkIf cfg.enabled {
         virtualisation.oci-containers.containers.calino = {
           image = cfg.containers.calino;
-          autoStart = true;
           environment = {
             TZ = config.neo.core.timeZone;
           };

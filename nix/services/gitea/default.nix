@@ -54,7 +54,6 @@
 
         virtualisation.oci-containers.containers.gitea = {
           image = cfg.containers.gitea;
-          autoStart = true;
           environment =
             {
               USER_UID = "1000";

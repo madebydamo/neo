@@ -34,7 +34,6 @@
 
         virtualisation.oci-containers.containers.collabora = {
           image = cfg.containers.collabora;
-          autoStart = true;
           # CODE 26.04+ entrypoint is coolwsd --use-env-vars, which ignores
           # extra_params. Pass SSL overrides as cmd so they append to the
           # entrypoint (reverse proxy terminates TLS; container speaks plain HTTP).

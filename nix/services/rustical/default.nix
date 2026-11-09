@@ -37,7 +37,6 @@
 
         virtualisation.oci-containers.containers.rustical = {
           image = cfg.containers.rustical;
-          autoStart = true;
           environment = {
             TZ = config.neo.core.timeZone;
             # Default image bind is [::]:4000; force IPv4 so Docker DNS/health work.

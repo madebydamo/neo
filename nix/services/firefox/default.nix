@@ -14,7 +14,6 @@
 
         virtualisation.oci-containers.containers.firefox = {
           image = cfg.containers.firefox;
-          autoStart = true;
           environment =
             lib.neo.linuxserverEnv config
             // {

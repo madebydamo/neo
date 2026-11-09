@@ -35,7 +35,6 @@
 
         virtualisation.oci-containers.containers.registry = {
           image = cfg.containers.registry;
-          autoStart = true;
           user = "${toString config.neo.core.uid}:${toString config.neo.core.gid}";
           # Env overrides of /etc/distribution/config.yml (REGISTRY_<section>_<key>).
           environment =

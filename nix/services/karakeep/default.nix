@@ -49,7 +49,6 @@
         virtualisation.oci-containers.containers = {
           karakeep-meilisearch = {
             image = cfg.containers."karakeep-meilisearch";
-            autoStart = true;
             environment = {
               MEILI_NO_ANALYTICS = "true";
               # Migrates the index in place when the image is a newer v1.x than the data.
@@ -63,7 +62,6 @@
 
           karakeep-chrome = {
             image = cfg.containers."karakeep-chrome";
-            autoStart = true;
             # The image's entrypoint adds headless/no-sandbox and forwards :9222 to Chrome's
             # localhost DevTools port; remote-debugging flags here would clash with it.
             cmd = [
@@ -79,7 +77,6 @@
 
           karakeep = {
             image = cfg.containers.karakeep;
-            autoStart = true;
             environment = {
               DATA_DIR = "/data";
               NEXTAUTH_URL = "https://${cfg.subdomain}.${domain}";

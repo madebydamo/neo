@@ -16,7 +16,6 @@
         virtualisation.oci-containers.containers = {
           changedetection = {
             image = cfg.containers.changedetection;
-            autoStart = true;
             environment =
               lib.neo.linuxserverEnv config
               // {
@@ -31,7 +30,6 @@
 
           changedetection-webengine = {
             image = cfg.containers."changedetection-webengine";
-            autoStart = true;
             # Off the default 3000/8080, which karakeep and searxng use inside the shared VPN namespace.
             cmd = ["/usr/local/bin/entrypoint.sh" "--port" "4444" "--sport" "4445"];
             extraOptions = [

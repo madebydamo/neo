@@ -53,7 +53,6 @@
         virtualisation.oci-containers.containers = {
           activepieces-redis = {
             image = cfg.containers."activepieces-redis";
-            autoStart = true;
             volumes = [
               "${appdata}/redisdata:/data"
             ];
@@ -62,7 +61,6 @@
 
           activepieces-db = {
             image = cfg.containers."activepieces-db";
-            autoStart = true;
             environment = {
               POSTGRES_DB = "activepieces";
               POSTGRES_USER = "activepieces";
@@ -75,7 +73,6 @@
 
           activepieces = {
             image = cfg.containers.activepieces;
-            autoStart = true;
             environment = {
               AP_ENVIRONMENT = "prod";
               AP_FRONTEND_URL = "https://${cfg.subdomain}.${domain}";

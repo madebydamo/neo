@@ -37,7 +37,6 @@
 
         virtualisation.oci-containers.containers.pihole = {
           image = cfg.containers.pihole;
-          autoStart = true;
           environment =
             {
               TZ = config.neo.core.timeZone;

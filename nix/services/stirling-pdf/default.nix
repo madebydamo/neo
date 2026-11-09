@@ -27,7 +27,6 @@
 
         virtualisation.oci-containers.containers."stirling-pdf" = {
           image = cfg.containers."stirling-pdf";
-          autoStart = true;
           environment =
             {
               SECURITY_ENABLELOGIN = boolToString cfg.enableLogin;

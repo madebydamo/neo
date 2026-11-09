@@ -25,7 +25,6 @@
 
         virtualisation.oci-containers.containers.dufs = {
           image = cfg.containers.dufs;
-          autoStart = true;
           user = "${toString config.neo.core.uid}:${toString config.neo.core.gid}";
           environment = {
             TZ = config.neo.core.timeZone;

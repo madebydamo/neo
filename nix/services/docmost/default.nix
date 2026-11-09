@@ -61,7 +61,6 @@
         virtualisation.oci-containers.containers = {
           docmost-redis = {
             image = cfg.containers."docmost-redis";
-            autoStart = true;
             cmd = ["redis-server" "--appendonly" "yes" "--maxmemory-policy" "noeviction"];
             volumes = [
               "${appdata}/redisdata:/data"
@@ -71,7 +70,6 @@
 
           docmost-db = {
             image = cfg.containers."docmost-db";
-            autoStart = true;
             environment = {
               POSTGRES_DB = "docmost";
               POSTGRES_USER = "docmost";
@@ -84,7 +82,6 @@
 
           docmost = {
             image = cfg.containers.docmost;
-            autoStart = true;
             environment = {
               APP_URL = "https://${cfg.subdomain}.${domain}";
               REDIS_URL = "redis://docmost-redis:6379";
@@ -97,7 +94,6 @@
 
           docmost-sso = mkIf ssoActive {
             image = cfg.containers."docmost-sso";
-            autoStart = true;
             cmd = ["python3" "/app/sso.py"];
             environment = {
               PORT = toString ssoPort;
@@ -114,7 +110,6 @@
 
           docmost-mcp = mkIf mcpActive {
             image = cfg.containers."docmost-mcp";
-            autoStart = true;
             cmd = ["python3" "/app/mcp.py"];
             environment = {
               PORT = toString mcpPort;

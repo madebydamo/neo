@@ -17,7 +17,6 @@
         virtualisation.oci-containers.containers.syncthing = {
           environment = lib.neo.linuxserverEnv config;
           image = cfg.containers.syncthing;
-          autoStart = true;
           volumes = [
             "${config.neo.core.volumes.appdata}/syncthing:/config"
             "${config.neo.core.volumes.data}:/DATA"
