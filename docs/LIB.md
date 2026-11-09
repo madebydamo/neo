@@ -86,6 +86,7 @@ The build fails if a placeholder would end up in a container or unit `environmen
 | Function | Arguments | Returns |
 |----------|-----------|---------|
 | `toOciBindMounts` | List of `{ localPath, containerPath }` | List of `"host:container"` strings |
+| `linuxserverEnv` | `config` | `{ PUID; PGID; TZ; }` from `neo.core.uid`, `gid` and `timeZone`; merge into a container's `environment` with `//` |
 | `mkSetupService` | `{ pkgs, name, description, script, containers ? [], attachTo ? containers, after ? [], wants ? [], requires ? [], bindsTo ? [], partOf ? [], before ? [], wantedBy ? [], path ? [], environment ? {}, retryInterval ? 60, maxAttempts ? null, blocking ? false, serviceConfig ? {}, unitConfig ? {} }` | A `systemd.services.<name>` value. `After`/`Requires` on `docker-<c>` for each of `containers`; `docker-<c>` of `attachTo` wants it. `script` is one attempt under `bash -e`, retried every `retryInterval` s until exit 0 (`null` = one attempt, then `Restart=on-failure`); `maxAttempts` gives up. `RemainAfterExit` always; `Type=simple`, or `oneshot` with `blocking = true` |
 | `isSetupService` | A `systemd.services` value | bool; **internal** |
 | `setupUnitMarker` | | `"X-Neo-Setup"`, the unit key that marks setup units; **internal** |

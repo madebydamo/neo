@@ -30,14 +30,13 @@
         virtualisation.oci-containers.containers.mealie = {
           image = cfg.containers.mealie;
           autoStart = true;
-          environment = {
-            PUID = toString config.neo.core.uid;
-            PGID = toString config.neo.core.gid;
-            TZ = config.neo.core.timeZone;
-            BASE_URL = "https://${publicHost}";
-            ALLOW_SIGNUP = boolToString cfg.allowSignup;
-            API_PORT = toString cfg.port;
-          };
+          environment =
+            lib.neo.linuxserverEnv config
+            // {
+              BASE_URL = "https://${publicHost}";
+              ALLOW_SIGNUP = boolToString cfg.allowSignup;
+              API_PORT = toString cfg.port;
+            };
           volumes = [
             "${appdata}:/app/data"
           ];

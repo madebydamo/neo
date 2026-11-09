@@ -17,13 +17,12 @@
           changedetection = {
             image = cfg.containers.changedetection;
             autoStart = true;
-            environment = {
-              PUID = toString config.neo.core.uid;
-              PGID = toString config.neo.core.gid;
-              TZ = config.neo.core.timeZone;
-              PLAYWRIGHT_DRIVER_URL = "ws://changedetection-webengine:4444";
-              ALLOW_IANA_RESTRICTED_ADDRESSES = toString true;
-            };
+            environment =
+              lib.neo.linuxserverEnv config
+              // {
+                PLAYWRIGHT_DRIVER_URL = "ws://changedetection-webengine:4444";
+                ALLOW_IANA_RESTRICTED_ADDRESSES = toString true;
+              };
             volumes = [
               "${appdata}:/datastore"
             ];

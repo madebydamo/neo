@@ -15,16 +15,15 @@
         virtualisation.oci-containers.containers.webtop = {
           image = cfg.containers.webtop;
           autoStart = true;
-          environment = {
-            PUID = toString config.neo.core.uid;
-            PGID = toString config.neo.core.gid;
-            TZ = config.neo.core.timeZone;
-            TITLE = cfg.title;
-            # Unique from karakeep/tinyauth (3000); required when sharing gluetun network namespace.
-            CUSTOM_PORT = toString cfg.port;
-            CUSTOM_HTTPS_PORT = "3051";
-            # WebSocket stays at Selkies default 8082 (listed in vpn.ports for conflict checks).
-          };
+          environment =
+            lib.neo.linuxserverEnv config
+            // {
+              TITLE = cfg.title;
+              # Unique from karakeep/tinyauth (3000); required when sharing gluetun network namespace.
+              CUSTOM_PORT = toString cfg.port;
+              CUSTOM_HTTPS_PORT = "3051";
+              # WebSocket stays at Selkies default 8082 (listed in vpn.ports for conflict checks).
+            };
           volumes =
             [
               "${appdata}:/config"

@@ -21,7 +21,7 @@
           ];
           environment =
             {
-              TZ = "Europe/Zurich";
+              TZ = config.neo.core.timeZone;
               SHARE_ALL_SYSTEMS = "true";
               APP_URL = "https://${cfg.subdomain}.${config.neo.services.swag.domain}";
             }

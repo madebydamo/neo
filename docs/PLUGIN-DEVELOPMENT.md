@@ -192,7 +192,7 @@ Work through every item. Each one exists because it is easy to forget.
 - [ ] Everything inside `config = lib.mkIf cfg.enabled { … }`.
 - [ ] Appdata directories created with `lib.neo.mkEnsureDirs config [ … ]` in the container's `preStart` (or tmpfiles for native units).
 - [ ] Containers: `image = cfg.containers.<c>`, `autoStart = true`, `networks = ["internal"]`.
-- [ ] `PUID`/`PGID = toString config.neo.core.uid/gid`, `TZ = config.neo.core.timeZone` (if the image supports them).
+- [ ] `environment = lib.neo.linuxserverEnv config // { … }` (`PUID`, `PGID`, `TZ`) if the image supports them; never a literal time zone.
 - [ ] All state under `${config.neo.core.volumes.appdata}/<name>`. Media and documents from `config.neo.core.volumes.media` / `.documents`.
 - [ ] No host ports for web UIs; SWAG reaches containers over `internal`. Only publish non-HTTP protocol ports.
 - [ ] Post-start configuration in `lib.neo.mkSetupService`, also listed in `extraUnits`.
@@ -339,10 +339,7 @@ Notes:
       virtualisation.oci-containers.containers.${name} = {
         image = cfg.containers.${name};
         autoStart = true;
-        environment = {
-          PUID = toString config.neo.core.uid;
-          PGID = toString config.neo.core.gid;
-          TZ = config.neo.core.timeZone;
+        environment = lib.neo.linuxserverEnv config // {
           MYAPP_PUBLIC_URL = "https://${cfg.subdomain}.${domain}";
           MYAPP_SIGNUP = lib.boolToString cfg.allowSignup;
         };

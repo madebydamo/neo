@@ -277,22 +277,21 @@
           virtualisation.oci-containers.containers.swag = {
             image = cfg.containers.swag;
             autoStart = true;
-            environment = {
-              PUID = toString config.neo.core.uid;
-              PGID = toString config.neo.core.gid;
-              TZ = "Europe/Zurich";
-              URL = cfg.domain;
-              SUBDOMAINS = concatStringsSep "," subdomains;
-              VALIDATION = "http";
-              EMAIL = cfg.email;
-              ONLY_SUBDOMAINS = boolToString cfg.onlySubdomains;
-              EXTRA_DOMAINS = concatStringsSep "," (proxyPassDomains ++ customDomains);
-              SWAG_AUTORELOAD = "true";
-              SWAG_AUTORELOAD_WATCHLIST = "/config/etc/letsencrypt";
-              DOCKER_MODS = "linuxserver/mods:swag-dashboard|linuxserver/mods:swag-dbip";
-              # No jails selected: SWAG skips fail2ban setup and the daemon.
-              DISABLE_F2B = boolToString (autoBan.jails == []);
-            };
+            environment =
+              lib.neo.linuxserverEnv config
+              // {
+                URL = cfg.domain;
+                SUBDOMAINS = concatStringsSep "," subdomains;
+                VALIDATION = "http";
+                EMAIL = cfg.email;
+                ONLY_SUBDOMAINS = boolToString cfg.onlySubdomains;
+                EXTRA_DOMAINS = concatStringsSep "," (proxyPassDomains ++ customDomains);
+                SWAG_AUTORELOAD = "true";
+                SWAG_AUTORELOAD_WATCHLIST = "/config/etc/letsencrypt";
+                DOCKER_MODS = "linuxserver/mods:swag-dashboard|linuxserver/mods:swag-dbip";
+                # No jails selected: SWAG skips fail2ban setup and the daemon.
+                DISABLE_F2B = boolToString (autoBan.jails == []);
+              };
             volumes = [
               "${config.neo.core.volumes.appdata}/swag:/config"
             ];

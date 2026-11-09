@@ -59,6 +59,14 @@ in {
           };
         };
 
+      # Environment most images (LinuxServer and others) read for file ownership
+      # and the operator's time zone. Merge with `//`.
+      linuxserverEnv = config: {
+        PUID = toString config.neo.core.uid;
+        PGID = toString config.neo.core.gid;
+        TZ = config.neo.core.timeZone;
+      };
+
       mkSystemdUnits = units:
         with lib; {
           systemdUnits = mkOption {

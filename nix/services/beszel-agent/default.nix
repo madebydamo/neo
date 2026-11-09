@@ -24,7 +24,7 @@
           networks = ["host"];
           environment =
             {
-              TZ = "Europe/Zurich";
+              TZ = config.neo.core.timeZone;
               DISABLE_SSH = "true";
             }
             // (optionalAttrs (cfg.hubUrl != null) {

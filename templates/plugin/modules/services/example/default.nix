@@ -40,11 +40,7 @@
         virtualisation.oci-containers.containers.${name} = {
           image = cfg.containers.${name};
           autoStart = true;
-          environment = {
-            PUID = toString config.neo.core.uid;
-            PGID = toString config.neo.core.gid;
-            TZ = config.neo.core.timeZone;
-          };
+          environment = lib.neo.linuxserverEnv config;
           volumes = [
             "${appdata}:/config"
           ];

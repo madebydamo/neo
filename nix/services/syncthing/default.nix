@@ -15,11 +15,7 @@
         ];
 
         virtualisation.oci-containers.containers.syncthing = {
-          environment = {
-            PUID = toString config.neo.core.uid;
-            PGID = toString config.neo.core.gid;
-            TZ = "Europe/Zurich";
-          };
+          environment = lib.neo.linuxserverEnv config;
           image = cfg.containers.syncthing;
           autoStart = true;
           volumes = [

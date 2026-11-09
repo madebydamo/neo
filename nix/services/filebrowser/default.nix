@@ -32,7 +32,7 @@
 
         virtualisation.oci-containers.containers.filebrowser = {
           environment = {
-            TZ = "Europe/Zurich";
+            TZ = config.neo.core.timeZone;
           };
           image = cfg.containers.filebrowser;
           autoStart = true;

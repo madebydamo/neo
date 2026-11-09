@@ -16,10 +16,8 @@
           image = cfg.containers.firefox;
           autoStart = true;
           environment =
-            {
-              PUID = toString config.neo.core.uid;
-              PGID = toString config.neo.core.gid;
-              TZ = config.neo.core.timeZone;
+            lib.neo.linuxserverEnv config
+            // {
               TITLE = cfg.title;
               # Unique from webtop (3050/3051/8082) and karakeep (3000); required when sharing gluetun.
               CUSTOM_PORT = toString cfg.port;
