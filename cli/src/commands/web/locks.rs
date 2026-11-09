@@ -17,7 +17,7 @@ use rocket::Request;
 use serde_json::json;
 
 use super::types::AppConfig;
-use super::util::escape_attr;
+use super::util::{escape_attr, proc};
 use crate::utils::locks::{Holder, LockError, LockGuard, LockManager, LockSpec, OpInfo};
 
 pub use crate::utils::locks::{LockMode, Scope};
@@ -104,22 +104,22 @@ fn element(json: &str, oob: bool) -> String {
     )
 }
 
+async fn holders() -> Vec<Holder> {
+    proc::blocking(|| manager().holders())
+        .await
+        .unwrap_or_default()
+}
+
 /// `#neo-locks` with the current holders (initial page load / WS reconnect).
 pub async fn locks_element() -> String {
-    let holders = tokio::task::spawn_blocking(|| manager().holders())
-        .await
-        .unwrap_or_default();
-    element(&holders_json(&holders), false)
+    element(&holders_json(&holders().await), false)
 }
 
 /// OOB `#neo-locks` with the current holders: sent on every `/ws/status` (re)connect,
 /// since the watcher only pushes changes and a client that was away (neo-web restart
 /// during a switch, lagged channel) would otherwise keep stale holders.
 pub async fn locks_oob_element() -> String {
-    let holders = tokio::task::spawn_blocking(|| manager().holders())
-        .await
-        .unwrap_or_default();
-    element(&holders_json(&holders), true)
+    element(&holders_json(&holders().await), true)
 }
 
 /// Push `#neo-locks` whenever the set of holders changes. Also cleans up
@@ -128,10 +128,7 @@ pub fn start_lock_watcher(config: Arc<AppConfig>) {
     tokio::spawn(async move {
         let mut last = String::new();
         loop {
-            let holders = tokio::task::spawn_blocking(|| manager().holders())
-                .await
-                .unwrap_or_default();
-            let json = holders_json(&holders);
+            let json = holders_json(&holders().await);
             if json != last {
                 let _ = config.unit_updates.send(element(&json, true));
                 last = json;
