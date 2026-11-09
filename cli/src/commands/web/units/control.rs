@@ -150,7 +150,7 @@ pub async fn unit_controls_oob_fragment(unit: &str, config: &AppConfig) -> Strin
 }
 
 /// `data-active-state` = raw ActiveState, `data-health` = [`UnitHealth`] (the pane
-/// summary in configuration.js reads both).
+/// summary in unit_watch.js reads both).
 pub fn unit_controls_oob_fragment_with_state(unit: &str, st: &UnitStatus, pulling: bool) -> String {
     format!(
         r#"<div id="unit-controls-{}" class="unit-controls" data-active-state="{}" data-health="{}" hx-swap-oob="true">{}</div>"#,
