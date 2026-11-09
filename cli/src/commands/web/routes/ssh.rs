@@ -9,8 +9,10 @@ use std::process::Command;
 use rocket::response::content::RawHtml;
 use rocket::{get, post};
 
+use crate::commands::web::locks::{system_lock_attr, try_lock, Blocked, LockMode};
 use crate::commands::web::util::{escape_html, proc};
 use crate::utils::command::sudo_command;
+use crate::utils::locks::{LockSpec, OpInfo};
 
 /// One keypair the UI shows and can rotate.
 struct KeySpec {
@@ -175,6 +177,7 @@ fn card_ok(spec: &KeySpec, key: &str) -> String {
     };
     let confirm = escape_html(spec.confirm);
     let id = spec.id;
+    let lk = system_lock_attr(LockMode::Shared);
     format!(
         r##"<div id="ssh-pubkey-card-{id}" class="rounded-box border border-base-300 bg-base-100 p-4">
   <div class="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -186,7 +189,7 @@ fn card_ok(spec: &KeySpec, key: &str) -> String {
     <div class="flex items-center gap-1.5 shrink-0">
       <button type="button" class="btn btn-sm btn-ghost"
         onclick="var b=this;navigator.clipboard.writeText(document.getElementById('ssh-pubkey-value-{id}').textContent.trim()).then(function(){{b.textContent='Copied';setTimeout(function(){{b.textContent='Copy'}},1500)}})">Copy</button>
-      <button type="button" class="btn btn-sm btn-soft btn-warning"
+      <button type="button" class="btn btn-sm btn-soft btn-warning"{lk}
         hx-post="/ssh/{id}/regenerate"
         hx-target="#ssh-pubkey-card-{id}"
         hx-swap="outerHTML"
@@ -205,6 +208,7 @@ fn card_err(spec: &KeySpec, msg: &str) -> String {
     let path = escape_html(&pub_path(spec));
     let title = escape_html(spec.title);
     let id = spec.id;
+    let lk = system_lock_attr(LockMode::Shared);
     format!(
         r##"<div id="ssh-pubkey-card-{id}" class="rounded-box border border-warning/40 bg-warning/5 p-4">
   <div class="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -214,7 +218,7 @@ fn card_err(spec: &KeySpec, msg: &str) -> String {
       <p class="text-xs text-base-content/70 mt-0.5">{msg}</p>
       <p class="text-xs text-base-content/50 mt-0.5">Expected at <span class="font-mono">{path}</span> after activation.</p>
     </div>
-    <button type="button" class="btn btn-sm btn-primary shrink-0"
+    <button type="button" class="btn btn-sm btn-primary shrink-0"{lk}
       hx-post="/ssh/{id}/regenerate"
       hx-target="#ssh-pubkey-card-{id}"
       hx-swap="outerHTML">
@@ -237,15 +241,22 @@ pub fn ssh_public_key_card(key: &str) -> Option<RawHtml<String>> {
 
 /// POST /ssh/<key>/regenerate — delete the keypair and re-run its key script.
 #[post("/ssh/<key>/regenerate")]
-pub async fn ssh_regenerate(key: &str) -> Option<RawHtml<String>> {
-    let spec = spec(key)?;
+pub async fn ssh_regenerate(key: &str) -> Result<Option<RawHtml<String>>, Blocked> {
+    let Some(spec) = spec(key) else {
+        return Ok(None);
+    };
+    // Not while an activation regenerates the same keys.
+    let _lock = try_lock(
+        &LockSpec::system_shared(),
+        OpInfo::new("ssh-key", format!("Regenerating the {key} key")),
+    )?;
     let rotated = proc::blocking(move || rotate_key(spec))
         .await
         .and_then(|r| r);
-    Some(RawHtml(match rotated {
+    Ok(Some(RawHtml(match rotated {
         Ok(k) => card_ok(spec, &k),
         Err(msg) => card_err(spec, &format!("Regenerate failed: {msg}")),
-    }))
+    })))
 }
 
 #[cfg(test)]

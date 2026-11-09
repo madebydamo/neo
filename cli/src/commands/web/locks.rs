@@ -74,6 +74,11 @@ pub fn lock_attr(scopes: &[(Scope, LockMode)]) -> String {
     format!(r#" data-neo-lock="{}""#, escape_attr(&v.join(" ")))
 }
 
+/// [`lock_attr`] for the system scope alone.
+pub fn system_lock_attr(mode: LockMode) -> String {
+    lock_attr(&[(Scope::System, mode)])
+}
+
 /// Client view of the live holders.
 fn holders_json(holders: &[Holder]) -> String {
     let v: Vec<serde_json::Value> = holders

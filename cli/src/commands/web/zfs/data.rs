@@ -9,6 +9,7 @@
 //! Optionally the boot generation is switched to the one that was running when
 //! the snapshot was taken ([`GenerationTimeline`]), so restored settings and
 //! system match.
+use super::super::locks::{system_lock_attr, LockMode};
 use super::super::power::{self, PowerAction};
 use super::super::util::{escape_attr, escape_html, sudo_cmd};
 use super::render::{self, ManageCtx, BTN_SECONDARY};
@@ -93,9 +94,11 @@ pub async fn render_card(notice: Option<(&'static str, String)>) -> String {
             tone: "alert-warning",
             html: format!(
                 r##"<span>Restore to <span class="font-mono">{}</span> runs at the next boot.</span>
-<span class="flex gap-1 ml-auto"><button type="button" class="btn btn-xs btn-error" hx-post="/versioning/zfs/reboot" data-neo-lock="system" hx-target="#{CARD_ID}" hx-swap="outerHTML" hx-confirm="Reboot the server now and restore all Neo data?">Reboot now</button>
-<button type="button" class="btn btn-xs" hx-post="/versioning/zfs/cancel" hx-target="#{CARD_ID}" hx-swap="outerHTML">Cancel</button></span>"##,
-                escape_html(target)
+<span class="flex gap-1 ml-auto"><button type="button" class="btn btn-xs btn-error" hx-post="/versioning/zfs/reboot"{lk} hx-target="#{CARD_ID}" hx-swap="outerHTML" hx-confirm="Reboot the server now and restore all Neo data?">Reboot now</button>
+<button type="button" class="btn btn-xs" hx-post="/versioning/zfs/cancel"{lk_sh} hx-target="#{CARD_ID}" hx-swap="outerHTML">Cancel</button></span>"##,
+                escape_html(target),
+                lk = system_lock_attr(LockMode::Exclusive),
+                lk_sh = system_lock_attr(LockMode::Shared),
             ),
         });
     }
@@ -113,9 +116,10 @@ pub async fn render_card(notice: Option<(&'static str, String)>) -> String {
             tone,
             html: format!(
                 r##"<span>{head} ({when}): <span class="font-mono">{detail}</span></span>
-<button type="button" class="btn btn-xs btn-ghost ml-auto" hx-post="/versioning/zfs/dismiss" hx-target="#{CARD_ID}" hx-swap="outerHTML">Dismiss</button>"##,
+<button type="button" class="btn btn-xs btn-ghost ml-auto" hx-post="/versioning/zfs/dismiss"{lk} hx-target="#{CARD_ID}" hx-swap="outerHTML">Dismiss</button>"##,
                 when = escape_html(&ts_display(ts)),
                 detail = escape_html(detail),
+                lk = system_lock_attr(LockMode::Shared),
             ),
         });
     }
@@ -139,11 +143,12 @@ pub async fn render_card(notice: Option<(&'static str, String)>) -> String {
   <p class="text-xs sm:text-sm text-base-content/60 min-w-0 flex-1">Snapshots of all Neo data — every service's app data and the configuration — on <span class="font-mono">{live}</span>.</p>
   <span class="flex gap-1.5">
     <button type="button" class="{BTN_SECONDARY}" hx-get="/versioning/zfs" hx-target="#{CARD_ID}" hx-swap="outerHTML">Refresh</button>
-    <button type="button" class="btn btn-sm btn-primary" hx-post="/versioning/zfs/snapshot" hx-target="#{CARD_ID}" hx-swap="outerHTML" hx-disabled-elt="this" title="zfs snapshot {live}@neo-data-…">Snapshot now</button>
+    <button type="button" class="btn btn-sm btn-primary" hx-post="/versioning/zfs/snapshot"{lk} hx-target="#{CARD_ID}" hx-swap="outerHTML" hx-disabled-elt="this" title="zfs snapshot {live}@neo-data-…">Snapshot now</button>
   </span>
 </div>
 {how}"##,
         live = escape_html(&live),
+        lk = system_lock_attr(LockMode::Shared),
         how = render::how_it_works(&[
             "The server <b>reboots</b> and swaps the data during boot; services are down until it is back.",
             &format!("<b>Files only:</b> the NixOS system is not part of the snapshot and boots its default generation{}. Activate afterwards to rebuild from the restored settings, or pick <i>Restore + boot gen</i> to also boot the generation that was running back then.", boot_gen.map(|g| format!(" ({g})")).unwrap_or_default()),
@@ -255,16 +260,18 @@ fn data_row(s: &Snapshot, ctx: &RowCtx) -> String {
                 .unwrap_or_else(|| "(current)".into()),
         );
         actions.push_str(&format!(
-            r##"<button type="button" class="{BTN_SECONDARY}" hx-post="/versioning/zfs/restore?{q}" data-neo-lock="system" hx-target="#{CARD_ID}" hx-swap="outerHTML" hx-disabled-elt="this" hx-confirm="{c}" title="Restore data only; boot the default system generation">Restore</button>"##,
+            r##"<button type="button" class="{BTN_SECONDARY}" hx-post="/versioning/zfs/restore?{q}"{lk} hx-target="#{CARD_ID}" hx-swap="outerHTML" hx-disabled-elt="this" hx-confirm="{c}" title="Restore data only; boot the default system generation">Restore</button>"##,
             c = escape_attr(&data_only),
+            lk = system_lock_attr(LockMode::Exclusive),
         ));
         if let Some(g) = gen.filter(|g| Some(*g) != ctx.boot_gen) {
             let with_gen = format!(
                 "{base_warning}\n• The boot default is set to system generation {g} (running when the snapshot was taken) before the reboot."
             );
             actions.push_str(&format!(
-                r##"<button type="button" class="{BTN_SECONDARY}" hx-post="/versioning/zfs/restore?{q}&gen={g}" data-neo-lock="system" hx-target="#{CARD_ID}" hx-swap="outerHTML" hx-disabled-elt="this" hx-confirm="{c}" title="Restore data and boot system generation {g}">Restore + boot gen {g}</button>"##,
+                r##"<button type="button" class="{BTN_SECONDARY}" hx-post="/versioning/zfs/restore?{q}&gen={g}"{lk} hx-target="#{CARD_ID}" hx-swap="outerHTML" hx-disabled-elt="this" hx-confirm="{c}" title="Restore data and boot system generation {g}">Restore + boot gen {g}</button>"##,
                 c = escape_attr(&with_gen),
+                lk = system_lock_attr(LockMode::Exclusive),
             ));
         }
     }

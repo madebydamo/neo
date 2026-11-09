@@ -6,6 +6,7 @@ use rocket::response::content::RawHtml;
 use rocket::{get, post, FromForm, State};
 
 use crate::commands::web::locks::{try_lock, Blocked};
+use crate::commands::web::power::{hold_until_down, power_lock};
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::units::{begin_clear_appdata, pane_lock_spec, trusted_appdata};
 use crate::commands::web::util::{
@@ -17,7 +18,7 @@ use crate::commands::web::zfs::service::{
     RestoreJob,
 };
 use crate::commands::web::zfs::{create_snapshot, data, snapshot_name_ok, SnapAction};
-use crate::utils::locks::{LockMode, LockSpec, OpInfo, Scope};
+use crate::utils::locks::{LockGuard, LockMode, LockSpec, OpInfo, Scope};
 
 fn out_err(service: &str, msg: &str) -> RawHtml<String> {
     let (inner, title) = status_err(msg);
@@ -228,26 +229,33 @@ pub async fn versioning_zfs() -> RawHtml<String> {
     RawHtml(data::render_card(None).await)
 }
 
+/// System shared: a data restore waiting for its reboot (system exclusive) refuses
+/// these, shown on the card they target.
+async fn try_data_lock(label: &str) -> Result<LockGuard, RawHtml<String>> {
+    match try_lock(&LockSpec::system_shared(), OpInfo::new("snapshot", label)) {
+        Ok(lock) => Ok(lock),
+        Err(Blocked(msg)) => Err(RawHtml(data::blocked_card(&msg).await)),
+    }
+}
+
 #[post("/versioning/zfs/snapshot")]
 pub async fn versioning_zfs_snapshot() -> RawHtml<String> {
+    let _lock = match try_data_lock("Data snapshot").await {
+        Ok(l) => l,
+        Err(card) => return card,
+    };
     RawHtml(data::snapshot_now().await)
 }
 
 /// Data restore = reboot: nothing else may be running. The lock is kept until
 /// the reboot (or briefly, when nothing was scheduled).
-fn data_restore_lock() -> Result<crate::utils::locks::LockGuard, Blocked> {
-    try_lock(
-        &LockSpec::system_change(),
-        OpInfo::new("data-restore", "Data restore (reboot)"),
-    )
+fn data_restore_lock() -> Result<LockGuard, Blocked> {
+    power_lock("data-restore", "Data restore (reboot)")
 }
 
-async fn hold_until_reboot(lock: crate::utils::locks::LockGuard) {
+async fn hold_until_reboot(lock: LockGuard) {
     if data::restore_scheduled().await {
-        tokio::spawn(async move {
-            let _lock = lock;
-            tokio::time::sleep(std::time::Duration::from_secs(300)).await;
-        });
+        hold_until_down(lock);
     }
 }
 
@@ -273,22 +281,26 @@ pub async fn versioning_zfs_reboot() -> Result<RawHtml<String>, Blocked> {
 
 #[post("/versioning/zfs/cancel")]
 pub async fn versioning_zfs_cancel() -> RawHtml<String> {
+    let _lock = match try_data_lock("Cancel data restore").await {
+        Ok(l) => l,
+        Err(card) => return card,
+    };
     RawHtml(data::cancel().await)
 }
 
 #[post("/versioning/zfs/dismiss")]
 pub async fn versioning_zfs_dismiss() -> RawHtml<String> {
+    let _lock = match try_data_lock("Dismiss restore result").await {
+        Ok(l) => l,
+        Err(card) => return card,
+    };
     RawHtml(data::dismiss().await)
 }
 
-/// Data snapshot change; system shared so a pending data restore (system ex) blocks it.
 async fn data_manage(ds: &str, snap: &str, action: SnapAction) -> String {
-    let _lock = match try_lock(
-        &LockSpec::system_shared(),
-        OpInfo::new("snapshot", "Data snapshot change"),
-    ) {
+    let _lock = match try_data_lock("Data snapshot change").await {
         Ok(l) => l,
-        Err(Blocked(msg)) => return data::blocked_card(&msg).await,
+        Err(card) => return card.0,
     };
     data::manage(ds, snap, action).await
 }
