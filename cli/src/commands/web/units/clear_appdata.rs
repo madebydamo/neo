@@ -3,13 +3,11 @@ use std::path::{Component, Path};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use tokio::process::Command as AsyncCommand;
-
 use super::super::locks::{lock_attr, LockMode, Scope};
 use super::super::schema_cache::extract_pane;
 use super::super::types::{AppConfig, OptionPaneContext};
 use super::super::util::{
-    escape_attr, escape_html, status_err, status_ok, status_pulling, status_slot_oob, sudo_cmd,
+    escape_attr, escape_html, proc, status_err, status_ok, status_pulling, status_slot_oob,
 };
 use super::control::{
     broadcast_unit_update, schedule_unit_refresh_burst, unit_active_state_async, unit_name_valid,
@@ -191,8 +189,7 @@ pub async fn start_units_best_effort(units: &[String], config: &Arc<AppConfig>) 
 }
 
 pub async fn systemctl_action_blocking(action: &str, unit: &str) -> Result<(), String> {
-    let sudo = sudo_cmd();
-    let out = AsyncCommand::new(&sudo)
+    let out = proc::sudo()
         .args(["systemctl", action, unit, "--no-ask-password"])
         .output()
         .await
@@ -219,18 +216,8 @@ async fn rm_rf_path(path: &str) -> Result<(), String> {
     if !p.exists() {
         return Ok(());
     }
-    let sudo = sudo_cmd();
-    let out = AsyncCommand::new(&sudo)
-        .args(["rm", "-rf", "--", path])
-        .output()
-        .await
-        .map_err(|e| format!("rm -rf: {}", e))?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        let err = String::from_utf8_lossy(&out.stderr);
-        Err(format!("rm -rf failed: {}", err.trim()))
-    }
+    proc::run_ok(proc::sudo().args(["rm", "-rf", "--", path]), "rm -rf").await?;
+    Ok(())
 }
 
 fn finish_clear_appdata(

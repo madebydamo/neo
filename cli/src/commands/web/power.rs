@@ -2,10 +2,8 @@
 //! "Boot into generation", data restore).
 use std::time::Duration;
 
-use tokio::process::Command as AsyncCommand;
-
 use super::locks::{try_lock, Blocked};
-use super::util::{escape_html, sudo_cmd};
+use super::util::{escape_html, proc};
 use crate::utils::locks::{LockGuard, LockSpec, OpInfo};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,18 +39,11 @@ pub fn hold_until_down(lock: LockGuard) {
 pub fn schedule(action: PowerAction) {
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(2)).await;
-        let out = AsyncCommand::new(sudo_cmd())
-            .args(["-n", "systemctl", action.verb(), "--no-ask-password"])
-            .output()
-            .await;
-        match out {
-            Ok(o) if !o.status.success() => eprintln!(
-                "web: systemctl {}: {}",
-                action.verb(),
-                String::from_utf8_lossy(&o.stderr).trim()
-            ),
-            Err(e) => eprintln!("web: systemctl {}: {e}", action.verb()),
-            _ => {}
+        let what = format!("systemctl {}", action.verb());
+        let mut cmd = proc::sudo();
+        cmd.args(["systemctl", action.verb(), "--no-ask-password"]);
+        if let Err(e) = proc::run_ok(&mut cmd, &what).await {
+            eprintln!("web: {e}");
         }
     });
 }

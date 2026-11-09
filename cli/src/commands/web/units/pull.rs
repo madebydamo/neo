@@ -6,7 +6,7 @@ use tokio::io::{AsyncReadExt, BufReader as AsyncBufReader};
 use tokio::process::Command as AsyncCommand;
 
 use super::super::types::AppConfig;
-use super::super::util::{docker_bin, status_err, status_ok, status_pulling, sudo_cmd};
+use super::super::util::{docker_bin, proc, status_err, status_ok, status_pulling};
 use super::control::{
     broadcast_unit_update, broadcast_update_out, end_pull, schedule_unit_refresh_burst,
 };
@@ -163,8 +163,7 @@ pub async fn run_container_pull(unit: String, cname: String, config: Arc<AppConf
             let (inner, title) = status_pulling("restarting…");
             push(inner, title);
 
-            let sudo = sudo_cmd();
-            let _ = AsyncCommand::new(&sudo)
+            let _ = proc::sudo()
                 .args([
                     "systemctl",
                     "restart",

@@ -5,6 +5,7 @@ mod htmx;
 mod inflight;
 mod oob_status;
 mod paths;
+pub mod proc;
 mod validate;
 
 pub use alerts::{alert_html, changes_actions_row, AlertKind};

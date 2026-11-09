@@ -5,7 +5,6 @@ use rocket::response::stream::{Event, EventStream};
 use rocket::serde::json::Json;
 use rocket::{get, post, State};
 use tokio::io::{AsyncBufReadExt, BufReader as AsyncBufReader};
-use tokio::process::Command as AsyncCommand;
 
 use crate::commands::web::locks::{try_lock, Blocked};
 use crate::commands::web::types::AppConfig;
@@ -15,9 +14,7 @@ use crate::commands::web::units::{
     trusted_appdata, try_begin_clear_appdata, try_begin_pull, unit_controls_oob_fragment,
     unit_name_valid, update_out_oob, ServiceStatusRequest, ServiceStatusResponse, UnitAction,
 };
-use crate::commands::web::util::{
-    escape_html, service_name_ok, status_err, status_pulling, sudo_cmd,
-};
+use crate::commands::web::util::{escape_html, proc, service_name_ok, status_err, status_pulling};
 use crate::utils::locks::{LockSpec, OpInfo};
 
 /// Shared post-action path: kick systemctl, push OOB once, then burst-refresh while it settles.
@@ -165,8 +162,7 @@ pub async fn sse_logs(unit: &str) -> EventStream![] {
         if !unit_name_valid(&unit) {
             yield Event::data("invalid unit name for logs");
         } else {
-            let sudo = sudo_cmd();
-            let spawn_res = AsyncCommand::new(&sudo)
+            let spawn_res = proc::sudo()
                 .args([
                     "journalctl",
                     "-u",

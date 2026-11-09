@@ -17,7 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use tokio::process::Command as AsyncCommand;
 
-use super::util::{sudo_cmd, zfs_bin};
+use super::util::{proc, zfs_bin};
 
 /// A mounted ZFS filesystem (from /proc/self/mounts; disko uses legacy mounts,
 /// so the `mountpoint` property alone would say "legacy").
@@ -178,27 +178,14 @@ fn parse_holds(text: &str, tag: &str) -> Vec<String> {
 async fn zfs_output(args: &[&str], sudo: bool) -> Result<String, String> {
     let zfs = zfs_bin();
     let mut cmd = if sudo {
-        let mut c = AsyncCommand::new(sudo_cmd());
-        c.arg("-n").arg(&zfs);
+        let mut c = proc::sudo();
+        c.arg(&zfs);
         c
     } else {
         AsyncCommand::new(&zfs)
     };
-    let out = cmd
-        .args(args)
-        .output()
-        .await
-        .map_err(|e| format!("zfs {}: {}", args.first().unwrap_or(&""), e))?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-    } else {
-        let err = String::from_utf8_lossy(&out.stderr);
-        Err(format!(
-            "zfs {} failed: {}",
-            args.first().unwrap_or(&""),
-            err.trim()
-        ))
-    }
+    cmd.args(args);
+    proc::run_ok(&mut cmd, &format!("zfs {}", args.first().unwrap_or(&""))).await
 }
 
 /// Snapshots of `dataset` (and its descendants when `recursive`), oldest first.

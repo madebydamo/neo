@@ -14,8 +14,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::process::Command as AsyncCommand;
-
 use super::super::locks::{lock_attr, LockMode, Scope};
 use super::super::types::AppConfig;
 use super::super::units::{
@@ -24,8 +22,8 @@ use super::super::units::{
     wait_units_stopped,
 };
 use super::super::util::{
-    escape_attr, escape_html, rsync_bin, status_err, status_ok, status_pulling, status_slot_oob,
-    sudo_cmd,
+    escape_attr, escape_html, proc, rsync_bin, status_err, status_ok, status_pulling,
+    status_slot_oob,
 };
 use super::render::{self, ManageCtx, BTN_SECONDARY};
 use super::{
@@ -240,9 +238,8 @@ async fn rsync_restore(src: &Path, dst: &str) -> Result<(), String> {
     src_s.push('/');
     let mut dst_s = dst.trim_end_matches('/').to_string();
     dst_s.push('/');
-    let out = AsyncCommand::new(sudo_cmd())
+    let out = proc::sudo()
         .args([
-            "-n",
             &rsync_bin(),
             "-aHX",
             "--delete",

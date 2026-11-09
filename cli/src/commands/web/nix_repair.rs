@@ -5,14 +5,13 @@ use std::process::Stdio;
 use std::sync::Arc;
 
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command as TokioCommand;
 
 use crate::commands::web::locks::{try_lock, Blocked};
 use crate::commands::web::ops::store::{
     append_log, find_recent_in_progress, log_path, write_state,
 };
 use crate::commands::web::types::AppConfig;
-use crate::commands::web::util::{nix_bin, sudo_cmd};
+use crate::commands::web::util::{nix_bin, proc};
 use crate::utils::locks::{LockSpec, OpInfo};
 use crate::utils::{get_timestamp, OperationKind, OPERATIONS_DIR};
 
@@ -47,7 +46,6 @@ pub fn start_store_verify_repair(config: Arc<AppConfig>) -> Result<String, Block
 async fn run_store_verify_repair(config: Arc<AppConfig>, id: String) {
     write_state(&id, "in_progress", "nix-store-verify-repair", None);
     let log_file = log_path(&id);
-    let sudo = sudo_cmd();
     // Prefer the same nix binary neo-web uses when available.
     let nix_store = {
         let nix = nix_bin();
@@ -67,8 +65,8 @@ async fn run_store_verify_repair(config: Arc<AppConfig>, id: String) {
     // Use sudo -n (non-interactive). Do not pass --no-ask-password: that is a
     // systemctl flag, not a sudo option. Skip --check-contents (full content
     // rehash is very slow); path existence + repair is enough for missing store paths.
-    let mut child = match TokioCommand::new(&sudo)
-        .args(["-n", &nix_store, "--verify", "--repair"])
+    let mut child = match proc::sudo()
+        .args([&nix_store, "--verify", "--repair"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

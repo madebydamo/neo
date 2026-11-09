@@ -1,14 +1,12 @@
 //! Systemd unit control: active state, start/stop/restart, control OOB fragments.
-use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::process::Command as AsyncCommand;
-
 use super::super::locks::{lock_attr, LockMode, Scope};
 use super::super::types::AppConfig;
-use super::super::util::{escape_attr, escape_html, status_slot_oob, sudo_cmd};
+use super::super::util::{escape_attr, escape_html, proc, status_slot_oob};
 use super::status::{query_unit_status_blocking, UnitStatus};
+use crate::utils::command::sudo_command;
 
 pub use super::super::util::unit_name_valid;
 
@@ -54,8 +52,7 @@ fn parse_active_state_stdout(stdout: &[u8]) -> String {
 }
 
 pub async fn unit_active_state_async(unit: &str) -> String {
-    let sudo = sudo_cmd();
-    match AsyncCommand::new(&sudo)
+    match proc::sudo()
         .args(["systemctl", "is-active", unit])
         .output()
         .await
@@ -197,8 +194,7 @@ pub fn perform_unit_action(action: UnitAction, unit: &str) {
     if !unit_name_valid(unit) {
         return;
     }
-    let sudo = sudo_cmd();
-    let _ = Command::new(&sudo)
+    let _ = sudo_command()
         .args([
             "systemctl",
             action.as_str(),

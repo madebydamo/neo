@@ -9,7 +9,8 @@ use std::process::Command;
 use rocket::response::content::RawHtml;
 use rocket::{get, post};
 
-use crate::commands::web::util::{escape_html, sudo_cmd};
+use crate::commands::web::util::escape_html;
+use crate::utils::command::sudo_command;
 
 /// One keypair the UI shows and can rotate.
 struct KeySpec {
@@ -103,9 +104,7 @@ fn rotate_key(spec: &KeySpec) -> Result<String, String> {
     let script = std::env::var(spec.script_env).unwrap_or_else(|_| spec.script.to_string());
     if Path::new(&script).is_file() {
         let out = if spec.sudo {
-            Command::new(sudo_cmd())
-                .args(["-n", &script, "rotate"])
-                .output()
+            sudo_command().args([&script, "rotate"]).output()
         } else {
             Command::new(&script).arg("rotate").output()
         }

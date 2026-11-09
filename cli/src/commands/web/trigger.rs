@@ -1,8 +1,7 @@
 //! Start activation / update / generation-switch oneshots and return their monitor.
-use std::process::Command;
-
 use rocket::response::content::RawHtml;
 
+use crate::utils::command::sudo_command;
 use crate::utils::locks::{LockSpec, OpInfo};
 use crate::utils::{execute_command, get_timestamp, GenerationMode, OperationKind, OperationLog};
 
@@ -33,7 +32,7 @@ fn trigger_systemd_run(
     let nix_bin = util::nix_bin();
     let neo_bin = util::neo_bin();
     let unit = format!("neo-{}.service", unit_leaf);
-    let mut run_cmd = Command::new(&sudo_cmd);
+    let mut run_cmd = sudo_command();
     run_cmd.args([
         "systemd-run",
         "--collect",
