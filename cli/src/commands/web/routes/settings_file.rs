@@ -9,12 +9,12 @@ use rocket::response::content::RawHtml;
 use rocket::response::{Responder, Response};
 use rocket::{get, post, Request, State};
 
-use crate::commands::web::locks::{try_lock, Blocked};
-use crate::commands::web::settings::file::{export_settings_toml, import_settings_toml};
-use crate::commands::web::settings::save::refresh_after_settings_change;
+use crate::commands::web::locks::Blocked;
+use crate::commands::web::settings::edit::{apply_edit, Edit};
+use crate::commands::web::settings::file::{export_settings_toml, parse_settings_upload};
+use crate::commands::web::settings::save::SaveError;
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::{alert_html, AlertKind};
-use crate::utils::locks::{LockSpec, OpInfo};
 
 pub struct TomlAttachment {
     body: String,
@@ -61,18 +61,18 @@ pub async fn upload_settings(
             )));
         }
     };
-    let _lock = try_lock(
-        &LockSpec::system_shared(),
-        OpInfo::new("settings", "Settings upload"),
-    )?;
-    Ok(match import_settings_toml(&config.settings_path, &raw) {
-        Ok(()) => {
-            refresh_after_settings_change(config);
-            RawHtml(alert_html(
+    let doc = match parse_settings_upload(&raw) {
+        Ok(doc) => doc,
+        Err(e) => return Ok(RawHtml(alert_html(AlertKind::Error, &e))),
+    };
+    Ok(RawHtml(
+        match apply_edit(config, Edit::ReplaceFile { doc }).await {
+            Ok(()) => alert_html(
                 AlertKind::Success,
                 "Replaced working-tree settings.toml. Review pending changes and apply to activate.",
-            ))
-        }
-        Err(e) => RawHtml(alert_html(AlertKind::Error, &e)),
-    })
+            ),
+            Err(SaveError::Blocked(b)) => return Err(b),
+            Err(e) => alert_html(AlertKind::Error, e.message()),
+        },
+    ))
 }

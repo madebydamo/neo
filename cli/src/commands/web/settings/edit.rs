@@ -3,11 +3,15 @@
 //! which takes the settings lock, edits the document, routes secrets and
 //! finishes the save (sorted write, rekey, evaluator + action bar refresh).
 
+use std::fs;
+
 use rocket::http::Status;
 use toml_edit::{DocumentMut, Item, Table};
 
 use super::json_to_toml_value;
-use super::save::{apply_payload_to_table, finish_save, load_settings_doc, route_secrets};
+use super::save::{
+    apply_payload_to_table, finish_save, load_settings_doc, route_secrets, SaveError,
+};
 use crate::commands::web::locks::{try_lock, Blocked};
 use crate::commands::web::plugins::{services_to_remove, strip_service_tables};
 use crate::commands::web::types::AppConfig;
@@ -31,6 +35,9 @@ pub enum Edit {
     },
     /// Agent proposals: set / remove single settings by path.
     Patch { ops: Vec<PatchOp> },
+    /// Settings upload: replace the whole file. Secrets in it move to the secrets
+    /// file; secrets it does not mention stay (a downloaded file never has them).
+    ReplaceFile { doc: DocumentMut },
 }
 
 /// One resolved patch operation on a settings path (`["services","pihole","localIP"]`).
@@ -56,9 +63,9 @@ fn settings_lock() -> Result<LockGuard, Blocked> {
 }
 
 /// Apply `edit` to settings.toml under the settings lock.
-pub async fn apply_edit(config: &AppConfig, edit: Edit) -> Result<Status, Blocked> {
+pub async fn apply_edit(config: &AppConfig, edit: Edit) -> Result<(), SaveError> {
     let _lock = settings_lock()?;
-    Ok(match edit {
+    match edit {
         Edit::ReplaceService { service, payload } => {
             save_service_inner(config, &service, &payload).await
         }
@@ -66,7 +73,15 @@ pub async fn apply_edit(config: &AppConfig, edit: Edit) -> Result<Status, Blocke
             save_core_section_inner(config, &section, &payload).await
         }
         Edit::Patch { ops } => save_patch_inner(config, &ops).await,
-    })
+        Edit::ReplaceFile { doc } => save_file_inner(config, doc).await,
+    }
+}
+
+async fn save_file_inner(config: &AppConfig, mut doc: DocumentMut) -> Result<(), SaveError> {
+    fs::create_dir_all(config.config_dir())
+        .map_err(|e| SaveError::internal(format!("create directory: {e}")))?;
+    route_secrets(config, &mut doc, None).await?;
+    finish_save(&config.settings_path, &mut doc, config).await
 }
 
 /// Non-empty JSON object payload, if any.
@@ -85,19 +100,18 @@ async fn save_service_inner(
     config: &AppConfig,
     service: &str,
     payload: &serde_json::Value,
-) -> Status {
+) -> Result<(), SaveError> {
     let settings_path = &config.settings_path;
-    let mut doc = match load_settings_doc(settings_path) {
-        Ok(d) => d,
-        Err(s) => return s,
-    };
+    let mut doc = load_settings_doc(settings_path)?;
 
     let Some(services_table) = doc
         .entry("services")
         .or_insert(Item::Table(Table::new()))
         .as_table_mut()
     else {
-        return Status::InternalServerError;
+        return Err(SaveError::internal(
+            "[services] in settings.toml is not a table",
+        ));
     };
 
     // Replace [services.<service>] entirely (clean slate for this service's overrides).
@@ -107,9 +121,7 @@ async fn save_service_inner(
     }
 
     let scope = ["services".to_string(), service.to_string()];
-    if let Err(s) = route_secrets(config, &mut doc, Some(&scope)).await {
-        return s;
-    }
+    route_secrets(config, &mut doc, Some(&scope)).await?;
     finish_save(settings_path, &mut doc, config).await
 }
 
@@ -117,12 +129,9 @@ async fn save_core_section_inner(
     config: &AppConfig,
     section: &str,
     payload: &serde_json::Value,
-) -> Status {
+) -> Result<(), SaveError> {
     let settings_path = &config.settings_path;
-    let mut doc = match load_settings_doc(settings_path) {
-        Ok(d) => d,
-        Err(s) => return s,
-    };
+    let mut doc = load_settings_doc(settings_path)?;
 
     let old_plugins = plugins_from_doc(&doc);
     let old_plugins_item = doc.get("core").and_then(|c| c.get("plugins")).cloned();
@@ -134,9 +143,7 @@ async fn save_core_section_inner(
     }
 
     if CORE_NESTED_SECTIONS.contains(&section) {
-        if let Err(s) = apply_core_nested_section(&mut doc, section, payload) {
-            return s;
-        }
+        apply_core_nested_section(&mut doc, section, payload)?;
     } else if let Some(tbl) = payload_map(payload).and_then(payload_table) {
         // Top-level sections: neo-cli, disko
         doc.insert(section, Item::Table(tbl));
@@ -146,8 +153,7 @@ async fn save_core_section_inner(
     if old_plugins != new_plugins || !plugins_are_tables(&doc) {
         let errs = validate_plugins(&new_plugins);
         if !errs.is_empty() {
-            eprintln!("web: refusing plugin save: {}", errs.join("; "));
-            return Status::BadRequest;
+            return Err(SaveError::Refused(Status::BadRequest, errs.join("; ")));
         }
         // [core.plugins.<id>] tables; the form sends one object, an old config a list.
         // Rewrite onto the previous tables so unchanged entries keep their place.
@@ -164,13 +170,11 @@ async fn save_core_section_inner(
     if old_ids.iter().any(|id| !new_ids.contains(id)) {
         let owners = {
             let mut ev = config.evaluator.lock().await;
-            match ev.extract_plugin_owners().await {
-                Ok(m) => m,
-                Err(e) => {
-                    eprintln!("web: refusing plugin list save; ownership extract failed: {e:#}");
-                    return Status::InternalServerError;
-                }
-            }
+            ev.extract_plugin_owners().await.map_err(|e| {
+                SaveError::internal(format!(
+                    "Not saved: could not read which services the plugins own: {e:#}"
+                ))
+            })?
         };
         let gone = services_to_remove(&owners, &old_ids, &new_ids);
         if !gone.is_empty() {
@@ -183,27 +187,25 @@ async fn save_core_section_inner(
     let scope = ["core".to_string(), section.to_string()];
     let scope =
         (CORE_NESTED_SECTIONS.contains(&section) && section != "core").then_some(&scope[..]);
-    if let Err(s) = route_secrets(config, &mut doc, scope).await {
-        return s;
-    }
+    route_secrets(config, &mut doc, scope).await?;
     finish_save(settings_path, &mut doc, config).await
 }
 
-/// Ensure `[core]` exists and return a mutable reference, or InternalServerError.
-fn ensure_core_table(doc: &mut DocumentMut) -> Result<&mut Table, Status> {
+/// Ensure `[core]` exists and return a mutable reference.
+fn ensure_core_table(doc: &mut DocumentMut) -> Result<&mut Table, SaveError> {
     if !doc.get("core").is_some_and(|c| c.is_table()) {
         doc.insert("core", Item::Table(Table::new()));
     }
     doc.get_mut("core")
         .and_then(|c| c.as_table_mut())
-        .ok_or(Status::InternalServerError)
+        .ok_or_else(|| SaveError::internal("[core] in settings.toml is not a table"))
 }
 
 fn apply_core_nested_section(
     doc: &mut DocumentMut,
     section: &str,
     payload: &serde_json::Value,
-) -> Result<(), Status> {
+) -> Result<(), SaveError> {
     let core_table = ensure_core_table(doc)?;
     if section != "core" {
         core_table.remove(section);
@@ -312,26 +314,16 @@ pub fn apply_ops(doc: &mut DocumentMut, ops: &[PatchOp]) -> Result<(), String> {
     Ok(())
 }
 
-async fn save_patch_inner(config: &AppConfig, ops: &[PatchOp]) -> Status {
+async fn save_patch_inner(config: &AppConfig, ops: &[PatchOp]) -> Result<(), SaveError> {
     let settings_path = &config.settings_path;
-    let mut doc = match load_settings_doc(settings_path) {
-        Ok(d) => d,
-        Err(s) => return s,
-    };
-    if let Err(e) = apply_ops(&mut doc, ops) {
-        eprintln!("web: refusing settings patch: {e}");
-        return Status::UnprocessableEntity;
-    }
+    let mut doc = load_settings_doc(settings_path)?;
+    apply_ops(&mut doc, ops).map_err(|e| SaveError::Refused(Status::UnprocessableEntity, e))?;
     // New secret values move to the secrets file like a form save.
-    if let Err(s) = route_secrets(config, &mut doc, None).await {
-        return s;
-    }
+    route_secrets(config, &mut doc, None).await?;
     // A cleared secret also leaves the secrets file (scope = that path).
     for op in ops {
         if let PatchOp::Unset { path, secret: true } = op {
-            if let Err(s) = route_secrets(config, &mut doc, Some(path)).await {
-                return s;
-            }
+            route_secrets(config, &mut doc, Some(path)).await?;
         }
     }
     finish_save(settings_path, &mut doc, config).await

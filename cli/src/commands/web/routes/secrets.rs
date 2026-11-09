@@ -3,7 +3,6 @@
 //! are the ones `neo secrets …` runs (utils/secrets_store.rs); changes apply
 //! with the next activation.
 
-use std::path::Path;
 use std::sync::Arc;
 
 use rocket::response::content::RawHtml;
@@ -11,7 +10,7 @@ use rocket::{get, post, State};
 use toml_edit::DocumentMut;
 
 use crate::commands::web::locks::{lock_attr, try_lock, Blocked, LockMode, Scope};
-use crate::commands::web::settings::save::refresh_after_settings_change;
+use crate::commands::web::settings::save::{load_settings_doc, refresh_after_settings_change};
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::{escape_html, proc};
 use crate::utils::locks::{LockSpec, OpInfo};
@@ -19,17 +18,6 @@ use crate::utils::secrets::{Backend, PLAIN_FILE, SOPS_FILE};
 use crate::utils::secrets_store::{admin_keys, host_key, ignored_keys, Store, IDENTITY_FILE};
 
 const LOCK_ICON: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 018 0v3"/></svg>"#;
-
-fn store(config: &AppConfig) -> Store {
-    Store::new(config.settings_path.parent().unwrap_or(Path::new(".")))
-}
-
-fn load_doc(config: &AppConfig) -> DocumentMut {
-    std::fs::read_to_string(&config.settings_path)
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or_default()
-}
 
 /// Short display form of a public key: type, …last 12 chars, comment.
 fn short_key(key: &str) -> String {
@@ -75,8 +63,11 @@ fn button(action: &str, label: &str, class: &str, confirm: Option<&str>) -> Stri
 }
 
 fn card(config: &AppConfig, message: Option<(&str, &str)>) -> String {
-    let doc = load_doc(config);
-    let store = store(config);
+    let (doc, unreadable) = match load_settings_doc(&config.settings_path) {
+        Ok(doc) => (doc, None),
+        Err(e) => (DocumentMut::new(), Some(e.message().to_string())),
+    };
+    let store = config.secrets_store();
     let backend = store.backend();
     let admins = admin_display(&doc);
     let ignored = ignored_keys(&doc);
@@ -147,6 +138,7 @@ fn card(config: &AppConfig, message: Option<(&str, &str)>) -> String {
         )
     });
     let message = message
+        .or(unreadable.as_deref().map(|t| ("error", t)))
         .or(stale.as_deref().map(|t| ("warning", t)))
         .map(|(kind, text)| {
             format!(
@@ -199,7 +191,7 @@ async fn with_store<F>(config: &AppConfig, f: F) -> Result<String, String>
 where
     F: FnOnce(&Store) -> anyhow::Result<String> + Send + 'static,
 {
-    let store = store(config);
+    let store = config.secrets_store();
     proc::blocking(move || f(&store).map_err(|e| format!("{e:#}")))
         .await
         .and_then(|r| r)

@@ -153,14 +153,9 @@ async fn save(
     asked: &HashMap<String, String>,
 ) -> Result<(), (Status, String)> {
     let ops = proposals::ops_for_save(config, p, asked).await?;
-    match apply_edit(config, Edit::Patch { ops }).await {
-        Ok(s) if s == HttpStatus::Ok => Ok(()),
-        Ok(s) => Err((
-            Status::Failed,
-            format!("Saving failed ({}). Nothing was changed.", s.code),
-        )),
-        Err(b) => Err((Status::Failed, b.0)),
-    }
+    apply_edit(config, Edit::Patch { ops })
+        .await
+        .map_err(|e| (Status::Failed, e.message().to_string()))
 }
 
 #[post("/proposals/<id>/save", data = "<form>")]

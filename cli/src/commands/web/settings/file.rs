@@ -5,26 +5,19 @@ use std::path::Path;
 
 use toml_edit::DocumentMut;
 
-use crate::utils::sort_document_alphabetically;
-
-/// Replace `settings.toml` with uploaded TOML. Parses and sorts; does not write on error.
-pub fn import_settings_toml(path: &Path, raw: &str) -> Result<(), String> {
+/// Parse an uploaded `settings.toml`. Writing it goes through `apply_edit`.
+pub fn parse_settings_upload(raw: &str) -> Result<DocumentMut, String> {
     let raw = raw.strip_prefix('\u{feff}').unwrap_or(raw);
     if raw.trim().is_empty() {
         return Err("Uploaded file is empty".into());
     }
-    let mut doc: DocumentMut = raw
+    let doc: DocumentMut = raw
         .parse()
         .map_err(|e: toml_edit::TomlError| format!("Invalid TOML: {e}"))?;
     if doc.as_table().is_empty() {
         return Err("Uploaded settings.toml has no keys".into());
     }
-    sort_document_alphabetically(&mut doc);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("create directory: {e}"))?;
-    }
-    fs::write(path, doc.to_string()).map_err(|e| format!("write settings.toml: {e}"))?;
-    Ok(())
+    Ok(doc)
 }
 
 /// Read working-tree `settings.toml` for download.
@@ -52,71 +45,28 @@ mod tests {
     }
 
     #[test]
-    fn import_rejects_invalid_toml_and_leaves_existing_file() {
-        let path = temp_settings();
-        fs::write(&path, "keep = true\n").unwrap();
-        let err = import_settings_toml(&path, "not = [toml").unwrap_err();
-        assert!(
-            err.to_lowercase().contains("toml") || err.to_lowercase().contains("invalid"),
-            "unexpected error: {err}"
-        );
-        assert_eq!(fs::read_to_string(&path).unwrap(), "keep = true\n");
+    fn upload_rejects_invalid_toml() {
+        let err = parse_settings_upload("not = [toml").unwrap_err();
+        assert!(err.contains("Invalid TOML"), "unexpected error: {err}");
     }
 
     #[test]
-    fn import_rejects_empty_payload() {
-        let path = temp_settings();
-        fs::write(&path, "keep = true\n").unwrap();
-        let err = import_settings_toml(&path, "  \n\t").unwrap_err();
-        assert!(
-            err.to_lowercase().contains("empty"),
-            "unexpected error: {err}"
-        );
-        assert_eq!(fs::read_to_string(&path).unwrap(), "keep = true\n");
+    fn upload_rejects_empty_payload() {
+        let err = parse_settings_upload("  \n\t").unwrap_err();
+        assert!(err.contains("empty"), "unexpected error: {err}");
     }
 
     #[test]
-    fn import_rejects_document_with_no_keys() {
-        let path = temp_settings();
-        fs::write(&path, "keep = true\n").unwrap();
-        let err = import_settings_toml(&path, "# comments only\n").unwrap_err();
-        assert!(
-            err.to_lowercase().contains("no keys") || err.to_lowercase().contains("empty"),
-            "unexpected error: {err}"
-        );
-        assert_eq!(fs::read_to_string(&path).unwrap(), "keep = true\n");
+    fn upload_rejects_document_with_no_keys() {
+        let err = parse_settings_upload("# comments only\n").unwrap_err();
+        assert!(err.contains("no keys"), "unexpected error: {err}");
     }
 
     #[test]
-    fn import_writes_sorted_toml() {
-        let path = temp_settings();
-        import_settings_toml(
-            &path,
-            r#"
-[services.zeta]
-enabled = true
-
-[services.alpha]
-enabled = false
-"#,
-        )
-        .unwrap();
-        let written = fs::read_to_string(&path).unwrap();
-        let alpha = written.find("[services.alpha]").expect("alpha table");
-        let zeta = written.find("[services.zeta]").expect("zeta table");
-        assert!(
-            alpha < zeta,
-            "expected alphabetical table order:\n{written}"
-        );
-    }
-
-    #[test]
-    fn import_strips_utf8_bom() {
-        let path = temp_settings();
-        import_settings_toml(&path, "\u{feff}core.hostname = \"neo\"\n").unwrap();
-        let written = fs::read_to_string(&path).unwrap();
-        assert!(written.contains("hostname"));
-        assert!(!written.starts_with('\u{feff}'));
+    fn upload_strips_utf8_bom() {
+        let doc = parse_settings_upload("\u{feff}core.hostname = \"neo\"\n").unwrap();
+        assert!(doc.to_string().contains("hostname"));
+        assert!(!doc.to_string().starts_with('\u{feff}'));
     }
 
     #[test]

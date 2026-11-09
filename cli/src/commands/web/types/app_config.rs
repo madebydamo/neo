@@ -8,6 +8,7 @@ use super::super::resources::ResourceSampler;
 use super::super::schema_cache::SchemaCache;
 use super::super::units::UnitStatusCache;
 use super::super::util::InFlightSet;
+use crate::utils::secrets_store::Store;
 
 #[derive(Clone, Debug)]
 pub struct AppConfig {
@@ -30,4 +31,18 @@ pub struct AppConfig {
     /// CPU/mem/disk/net/process sampler backing the resources panel; owns the
     /// previous `/proc` reading needed for percent/rate deltas.
     pub resources: Arc<ResourceSampler>,
+}
+
+impl AppConfig {
+    /// The config repo: the folder of settings.toml.
+    pub fn config_dir(&self) -> PathBuf {
+        self.settings_path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("."))
+    }
+
+    pub fn secrets_store(&self) -> Store {
+        Store::new(self.config_dir())
+    }
 }

@@ -1,34 +1,84 @@
 use std::fs;
+use std::io::Cursor;
 use std::path::Path;
 
-use rocket::http::Status;
+use rocket::http::{ContentType, Status};
+use rocket::response::{Responder, Response};
+use rocket::Request;
 use toml_edit::{DocumentMut, Table};
 
 use super::{insert_dotted, json_to_toml_item, json_to_toml_value};
+use crate::commands::web::locks::Blocked;
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::proc;
-use crate::utils::secrets_store::Store;
 use crate::utils::{secrets, sort_document_alphabetically};
 
-pub fn load_settings_doc(path: &Path) -> Result<DocumentMut, Status> {
+/// Why a settings write did not happen: 409 from the settings lock, else a status
+/// and plain-text reason, which the form and the proposal card show as they are.
+/// Never put a settings value in a reason (a TOML parse error quotes the line).
+#[derive(Debug)]
+pub enum SaveError {
+    Blocked(Blocked),
+    Refused(Status, String),
+}
+
+impl SaveError {
+    pub fn internal(msg: impl Into<String>) -> Self {
+        SaveError::Refused(Status::InternalServerError, msg.into())
+    }
+
+    pub fn message(&self) -> &str {
+        match self {
+            SaveError::Blocked(b) => &b.0,
+            SaveError::Refused(_, msg) => msg,
+        }
+    }
+}
+
+impl From<Blocked> for SaveError {
+    fn from(b: Blocked) -> Self {
+        SaveError::Blocked(b)
+    }
+}
+
+impl<'r> Responder<'r, 'static> for SaveError {
+    fn respond_to(self, req: &'r Request<'_>) -> rocket::response::Result<'static> {
+        match self {
+            SaveError::Blocked(b) => b.respond_to(req),
+            SaveError::Refused(status, msg) => {
+                eprintln!("web: settings not saved: {msg}");
+                Response::build()
+                    .status(status)
+                    .header(ContentType::Plain)
+                    .sized_body(msg.len(), Cursor::new(msg))
+                    .ok()
+            }
+        }
+    }
+}
+
+pub fn load_settings_doc(path: &Path) -> Result<DocumentMut, SaveError> {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
     let content = if path.exists() {
-        fs::read_to_string(path).map_err(|_| Status::InternalServerError)?
+        fs::read_to_string(path).map_err(|e| SaveError::internal(format!("read settings: {e}")))?
     } else {
         String::new()
     };
     if content.trim().is_empty() {
         Ok(DocumentMut::new())
     } else {
-        content.parse().map_err(|_| Status::InternalServerError)
+        content
+            .parse()
+            .map_err(|_| SaveError::internal("settings.toml is not valid TOML"))
     }
 }
 
-pub fn write_settings_doc(path: &Path, doc: &mut DocumentMut) -> Result<(), Status> {
+pub fn write_settings_doc(path: &Path, doc: &mut DocumentMut) -> Result<(), SaveError> {
     sort_document_alphabetically(doc);
-    fs::write(path, doc.to_string()).map_err(|_| Status::InternalServerError)
+    fs::write(path, doc.to_string())
+        .map_err(|e| SaveError::internal(format!("write settings: {e}")))
 }
 
 /// Apply a JSON object payload into a TOML table (supports dotted leaf keys).
@@ -71,46 +121,43 @@ pub async fn route_secrets(
     config: &AppConfig,
     doc: &mut DocumentMut,
     scope: Option<&[String]>,
-) -> Result<(), Status> {
+) -> Result<(), SaveError> {
     let backend = secrets::backend_for(&config.settings_path);
     if backend == secrets::Backend::Inline {
         return Ok(());
     }
     // A settings.nix older than secrets support never reads the secrets file:
     // a value saved there would silently drop out of the evaluated config.
-    let store = Store::new(config.settings_path.parent().unwrap_or(Path::new(".")));
+    let store = config.secrets_store();
     if !store.loads_secret_files() {
-        eprintln!(
-            "web: refusing save; modules/settings.nix does not load {} / {} (refresh the config from the neo homeserver template, e.g. neo update)",
+        return Err(SaveError::internal(format!(
+            "Not saved: modules/settings.nix does not load {} / {} (refresh the config from the neo homeserver template, e.g. neo update)",
             secrets::PLAIN_FILE,
             secrets::SOPS_FILE
-        );
-        return Err(Status::InternalServerError);
+        )));
     }
     // Without the list of secret paths a save could write secrets inline: refuse.
     let patterns = {
         let mut ev = config.evaluator.lock().await;
         ev.extract_secret_paths().await.map_err(|e| {
-            eprintln!("web: refusing save; secret path extract failed: {e:#}");
-            Status::InternalServerError
+            SaveError::internal(format!(
+                "Not saved: could not list the secret settings: {e:#}"
+            ))
         })?
     };
     if patterns.is_empty() {
-        eprintln!("web: refusing save; no secret settings found (evaluation problem?)");
-        return Err(Status::InternalServerError);
+        return Err(SaveError::internal(
+            "Not saved: no secret settings found (evaluation problem?)",
+        ));
     }
     match backend {
         secrets::Backend::Inline => Ok(()),
         secrets::Backend::Plain(path) => {
-            let mut tree = secrets::read_plain(&path).map_err(|e| {
-                eprintln!("web: refusing save: {e:#}");
-                Status::InternalServerError
-            })?;
+            let mut tree = secrets::read_plain(&path)
+                .map_err(|e| SaveError::internal(format!("Not saved: {e:#}")))?;
             secrets::split_into(doc, &mut tree, &patterns, scope);
-            secrets::write_plain(&path, &tree).map_err(|e| {
-                eprintln!("web: writing secrets failed: {e:#}");
-                Status::InternalServerError
-            })
+            secrets::write_plain(&path, &tree)
+                .map_err(|e| SaveError::internal(format!("Writing secrets failed: {e:#}")))
         }
         secrets::Backend::Sops(_) => {
             // Placeholders (unchanged values) are dropped; changed or cleared
@@ -122,26 +169,24 @@ pub async fn route_secrets(
                 (owned, saved)
             })
             .await
-            .map_err(|e| {
-                eprintln!("web: refusing save; encrypted secrets: {e}");
-                Status::InternalServerError
-            })?;
+            .map_err(|e| SaveError::internal(format!("Not saved: encrypted secrets: {e}")))?;
             *doc = owned;
-            saved.map(|_| ()).map_err(|e| {
-                eprintln!("web: refusing save; encrypted secrets: {e:#}");
-                Status::InternalServerError
-            })
+            saved
+                .map(|_| ())
+                .map_err(|e| SaveError::internal(format!("Not saved: encrypted secrets: {e:#}")))
         }
     }
 }
 
-pub async fn finish_save(path: &Path, doc: &mut DocumentMut, config: &AppConfig) -> Status {
-    if write_settings_doc(path, doc).is_err() {
-        return Status::InternalServerError;
-    }
+pub async fn finish_save(
+    path: &Path,
+    doc: &mut DocumentMut,
+    config: &AppConfig,
+) -> Result<(), SaveError> {
+    write_settings_doc(path, doc)?;
     // New or removed SSH keys change who may decrypt: re-encrypt right away.
-    let store = Store::new(path.parent().unwrap_or(Path::new(".")));
-    let rekeyed = proc::blocking(move || {
+    let store = config.secrets_store();
+    proc::blocking(move || {
         if store.needs_rekey() {
             store.rekey().map(|_| ()).map_err(|e| format!("{e:#}"))
         } else {
@@ -149,11 +194,12 @@ pub async fn finish_save(path: &Path, doc: &mut DocumentMut, config: &AppConfig)
         }
     })
     .await
-    .and_then(|r| r);
-    if let Err(e) = rekeyed {
-        eprintln!("web: re-encrypting secrets for the new SSH keys failed: {e}");
-        return Status::InternalServerError;
-    }
+    .and_then(|r| r)
+    .map_err(|e| {
+        SaveError::internal(format!(
+            "Saved, but re-encrypting secrets for the new SSH keys failed: {e}"
+        ))
+    })?;
     refresh_after_settings_change(config);
-    Status::Ok
+    Ok(())
 }

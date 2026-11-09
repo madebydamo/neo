@@ -4,8 +4,8 @@ use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{post, State};
 
-use crate::commands::web::locks::Blocked;
 use crate::commands::web::settings::edit::{apply_edit, Edit};
+use crate::commands::web::settings::save::SaveError;
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::{core_section_ok, service_name_ok};
 
@@ -14,7 +14,7 @@ pub async fn save_service(
     config: &State<Arc<AppConfig>>,
     service: &str,
     payload: Json<serde_json::Value>,
-) -> Result<Status, Blocked> {
+) -> Result<Status, SaveError> {
     if !service_name_ok(service) {
         eprintln!("web: refusing save for invalid service name {:?}", service);
         return Ok(Status::BadRequest);
@@ -26,7 +26,8 @@ pub async fn save_service(
             payload: payload.into_inner(),
         },
     )
-    .await
+    .await?;
+    Ok(Status::Ok)
 }
 
 #[post("/save-core/<section>", data = "<payload>")]
@@ -34,7 +35,7 @@ pub async fn save_core_section(
     config: &State<Arc<AppConfig>>,
     section: &str,
     payload: Json<serde_json::Value>,
-) -> Result<Status, Blocked> {
+) -> Result<Status, SaveError> {
     if !core_section_ok(section) {
         eprintln!("web: refusing save for unknown core section {:?}", section);
         return Ok(Status::BadRequest);
@@ -46,5 +47,6 @@ pub async fn save_core_section(
             payload: payload.into_inner(),
         },
     )
-    .await
+    .await?;
+    Ok(Status::Ok)
 }
