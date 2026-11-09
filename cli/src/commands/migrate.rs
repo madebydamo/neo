@@ -31,6 +31,7 @@ pub fn migrate(config_path: &str, source_settings: &Path, dry_run: bool) -> Resu
     }
     let content = fs::read_to_string(&target).context("read settings.toml for migration")?;
     let mut doc: DocumentMut = content.parse().context("parse settings.toml")?;
+    check_migrations_table(&doc)?;
     let changed = apply_migrations(&mut doc);
     if changed {
         // Same ordering as web saves so update→migrate does not unsort the file.
@@ -588,12 +589,22 @@ fn get_applied(doc: &DocumentMut) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// A `migrations` key neo cannot write to would otherwise lose the record of
+/// what ran, so every migration runs again next time.
+fn check_migrations_table(doc: &DocumentMut) -> Result<()> {
+    match doc.get("migrations") {
+        Some(m) if !m.is_table() => {
+            anyhow::bail!("settings.toml: `migrations` must be a [migrations] table")
+        }
+        _ => Ok(()),
+    }
+}
+
 fn set_applied(doc: &mut DocumentMut, applied: &[String]) {
-    let tbl = doc
-        .entry("migrations")
-        .or_insert(Item::Table(Table::new()))
-        .as_table_mut()
-        .expect("migrations table");
+    let entry = doc.entry("migrations").or_insert(Item::Table(Table::new()));
+    let Some(tbl) = entry.as_table_mut() else {
+        return;
+    };
     let mut arr = Array::new();
     for s in applied {
         arr.push(s.as_str());
@@ -697,6 +708,17 @@ fn move_dotted(doc: &mut DocumentMut, from: &str, to: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn malformed_migrations_key_is_an_error() {
+        for bad in ["migrations = \"x\"\n", "migrations = { applied = [] }\n"] {
+            let doc: DocumentMut = bad.parse().unwrap();
+            assert!(check_migrations_table(&doc).is_err(), "{bad}");
+        }
+        let ok: DocumentMut = "[migrations]\napplied = []\n".parse().unwrap();
+        assert!(check_migrations_table(&ok).is_ok());
+        assert!(check_migrations_table(&DocumentMut::new()).is_ok());
+    }
 
     #[test]
     fn migration_012_maps_old_themes() {

@@ -46,7 +46,8 @@ pub fn init(
     } else {
         if repo_path
             .read_dir()?
-            .any(|e| e.is_ok() && !e.unwrap().file_name().to_string_lossy().starts_with('.'))
+            .flatten()
+            .any(|e| !e.file_name().to_string_lossy().starts_with('.'))
         {
             anyhow::bail!("Error: {} is not empty and is not a git repository. Please remove the files first or use a different directory.", config_path);
         }
