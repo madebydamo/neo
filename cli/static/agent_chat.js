@@ -535,8 +535,7 @@
     refs.at = Date.now();
     refs.promise = fetch('/agent/refs', { credentials: 'same-origin' })
       .then(function (r) {
-        if (!r.ok) throw new Error('references unavailable (' + r.status + ')');
-        return r.json();
+        return window.NeoUtil.readJson(r, 'references unavailable');
       })
       .then(function (j) {
         var items = j.items || [];
@@ -1339,15 +1338,7 @@
   };
 
   function jsonOrThrow(r) {
-    return r.json().then(
-      function (j) {
-        if (!r.ok) throw new Error((j && j.error) || 'The assistant is not reachable.');
-        return j;
-      },
-      function () {
-        throw new Error('The assistant is not reachable (' + r.status + ').');
-      }
-    );
+    return window.NeoUtil.readJson(r, 'The assistant is not reachable');
   }
 
   function runningLines(turn) {

@@ -107,7 +107,7 @@ window.versioningPage = function versioningPage() {
       var self = this;
       return fetch('/versioning/tree?limit=' + this.limit)
         .then(function (r) {
-          return r.json();
+          return window.NeoUtil.readJson(r);
         })
         .then(function (data) {
           if (data.error) throw new Error(data.error);
@@ -164,7 +164,7 @@ window.versioningPage = function versioningPage() {
       this.services[id] = null;
       fetch('/versioning/commit/' + encodeURIComponent(id) + '/services')
         .then(function (r) {
-          return r.json();
+          return window.NeoUtil.readJson(r);
         })
         .then(function (data) {
           self.services[id] = data.error ? { error: data.error } : { enabled: data.enabled || [] };
@@ -696,7 +696,7 @@ window.versioningPage = function versioningPage() {
         body: VT.noteBody(kind, id, note),
       })
         .then(function (r) {
-          return r.json();
+          return window.NeoUtil.readJson(r);
         })
         .then(function (res) {
           if (res.error) throw new Error(res.error);

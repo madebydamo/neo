@@ -141,6 +141,23 @@
     return true;
   }
 
+  /**
+   * Body of a fetch Response as JSON. Rejects with the server's `error` field, or
+   * `<fallback> (<status>).` for any other failure (a proxy's HTML error page, …).
+   */
+  function readJson(res, fallback) {
+    var generic = (fallback || 'Request failed') + ' (' + res.status + ').';
+    return res.json().then(
+      function (j) {
+        if (!res.ok) throw new Error((j && j.error) || generic);
+        return j;
+      },
+      function () {
+        throw new Error(generic);
+      }
+    );
+  }
+
   return {
     esc: esc,
     toast: toast,
@@ -148,5 +165,6 @@
     onReady: onReady,
     markStandalone: markStandalone,
     reloadPane: reloadPane,
+    readJson: readJson,
   };
 });

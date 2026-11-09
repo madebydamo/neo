@@ -85,3 +85,15 @@ test('reloadPane loads the pane URL into the content area', () => {
     delete globalThis.document;
   }
 });
+
+test('readJson returns the body and rejects with the best message', async () => {
+  const res = (ok, status, json) => ({ ok, status, json });
+  assert.deepStrictEqual(await NeoUtil.readJson(res(true, 200, async () => ({ a: 1 }))), { a: 1 });
+  await assert.rejects(NeoUtil.readJson(res(false, 500, async () => ({ error: 'nope' }))), /^Error: nope$/);
+  await assert.rejects(NeoUtil.readJson(res(false, 500, async () => ({})), 'Broken'), /^Error: Broken \(500\)\.$/);
+  const notJson = async () => {
+    throw new SyntaxError('Unexpected token <');
+  };
+  await assert.rejects(NeoUtil.readJson(res(false, 502, notJson)), /^Error: Request failed \(502\)\.$/);
+  await assert.rejects(NeoUtil.readJson(res(true, 200, notJson), 'Broken'), /^Error: Broken \(200\)\.$/);
+});
