@@ -12,6 +12,23 @@
           options =
             {
               enabled = mkEnableOption "Upload links so family and friends can add photos to your Immich without an account" {rank = 0;};
+
+              apiKey = lib.neo.mkSecretOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = "Lets guests upload through invite links. Empty means only people logged in with their Immich account can upload. Create the key in Immich under Account Settings, API Keys.";
+                rank = 10;
+                ui = lib.neo.ui.mkUi {label = "Immich API key";};
+              };
+
+              sessionSecret = lib.neo.mkSecretOption {
+                type = types.nullOr types.str;
+                default = null;
+                description = "Protects admin logins to this app. Changing it signs everyone out.";
+                rank = 20;
+                helper = lib.neo.helpers.randomToken;
+                ui = lib.neo.ui.mkUi {label = "Session secret";};
+              };
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "drop";

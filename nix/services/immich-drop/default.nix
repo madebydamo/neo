@@ -9,8 +9,21 @@
       cfg = config.neo.services.immich-drop;
       immichCfg = config.neo.services.immich;
       domain = config.neo.services.swag.domain;
+      secretSet = v: v != null && v != "";
     in {
       config = mkIf cfg.enabled {
+        assertions = [
+          {
+            assertion = secretSet cfg.sessionSecret;
+            message = "neo.services.immich-drop: sessionSecret is required when enabled (use the Generate helper).";
+          }
+        ];
+
+        neo.core.secrets.containerEnv.immich-drop = mkIf (cfg.sessionSecret != null) (
+          {SESSION_SECRET = cfg.sessionSecret;}
+          // optionalAttrs (cfg.apiKey != null) {IMMICH_API_KEY = cfg.apiKey;}
+        );
+
         systemd.services.docker-immich-drop.preStart = lib.neo.mkEnsureDirs config [
           "${config.neo.core.volumes.appdata}/immich-drop"
         ];
@@ -21,13 +34,11 @@
             autoStart = true;
             environment = {
               IMMICH_BASE_URL = "https://${immichCfg.subdomain}.${domain}/api";
-              IMMICH_API_KEY = "N0iWGGfNrozgwBfPuTLQYAAjYfv6rxJMcDN6Xfo8c";
               IMMICH_ALBUM_NAME = "dead-drop";
               PUBLIC_UPLOAD_PAGE_ENABLED = "false";
               PUBLIC_BASE_URL = "https://${cfg.subdomain}.${domain}";
               CHUNKED_UPLOADS_ENABLED = "true";
               CHUNK_SIZE_MB = "95";
-              SESSION_SECRET = "SET-A-STRONG-RANDOM-VALUE";
             };
             volumes = [
               "${config.neo.core.volumes.appdata}/immich-drop:/data"
