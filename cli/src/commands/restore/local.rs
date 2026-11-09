@@ -3,7 +3,6 @@
 
 use anyhow::{bail, Context, Result};
 use std::fs;
-use std::io::{self, BufRead, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -14,7 +13,7 @@ use super::{
     access_tokens, int_setting, restore_identity, under, DataSource, RestoreArgs,
     DEFAULT_CONFIG_PATH,
 };
-use crate::utils::command::is_root;
+use crate::utils::command::{confirm, is_root};
 use crate::utils::execute_command;
 
 pub const WORK_DIR: &str = "/root/neo-restore";
@@ -95,17 +94,6 @@ pub(crate) fn missing_local_plugins(doc: &DocumentMut) -> Vec<String> {
         .filter(|(_, p)| !Path::new(p).exists())
         .map(|(u, _)| u)
         .collect()
-}
-
-fn confirm(question: &str) -> Result<()> {
-    print!("{question} Type yes to continue: ");
-    io::stdout().flush()?;
-    let mut line = String::new();
-    io::stdin().lock().read_line(&mut line)?;
-    if line.trim() != "yes" {
-        bail!("aborted");
-    }
-    Ok(())
 }
 
 /// Cap the ZFS ARC: the installer's Nix store is a tmpfs in the same RAM, and

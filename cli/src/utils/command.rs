@@ -50,6 +50,18 @@ pub fn root_command(program: &str, sudo: &str, non_interactive: bool) -> Command
     c
 }
 
+/// Ask on the terminal; anything but `yes` is an error.
+pub fn confirm(question: &str) -> Result<()> {
+    print!("{question} Type yes to continue: ");
+    std::io::stdout().flush()?;
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line)?;
+    if line.trim() != "yes" {
+        bail!("aborted");
+    }
+    Ok(())
+}
+
 /// Quote a string for safe copy-paste into a POSIX shell (bash/sh).
 ///
 /// Bare tokens stay unquoted when they only use safe characters; otherwise

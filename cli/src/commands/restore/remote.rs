@@ -6,7 +6,7 @@
 use anyhow::{bail, Context, Result};
 use std::env;
 use std::fs;
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread::sleep;
@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use super::backup::{self, Access, Location, Source};
 use super::local::{commit_uncommitted, remote_url, WORK_DIR};
 use super::{DataSource, RestoreArgs};
-use crate::utils::command::{shell_quote, stdout_checked};
+use crate::utils::command::{confirm, shell_quote, stdout_checked};
 use crate::utils::execute_command;
 use crate::utils::fsutil::TempDir;
 
@@ -36,17 +36,6 @@ const RESULT_MARK: &str = "NEO-RESTORE-RESULT=";
 
 /// A NixOS installer: root on tmpfs (or the ISO's overlay) and nixos-install.
 const INSTALLER_TEST: &str = "test -e /etc/NIXOS && command -v nixos-install >/dev/null && case $(findmnt -no FSTYPE /) in tmpfs|overlay|rootfs) true;; *) false;; esac";
-
-fn confirm(question: &str) -> Result<()> {
-    print!("{question} Type yes to continue: ");
-    io::stdout().flush()?;
-    let mut line = String::new();
-    io::stdin().lock().read_line(&mut line)?;
-    if line.trim() != "yes" {
-        bail!("aborted");
-    }
-    Ok(())
-}
 
 /// The machine being restored and how to log in to it.
 struct Target {
