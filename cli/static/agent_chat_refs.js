@@ -3,6 +3,7 @@
   'use strict';
 
   var core = root.NeoAgentCore;
+  var h = root.NeoUtil.h;
 
   /**
    * The `@` popup on the chat input: opens while an `@query` is typed, filters
@@ -23,75 +24,50 @@
     }
 
     function row(it, i) {
-      var r = document.createElement('div');
-      r.id = 'neo-agent-ref-' + i;
-      r.setAttribute('role', 'option');
-      r.setAttribute('aria-selected', i === st.sel ? 'true' : 'false');
-      r.className = 'neo-agent-ref-opt' + (i === st.sel ? ' is-active' : '');
-      var ico = document.createElement('span');
-      ico.className = 'neo-agent-ref-ico';
-      if (it.icon) {
-        var img = document.createElement('img');
-        img.src = it.icon;
-        img.alt = '';
-        ico.appendChild(img);
-      } else {
-        ico.textContent = it.kind === 'option' ? '⚙' : it.kind === 'guide' ? '☰' : it.kind === 'privacy' ? '◎' : '▣';
-      }
-      r.appendChild(ico);
-      var main = document.createElement('span');
-      main.className = 'min-w-0 flex-1';
-      var top = document.createElement('span');
-      top.className = 'flex items-baseline gap-1.5 min-w-0';
-      var label = document.createElement('span');
-      label.className = 'text-sm font-medium truncate';
-      label.textContent = it.label;
-      var tok = document.createElement('span');
-      tok.className = 'text-xs font-mono text-base-content/60 truncate';
-      tok.textContent = '@' + it.token;
-      top.appendChild(label);
-      top.appendChild(tok);
-      main.appendChild(top);
       var hint = [];
       if (it.hint) hint.push(it.hint);
       if (it.kind === 'service' && !it.enabled) hint.push('not installed');
       if (it.secret) hint.push('secret, value stays hidden');
-      if (hint.length) {
-        var h = document.createElement('span');
-        h.className = 'block text-xs text-base-content/60 truncate';
-        h.textContent = hint.join(' · ');
-        main.appendChild(h);
-      }
-      r.appendChild(main);
-      var badge = document.createElement('span');
-      badge.className = 'badge badge-ghost badge-xs shrink-0';
-      badge.textContent = core.KIND_LABEL[it.kind] || it.kind;
-      r.appendChild(badge);
-      r.addEventListener('mousedown', function (e) {
-        e.preventDefault(); // keep the focus in the input
-        pick(i);
-      });
-      r.addEventListener('mousemove', function () {
-        if (st.sel !== i) { st.sel = i; paint(); }
-      });
-      return r;
+      var fallback = it.kind === 'option' ? '⚙' : it.kind === 'guide' ? '☰' : it.kind === 'privacy' ? '◎' : '▣';
+      return h(
+        'div',
+        {
+          id: 'neo-agent-ref-' + i,
+          class: 'neo-agent-ref-opt' + (i === st.sel ? ' is-active' : ''),
+          attrs: { role: 'option', 'aria-selected': i === st.sel ? 'true' : 'false' },
+          on: {
+            mousedown: function (e) {
+              e.preventDefault(); // keep the focus in the input
+              pick(i);
+            },
+            mousemove: function () {
+              if (st.sel !== i) { st.sel = i; paint(); }
+            },
+          },
+        },
+        h('span', it.icon ? { class: 'neo-agent-ref-ico' } : { class: 'neo-agent-ref-ico', text: fallback },
+          it.icon && h('img', { src: it.icon, alt: '' })),
+        h('span', { class: 'min-w-0 flex-1' },
+          h('span', { class: 'flex items-baseline gap-1.5 min-w-0' },
+            h('span', { class: 'text-sm font-medium truncate', text: it.label }),
+            h('span', { class: 'text-xs font-mono text-base-content/60 truncate', text: '@' + it.token })),
+          hint.length && h('span', { class: 'block text-xs text-base-content/60 truncate', text: hint.join(' · ') })),
+        h('span', { class: 'badge badge-ghost badge-xs shrink-0', text: core.KIND_LABEL[it.kind] || it.kind })
+      );
     }
 
     function paint() {
       pop.textContent = '';
       if (!st.list.length) {
-        var none = document.createElement('div');
-        none.className = 'px-3 py-2 text-xs text-base-content/60';
-        none.textContent = st.loading ? 'Loading…' : st.error ? st.error : 'Nothing matches @' + st.q.query + '.';
-        pop.appendChild(none);
+        pop.appendChild(h('div', {
+          class: 'px-3 py-2 text-xs text-base-content/60',
+          text: st.loading ? 'Loading…' : st.error ? st.error : 'Nothing matches @' + st.q.query + '.',
+        }));
       }
       st.list.forEach(function (it, i) {
         pop.appendChild(row(it, i));
       });
-      var foot = document.createElement('div');
-      foot.className = 'neo-agent-ref-foot';
-      foot.textContent = '↑↓ choose · Enter insert · Esc close';
-      pop.appendChild(foot);
+      pop.appendChild(h('div', { class: 'neo-agent-ref-foot', text: '↑↓ choose · Enter insert · Esc close' }));
       pop.classList.remove('hidden');
       input.setAttribute('aria-expanded', 'true');
       if (st.list.length) input.setAttribute('aria-activedescendant', 'neo-agent-ref-' + st.sel);

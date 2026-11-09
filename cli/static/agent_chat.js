@@ -11,6 +11,8 @@
   'use strict';
 
   var core = root.NeoAgentCore;
+  var h = root.NeoUtil.h;
+  var SPINNER = '<span class="loading loading-spinner loading-xs" aria-hidden="true"></span>';
   var relativeTime = core.relativeTime;
   var countdownText = core.countdownText;
   var statusLine = core.statusLine;
@@ -100,7 +102,7 @@
 
   /** A note with a spinner ("Loading the chat…"). */
   function spinnerNote(text) {
-    var n = bubble('note', '<span class="loading loading-spinner loading-xs" aria-hidden="true"></span> ');
+    var n = bubble('note', SPINNER + ' ');
     n.classList.add('neo-agent-loading');
     n.appendChild(document.createTextNode(text));
     return n;
@@ -233,31 +235,15 @@
   function approvalCard(d) {
     if (d.request_id && findApproval(d.request_id)) return;
     var card = bubble('approval', '');
-    var head = document.createElement('div');
-    head.className = 'flex items-baseline gap-2';
-    var title = document.createElement('div');
-    title.className = 'font-medium text-sm flex-1';
-    title.textContent = 'The assistant wants to do this:';
-    var timer = document.createElement('span');
-    timer.className = 'neo-agent-approval-timer';
-    head.appendChild(title);
-    head.appendChild(timer);
-    card.appendChild(head);
-    var what = document.createElement('div');
-    what.className = 'text-sm mt-1';
-    what.textContent = d.description || d.reason || '';
-    if (what.textContent) card.appendChild(what);
-    if (d.command) {
-      var pre = document.createElement('pre');
-      pre.className = 'neo-agent-cmd';
-      pre.textContent = d.command;
-      card.appendChild(pre);
-    }
-    var row = document.createElement('div');
-    row.className = 'flex flex-wrap gap-2 mt-2';
-    var msg = document.createElement('div');
-    msg.className = 'neo-agent-approval-msg hidden';
-    msg.setAttribute('role', 'status');
+    var timer = h('span', { class: 'neo-agent-approval-timer' });
+    card.appendChild(h('div', { class: 'flex items-baseline gap-2' },
+      h('div', { class: 'font-medium text-sm flex-1', text: 'The assistant wants to do this:' }),
+      timer));
+    var what = d.description || d.reason;
+    if (what) card.appendChild(h('div', { class: 'text-sm mt-1', text: what }));
+    if (d.command) card.appendChild(h('pre', { class: 'neo-agent-cmd', text: d.command }));
+    var row = h('div', { class: 'flex flex-wrap gap-2 mt-2' });
+    var msg = h('div', { class: 'neo-agent-approval-msg hidden', attrs: { role: 'status' } });
     var ctl = {
       id: d.request_id || null,
       open: true,
@@ -359,7 +345,7 @@
       stop.classList.toggle('hidden', !on);
       var stopping = state.phase === 'stopping';
       stop.disabled = stopping || !state.run;
-      stop.innerHTML = stopping ? '<span class="loading loading-spinner loading-xs" aria-hidden="true"></span> Stopping…' : 'Stop';
+      stop.innerHTML = stopping ? SPINNER + ' Stopping…' : 'Stop';
     }
     if (fresh) {
       fresh.disabled = on;
@@ -1018,7 +1004,7 @@
     box.textContent = '';
     var loading = document.createElement('div');
     loading.className = 'neo-agent-msg neo-agent-msg--note neo-agent-loading';
-    loading.innerHTML = '<span class="loading loading-spinner loading-xs" aria-hidden="true"></span> Loading your chats…';
+    loading.innerHTML = SPINNER + ' Loading your chats…';
     box.appendChild(loading);
     fetch('/agent/sessions?context=' + encodeURIComponent(state.context), { credentials: 'same-origin' })
       .then(jsonOrThrow)
@@ -1066,64 +1052,49 @@
   }
 
   function historyRow(s, all) {
-    var li = document.createElement('li');
     var current = s.id === state.session;
-    li.className = 'neo-agent-hist-row' + (current ? ' is-current' : '');
-    var openBtn = document.createElement('button');
-    openBtn.type = 'button';
-    openBtn.className = 'neo-agent-hist-open';
-    var ico = document.createElement('span');
-    ico.className = 'neo-agent-ref-ico';
-    ico.setAttribute('aria-hidden', 'true');
-    if (s.icon) {
-      var img = document.createElement('img');
-      img.src = s.icon;
-      img.alt = '';
-      ico.appendChild(img);
-    } else {
-      ico.textContent = s.context && s.context.indexOf('guide:') === 0 ? '☰' : s.context === 'general' ? '✦' : '▣';
-    }
-    openBtn.appendChild(ico);
-    var main = document.createElement('span');
-    main.className = 'min-w-0 flex-1';
-    var title = document.createElement('span');
-    title.className = 'block text-sm font-medium truncate';
-    title.textContent = s.title || s.preview || 'Chat';
-    var meta = document.createElement('span');
-    meta.className = 'block text-xs text-base-content/60 truncate';
     var bits = [s.label, relativeTime(s.last_active)];
     if (s.message_count) bits.push(s.message_count + (s.message_count === 1 ? ' message' : ' messages'));
-    meta.textContent = bits.filter(Boolean).join(' · ');
-    main.appendChild(title);
-    main.appendChild(meta);
-    openBtn.appendChild(main);
-    if (current) {
-      var badge = document.createElement('span');
-      badge.className = 'badge badge-xs shrink-0 ' + (busy() ? 'badge-primary' : 'badge-ghost');
-      badge.textContent = busy() ? 'Working…' : 'Open';
-      openBtn.appendChild(badge);
-    }
+    var fallback = s.context && s.context.indexOf('guide:') === 0 ? '☰' : s.context === 'general' ? '✦' : '▣';
     var locked = busy() && !current;
-    if (locked) {
-      openBtn.disabled = true;
-      openBtn.title = 'Wait for the current reply or stop it first';
-    }
-    openBtn.addEventListener('click', function () {
-      if (current && state.loaded) backToChat();
-      else loadChat(s.id, { title: s.title || s.label });
+    var openBtn = h(
+      'button',
+      {
+        type: 'button',
+        class: 'neo-agent-hist-open',
+        disabled: locked,
+        title: locked ? 'Wait for the current reply or stop it first' : '',
+        on: {
+          click: function () {
+            if (current && state.loaded) backToChat();
+            else loadChat(s.id, { title: s.title || s.label });
+          },
+        },
+      },
+      h('span', Object.assign({ class: 'neo-agent-ref-ico', attrs: { 'aria-hidden': 'true' } }, s.icon ? {} : { text: fallback }),
+        s.icon && h('img', { src: s.icon, alt: '' })),
+      h('span', { class: 'min-w-0 flex-1' },
+        h('span', { class: 'block text-sm font-medium truncate', text: s.title || s.preview || 'Chat' }),
+        h('span', { class: 'block text-xs text-base-content/60 truncate', text: bits.filter(Boolean).join(' · ') })),
+      current && h('span', {
+        class: 'badge badge-xs shrink-0 ' + (busy() ? 'badge-primary' : 'badge-ghost'),
+        text: busy() ? 'Working…' : 'Open',
+      })
+    );
+    var del = h('button', {
+      type: 'button',
+      class: 'btn btn-ghost btn-xs btn-square shrink-0',
+      title: 'Delete this chat',
+      innerHTML: TRASH_SVG,
+      disabled: current && busy(),
+      attrs: { 'aria-label': 'Delete this chat' },
+      on: {
+        click: function () {
+          confirmDelete(li, s, all);
+        },
+      },
     });
-    li.appendChild(openBtn);
-    var del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'btn btn-ghost btn-xs btn-square shrink-0';
-    del.setAttribute('aria-label', 'Delete this chat');
-    del.title = 'Delete this chat';
-    del.innerHTML = TRASH_SVG;
-    del.disabled = current && busy();
-    del.addEventListener('click', function () {
-      confirmDelete(li, s, all);
-    });
-    li.appendChild(del);
+    var li = h('li', { class: 'neo-agent-hist-row' + (current ? ' is-current' : '') }, openBtn, del);
     return li;
   }
 
@@ -1132,17 +1103,9 @@
     var kept = Array.prototype.slice.call(li.childNodes);
     li.textContent = '';
     li.classList.add('is-confirm');
-    var q = document.createElement('span');
-    q.className = 'text-sm flex-1 min-w-0';
-    q.textContent = 'Delete “' + (s.title || 'this chat') + '”? This cannot be undone.';
-    var yes = document.createElement('button');
-    yes.type = 'button';
-    yes.className = 'btn btn-error btn-xs';
-    yes.textContent = 'Delete';
-    var no = document.createElement('button');
-    no.type = 'button';
-    no.className = 'btn btn-ghost btn-xs';
-    no.textContent = 'Cancel';
+    var q = h('span', { class: 'text-sm flex-1 min-w-0', text: 'Delete “' + (s.title || 'this chat') + '”? This cannot be undone.' });
+    var yes = h('button', { type: 'button', class: 'btn btn-error btn-xs', text: 'Delete' });
+    var no = h('button', { type: 'button', class: 'btn btn-ghost btn-xs', text: 'Cancel' });
     no.addEventListener('click', function () {
       li.textContent = '';
       li.classList.remove('is-confirm');
@@ -1151,7 +1114,7 @@
     yes.addEventListener('click', function () {
       yes.disabled = true;
       no.disabled = true;
-      yes.innerHTML = '<span class="loading loading-spinner loading-xs" aria-hidden="true"></span> Deleting…';
+      yes.innerHTML = SPINNER + ' Deleting…';
       fetch('/agent/sessions/' + encodeURIComponent(s.id), { method: 'DELETE', credentials: 'same-origin' })
         .then(jsonOrThrow)
         .then(function () {

@@ -158,22 +158,12 @@ window.neoUploadSettingsToml = function neoUploadSettingsToml(input) {
     }
     fields.innerHTML = '';
     (helper.inputs || []).forEach(function (inp) {
-      var wrap = document.createElement('div');
-      wrap.className = 'flex flex-col w-full';
-      var lab = document.createElement('label');
-      lab.className = 'label py-1';
+      var h = NeoUtil.h;
       // Helpers may come from plugins: the label is text, never markup.
-      var labText = document.createElement('span');
-      labText.className = 'label-text text-sm';
-      labText.textContent = inp.label || inp.name;
-      if (inp.required !== false) {
-        var mark = document.createElement('span');
-        mark.className = 'text-error';
-        mark.textContent = ' *';
-        labText.appendChild(mark);
-      }
-      lab.appendChild(labText);
-      wrap.appendChild(lab);
+      var wrap = h('div', { class: 'flex flex-col w-full' },
+        h('label', { class: 'label py-1' },
+          h('span', { class: 'label-text text-sm', text: inp.label || inp.name },
+            inp.required !== false && h('span', { class: 'text-error', text: ' *' }))));
       var el;
       if (inp.type === 'bool') {
         el = document.createElement('input');
@@ -184,10 +174,7 @@ window.neoUploadSettingsToml = function neoUploadSettingsToml(input) {
         el = document.createElement('select');
         el.className = 'select select-sm w-full font-mono';
         inp.values.forEach(function (v) {
-          var o = document.createElement('option');
-          o.value = v;
-          o.textContent = v;
-          el.appendChild(o);
+          el.appendChild(h('option', { value: v, text: v }));
         });
       } else {
         el = document.createElement('input');

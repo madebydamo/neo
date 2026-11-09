@@ -166,6 +166,27 @@
     );
   }
 
+  /**
+   * Build an element. props: class, text, attrs {name: value}, on {event: fn}; any
+   * other key is set as a property (id, type, title, disabled, …). Empty children
+   * are skipped.
+   */
+  function h(tag, props, ...children) {
+    var el = document.createElement(tag);
+    Object.keys(props || {}).forEach(function (k) {
+      var v = props[k];
+      if (k === 'class') el.className = v;
+      else if (k === 'text') el.textContent = v;
+      else if (k === 'attrs') Object.keys(v).forEach(function (a) { el.setAttribute(a, v[a]); });
+      else if (k === 'on') Object.keys(v).forEach(function (e) { el.addEventListener(e, v[e]); });
+      else el[k] = v;
+    });
+    children.forEach(function (c) {
+      if (c) el.appendChild(c);
+    });
+    return el;
+  }
+
   return {
     esc: esc,
     toast: toast,
@@ -175,5 +196,6 @@
     reloadPane: reloadPane,
     readJson: readJson,
     isContentSwap: isContentSwap,
+    h: h,
   };
 });

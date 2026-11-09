@@ -104,3 +104,36 @@ test('isContentSwap: the content area, or the pane inside it', () => {
   assert.strictEqual(NeoUtil.isContentSwap({ id: 'options-pane', closest: () => null }), false);
   assert.strictEqual(NeoUtil.isContentSwap({ id: 'other', closest: () => ({}) }), false);
 });
+
+test('h sets classes, text, attributes, listeners, properties and children', () => {
+  const made = [];
+  globalThis.document = {
+    createElement: (tag) => {
+      const el = {
+        tag,
+        attrs: {},
+        kids: [],
+        listeners: {},
+        setAttribute(k, v) { this.attrs[k] = v; },
+        addEventListener(k, f) { this.listeners[k] = f; },
+        appendChild(c) { this.kids.push(c); },
+      };
+      made.push(el);
+      return el;
+    },
+  };
+  try {
+    const onClick = () => {};
+    const kid = NeoUtil.h('i');
+    const el = NeoUtil.h('button', { class: 'a b', text: 'go', title: 't', disabled: true, attrs: { role: 'x' }, on: { click: onClick } }, kid, null, false);
+    assert.strictEqual(el.className, 'a b');
+    assert.strictEqual(el.textContent, 'go');
+    assert.strictEqual(el.title, 't');
+    assert.strictEqual(el.disabled, true);
+    assert.strictEqual(el.attrs.role, 'x');
+    assert.strictEqual(el.listeners.click, onClick);
+    assert.deepStrictEqual(el.kids, [kid]);
+  } finally {
+    delete globalThis.document;
+  }
+});
