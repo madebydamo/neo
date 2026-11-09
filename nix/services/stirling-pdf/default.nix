@@ -8,7 +8,7 @@
   }:
     with lib; let
       cfg = config.neo.services.stirling-pdf;
-      appdata = "${config.neo.core.volumes.appdata}/stirling-pdf";
+      appdata = cfg.appdata;
     in {
       config = mkIf cfg.enabled {
         systemd.services."docker-stirling-pdf".preStart = lib.neo.mkEnsureDirs config [

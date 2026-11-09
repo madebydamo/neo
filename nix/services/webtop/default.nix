@@ -7,7 +7,7 @@
   }:
     with lib; let
       cfg = config.neo.services.webtop;
-      appdata = "${config.neo.core.volumes.appdata}/webtop";
+      appdata = cfg.appdata;
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-webtop.preStart = lib.neo.mkEnsureDirs config [appdata];

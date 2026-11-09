@@ -10,7 +10,7 @@
   }:
     with lib; let
       cfg = config.neo.services.isponsorblocktv;
-      dataDir = "${config.neo.core.volumes.appdata}/isponsorblocktv";
+      dataDir = cfg.appdata;
       image = cfg.containers.isponsorblocktv;
       setupPort = 7681;
       setupContainerName = "isponsorblocktv-setup";

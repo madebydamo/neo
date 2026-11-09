@@ -15,7 +15,7 @@
   }:
     with lib; let
       cfg = config.neo.services.docmost;
-      appdata = "${config.neo.core.volumes.appdata}/docmost";
+      appdata = cfg.appdata;
       domain = config.neo.services.swag.domain;
       secretSet = v: v != null && v != "";
       dbPassword = cfg.dbPassword or "";

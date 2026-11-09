@@ -8,7 +8,7 @@
   }:
     with lib; let
       cfg = config.neo.services.nextcloud;
-      appdata = "${config.neo.core.volumes.appdata}/nextcloud";
+      appdata = cfg.appdata;
       domain = config.neo.services.swag.domain;
       nextcloudUrl = "${cfg.subdomain}.${domain}";
     in {

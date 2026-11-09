@@ -10,7 +10,7 @@
   }:
     with lib; let
       cfg = config.neo.services.authentik;
-      appdata = "${config.neo.core.volumes.appdata}/authentik";
+      appdata = cfg.appdata;
       domain = config.neo.services.swag.domain or null;
       # Public origin for absolute links (emails, embedded outpost, OIDC issuer hints).
       publicUrl =

@@ -7,7 +7,7 @@
   }:
     with lib; let
       cfg = config.neo.services.gitea;
-      appdata = "${config.neo.core.volumes.appdata}/gitea";
+      appdata = cfg.appdata;
       domain = config.neo.services.swag.domain or null;
       rootUrl =
         if cfg.rootUrl != null && cfg.rootUrl != ""

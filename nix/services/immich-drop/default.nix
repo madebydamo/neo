@@ -25,7 +25,7 @@
         );
 
         systemd.services.docker-immich-drop.preStart = lib.neo.mkEnsureDirs config [
-          "${config.neo.core.volumes.appdata}/immich-drop"
+          cfg.appdata
         ];
 
         virtualisation.oci-containers.containers = {
@@ -40,7 +40,7 @@
               CHUNK_SIZE_MB = "95";
             };
             volumes = [
-              "${config.neo.core.volumes.appdata}/immich-drop:/data"
+              "${cfg.appdata}:/data"
             ];
             extraOptions = [
               "--health-cmd=python - <<'PY'\nimport os,urllib.request,sys; url=f\"http://127.0.0.1:{os.getenv('PORT','8080')}/\";\ntry: urllib.request.urlopen(url, timeout=3); sys.exit(0)\nexcept Exception: sys.exit(1)\nPY"

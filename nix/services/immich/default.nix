@@ -10,13 +10,13 @@
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-immich-server.preStart = lib.neo.mkEnsureDirs config [
-          "${config.neo.core.volumes.appdata}/immich/server"
+          "${cfg.appdata}/server"
         ];
         systemd.services.docker-immich-machine-learning.preStart = lib.neo.mkEnsureDirs config [
-          "${config.neo.core.volumes.appdata}/immich/cache"
+          "${cfg.appdata}/cache"
         ];
         systemd.services.docker-immich-database.preStart = lib.neo.mkEnsureDirs config [
-          "${config.neo.core.volumes.appdata}/immich/data"
+          "${cfg.appdata}/data"
         ];
 
         virtualisation.oci-containers.containers = {
@@ -27,7 +27,7 @@
               REDIS_HOSTNAME = "immich-redis";
             };
             volumes = [
-              "${config.neo.core.volumes.appdata}/immich/server:/data"
+              "${cfg.appdata}/server:/data"
               "/etc/localtime:/etc/localtime:ro"
             ];
             networks = ["internal"];
@@ -36,7 +36,7 @@
           immich-machine-learning = {
             image = cfg.containers."immich-machine-learning";
             volumes = [
-              "${config.neo.core.volumes.appdata}/immich/cache:/cache"
+              "${cfg.appdata}/cache:/cache"
             ];
             networks = ["internal"];
           };
@@ -61,7 +61,7 @@
               POSTGRES_INITDB_ARGS = "--data-checksums";
             };
             volumes = [
-              "${config.neo.core.volumes.appdata}/immich/data:/var/lib/postgresql/data"
+              "${cfg.appdata}/data:/var/lib/postgresql/data"
             ];
             extraOptions = [
               "--shm-size=128mb"

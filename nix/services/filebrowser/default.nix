@@ -19,12 +19,12 @@
       config = mkIf cfg.enabled {
         systemd.services.docker-filebrowser.preStart = lib.concatStringsSep "\n" [
           (lib.neo.mkEnsureDirs config [
-            "${config.neo.core.volumes.appdata}/filebrowser"
-            "${config.neo.core.volumes.appdata}/filebrowser/database"
-            "${config.neo.core.volumes.appdata}/filebrowser/config"
+            cfg.appdata
+            "${cfg.appdata}/database"
+            "${cfg.appdata}/config"
           ])
           (lib.neo.mkActivationScriptForFile config {
-            filePath = "${config.neo.core.volumes.appdata}/filebrowser/config/settings.json";
+            filePath = "${cfg.appdata}/config/settings.json";
             content = settingsJson;
             mode = "0644";
           })
@@ -37,8 +37,8 @@
           image = cfg.containers.filebrowser;
           volumes =
             [
-              "${config.neo.core.volumes.appdata}/filebrowser/config:/config"
-              "${config.neo.core.volumes.appdata}/filebrowser/database:/database"
+              "${cfg.appdata}/config:/config"
+              "${cfg.appdata}/database:/database"
               "${config.neo.core.volumes.media}:/srv/Media"
               "${config.neo.core.volumes.documents}:/srv/Documents"
               "${config.neo.core.volumes.appdata}:/srv/AppData"

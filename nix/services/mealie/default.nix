@@ -9,7 +9,7 @@
   }:
     with lib; let
       cfg = config.neo.services.mealie;
-      appdata = "${config.neo.core.volumes.appdata}/mealie";
+      appdata = cfg.appdata;
       domain = config.neo.services.swag.domain or null;
       publicHost =
         if (cfg.subdomain or "") == "" || domain == null || domain == ""

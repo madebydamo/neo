@@ -9,7 +9,7 @@
   }:
     with lib; let
       cfg = config.neo.services.dawarich;
-      appdata = "${config.neo.core.volumes.appdata}/dawarich";
+      appdata = cfg.appdata;
       domain = config.neo.services.swag.domain or null;
       secretSet = v: v != null && v != "";
       inherit (lib.neo.secrets) isPlaceholder;

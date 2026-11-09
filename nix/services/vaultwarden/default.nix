@@ -18,7 +18,7 @@
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-vaultwarden.preStart = lib.neo.mkEnsureDirs config [
-          "${config.neo.core.volumes.appdata}/vaultwarden"
+          cfg.appdata
         ];
 
         # The admin token reaches the container through an env file rendered at activation.
@@ -37,7 +37,7 @@
               DOMAIN = publicUrl;
             };
           volumes = [
-            "${config.neo.core.volumes.appdata}/vaultwarden:/data"
+            "${cfg.appdata}:/data"
           ];
           networks = ["internal"];
         };

@@ -10,7 +10,7 @@
   }:
     with lib; let
       cfg = config.neo.services.dufs;
-      appdata = "${config.neo.core.volumes.appdata}/dufs";
+      appdata = cfg.appdata;
       dataDir = "${appdata}/data";
       webdavAuth =
         (cfg.password or null)

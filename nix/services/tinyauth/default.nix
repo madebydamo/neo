@@ -231,7 +231,7 @@
         ];
 
         systemd.services.docker-tinyauth.preStart = lib.neo.mkEnsureDirs config [
-          "${config.neo.core.volumes.appdata}/tinyauth"
+          cfg.appdata
         ];
 
         neo.core.secrets.containerEnv.tinyauth = mkIf (oauthSecretEnv != {}) oauthSecretEnv;
@@ -254,7 +254,7 @@
             // oauthEnv
             // appAclEnvVars;
           volumes = [
-            "${config.neo.core.volumes.appdata}/tinyauth:/data"
+            "${cfg.appdata}:/data"
           ];
           networks = ["internal"];
         };

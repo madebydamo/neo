@@ -9,7 +9,7 @@
   }:
     with lib; let
       cfg = config.neo.services.karakeep;
-      appdata = "${config.neo.core.volumes.appdata}/karakeep";
+      appdata = cfg.appdata;
       domain = config.neo.services.swag.domain;
       secretSet = v: v != null && v != "";
     in {

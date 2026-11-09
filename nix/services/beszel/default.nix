@@ -10,13 +10,13 @@
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-beszel.preStart = lib.neo.mkEnsureDirs config [
-          "${config.neo.core.volumes.appdata}/beszel"
+          cfg.appdata
         ];
 
         virtualisation.oci-containers.containers.beszel = {
           image = cfg.containers.beszel;
           volumes = [
-            "${config.neo.core.volumes.appdata}/beszel:/beszel_data"
+            "${cfg.appdata}:/beszel_data"
           ];
           environment =
             {

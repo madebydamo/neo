@@ -42,7 +42,7 @@
         proxyPass = cfg.proxyPass;
         proxyPassDomains = attrNames proxyPass;
         domain = cfg.domain;
-        appdataSwag = "${config.neo.core.volumes.appdata}/swag";
+        appdataSwag = cfg.appdata;
         ppContainerPort = lib.neo.httpsProxyProtocolContainerPort;
         autoBan = cfg.autoBan;
         # Stock SWAG jail settings; filters ship in the image (/defaults/fail2ban).
@@ -292,7 +292,7 @@
                 DISABLE_F2B = boolToString (autoBan.jails == []);
               };
             volumes = [
-              "${config.neo.core.volumes.appdata}/swag:/config"
+              "${cfg.appdata}:/config"
             ];
             ports = [
               "${toString cfg.localHttpPort}:80"
@@ -319,7 +319,7 @@
               RestartSec = "10";
             };
             script = ''
-              WATCH_DIR="${config.neo.core.volumes.appdata}/swag/etc/letsencrypt/live"
+              WATCH_DIR="${cfg.appdata}/etc/letsencrypt/live"
               CONTAINER_NAME="swag"
               NGINX_RELOAD_CMD="nginx -c /config/nginx/nginx.conf -s reload"
               ${builtins.readFile ./swag-cert-reloader.sh}
@@ -340,7 +340,7 @@
             path = [pkgs.docker];
             retryInterval = 5;
             script = ''
-              APPDATA="${config.neo.core.volumes.appdata}/swag"
+              APPDATA="${cfg.appdata}"
               NEO_UID="${toString config.neo.core.uid}"
               NEO_GID="${toString config.neo.core.gid}"
               NEO_SUPPORT=${lib.boolToString ((config.neo.services.neo.iframeCookieSupport) && (config.neo.services.neo.enabled))}

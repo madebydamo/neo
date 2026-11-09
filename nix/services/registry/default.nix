@@ -11,7 +11,7 @@
   }:
     with lib; let
       cfg = config.neo.services.registry;
-      appdata = "${config.neo.core.volumes.appdata}/registry";
+      appdata = cfg.appdata;
       dataDir = "${appdata}/data";
       authEnabled = cfg.users != [];
       htpasswd = pkgs.writeText "neo-registry-htpasswd" (concatStringsSep "\n" cfg.users + "\n");

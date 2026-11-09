@@ -7,7 +7,7 @@
   }:
     with lib; let
       cfg = config.neo.services.searxng;
-      appdata = "${config.neo.core.volumes.appdata}/searxng";
+      appdata = cfg.appdata;
       domain = config.neo.services.swag.domain;
     in {
       config = mkIf cfg.enabled {

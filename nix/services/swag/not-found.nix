@@ -8,7 +8,7 @@
   }:
     with lib; let
       cfg = config.neo.services.swag;
-      appdataSwag = "${config.neo.core.volumes.appdata}/swag";
+      appdataSwag = config.neo.services.swag.appdata;
       ppContainerPort = toString lib.neo.httpsProxyProtocolContainerPort;
       neoHome =
         if cfg.domain == null

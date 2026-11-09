@@ -11,7 +11,7 @@
       cfg = config.neo.services.vikunja;
       domain = config.neo.services.swag.domain or "localhost";
       publicHost = "${cfg.subdomain}.${domain}";
-      appdata = "${config.neo.core.volumes.appdata}/vikunja";
+      appdata = cfg.appdata;
     in {
       config = mkIf cfg.enabled (mkMerge [
         (lib.neo.mkDockerToLocalhostForward cfg.port)

@@ -7,7 +7,7 @@
   }:
     with lib; let
       cfg = config.neo.services.paperless;
-      appdata = "${config.neo.core.volumes.appdata}/paperless";
+      appdata = cfg.appdata;
       domain = config.neo.services.swag.domain;
       secretSet = v: v != null && v != "";
     in {

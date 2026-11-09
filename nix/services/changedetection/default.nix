@@ -8,7 +8,7 @@
   }:
     with lib; let
       cfg = config.neo.services.changedetection;
-      appdata = "${config.neo.core.volumes.appdata}/changedetection";
+      appdata = cfg.appdata;
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-changedetection.preStart = lib.neo.mkEnsureDirs config [appdata];

@@ -11,14 +11,14 @@
     in {
       config = mkIf cfg.enabled {
         systemd.services.docker-syncthing.preStart = lib.neo.mkEnsureDirs config [
-          "${config.neo.core.volumes.appdata}/syncthing"
+          cfg.appdata
         ];
 
         virtualisation.oci-containers.containers.syncthing = {
           environment = lib.neo.linuxserverEnv config;
           image = cfg.containers.syncthing;
           volumes = [
-            "${config.neo.core.volumes.appdata}/syncthing:/config"
+            "${cfg.appdata}:/config"
             "${config.neo.core.volumes.data}:/DATA"
           ];
           # GUI (8384) is NOT published on the host — only reachable on the
@@ -42,7 +42,7 @@
           containers = ["syncthing"];
           retryInterval = 10;
           script = let
-            configFile = "${config.neo.core.volumes.appdata}/syncthing/config.xml";
+            configFile = "${cfg.appdata}/config.xml";
             uid = toString config.neo.core.uid;
             gid = toString config.neo.core.gid;
           in ''

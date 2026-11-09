@@ -388,7 +388,7 @@
         owner = toString config.neo.core.uid;
         group = toString config.neo.core.gid;
         mode = "0440";
-        copies = ["${config.neo.core.volumes.appdata}/swag/www/hermes-autologin.html"];
+        copies = ["${config.neo.services.swag.appdata}/www/hermes-autologin.html"];
       };
 
       environment.variables.HERMES_HOME = "${cfg.stateDir}/.hermes";

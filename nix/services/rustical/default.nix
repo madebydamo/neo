@@ -12,7 +12,7 @@
   }:
     with lib; let
       cfg = config.neo.services.rustical;
-      appdata = "${config.neo.core.volumes.appdata}/rustical";
+      appdata = cfg.appdata;
       tinyauthCfg = config.neo.services.tinyauth or {};
       principalIds =
         lib.filter (

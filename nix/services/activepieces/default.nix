@@ -8,7 +8,7 @@
   }:
     with lib; let
       cfg = config.neo.services.activepieces;
-      appdata = "${config.neo.core.volumes.appdata}/activepieces";
+      appdata = cfg.appdata;
       domain = config.neo.services.swag.domain;
       secretSet = v: v != null && v != "";
       inherit (lib.neo.secrets) isPlaceholder;

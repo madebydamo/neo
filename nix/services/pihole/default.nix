@@ -8,7 +8,7 @@
   }:
     with lib; let
       cfg = config.neo.services.pihole;
-      piholeData = "${config.neo.core.volumes.appdata}/pihole";
+      piholeData = cfg.appdata;
       splitDnsActive = lib.neo.splitDnsActive config;
       names = lib.neo.localDnsNamesFromConfig config;
       dnsMasqLines = concatStringsSep ";" (

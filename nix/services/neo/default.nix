@@ -108,7 +108,7 @@
             RestartSec = 5;
           };
           preStart = lib.optionalString (cfg.iframeCookieSupport && swagDomain != null) (lib.neo.mkActivationScriptForFile config {
-            filePath = "${config.neo.core.volumes.appdata}/swag/nginx/conf.d/neo-iframe-cookies.conf";
+            filePath = "${config.neo.services.swag.appdata}/nginx/conf.d/neo-iframe-cookies.conf";
             content = ''
               # Auto-generated because the neo web UI is enabled with iframeCookieSupport.
               # This makes session/auth cookies from all your subdomains work when the pages
