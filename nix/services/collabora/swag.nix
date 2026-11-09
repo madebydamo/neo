@@ -1,7 +1,6 @@
-# Nextcloud (and collabora) reverse proxy configuration for SWAG.
-# Protects the Nextcloud web UI with tinyauth forward authentication (additional auth for webui).
+# Collabora reverse proxy configuration for SWAG.
 {...}: {
-  flake.modules.nixos.nextcloud-swag = {
+  flake.modules.nixos.collabora-swag = {
     config,
     lib,
     ...

@@ -1,4 +1,4 @@
-# Nextcloud (and collabora) reverse proxy configuration for SWAG.
+# Nextcloud reverse proxy configuration for SWAG.
 # Protects the Nextcloud web UI with tinyauth forward authentication (additional auth for webui).
 {...}: {
   flake.modules.nixos.nextcloud-swag = {
@@ -7,7 +7,6 @@
     ...
   }: let
     cfg = config.neo.services.nextcloud;
-    collaboraSubdomain = config.neo.services.collabora.subdomain;
   in {
     config.neo.services.nextcloud.proxyConf = lib.mkDefault ''
       server {
@@ -47,7 +46,7 @@
           include /config/nginx/resolver.conf;
 
           set $upstream_app nextcloud;
-          set $upstream_port 80;
+          set $upstream_port ${toString cfg.port};
           set $upstream_proto http;
 
           proxy_pass $upstream_proto://$upstream_app:$upstream_port;
