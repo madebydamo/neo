@@ -180,8 +180,9 @@ fn lock(label: &str) -> Result<crate::utils::locks::LockGuard, Blocked> {
 }
 
 async fn secret_paths(config: &AppConfig) -> Result<Vec<Vec<String>>, String> {
-    let mut ev = config.evaluator.lock().await;
-    ev.extract_secret_paths()
+    config
+        .eval
+        .secret_paths()
         .await
         .map_err(|e| format!("Could not list secret settings: {e:#}"))
 }

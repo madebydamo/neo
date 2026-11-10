@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::super::locks::{lock_attr, LockMode, Scope};
-use super::super::schema_cache::extract_pane;
+use super::super::panes::extract_pane;
 use super::super::types::{AppConfig, OptionPaneContext};
 use super::super::util::{
     escape_attr, escape_html, proc, status_err, status_ok, status_pulling, status_slot_oob,

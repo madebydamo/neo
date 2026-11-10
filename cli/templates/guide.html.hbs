@@ -1,6 +1,6 @@
 {{!-- One guide: header (services, time, difficulty), rendered Markdown,
      table of contents and related guides. --}}
-<div id="guide-page" class="max-w-5xl" {{#if guide}}data-guide-title="{{guide.title}}"{{/if}}>
+<div id="guide-page" class="max-w-5xl" {{#if guide}}data-guide-title="{{guide.title}}" data-neo-eval-keys="guides" data-neo-eval-gen="{{eval.gen}}" data-neo-eval-provisional="{{eval.provisional}}" data-neo-eval-url="/configuration/guides/{{guide.id}}"{{/if}}>
   {{#if error}}
     <div role="alert" class="alert alert-error alert-soft text-sm">
       <div class="text-xs whitespace-pre-wrap break-words font-mono">{{error}}</div>

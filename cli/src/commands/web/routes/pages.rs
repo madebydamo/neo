@@ -8,8 +8,8 @@ use rocket_dyn_templates::{Metadata, Template};
 
 use crate::commands::web::icons::IconSet;
 use crate::commands::web::navigator;
+use crate::commands::web::panes::load_pane;
 use crate::commands::web::routes::branches::branches_template;
-use crate::commands::web::schema_cache::load_pane;
 use crate::commands::web::types::{
     AppConfig, ConfigurationPageContext, IndexContext, NavigatorContext, OptionPaneContext,
 };
@@ -43,11 +43,7 @@ pub async fn nav_services(config: &State<Arc<AppConfig>>, icons: &State<Arc<Icon
     if let Some(data) = navigator::from_build_file(icons) {
         return Template::render("nav_services", data);
     }
-    let data = {
-        let mut ev = config.evaluator.lock().await;
-        ev.extract_proxied_services().await
-    };
-    Template::render("nav_services", data)
+    Template::render("nav_services", config.eval.navigator().await)
 }
 
 pub(super) async fn configuration_shell(
@@ -58,12 +54,12 @@ pub(super) async fn configuration_shell(
     initial_content_html: Option<String>,
 ) -> Template {
     let ctx = {
-        let mut ev = config.evaluator.lock().await;
-        let services = ev.extract_services().await;
-        let theme = ev.extract_neo_theme().await;
+        let services = config.eval.services().await;
+        let theme = config.eval.theme().await;
         ConfigurationPageContext {
             theme,
             eval_error: services.eval_error,
+            eval_status_html: config.eval.status_html(false),
             initial_content_url: initial_content_url.to_string(),
             initial_tab: initial_tab.to_string(),
             initial_detail,
@@ -93,11 +89,7 @@ fn render_pane_html(meta: &Metadata<'_>, pane: &OptionPaneContext) -> Option<Str
 }
 
 async fn services_grid_template(config: &State<Arc<AppConfig>>) -> Template {
-    let ctx = {
-        let mut ev = config.evaluator.lock().await;
-        ev.extract_services().await
-    };
-    Template::render("services_grid", ctx)
+    Template::render("services_grid", config.eval.services().await)
 }
 
 fn core_grid_template() -> Template {

@@ -892,7 +892,7 @@ function optionForm() {
           this.saveBusy = false;
           this.saveFlash = 'ok';
           window.neoToast('Settings saved', 'success');
-          // Keep success feedback visible before the pane reload (nix re-eval).
+          // Keep success feedback visible before the pane reload.
           await new Promise((r) => setTimeout(r, 900));
           if (!window.NeoUtil.reloadPane()) {
             setTimeout(() => { if (this.saveFlash === 'ok') this.saveFlash = ''; }, 1500);

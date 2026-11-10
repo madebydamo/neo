@@ -123,7 +123,7 @@ fn next_step(in_cloud: &[PrivacyCategory]) -> Option<NextStep> {
     })
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct PrivacyExtract {
     #[serde(default)]
     pub categories: Vec<PrivacyCategory>,
@@ -151,11 +151,12 @@ struct PrivacyContext {
     disabled: bool,
     #[serde(flatten)]
     eval_error: EvalErrorUi,
+    eval: crate::commands::web::types::EvalMark,
 }
 
 async fn context(config: &AppConfig) -> PrivacyContext {
-    let mut ev = config.evaluator.lock().await;
-    match ev.extract_privacy().await {
+    let (r, eval) = config.eval.privacy().await;
+    let mut ctx = match r {
         Ok(x) => {
             let mut at_home: Vec<_> = x
                 .categories
@@ -193,7 +194,9 @@ async fn context(config: &AppConfig) -> PrivacyContext {
                 ..Default::default()
             }
         }
-    }
+    };
+    ctx.eval = eval;
+    ctx
 }
 
 #[get("/configuration/privacy")]

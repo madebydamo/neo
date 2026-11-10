@@ -3,20 +3,22 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use rocket::response::content::RawHtml;
-use tokio::sync::Mutex as AsyncMutex;
 
+use super::super::nix::EvalPool;
 use super::super::resources::ResourceSampler;
-use super::super::schema_cache::SchemaCache;
 use super::super::units::UnitStatusCache;
 use super::super::util::InFlightSet;
 use crate::utils::secrets_store::Store;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AppConfig {
     pub settings_path: PathBuf,
-    pub evaluator: Arc<AsyncMutex<super::super::nix::NixEvaluator>>,
-    /// Shared with the persistent nix repl: true while an evaluation/refresh is in flight.
+    /// Evaluations of the config repo and their cached results (nix/pool.rs).
+    pub eval: Arc<EvalPool>,
+    /// Pages wait for an evaluation (none yet, or a structural change): navbar spinner.
     pub eval_busy: Arc<AtomicBool>,
+    /// A settings change is being evaluated in the background (pages are not blocked).
+    pub eval_pending: Arc<AtomicBool>,
     /// Sender for broadcasting HTML OOB swap fragments over WS to htmx clients
     /// (unit controls + action-bar status + container pull progress).
     pub unit_updates: tokio::sync::broadcast::Sender<String>,
@@ -24,8 +26,6 @@ pub struct AppConfig {
     pub pulls_in_flight: Arc<InFlightSet>,
     /// Service names with an in-flight clear-appdata operation (stop → rm → start if was running).
     pub clear_appdata_in_flight: Arc<InFlightSet>,
-    /// Process-local option schema cache for helper resolution (avoids re-taking eval mutex).
-    pub schema_cache: Arc<tokio::sync::RwLock<SchemaCache>>,
     /// Few-second, single-flight cache of batched `systemctl show` results for the
     /// services-page status dots (one systemd query per refresh for the whole page).
     pub unit_status: Arc<UnitStatusCache>,

@@ -1,5 +1,5 @@
 // Long-running Nix store repair jobs triggered from the web UI.
-// Does not hold the evaluator mutex while `nix-store` runs; refreshes the repl afterwards.
+// Does not wait on evaluations while `nix-store` runs; restarts the repls afterwards.
 use std::fs;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -116,35 +116,22 @@ async fn run_store_verify_repair(config: Arc<AppConfig>, id: String) {
         Ok(st) if st.success() => {
             append_log(&log_file, "nix-store --verify --repair completed OK");
             write_state(&id, OpStatus::InProgress, "refresh-repl", None);
-            // Restart the persistent repl and warm extracts so the UI can recover.
-            {
-                let mut ev = config.evaluator.lock().await;
-                match ev.refresh().await {
-                    Ok(()) => {
-                        append_log(&log_file, "nix repl refreshed after store repair");
-                        match ev.warm_up().await {
-                            Some(err) => append_log(
-                                &log_file,
-                                &format!("warm-up still reports error: {err}"),
-                            ),
-                            None => append_log(&log_file, "warm-up navigator extract succeeded"),
-                        }
-                    }
-                    Err(e) => {
-                        append_log(&log_file, &format!("repl refresh failed: {e:#}"));
-                        write_state(
-                            &id,
-                            OpStatus::Failed,
-                            "refresh-repl",
-                            Some(&format!("store repair OK but repl refresh failed: {e:#}")),
-                        );
-                        return;
-                    }
+            // Fresh repls and a fresh evaluation so the UI can recover.
+            match config.eval.restart_and_wait("nix store repair").await {
+                Ok(()) => append_log(
+                    &log_file,
+                    "nix repl restarted and evaluated after store repair",
+                ),
+                Err(e) => {
+                    append_log(&log_file, &format!("evaluation after repair failed: {e}"));
+                    write_state(
+                        &id,
+                        OpStatus::Failed,
+                        "refresh-repl",
+                        Some(&format!("store repair OK but evaluation failed: {e}")),
+                    );
+                    return;
                 }
-            }
-            {
-                let mut cache = config.schema_cache.write().await;
-                cache.invalidate_all();
             }
             write_state(&id, OpStatus::Success, "complete", None);
             append_log(&log_file, "repair job complete");

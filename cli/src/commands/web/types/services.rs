@@ -94,7 +94,7 @@ fn yes() -> bool {
     true
 }
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Default, Clone)]
 pub struct IndexContext {
     /// All services grouped by category (preferred category order).
     #[serde(default)]
@@ -112,6 +112,9 @@ pub struct IndexContext {
     pub guides: bool,
     #[serde(flatten)]
     pub eval_error: EvalErrorUi,
+    /// Evaluation this grid comes from (client refresh after the next one).
+    #[serde(default)]
+    pub eval: super::EvalMark,
 }
 
 /// Full configuration shell page (not used by services_grid partial).
@@ -120,6 +123,8 @@ pub struct ConfigurationPageContext {
     pub theme: String,
     #[serde(flatten)]
     pub eval_error: EvalErrorUi,
+    /// `#neo-eval-sync` + `#neo-eval-error` (nix/pool.rs `status_html`).
+    pub eval_status_html: String,
     /// Partial URL loaded into `#config-content` on first paint (HTMX GET).
     /// Unused when `initial_content_html` is already set (deep-linked option/core pane).
     pub initial_content_url: String,
@@ -145,6 +150,7 @@ impl Default for ConfigurationPageContext {
         Self {
             theme: String::new(),
             eval_error: EvalErrorUi::default(),
+            eval_status_html: String::new(),
             initial_content_url: "/configuration".to_string(),
             initial_tab: "services".to_string(),
             initial_detail: None,
@@ -178,7 +184,7 @@ pub struct ProxiedService {
     pub timers: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct NavigatorContext {
     pub domain: Option<String>,
     #[serde(default)]

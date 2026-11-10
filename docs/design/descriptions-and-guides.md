@@ -415,7 +415,7 @@ pub async fn apply_edit(config: &AppConfig, edit: Edit) -> Result<(), EditError>
 - runs the plugin table cleanup when `core.plugins` changes,
 - calls `route_secrets` with the touched scope (secrets go to `secrets.yaml` /
   `secrets.sops.yaml` exactly like a form save),
-- calls `finish_save` (sorted write, rekey, evaluator + schema-cache refresh,
+- calls `finish_save` (sorted write, rekey, background re-evaluation (`EvalPool::note_change`),
   action bar broadcast).
 
 **Save & apply** then calls `apply_or_activate` (the `/changes/apply` handler),

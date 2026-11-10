@@ -9,7 +9,7 @@ use serde::Serialize;
 use super::pages::configuration_shell;
 use crate::commands::web::guides::{self, Guide, GuidesExtract, RenderCtx, TocEntry};
 use crate::commands::web::nix::errors::eval_error_ui;
-use crate::commands::web::types::{AppConfig, EvalErrorUi};
+use crate::commands::web::types::{AppConfig, EvalErrorUi, EvalMark};
 use crate::commands::web::util::{service_name_ok, Htmx};
 
 #[derive(Serialize, Default)]
@@ -19,6 +19,7 @@ struct GuidesGridContext {
     disabled: bool,
     #[serde(flatten)]
     eval_error: EvalErrorUi,
+    eval: EvalMark,
 }
 
 #[derive(Serialize, Default)]
@@ -31,14 +32,21 @@ struct GuidePageContext {
     assistant: bool,
     #[serde(flatten)]
     eval_error: EvalErrorUi,
+    eval: EvalMark,
 }
 
 pub async fn load_guides(config: &AppConfig) -> Result<GuidesExtract, EvalErrorUi> {
-    let mut ev = config.evaluator.lock().await;
-    ev.extract_guides().await.map_err(|e| {
+    load_guides_marked(config).await.0
+}
+
+/// [`load_guides`] plus the evaluation it comes from.
+async fn load_guides_marked(config: &AppConfig) -> (Result<GuidesExtract, EvalErrorUi>, EvalMark) {
+    let (r, mark) = config.eval.guides().await;
+    let r = r.map_err(|e| {
         eprintln!("web: nix extract_guides failed: {e:#}");
         eval_error_ui("Nix error while extracting guides", &e)
-    })
+    });
+    (r, mark)
 }
 
 /// Guides that use `service`, for the option pane strip (empty on errors).
@@ -56,7 +64,8 @@ pub async fn guides_for_service(config: &AppConfig, service: &str) -> Vec<Guide>
 const MAX_FILTER_TAGS: usize = 8;
 
 async fn grid_context(config: &AppConfig) -> GuidesGridContext {
-    match load_guides(config).await {
+    let (r, eval) = load_guides_marked(config).await;
+    let mut ctx = match r {
         Ok(x) => {
             // Filter row: only topics shared by several guides, most used
             // first; one-off tags stay searchable but get no pill.
@@ -83,21 +92,28 @@ async fn grid_context(config: &AppConfig) -> GuidesGridContext {
             eval_error,
             ..Default::default()
         },
-    }
+    };
+    ctx.eval = eval;
+    ctx
 }
 
 async fn page_context(config: &AppConfig, id: &str) -> GuidePageContext {
-    let x = match load_guides(config).await {
+    let (r, eval) = load_guides_marked(config).await;
+    let x = match r {
         Ok(x) => x,
         Err(eval_error) => {
             return GuidePageContext {
                 eval_error,
+                eval,
                 ..Default::default()
             }
         }
     };
     let Some(guide) = x.guides.iter().find(|g| g.id == id).cloned() else {
-        return GuidePageContext::default();
+        return GuidePageContext {
+            eval,
+            ..Default::default()
+        };
     };
     let icons: HashMap<String, String> = x
         .guides
@@ -124,6 +140,7 @@ async fn page_context(config: &AppConfig, id: &str) -> GuidePageContext {
         toc,
         related,
         assistant: crate::commands::web::agent::available(),
+        eval,
         ..Default::default()
     }
 }

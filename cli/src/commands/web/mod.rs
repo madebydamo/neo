@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::broadcast;
 
 use rocket::fs::FileServer;
 use rocket_dyn_templates::Template;
@@ -21,13 +21,13 @@ mod navigator;
 pub(crate) mod nix;
 mod nix_repair;
 mod ops;
+mod panes;
 mod plugins;
 mod power;
 mod proposals;
 mod redact;
 mod resources;
 mod routes;
-mod schema_cache;
 mod settings;
 mod trigger;
 mod types;
@@ -56,19 +56,28 @@ pub fn web(settings_path: PathBuf, nix_cmd: &str, config_path: &str) -> Result<(
     let static_dir = util::static_dir();
     rt.block_on(async move {
         let busy = Arc::new(AtomicBool::new(true));
-        let evaluator = nix::NixEvaluator::new(nix_cmd, &neo_input_for_eval, busy.clone())
-            .await
-            .context("start persistent nix repl for fast evals")?;
-        let icons = evaluator.icons.clone();
+        let pending = Arc::new(AtomicBool::new(true));
         let (unit_tx, _unit_rx) = broadcast::channel::<String>(128);
+        // Evaluations run in the background from here on (nix/pool.rs): the
+        // server starts at once and pages wait only for the first evaluation.
+        let eval = nix::EvalPool::new(
+            nix_cmd,
+            &neo_input_for_eval,
+            busy.clone(),
+            pending.clone(),
+            unit_tx.clone(),
+        )
+        .context("prepare nix evaluations")?;
+        eval.start();
+        let icons = eval.icons();
         let app_config = Arc::new(AppConfig {
             settings_path,
-            evaluator: Arc::new(Mutex::new(evaluator)),
+            eval,
             eval_busy: busy,
+            eval_pending: pending,
             unit_updates: unit_tx,
             pulls_in_flight: Default::default(),
             clear_appdata_in_flight: Default::default(),
-            schema_cache: Default::default(),
             unit_status: Default::default(),
             resources: Arc::new(resources::ResourceSampler::new()),
         });
@@ -82,18 +91,6 @@ pub fn web(settings_path: PathBuf, nix_cmd: &str, config_path: &str) -> Result<(
         start_action_bar_watcher(app_config.clone());
         // Push operation-lock holders (web jobs, CLI, timers) so conflicting buttons disable.
         start_lock_watcher(app_config.clone());
-
-        // Background warm-up: full homeserver flake + settings + option walking can take
-        // 30s–10min the first time. Spawn after start so Rocket can bind promptly; first
-        // request may still wait on the evaluator mutex if warm-up is incomplete.
-        let evaluator_for_warmup = app_config.evaluator.clone();
-        tokio::spawn(async move {
-            eprintln!("web: starting background warm-up of nix evaluator…");
-            if let Some(err) = evaluator_for_warmup.lock().await.warm_up().await {
-                eprintln!("web: warm-up navigator extract failed: {err}");
-            }
-            eprintln!("web: background warm-up complete.");
-        });
 
         let widgets_dir = PathBuf::from(&template_dir).join("options/widgets");
         mount_static_assets(rocket::build(), &static_dir, &widgets_dir)

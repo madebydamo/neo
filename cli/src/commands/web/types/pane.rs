@@ -65,7 +65,7 @@ pub struct ServiceScreenshot {
 }
 
 /// Runtime unit for a service's status/logs/control pane section.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct RuntimeUnit {
     pub name: String,
     /// True for docker-* units (or units backed by the containers registry); these get a manual docker update (pull) button.
@@ -101,7 +101,7 @@ pub struct OptionSection {
 }
 
 /// Context for the per-service option pane (includes both the form fields and rich intro metadata).
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct OptionPaneContext {
     pub service: String,
     pub meta: Option<ServiceMeta>,
@@ -147,4 +147,7 @@ pub struct OptionPaneContext {
     /// Assistant chat available: shows "Ask for help".
     #[serde(default)]
     pub assistant: bool,
+    /// Evaluation this pane comes from (client refresh after the next one).
+    #[serde(default)]
+    pub eval: super::EvalMark,
 }

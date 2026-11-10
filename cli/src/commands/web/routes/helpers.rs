@@ -9,7 +9,7 @@ use rocket::{post, State};
 use serde::{Deserialize, Serialize};
 
 use crate::commands::web::helper_exec::{parse_helper_value, run_helper_script};
-use crate::commands::web::schema_cache::load_options;
+use crate::commands::web::panes::load_options;
 use crate::commands::web::types::{AppConfig, OptionHelper, OptionSchema};
 
 /// Where to apply a helper result in nested option forms.

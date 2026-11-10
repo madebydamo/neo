@@ -152,6 +152,9 @@
         {{!-- hx-history-elt: history snapshots restore into this pane, not the whole body.
              Deep-linked option/core pages SSR the pane into this div so labels/fields are in
              the first HTML response (no HTMX round-trip). Grids still lazy-load on hx-trigger. --}}
+        {{!-- #neo-eval-sync (evaluation state, read by eval_sync.js) and
+             #neo-eval-error (latest change does not evaluate); replaced over /ws/status. --}}
+        {{{eval_status_html}}}
         <div id="config-content"
              hx-history-elt
              {{#unless initial_content_html}}
@@ -228,6 +231,7 @@
     <script src="/static/unit_watch.js"></script>
     <script src="/static/plugin_pills.js"></script>
     <script src="/static/nav_progress.js"></script>
+    <script src="/static/eval_sync.js"></script>
     {{#if assistant}}{{> partials/agent_drawer}}{{/if}}
   </body>
 </html>

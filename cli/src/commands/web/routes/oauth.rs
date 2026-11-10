@@ -11,7 +11,7 @@ use rocket::{post, State};
 use serde::{Deserialize, Serialize};
 
 use crate::commands::web::helper_exec::run_script;
-use crate::commands::web::schema_cache::load_options;
+use crate::commands::web::panes::load_options;
 use crate::commands::web::types::{AppConfig, OptionSchema, OptionUiOauth};
 use crate::commands::web::util::{
     oauth_env_key_ok, oauth_session_ok, option_name_ok, provider_id_ok, run_as_ok, service_name_ok,

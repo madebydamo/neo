@@ -346,7 +346,7 @@ pub fn block(items: &[Value]) -> Option<String> {
 
 /// Resolve the message's references (unknown ones are skipped).
 pub async fn context_for(config: &AppConfig, message: &str) -> Option<String> {
-    use super::schema_cache::load_options;
+    use super::panes::load_options;
     let tokens = parse_refs(message);
     if tokens.is_empty() {
         return None;
@@ -370,11 +370,10 @@ pub async fn context_for(config: &AppConfig, message: &str) -> Option<String> {
     };
     let privacy = if need_privacy {
         config
-            .evaluator
-            .lock()
+            .eval
+            .privacy()
             .await
-            .extract_privacy()
-            .await
+            .0
             .map(|x| x.categories)
             .unwrap_or_default()
     } else {
@@ -413,7 +412,7 @@ pub async fn context_for(config: &AppConfig, message: &str) -> Option<String> {
 }
 
 async fn all_services(config: &AppConfig) -> Vec<Service> {
-    let idx = config.evaluator.lock().await.extract_services().await;
+    let idx = config.eval.services().await;
     idx.groups.into_iter().flat_map(|g| g.services).collect()
 }
 
@@ -450,10 +449,8 @@ pub async fn cached_candidates(config: &AppConfig) -> Result<Arc<Vec<RefItem>>, 
     }
     let services = all_services(config).await;
     let index = config
-        .evaluator
-        .lock()
-        .await
-        .extract_option_index()
+        .eval
+        .option_index()
         .await
         .map_err(|e| format!("{e:#}"))?;
     let (guides, guides_on) = match super::routes::guides::load_guides(config).await {
@@ -462,11 +459,10 @@ pub async fn cached_candidates(config: &AppConfig) -> Result<Arc<Vec<RefItem>>, 
     };
     let privacy = if guides_on {
         config
-            .evaluator
-            .lock()
+            .eval
+            .privacy()
             .await
-            .extract_privacy()
-            .await
+            .0
             .map(|x| if x.enabled { x.categories } else { vec![] })
             .unwrap_or_default()
     } else {

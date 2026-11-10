@@ -17,6 +17,15 @@ pub struct EvalErrorUi {
     pub can_flake_update: bool,
 }
 
+/// Which evaluation a page was rendered from (docs/design/eval-latency.md §7).
+/// `provisional`: settings changed since, and were laid over it; the next
+/// evaluation replaces the page if it differs.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EvalMark {
+    pub gen: u64,
+    pub provisional: bool,
+}
+
 impl EvalErrorUi {
     pub fn message(msg: impl Into<String>) -> Self {
         Self {

@@ -22,10 +22,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::commands::web::helper_exec::{parse_helper_value, run_helper_script};
+use crate::commands::web::panes::{has_placeholder, load_options};
 use crate::commands::web::redact::{
     dropped_secrets, has_secret, is_set, redact_value, secret_in, secret_leak, Field, SET, UNSET,
 };
-use crate::commands::web::schema_cache::{has_placeholder, load_options};
 use crate::commands::web::settings::edit::PatchOp;
 use crate::commands::web::settings::save::load_settings_doc;
 use crate::commands::web::settings::toml_item_to_json;

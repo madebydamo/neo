@@ -498,7 +498,7 @@ VM's host key, identical rendered files), web saves in every mode, key escrow ro
   `enable`. `.sops.yaml` is generated for manual `sops edit` on a checkout.
 - **The form shows secrets like plain settings** (masked, with Show), not set/not set chips. On an
   encrypted config neo-web decrypts once per page and replaces the placeholders in the form
-  (`reveal_secrets`, `cli/src/commands/web/schema_cache.rs`); saving an unchanged value
+  (`reveal_secrets`, `cli/src/commands/web/panes.rs`); saving an unchanged value
   re-encrypts nothing.
 
 Every secret option in this repo works encrypted. Secrets used inside other values go through

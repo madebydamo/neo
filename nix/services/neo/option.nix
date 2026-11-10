@@ -63,6 +63,18 @@
                   group = lib.neo.ui.groups.advanced;
                 };
               };
+
+              # Two nix repls (NEO_WEB_EVAL_REPLS, docs/design/eval-latency.md).
+              backgroundEval = mkOption {
+                type = types.bool;
+                default = true;
+                rank = 25;
+                description = "Keeps settings pages usable while a change is being checked, so you can edit several services in a row. Uses about 1 GB more memory; turn off on small machines.";
+                ui = lib.neo.ui.mkUi {
+                  label = "Check changes in the background";
+                  group = lib.neo.ui.groups.advanced;
+                };
+              };
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "neo";

@@ -97,20 +97,13 @@ pub fn apply_payload_to_table(
     }
 }
 
-/// Refresh evaluator and schema cache after settings.toml changes (save or
-/// restore); the action-bar watcher notices the change by itself. Safe to call
-/// from routes that rewrite settings without going through [`finish_save`].
+/// Evaluate changed settings in the background after settings.toml changes
+/// (save or restore); pages keep being served meanwhile, with the new values laid
+/// over (docs/design/eval-latency.md). The action-bar watcher notices the change
+/// by itself. Safe to call from routes that rewrite settings without going
+/// through [`finish_save`].
 pub fn refresh_after_settings_change(config: &AppConfig) {
-    let ev = config.evaluator.clone();
-    tokio::spawn(async move {
-        let mut g = ev.lock().await;
-        let _ = g.refresh().await;
-    });
-    let cache = config.schema_cache.clone();
-    tokio::spawn(async move {
-        let mut c = cache.write().await;
-        c.invalidate_all();
-    });
+    config.eval.note_change("settings saved");
 }
 
 /// Move secret settings out of `doc` once the config repo keeps them in a
@@ -137,14 +130,11 @@ pub async fn route_secrets(
         )));
     }
     // Without the list of secret paths a save could write secrets inline: refuse.
-    let patterns = {
-        let mut ev = config.evaluator.lock().await;
-        ev.extract_secret_paths().await.map_err(|e| {
-            SaveError::internal(format!(
-                "Not saved: could not list the secret settings: {e:#}"
-            ))
-        })?
-    };
+    let patterns = config.eval.secret_paths().await.map_err(|e| {
+        SaveError::internal(format!(
+            "Not saved: could not list the secret settings: {e:#}"
+        ))
+    })?;
     if patterns.is_empty() {
         return Err(SaveError::internal(
             "Not saved: no secret settings found (evaluation problem?)",

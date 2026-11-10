@@ -145,6 +145,11 @@
             # --override-input without rewriting flake.lock; plain getFlake would
             # still show the locked, pre-lab options).
             NEO_FLAKE_PATH = toString self;
+            # Evaluate settings changes in a second repl while pages keep working.
+            NEO_WEB_EVAL_REPLS =
+              if cfg.backgroundEval
+              then "2"
+              else "1";
             # Explicit tool dirs for option helpers (used ahead of ambient PATH).
             NEO_HELPER_PATH = lib.makeBinPath [
               pkgs.bash

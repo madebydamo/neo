@@ -72,7 +72,7 @@ impl Guide {
 }
 
 /// Shape returned by `extract_guides.nix`.
-#[derive(Deserialize, Default, Clone)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct GuidesExtract {
     #[serde(default)]
     pub guides: Vec<Guide>,

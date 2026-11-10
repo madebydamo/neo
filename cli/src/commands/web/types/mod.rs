@@ -7,7 +7,7 @@ mod services;
 mod versioning;
 
 pub use app_config::AppConfig;
-pub use eval_error::EvalErrorUi;
+pub use eval_error::{EvalErrorUi, EvalMark};
 pub use pane::{OptionPaneContext, OptionSection, RuntimeUnit, ServiceMeta};
 pub use schema::{ChoiceItem, OptionHelper, OptionSchema, OptionType, OptionUiOauth};
 pub use services::{

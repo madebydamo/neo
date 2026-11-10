@@ -1,7 +1,7 @@
 {{!-- Services tab: search + status / category / source filters over category
      sections of service cards. Filter state lives in servicesGrid()
      (services_grid.js); cards carry data-* for matching. --}}
-<div id="services-grid" class="space-y-5 sm:space-y-6" x-data="servicesGrid()" @keydown.window="onKey($event)">
+<div id="services-grid" class="space-y-5 sm:space-y-6" data-neo-eval-keys="services" data-neo-eval-gen="{{eval.gen}}" data-neo-eval-provisional="{{eval.provisional}}" data-neo-eval-url="/configuration/services" x-data="servicesGrid()" @keydown.window="onKey($event)">
   {{> partials/resources_panel}}
 
   {{#if error}}

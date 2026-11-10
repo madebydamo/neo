@@ -168,14 +168,11 @@ async fn save_core_section_inner(
     let old_ids: Vec<String> = old_plugins.iter().map(|p| p.id.clone()).collect();
     let new_ids: Vec<String> = new_plugins.iter().map(|p| p.id.clone()).collect();
     if old_ids.iter().any(|id| !new_ids.contains(id)) {
-        let owners = {
-            let mut ev = config.evaluator.lock().await;
-            ev.extract_plugin_owners().await.map_err(|e| {
-                SaveError::internal(format!(
-                    "Not saved: could not read which services the plugins own: {e:#}"
-                ))
-            })?
-        };
+        let owners = config.eval.plugin_owners().await.map_err(|e| {
+            SaveError::internal(format!(
+                "Not saved: could not read which services the plugins own: {e:#}"
+            ))
+        })?;
         let gone = services_to_remove(&owners, &old_ids, &new_ids);
         if !gone.is_empty() {
             eprintln!("web: removing plugin config tables: {}", gone.join(", "));

@@ -1,4 +1,3 @@
-use super::errors::eval_error_ui;
 use super::registry::{
     NixExtractor, EXTRACT_GUIDES, EXTRACT_NEO_THEME, EXTRACT_OPTION_INDEX,
     EXTRACT_PLUGIN_INVENTORY, EXTRACT_PRIVACY, EXTRACT_PROXIED_SERVICES, EXTRACT_SECRET_PATHS,
@@ -140,65 +139,31 @@ impl NixEvaluator {
         &mut self,
         extractor: &NixExtractor,
     ) -> anyhow::Result<T> {
-        self.query_json(&format!("{} {{ neoFlake = f; }}", extractor.load_name))
-            .await
+        let inner = format!("{} {{ neoFlake = {}; }}", extractor.load_name, self.flake());
+        self.query_json(&inner).await
     }
 
-    pub async fn extract_services(&mut self) -> IndexContext {
-        match self
+    pub async fn extract_services(&mut self) -> anyhow::Result<IndexContext> {
+        let mut extracted = self
             .query_extractor::<ExtractedServiceGroups>(&EXTRACT_SERVICES)
-            .await
-        {
-            Ok(mut extracted) => {
-                let inventory = extracted.plugin_inventory.clone();
-                for group in &mut extracted.groups {
-                    attach_service_plugin_badges(&mut group.services, &inventory);
-                    for service in &mut group.services {
-                        self.icons.link(&mut service.icon);
-                    }
-                }
-                IndexContext {
-                    groups: extracted.groups,
-                    categories: extracted.categories,
-                    plugin_filters: plugin_filters(&inventory),
-                    guides: extracted.guides_enabled,
-                    ..Default::default()
-                }
-            }
-            Err(e) => {
-                eprintln!("web: nix extract_services failed: {e:#}");
-                IndexContext {
-                    eval_error: eval_error_ui("Nix error while extracting service list", &e),
-                    ..Default::default()
-                }
+            .await?;
+        let inventory = extracted.plugin_inventory.clone();
+        for group in &mut extracted.groups {
+            attach_service_plugin_badges(&mut group.services, &inventory);
+            for service in &mut group.services {
+                self.icons.link(&mut service.icon);
             }
         }
+        Ok(IndexContext {
+            groups: extracted.groups,
+            categories: extracted.categories,
+            plugin_filters: plugin_filters(&inventory),
+            guides: extracted.guides_enabled,
+            ..Default::default()
+        })
     }
 
-    /// Empty pane that only carries an error banner.
-    fn error_pane(target: &PaneTarget, eval_error: EvalErrorUi) -> OptionPaneContext {
-        OptionPaneContext {
-            service: target.label().to_string(),
-            meta: None,
-            options: vec![],
-            sections: vec![],
-            options_json: "[]".to_string(),
-            save_endpoint: target.save_endpoint(),
-            is_core: target.is_core(),
-            eval_error,
-            units: vec![],
-            group_unit: None,
-            containers: std::collections::HashMap::new(),
-            appdata: None,
-            appdata_root: None,
-            plugins: vec![],
-            plugin_inventory_json: "[]".to_string(),
-            guides: vec![],
-            assistant: false,
-        }
-    }
-
-    async fn extract_pane(&mut self, target: PaneTarget) -> OptionPaneContext {
+    async fn extract_pane(&mut self, target: PaneTarget) -> anyhow::Result<OptionPaneContext> {
         // Same charset as service names (alnum, `-`, `_`); rejects empty, path
         // separators, and the literal fallback "service".
         if !service_name_ok(target.label()) {
@@ -207,31 +172,22 @@ impl NixEvaluator {
             } else {
                 "service"
             };
-            return Self::error_pane(
-                &target,
-                EvalErrorUi::message(format!("Invalid {what} name for nix extract")),
-            );
+            let mut pane = error_pane_for(target.label(), target.is_core());
+            pane.eval_error = EvalErrorUi::message(format!("Invalid {what} name for nix extract"));
+            return Ok(pane);
         }
 
         let (arg_name, arg_val) = target.nix_arg();
         let label = target.label();
         let escaped = escape_nix_string(arg_val);
         let inner = format!(
-            r#"{} {{ neoFlake = f; {} = "{}"; }}"#,
-            EXTRACT_SERVICE_OPTIONS.load_name, arg_name, escaped
+            r#"{} {{ neoFlake = {}; {} = "{}"; }}"#,
+            EXTRACT_SERVICE_OPTIONS.load_name,
+            self.flake(),
+            arg_name,
+            escaped
         );
-        let raw: RawPane = match self.query_json(&inner).await {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("web: nix extract_pane({label}) failed: {e:#}");
-                let ctx = if target.is_core() {
-                    format!("Nix error for core section ({label})")
-                } else {
-                    format!("Nix error for service options ({label})")
-                };
-                return Self::error_pane(&target, eval_error_ui(&ctx, &e));
-            }
-        };
+        let raw: RawPane = self.query_json(&inner).await?;
         let mut opts = raw.options;
         enrich_options(&mut opts);
         if let PaneTarget::CoreSection(section) = &target {
@@ -252,7 +208,7 @@ impl NixEvaluator {
         let plugins = plugin_badges(&raw.plugin_ids, &raw.plugin_inventory);
         let plugin_inventory_json =
             serde_json::to_string(&raw.plugin_inventory).unwrap_or_else(|_| "[]".to_string());
-        OptionPaneContext {
+        Ok(OptionPaneContext {
             service: label.to_string(),
             meta,
             options: opts,
@@ -270,50 +226,34 @@ impl NixEvaluator {
             plugin_inventory_json,
             guides: vec![],
             assistant: false,
-        }
+            eval: Default::default(),
+        })
     }
 
-    pub async fn extract_service_options(&mut self, service: &str) -> OptionPaneContext {
+    pub async fn extract_service_options(
+        &mut self,
+        service: &str,
+    ) -> anyhow::Result<OptionPaneContext> {
         self.extract_pane(PaneTarget::Service(service.to_string()))
             .await
     }
 
-    pub async fn extract_neo_section(&mut self, section: &str) -> OptionPaneContext {
+    pub async fn extract_neo_section(
+        &mut self,
+        section: &str,
+    ) -> anyhow::Result<OptionPaneContext> {
         self.extract_pane(PaneTarget::CoreSection(section.to_string()))
             .await
     }
 
-    pub async fn extract_proxied_services(&mut self) -> NavigatorContext {
-        let mut ctx: NavigatorContext = match self.query_extractor(&EXTRACT_PROXIED_SERVICES).await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("web: nix extract_proxied_services failed: {e:#}");
-                NavigatorContext {
-                    eval_error: eval_error_ui("Nix error while building navigator", &e),
-                    ..Default::default()
-                }
-            }
-        };
+    pub async fn extract_proxied_services(&mut self) -> anyhow::Result<NavigatorContext> {
+        let mut ctx: NavigatorContext = self.query_extractor(&EXTRACT_PROXIED_SERVICES).await?;
         crate::commands::web::navigator::finish(&mut ctx, &self.icons);
-        ctx
+        Ok(ctx)
     }
 
-    /// Warm the evaluator (navigator + theme). Returns the navigator eval error, if any.
-    pub async fn warm_up(&mut self) -> Option<String> {
-        let nav = self.extract_proxied_services().await;
-        let _ = self.extract_neo_theme().await;
-        nav.eval_error.error
-    }
-
-    pub async fn extract_neo_theme(&mut self) -> String {
-        match self.query_extractor(&EXTRACT_NEO_THEME).await {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("web: nix extract_neo_theme failed: {e}");
-                "light".to_string()
-            }
-        }
+    pub async fn extract_neo_theme(&mut self) -> anyhow::Result<String> {
+        self.query_extractor(&EXTRACT_NEO_THEME).await
     }
 
     /// Service name → plugin instance ids that declare it (from the current flake).
@@ -395,8 +335,37 @@ impl NixEvaluator {
     }
 }
 
+/// Empty pane for `name` (service or core section) that only carries an error banner.
+pub(crate) fn error_pane_for(name: &str, is_core: bool) -> OptionPaneContext {
+    let target = if is_core {
+        PaneTarget::CoreSection(name.to_string())
+    } else {
+        PaneTarget::Service(name.to_string())
+    };
+    OptionPaneContext {
+        service: name.to_string(),
+        meta: None,
+        options: vec![],
+        sections: vec![],
+        options_json: "[]".to_string(),
+        save_endpoint: target.save_endpoint(),
+        is_core,
+        eval_error: EvalErrorUi::default(),
+        units: vec![],
+        group_unit: None,
+        containers: std::collections::HashMap::new(),
+        appdata: None,
+        appdata_root: None,
+        plugins: vec![],
+        plugin_inventory_json: "[]".to_string(),
+        guides: vec![],
+        assistant: false,
+        eval: Default::default(),
+    }
+}
+
 /// One setting in [`OptionIndex`]: `path` is relative to its service (or core).
-#[derive(serde::Deserialize, Clone, Debug, Default)]
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, Default)]
 pub struct OptionIndexEntry {
     pub path: String,
     #[serde(default)]
@@ -409,7 +378,7 @@ pub struct OptionIndexEntry {
 }
 
 /// `extract_option_index.nix`: settings per service plus core.
-#[derive(serde::Deserialize, Clone, Debug, Default)]
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, Default)]
 pub struct OptionIndex {
     #[serde(default)]
     pub services: std::collections::BTreeMap<String, Vec<OptionIndexEntry>>,

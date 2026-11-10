@@ -15,9 +15,9 @@ use rocket::{get, post, State};
 use serde_json::{json, Value};
 
 use super::proposals::create_proposal;
+use crate::commands::web::panes::load_options;
 use crate::commands::web::proposals::{self, ProposalRequest};
 use crate::commands::web::redact::{redacted_current, redacted_default};
-use crate::commands::web::schema_cache::load_options;
 use crate::commands::web::types::{AppConfig, OptionHelper, OptionSchema, OptionType};
 use crate::commands::web::util::read_token_file;
 use crate::commands::web::util::service_name_ok;

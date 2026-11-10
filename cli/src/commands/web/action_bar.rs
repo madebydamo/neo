@@ -20,10 +20,11 @@ const SHOWN_OPS: [(OperationKind, &str, &str); 3] = [
 fn action_bar_signature(config: &AppConfig) -> String {
     gc_old_ops();
     let busy = config.eval_busy.load(Ordering::Relaxed);
+    let pending = config.eval_pending.load(Ordering::Relaxed);
     let ops = running_ops(SHOWN_OPS.map(|(k, _, _)| k)).map(Option::unwrap_or_default);
     let d = dirty_state(config);
     let dirty = d.settings_dirty || d.worktree_dirty;
-    format!("{busy}|{}|{dirty}", ops.join("|"))
+    format!("{busy}|{pending}|{}|{dirty}", ops.join("|"))
 }
 
 fn progress_button(kind: OperationKind, kind_label: &str, id: &str, btn_class: &str) -> String {
@@ -69,13 +70,20 @@ fn render_action_bar_dynamic_inner(config: &AppConfig) -> String {
     format!(r#"{}{}"#, pending, reset)
 }
 
+/// Quiet note while a settings change is evaluated in the background (pages
+/// stay usable, so no spinner).
+const EVAL_PENDING: &str = r#"<span class="neo-eval-pending inline-flex items-center gap-1.5 px-1.5 text-xs text-base-content/50" title="Checking your latest change in the background. Pages already show the saved values."><span class="loading loading-ring loading-xs"></span><span class="hidden xl:inline">Checking…</span></span>"#;
+
 /// Full `#action-bar-dynamic` element (optional OOB attr for WS pushes).
+/// `data-eval-busy`: pages wait for an evaluation (navbar spinner);
+/// `data-eval-pending`: one runs in the background.
 pub fn action_bar_dynamic_element(config: &AppConfig, oob: bool) -> String {
     let busy = config.eval_busy.load(Ordering::Relaxed);
+    let pending = config.eval_pending.load(Ordering::Relaxed);
     let oob_attr = if oob { r#" hx-swap-oob="true""# } else { "" };
     format!(
-        r#"<div id="action-bar-dynamic" class="flex items-center gap-1" data-eval-busy="{}"{oob_attr}>{}</div>"#,
-        if busy { "true" } else { "false" },
+        r#"<div id="action-bar-dynamic" class="flex items-center gap-1" data-eval-busy="{busy}" data-eval-pending="{pending}"{oob_attr}>{}{}</div>"#,
+        if pending && !busy { EVAL_PENDING } else { "" },
         render_action_bar_dynamic_inner(config),
     )
 }

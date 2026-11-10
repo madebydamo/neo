@@ -18,7 +18,7 @@ use super::guides::load_guides;
 use crate::commands::web::agent::{self, valid_run_id, valid_session_id};
 use crate::commands::web::agent_refs;
 use crate::commands::web::guides::{render, RenderCtx};
-use crate::commands::web::schema_cache::load_options;
+use crate::commands::web::panes::load_options;
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::service_name_ok;
 

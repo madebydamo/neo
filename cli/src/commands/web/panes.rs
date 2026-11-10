@@ -1,54 +1,14 @@
-//! Process-local cache of option schemas for helper script resolution.
-//! Populated on pane load; helper runs use the cache on hit (no nix evaluator mutex).
-
-use std::collections::HashMap;
+//! Option panes from the evaluation pool (nix/pool.rs caches them per evaluation).
 
 use super::nix::value_to_display;
 use super::types::{AppConfig, OptionPaneContext, OptionSchema};
 use crate::utils::secrets::{self, Backend, Node, Tree, PLACEHOLDER_PREFIX};
 use crate::utils::secrets_store;
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
-pub struct SchemaCacheKey {
-    pub is_core: bool,
-    pub name: String,
-}
-
-#[derive(Default, Debug)]
-pub struct SchemaCache {
-    entries: HashMap<SchemaCacheKey, Vec<OptionSchema>>,
-}
-
-impl SchemaCache {
-    pub fn get(&self, is_core: bool, name: &str) -> Option<Vec<OptionSchema>> {
-        let key = SchemaCacheKey {
-            is_core,
-            name: name.to_string(),
-        };
-        self.entries.get(&key).cloned()
-    }
-
-    pub fn put(&mut self, is_core: bool, name: &str, options: Vec<OptionSchema>) {
-        let key = SchemaCacheKey {
-            is_core,
-            name: name.to_string(),
-        };
-        self.entries.insert(key, options);
-    }
-
-    pub fn invalidate_all(&mut self) {
-        self.entries.clear();
-    }
-}
-
-/// Extract a service (or core section) pane from the flake. Not cached.
+/// A service (or core section) pane from the serving evaluation, with settings
+/// saved since laid over it. Secrets stay placeholders on encrypted configs.
 pub async fn extract_pane(config: &AppConfig, is_core: bool, name: &str) -> OptionPaneContext {
-    let mut ev = config.evaluator.lock().await;
-    if is_core {
-        ev.extract_neo_section(name).await
-    } else {
-        ev.extract_service_options(name).await
-    }
+    config.eval.pane(is_core, name).await
 }
 
 /// Value of an `@NEO_SECRET:<a/b/c>@` placeholder in the decrypted tree.
@@ -124,37 +84,25 @@ fn reveal_secrets(config: &AppConfig, pane: &mut OptionPaneContext) {
     }
 }
 
-/// Extract a pane for rendering and remember its options for helper runs.
+/// A pane for rendering, secrets revealed for the form.
 pub async fn load_pane(config: &AppConfig, is_core: bool, name: &str) -> OptionPaneContext {
     let mut pane = extract_pane(config, is_core, name).await;
     reveal_secrets(config, &mut pane);
-    config
-        .schema_cache
-        .write()
-        .await
-        .put(is_core, name, pane.options.clone());
     pane
 }
 
-/// Option schemas for helper resolution: cache hit, else extract (cached on success).
+/// A pane's option schemas and values (secrets revealed) for helpers,
+/// proposals and the assistant's tools. Err with the evaluation error.
 pub async fn load_options(
     config: &AppConfig,
     is_core: bool,
     name: &str,
 ) -> Result<Vec<OptionSchema>, String> {
-    if let Some(opts) = config.schema_cache.read().await.get(is_core, name) {
-        return Ok(opts);
+    let pane = load_pane(config, is_core, name).await;
+    match pane.eval_error.error {
+        Some(err) => Err(err),
+        None => Ok(pane.options),
     }
-    let pane = extract_pane(config, is_core, name).await;
-    if let Some(err) = pane.eval_error.error {
-        return Err(err);
-    }
-    config
-        .schema_cache
-        .write()
-        .await
-        .put(is_core, name, pane.options.clone());
-    Ok(pane.options)
 }
 
 #[cfg(test)]

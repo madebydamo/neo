@@ -2,6 +2,7 @@
      service keeps it) and "in the cloud". A tile opens the detail panel.
      Three looks (lights / orbit / lanes) share the hero and the panel. --}}
 <div id="privacy-map" class="space-y-5 sm:space-y-6"
+     data-neo-eval-keys="privacy" data-neo-eval-gen="{{eval.gen}}" data-neo-eval-provisional="{{eval.provisional}}" data-neo-eval-url="/configuration/privacy"
      x-data="{ sel: (location.hash || '').slice(1) || null,
                look: (() => { try { return new URLSearchParams(location.search).get('look') || localStorage.getItem('neo-privacy-look') || 'lights'; } catch (e) { return 'lights'; } })(),
                setLook(v) { this.look = v; try { localStorage.setItem('neo-privacy-look', v); } catch (e) {} },
