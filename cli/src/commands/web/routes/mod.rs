@@ -12,6 +12,7 @@ mod nix_repair;
 mod oauth;
 mod pages;
 mod power;
+mod prefs;
 pub(crate) mod privacy;
 mod proposals;
 mod resources;
@@ -31,6 +32,9 @@ pub fn routes() -> Vec<rocket::Route> {
         icons::service_icon,
         pages::index,
         pages::nav_services,
+        prefs::sidebar_get,
+        prefs::sidebar_put,
+        prefs::sidebar_delete,
         // Configuration shell + HTMX partials.
         pages::configuration,
         pages::configuration_services,

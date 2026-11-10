@@ -90,6 +90,12 @@
             restartIfChanged = false;
           };
 
+        # Per-user web UI state (sidebar layouts). Neo-owned like the other
+        # services' appdata, so snapshots, backups and Clear appdata cover it.
+        systemd.tmpfiles.rules = [
+          "d ${cfg.appdata} 0755 homeserver homeserver -"
+        ];
+
         systemd.services.neo-web = {
           description = "Neo Homeserver Web UI (config editor)";
           wantedBy = ["multi-user.target"];
@@ -101,8 +107,9 @@
             User = "homeserver";
             Group = "homeserver";
             ExecStart = "${neoPkg}/bin/neo web";
-            # /var/lib/neo-web ($STATE_DIRECTORY): version notes. On the root fs,
-            # so a Neo data restore does not rewind them.
+            # /var/lib/neo-web ($STATE_DIRECTORY): version notes and proposals. On the
+            # root fs, so a Neo data restore does not rewind them. User data goes
+            # to appdata ($NEO_APPDATA).
             StateDirectory = "neo-web";
             Restart = "always";
             RestartSec = 5;
@@ -126,6 +133,7 @@
             DOCKER_BINARY_PATH = "${config.virtualisation.docker.package}/bin/docker";
             ROCKET_ADDRESS = "127.0.0.1";
             ROCKET_PORT = toString cfg.port;
+            NEO_APPDATA = cfg.appdata;
             # Full links in assistant tool replies (proposal pages).
             NEO_PUBLIC_URL = lib.defaultTo "" (lib.neo.publicUrl config cfg);
             NEO_HELPER_BASH = "${pkgs.bash}/bin/bash";

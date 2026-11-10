@@ -1,9 +1,10 @@
-// Navigator sidebar layout: drag & drop order and groups (folders), per browser.
+// Navigator sidebar layout: drag & drop order and groups (folders).
 //
 // The server renders the services as a flat list of `.svc-btn` links in
 // #nav-services; this module re-arranges those same elements (never clones
 // them, so status dots / warm / active classes keep working) after the layout
-// saved in localStorage. Nothing is stored on the server.
+// saved for the tinyauth user on the server (/prefs/sidebar, routes/prefs.rs),
+// cached in localStorage; without a user it stays per browser.
 //
 // Layout: a list of nodes, each a service name (string) or a group
 // { id: "group:…", name, open, items: [service names] }. Groups do not nest.
@@ -189,20 +190,76 @@
     nodeId: nodeId,
   };
 
-  // --- Storage (best effort: private windows may throw) ---
+  // --- Storage ---
+  // localStorage is the copy rendered at once (best effort: private windows may
+  // throw). With a tinyauth user the server keeps the layout per user
+  // (/prefs/sidebar): its copy wins on load and when the tab comes back, and
+  // every change is pushed. Without one (404) the layout stays per browser.
 
+  var PREFS_URL = '/prefs/sidebar';
+  var PUSH_DELAY_MS = 400;
   var storage = NeoUtil.store('local');
+  var synced = false; // the server keeps a layout for this user
+  var pushTimer = null;
 
   function load() {
     return storage.getJson(STORAGE_KEY, null);
   }
 
+  function request(method, body) {
+    if (!win || !win.fetch) return Promise.reject(new Error('no fetch'));
+    var opts = { method: method, credentials: 'same-origin', headers: {} };
+    if (body !== undefined) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    return win.fetch(PREFS_URL, opts);
+  }
+
+  function push() {
+    pushTimer = null;
+    if (!synced) return;
+    var tree = load();
+    request(tree === null ? 'DELETE' : 'PUT', tree === null ? undefined : tree).catch(function () {});
+  }
+
+  function schedulePush() {
+    if (!synced) return;
+    if (pushTimer) win.clearTimeout(pushTimer);
+    pushTimer = win.setTimeout(push, PUSH_DELAY_MS);
+  }
+
   function save(tree) {
     storage.setJson(STORAGE_KEY, tree);
+    schedulePush();
   }
 
   function clear() {
     storage.remove(STORAGE_KEY);
+    schedulePush();
+  }
+
+  /**
+   * Fetch this user's layout. A stored one replaces the local copy (re-rendered
+   * when it differs); none yet takes this browser's layout as the first copy.
+   */
+  function pull() {
+    if (pushTimer) return; // a local change is on its way up
+    request('GET').then(function (res) {
+      if (!res.ok) { synced = false; return null; }
+      return NeoUtil.readJson(res, null);
+    }).then(function (body) {
+      if (!body) return;
+      synced = true;
+      var local = load();
+      if (body.layout === null || body.layout === undefined) {
+        if (local !== null) schedulePush();
+        return;
+      }
+      if (JSON.stringify(body.layout) === JSON.stringify(local)) return;
+      storage.setJson(STORAGE_KEY, body.layout);
+      if (!drag && !pending) render();
+    }).catch(function () {});
   }
 
   // --- DOM ---
@@ -294,7 +351,7 @@
     c.querySelectorAll('.neo-group').forEach(function (g) { g.remove(); });
     c.insertBefore(frag, c.firstChild);
 
-    var reset = doc.getElementById('sidebar-reset');
+    var reset = doc.getElementById('sidebar-reset-bar');
     if (reset) reset.classList.toggle('hidden', load() === null);
   }
 
@@ -367,6 +424,11 @@
 
   function sidebar() {
     return doc.getElementById('sidebar');
+  }
+
+  /** The part of the sidebar that scrolls (the reset footer stays put). */
+  function scroller() {
+    return doc.getElementById('sidebar-scroll') || sidebar();
   }
 
   function dragSource(target) {
@@ -471,7 +533,7 @@
     drag.y = y;
     drag.ghost.style.transform = 'translate(' + (x - drag.dx) + 'px,' + (y - drag.dy) + 'px) scale(1.08)';
     drag.target = hitTest(x, y);
-    var sb = sidebar();
+    var sb = scroller();
     if (!sb) return;
     var r = sb.getBoundingClientRect();
     var edge = 40;
@@ -481,7 +543,7 @@
   function autoscroll() {
     if (!drag) return;
     if (drag.scroll) {
-      var sb = sidebar();
+      var sb = scroller();
       if (sb) {
         sb.scrollTop += drag.scroll;
         drag.target = hitTest(drag.x, drag.y);
@@ -627,6 +689,11 @@
       doc.body.addEventListener('htmx:afterSwap', function (evt) {
         var t = evt.detail && evt.detail.target;
         if (t && t.id === 'nav-services') render();
+      });
+      pull();
+      // Pick up changes made on another device while this tab was in the background.
+      doc.addEventListener('visibilitychange', function () {
+        if (doc.visibilityState === 'visible') pull();
       });
     };
     NeoUtil.onReady(doc, start);

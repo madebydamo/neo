@@ -18,22 +18,27 @@
 
       <!-- Slim icon sidebar: always visible on md+, off-canvas drawer on mobile -->
       <aside id="sidebar"
-             class="fixed md:static inset-y-0 left-0 z-50 w-16 bg-base-200 border-r border-base-content/10 flex flex-col items-center pt-2 pb-3 gap-y-1 overflow-y-auto flex-shrink-0 h-dvh -translate-x-full md:translate-x-0 transition-transform duration-200 ease-out shadow-lg md:shadow-none"
+             class="fixed md:static inset-y-0 left-0 z-50 w-16 bg-base-200 border-r border-base-content/10 flex flex-col items-center flex-shrink-0 h-dvh -translate-x-full md:translate-x-0 transition-transform duration-200 ease-out shadow-lg md:shadow-none"
              data-open="false"
              aria-label="Services">
-        <div id="nav-services"
-             hx-get="/nav-services"
-             hx-trigger="load"
-             hx-swap="innerHTML"
-             class="flex flex-col items-center gap-y-1.5 w-full">
-          <span class="loading loading-spinner loading-xs opacity-40 mt-2" title="Loading services…"></span>
+        {{!-- Only the services scroll; the footer below stays in view. --}}
+        <div id="sidebar-scroll" class="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain pt-2 pb-3">
+          <div id="nav-services"
+               hx-get="/nav-services"
+               hx-trigger="load"
+               hx-swap="innerHTML"
+               class="flex flex-col items-center gap-y-1.5 w-full">
+            <span class="loading loading-spinner loading-xs opacity-40 mt-2" title="Loading services…"></span>
+          </div>
         </div>
-        {{!-- Shown by sidebar_layout.js once this browser has a custom order. --}}
-        <button type="button" id="sidebar-reset"
-                class="hidden mt-auto pt-3 btn btn-ghost btn-xs btn-square opacity-40 hover:opacity-100"
-                title="Reset sidebar order and groups" aria-label="Reset sidebar order and groups">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 102.2-5.3M4.5 4.5v4h4"/></svg>
-        </button>
+        {{!-- Shown by sidebar_layout.js once there is a custom order. --}}
+        <div id="sidebar-reset-bar" class="hidden flex-shrink-0 w-full py-1.5 border-t border-base-content/10">
+          <button type="button" id="sidebar-reset"
+                  class="nav-btn mx-auto w-12 h-8 rounded-xl flex items-center justify-center text-base-content/40 hover:text-base-content"
+                  title="Reset sidebar order and groups" aria-label="Reset sidebar order and groups">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 102.2-5.3M4.5 4.5v4h4"/></svg>
+          </button>
+        </div>
       </aside>
 
       <!-- Main viewer area -->
@@ -88,7 +93,7 @@
               <div class="text-lg font-semibold tracking-tight">Pick a service</div>
               <p class="text-sm text-base-content/60 mt-1 md:hidden">Open the menu and choose a service to load its web UI here.</p>
               <p class="text-sm text-base-content/60 mt-1 hidden md:block">Choose a service on the left to load its web UI here.</p>
-              <p class="text-xs text-base-content/45 mt-3">Drag icons to reorder them, drop one on another to make a group. <span class="md:hidden">Touch and hold to start dragging.</span> Saved in this browser.</p>
+              <p class="text-xs text-base-content/45 mt-3">Drag icons to reorder them, drop one on another to make a group. <span class="md:hidden">Touch and hold to start dragging.</span> Saved for your login on every device.</p>
               <p id="welcome-domain" class="text-[11px] text-base-content/40 mt-4">Loading domain…</p>
             </div>
           </div>
@@ -142,7 +147,7 @@
     <dialog id="sidebar-reset-dialog" class="modal modal-bottom sm:modal-middle">
       <form method="dialog" class="modal-box max-w-sm">
         <h3 class="font-semibold text-lg">Reset the sidebar?</h3>
-        <p class="text-sm text-base-content/70 mt-2">Your order and groups in this browser are removed and the default order comes back.</p>
+        <p class="text-sm text-base-content/70 mt-2">Your order and groups are removed on every device you use and the default order comes back.</p>
         <div class="modal-action">
           <button type="submit" value="cancel" class="btn btn-ghost btn-sm">Cancel</button>
           <button type="submit" value="reset" class="btn btn-warning btn-sm">Reset</button>

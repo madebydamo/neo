@@ -76,6 +76,7 @@
                 "^/static/neo-icon\\.png$"
               ];
             }
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/neo"
             // lib.neo.mkSystemdUnits [
               "neo-web"
               "neo-bootstrap"

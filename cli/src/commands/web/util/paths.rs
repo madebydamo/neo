@@ -19,6 +19,16 @@ pub fn state_dir() -> Option<PathBuf> {
     Some(PathBuf::from(home).join(".local/state/neo"))
 }
 
+/// neo-web appdata (per-user UI state such as sidebar layouts): `$NEO_APPDATA`, set by
+/// the neo service to its appdata folder so snapshots and backups cover it; else the
+/// state directory (local / dev runs).
+pub fn appdata_dir() -> Option<PathBuf> {
+    match std::env::var("NEO_APPDATA") {
+        Ok(a) if !a.is_empty() => Some(PathBuf::from(a)),
+        _ => state_dir(),
+    }
+}
+
 /// Contents of the token file named by `$var`, trimmed; `None` when unset, unreadable
 /// or empty (the feature behind the token stays off).
 pub fn read_token_file(var: &str) -> Option<String> {
