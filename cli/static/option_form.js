@@ -684,6 +684,34 @@ function optionForm() {
       return this.deepEqual(vals[name], defs[name]);
     },
 
+    /**
+     * attrsOf of submodules with `entryDefaults` (each entry's own field defaults, from Nix):
+     * drop every field that still equals its entry's default. A value a module computes per entry
+     * (say an app's schedule) then stays out of settings.toml, and later changes to it still apply.
+     * Entries are kept (possibly empty), so an entry the operator added is never lost.
+     */
+    pruneEntryDefaults(name, value) {
+      const ed = this.optionsByName?.[name]?.entryDefaults;
+      if (!ed || !value || typeof value !== 'object' || Array.isArray(value)) return value;
+      const out = {};
+      Object.keys(value).forEach((k) => {
+        const entry = value[k];
+        const defs = ed[k];
+        if (!defs || !entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          out[k] = entry;
+          return;
+        }
+        const kept = {};
+        Object.keys(entry).forEach((f) => {
+          if (!Object.prototype.hasOwnProperty.call(defs, f) || !this.deepEqual(entry[f], defs[f])) {
+            kept[f] = entry[f];
+          }
+        });
+        out[k] = kept;
+      });
+      return out;
+    },
+
     isAtOriginal(name) {
       if (!name) return true;
       const vals = this.values || {};
@@ -842,6 +870,13 @@ function optionForm() {
           const prepared = w.prepareSave.call(this, k);
           if (prepared !== undefined) {
             toSave[k] = prepared;
+          }
+          return;
+        }
+        if (this.optionsByName?.[k]?.entryDefaults) {
+          const pruned = this.pruneEntryDefaults(k, this.values[k]);
+          if (!this.deepEqual(pruned, this.pruneEntryDefaults(k, this.defaults[k]))) {
+            toSave[k] = pruned;
           }
           return;
         }

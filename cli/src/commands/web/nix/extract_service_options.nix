@@ -800,6 +800,48 @@
         );
 
   # `group` is the nearest declared ui.group (own or ancestor); see walk.
+  # attrsOf of submodules: each entry's own field defaults, from the submodule evaluated with that
+  # entry's name (option.valueMeta). The form leaves a field out of settings.toml while it equals
+  # its entry's default, so a default a module computes per entry (an app's schedule, say) is not
+  # frozen into settings.toml by an unrelated save. Secret fields are left out.
+  # The walk descends through getSubOptions (the documentation evaluation, without real entries),
+  # so the option is looked up again along its path in the evaluated configuration.
+  evaluatedOptionAt = pathList: let
+    go = node: ps:
+      if ps == []
+      then node
+      else let
+        set =
+          if isOption node
+          then tryOr {} (node.valueMeta.configuration.options or {})
+          else node;
+      in
+        go (set.${builtins.head ps} or null) (builtins.tail ps);
+  in
+    tryOr null (go root pathList);
+
+  entryDefaultsOf = ti: pathList: let
+    isEntrySubmodule = (ti.kind or null) == "attrsOf" && ((ti.elem or {}).kind or null) == "submodule";
+    o = evaluatedOptionAt pathList;
+    attrs = tryOr null (o.valueMeta.attrs or null);
+    fieldDefaults = opts:
+      builtins.listToAttrs (builtins.concatMap (k: let
+        f = opts.${k};
+        v = tryOr null (toSafeValue f.default);
+      in
+        if builtins.substring 0 1 k == "_" || !(isOption f) || tryOr true (f.secret or false) || !(builtins.hasAttr "default" f) || v == null
+        then []
+        else [
+          {
+            name = k;
+            value = v;
+          }
+        ]) (builtins.attrNames opts));
+  in
+    if !isEntrySubmodule || !(builtins.isAttrs attrs)
+    then null
+    else builtins.mapAttrs (_: m: tryOr {} (fieldDefaults m.configuration.options)) attrs;
+
   mkOptionRecord = group: path: o: let
     t = tryOr {} (o.type or {});
     uiOwn = toUiMeta (o.ui or null);
@@ -850,20 +892,27 @@
     helper = toHelperMeta (o.helper or null);
     # lib.neo.mkSecretOption: masked in the form (nix/lib/secrets.nix).
     secret = tryOr false (o.secret or false);
-  in {
-    name = path;
-    type = ti;
-    typeLabel = typeLabel ti;
-    default = toSafeValue defVal;
-    description = descVal;
-    example = toSafeValue exVal;
-    internal = internal;
-    readOnly = readOnly;
-    current = toSafeValue curVal;
-    rank = rank;
-    inherit helper secret;
-    ui = uiMeta;
-  };
+    entryDefaults = tryOr null (entryDefaultsOf ti curPath);
+  in
+    {
+      name = path;
+      type = ti;
+      typeLabel = typeLabel ti;
+      default = toSafeValue defVal;
+      description = descVal;
+      example = toSafeValue exVal;
+      internal = internal;
+      readOnly = readOnly;
+      current = toSafeValue curVal;
+      rank = rank;
+      inherit helper secret;
+      ui = uiMeta;
+    }
+    // (
+      if entryDefaults == null
+      then {}
+      else {inherit entryDefaults;}
+    );
 
   # Walk options into a flat form list, ordered by level-dependent ranks.
   # - Sibling keys are sorted at each nesting level (rank bands, then name).

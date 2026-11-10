@@ -407,3 +407,69 @@ test('visibleWhen on an entry field works for list indexes too', () => {
   assert.equal(form.isEntryFieldVisible('rows', 1, 'mode=a'), false);
   assert.equal(form.isEntryFieldVisible('rows', 1, ''), true);
 });
+
+test('save() leaves out attrsOf entry fields that equal their entry defaults', async () => {
+  const posts = [];
+  const document = installGlobals({
+    fetch: async (url, init) => {
+      posts.push({ url, body: JSON.parse(init.body) });
+      return { ok: true, json: async () => ({}), text: async () => '' };
+    },
+  });
+  document.set('options-pane', { dataset: { service: 'virtual-tester' } });
+  loadOptionForm();
+  const form = optionForm();
+  form.serviceName = 'virtual-tester';
+  form.optionsByName = {
+    testers: {
+      name: 'testers',
+      type: { kind: 'attrsOf', elem: { kind: 'submodule' } },
+      // Each entry's own defaults (here: what each app ships).
+      entryDefaults: {
+        kpi: { enabled: true, schedule: '*-*-* 05:00:00', model: 'opus' },
+        tmr: { enabled: true, schedule: '*-*-* 06:40:00', model: 'sonnet' },
+      },
+    },
+  };
+  form.values.testers = {
+    kpi: { enabled: true, schedule: '*-*-* 04:00:00', model: 'opus' },
+    tmr: { enabled: true, schedule: '*-*-* 06:40:00', model: 'sonnet' },
+    extra: { enabled: false },
+  };
+  form.defaults.testers = {};
+  form.originals.testers = {};
+  await form.save();
+  assert.equal(posts.length, 1);
+  assert.deepEqual(posts[0].body.testers, {
+    kpi: { schedule: '*-*-* 04:00:00' },
+    tmr: {},
+    extra: { enabled: false },
+  });
+});
+
+test('save() omits an attrsOf whose entries all equal their entry defaults', async () => {
+  const posts = [];
+  const document = installGlobals({
+    fetch: async (url, init) => {
+      posts.push({ url, body: JSON.parse(init.body) });
+      return { ok: true, json: async () => ({}), text: async () => '' };
+    },
+  });
+  document.set('options-pane', { dataset: { service: 'virtual-tester' } });
+  loadOptionForm();
+  const form = optionForm();
+  form.serviceName = 'virtual-tester';
+  form.optionsByName = {
+    testers: {
+      name: 'testers',
+      type: { kind: 'attrsOf', elem: { kind: 'submodule' } },
+      entryDefaults: { kpi: { schedule: '*-*-* 05:00:00' } },
+    },
+  };
+  form.values.testers = { kpi: { schedule: '*-*-* 05:00:00' } };
+  form.defaults.testers = { kpi: { schedule: '*-*-* 05:00:00' } };
+  form.originals.testers = form.values.testers;
+  await form.save();
+  assert.equal(posts.length, 1);
+  assert.equal('testers' in posts[0].body, false);
+});

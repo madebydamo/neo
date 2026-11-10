@@ -235,6 +235,14 @@ pub struct OptionSchema {
     /// Declarative presentation metadata from option.ui (widgets, keysFrom, …).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui: Option<OptionUi>,
+    /// attrsOf of submodules: field defaults per entry (`{<key>: {<field>: default}}`), from the
+    /// submodule evaluated with that entry's name. The form drops fields equal to these on save.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "entryDefaults"
+    )]
+    pub entry_defaults: Option<serde_json::Value>,
     /// Display label (ui.label or humanized last path segment). Filled in Rust.
     #[serde(default)]
     pub label: String,
