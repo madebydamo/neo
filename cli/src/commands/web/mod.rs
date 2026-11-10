@@ -9,11 +9,12 @@ use rocket::fs::FileServer;
 use rocket_dyn_templates::Template;
 
 mod action_bar;
-mod agent;
-mod agent_refs;
+pub(crate) mod agent;
+pub(crate) mod agent_refs;
+pub(crate) mod chat;
 mod diff;
 mod git;
-mod guides;
+pub(crate) mod guides;
 mod helper_exec;
 mod icons;
 mod locks;
@@ -95,10 +96,12 @@ pub fn web(settings_path: PathBuf, nix_cmd: &str, config_path: &str) -> Result<(
         let widgets_dir = PathBuf::from(&template_dir).join("options/widgets");
         mount_static_assets(rocket::build(), &static_dir, &widgets_dir)
             .manage(icons)
+            .manage(routes::chat_host(app_config.clone()))
             .manage(app_config)
             .attach(Template::fairing())
             .configure(rocket::Config::figment().merge(("template_dir", template_dir)))
             .mount("/", routes())
+            .mount("/", chat::routes())
             .launch()
             .await
             .map_err(|e| anyhow::anyhow!("rocket launch failed: {e}"))?;

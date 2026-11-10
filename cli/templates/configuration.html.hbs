@@ -89,19 +89,7 @@
                  hx-trigger="load"
                  hx-swap="outerHTML"></div>
             <div class="w-px h-6 bg-base-300 mx-0.5 hidden sm:block" aria-hidden="true"></div>
-            {{#if assistant}}
-              {{!-- data-neo-agent-launch: agent_chat.js paintHeader() sets data-agent-state
-                   (working / waiting / unread) for the spinner, color and dot. --}}
-              <button type="button" class="neo-agent-launch btn btn-sm btn-ghost gap-1.5 px-2 lg:px-3"
-                      data-neo-agent="general" data-neo-agent-title="Assistant" data-neo-agent-launch
-                      data-agent-state="" title="Ask the assistant" aria-label="Ask the assistant">
-                <span class="neo-agent-launch-icon" aria-hidden="true">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 015.5 4h13A1.5 1.5 0 0120 5.5v9a1.5 1.5 0 01-1.5 1.5H10l-4 4v-4H5.5A1.5 1.5 0 014 14.5z"/><path d="M8.5 9.5h7M8.5 12.5h4"/></svg>
-                  <span class="neo-agent-launch-dot"></span>
-                </span>
-                <span class="hidden lg:inline">Assistant</span>
-              </button>
-            {{/if}}
+            {{#if assistant}}{{> partials/agent_launch}}{{/if}}
             <button type="button"
                     hx-post="/flake/update" data-neo-lock="system" hx-target="#changes-body" hx-swap="innerHTML"
                     hx-confirm="Run flake update + template refresh?"

@@ -26,6 +26,11 @@ mod ws;
 
 use rocket::routes;
 
+/// neo web's chat drawer host (the shared routes: `web::chat::routes`).
+pub fn chat_host(config: std::sync::Arc<super::types::AppConfig>) -> super::chat::Host {
+    std::sync::Arc::new(agent::NeoHost(config))
+}
+
 pub fn routes() -> Vec<rocket::Route> {
     routes![
         pages::site_webmanifest,
@@ -53,15 +58,6 @@ pub fn routes() -> Vec<rocket::Route> {
         proposals::proposal_page,
         agent_tools::mcp,
         agent_tools::mcp_get,
-        agent::agent_open,
-        agent::agent_chat,
-        agent::agent_approve,
-        agent::agent_stop,
-        agent::agent_render,
-        agent::agent_ref_list,
-        agent::agent_sessions,
-        agent::agent_session_delete,
-        agent::agent_run,
         helpers::run_helper,
         oauth::run_oauth,
         save::save_service,

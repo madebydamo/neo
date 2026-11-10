@@ -1,6 +1,7 @@
 {{!-- Assistant chat drawer (static/agent_chat.js). Opened by any element with
      data-neo-agent="<context>"; hidden until then. Each open starts a new chat;
-     "Chats" lists past ones (#neo-agent-history replaces the log meanwhile). --}}
+     "Chats" lists past ones (#neo-agent-history replaces the log meanwhile).
+     Params: placeholder, refs_label (what @ mentions; default apps, settings, guides). --}}
 <aside id="neo-agent" class="hidden neo-agent fixed z-50 inset-0 sm:inset-auto sm:top-3 sm:bottom-3 sm:right-3 sm:w-[26rem] flex flex-col bg-base-100 sm:rounded-box border border-base-300 shadow-2xl"
        role="dialog" aria-label="Assistant chat">
   <div class="flex items-center gap-1.5 px-3 py-2.5 border-b border-base-300 shrink-0">
@@ -27,9 +28,9 @@
   </div>
   <form id="neo-agent-form" class="relative border-t border-base-300 p-2.5 flex items-end gap-2 shrink-0">
     {{!-- @ references popup: filled by refPicker() in agent_chat.js. --}}
-    <div id="neo-agent-refs" class="neo-agent-refs hidden" role="listbox" aria-label="Apps, settings and guides to mention"></div>
+    <div id="neo-agent-refs" class="neo-agent-refs hidden" role="listbox" aria-label="{{#if refs_label}}{{refs_label}}{{else}}Apps, settings and guides{{/if}} to mention"></div>
     <textarea id="neo-agent-input" rows="2" class="textarea textarea-sm flex-1 resize-none min-h-0 leading-snug"
-              placeholder="Ask the assistant… Type @ to mention an app, setting or guide." aria-label="Message"></textarea>
+              placeholder="{{#if placeholder}}{{placeholder}}{{else}}Ask the assistant… Type @ to mention an app, setting or guide.{{/if}}" aria-label="Message"></textarea>
     <button id="neo-agent-send" type="submit" class="btn btn-sm btn-primary">Send</button>
     <button id="neo-agent-stop" type="button" class="btn btn-sm hidden" onclick="NeoAgent.stop()">Stop</button>
   </form>
