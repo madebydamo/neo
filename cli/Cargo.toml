@@ -18,3 +18,4 @@ rocket_ws = "0.1"
 tokio = { version = "1", features = ["full"] }
 pulldown-cmark = { version = "0.13.5", default-features = false, features = ["html"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["json"] }
+csv = "1"

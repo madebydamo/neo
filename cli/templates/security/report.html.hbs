@@ -1,0 +1,193 @@
+{{!-- Security report (neo security serve, own subdomain). Read-only; context: serve.rs Page. --}}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>neo security</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="dark light">
+    <link rel="icon" href="/static/favicon/favicon.ico" sizes="any">
+    <link rel="stylesheet" href="/static/neo-ui.css" />
+    <script src="https://unpkg.com/alpinejs@3.17.5/dist/cdn.min.js" defer></script>
+  </head>
+  {{!-- neo-config: the neo web page padding (input.css). A margin on the
+       header would collapse through <body> and show the root background. --}}
+  <body class="neo-config bg-base-300 text-base-content min-h-dvh" data-theme="{{theme}}">
+    <div class="max-w-5xl mx-auto"
+         x-data="{ show: 'open', q: '',
+                   visible(el) {
+                     const s = el.dataset.status;
+                     const okS = this.show === 'all' || (this.show === 'open' ? s !== 'harmless' : s === this.show);
+                     const okQ = !this.q || this.q.toLowerCase().split(/\s+/).every(w => (el.dataset.search || '').includes(w));
+                     return okS && okQ;
+                   } }">
+      <header class="navbar h-14 min-h-14 sm:h-16 sm:min-h-16 gap-2 bg-base-100/60 backdrop-blur-xs rounded-box mb-4 sm:mb-6 shadow sticky z-30"
+              style="top: var(--neo-sticky-bar-top)">
+        <div class="flex-1 min-w-0 flex items-center gap-2 pl-1 sm:pl-2">
+          <img src="/static/neo-icon.png" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-contain" alt="">
+          <span class="text-xl sm:text-2xl font-bold tracking-tight">neo</span>
+          <span class="text-base sm:text-lg font-medium text-base-content/60 truncate">security</span>
+        </div>
+        <div class="flex-none flex items-center gap-2 pr-1 sm:pr-2 text-xs sm:text-sm text-base-content/60">
+          {{#if running}}
+            <span class="loading loading-ring loading-sm text-info"></span>
+            <span>Check running…</span>
+          {{else}}{{#unless empty}}
+            <span>Last check <time data-ts="{{finished_at}}">–</time></span>
+          {{/unless}}{{/if}}
+        </div>
+      </header>
+
+      {{#if empty}}
+        <div class="card bg-base-100 shadow">
+          <div class="card-body">
+            <h2 class="card-title">No check has run yet</h2>
+            <p class="text-sm text-base-content/70">The first check runs on its schedule. To start one now, run <code class="font-mono text-xs bg-base-200 px-1.5 py-0.5 rounded">systemctl start neo-security-scan</code> on the server. It downloads the vulnerability databases first, so it takes a while.</p>
+          </div>
+        </div>
+      {{else}}
+        <div class="mb-4 sm:mb-6">
+          <h1 class="text-xl sm:text-2xl font-semibold tracking-tight">Security check</h1>
+          <p class="text-sm text-base-content/60 mt-0.5">
+            Known security holes in the server's software{{#if system}} (NixOS system){{/if}} and {{images}} container image{{#unless (eq images 1)}}s{{/unless}}.
+            {{raw_findings}} scanner hits became {{group_count}} findings{{#if below_floor}}, {{below_floor}} below {{floor}} left out{{/if}}.
+            {{#if ai}}Reviewed by {{ai}}.{{else}}No AI review is set up, so nothing is sorted out yet.{{/if}}
+          </p>
+        </div>
+
+        {{#each errors}}
+          <div role="alert" class="alert alert-warning alert-soft mb-3 text-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="w-5 h-5 shrink-0" aria-hidden="true"><path d="M12 8v5M12 16.5v.01"/><path d="M10.3 3.9L2.6 17.5A2 2 0 004.3 20.5h15.4a2 2 0 001.7-3l-7.7-13.6a2 2 0 00-3.4 0z" stroke-linejoin="round"/></svg>
+            <span class="break-words min-w-0">{{this}}</span>
+          </div>
+        {{/each}}
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6">
+          <button type="button" class="card bg-base-100 shadow text-left transition-shadow hover:shadow-md" :class="show === 'attention' && 'ring-2 ring-error'" @click="show = show === 'attention' ? 'open' : 'attention'">
+            <div class="card-body p-3 sm:p-4 gap-0.5">
+              <span class="text-2xl sm:text-3xl font-semibold text-error">{{attention}}</span>
+              <span class="text-xs sm:text-sm text-base-content/70">Need attention</span>
+            </div>
+          </button>
+          <button type="button" class="card bg-base-100 shadow text-left transition-shadow hover:shadow-md" :class="show === 'waiting' && 'ring-2 ring-warning'" @click="show = show === 'waiting' ? 'open' : 'waiting'">
+            <div class="card-body p-3 sm:p-4 gap-0.5">
+              <span class="text-2xl sm:text-3xl font-semibold">{{waiting}}</span>
+              <span class="text-xs sm:text-sm text-base-content/70">Waiting for a fix upstream</span>
+            </div>
+          </button>
+          <button type="button" class="card bg-base-100 shadow text-left transition-shadow hover:shadow-md" :class="show === 'unreviewed' && 'ring-2 ring-base-content/40'" @click="show = show === 'unreviewed' ? 'open' : 'unreviewed'">
+            <div class="card-body p-3 sm:p-4 gap-0.5">
+              <span class="text-2xl sm:text-3xl font-semibold">{{unreviewed}}</span>
+              <span class="text-xs sm:text-sm text-base-content/70">Not reviewed yet</span>
+            </div>
+          </button>
+          <button type="button" class="card bg-base-100 shadow text-left transition-shadow hover:shadow-md" :class="show === 'harmless' && 'ring-2 ring-success'" @click="show = show === 'harmless' ? 'open' : 'harmless'">
+            <div class="card-body p-3 sm:p-4 gap-0.5">
+              <span class="text-2xl sm:text-3xl font-semibold text-success">{{harmless}}</span>
+              <span class="text-xs sm:text-sm text-base-content/70">Checked and harmless here</span>
+            </div>
+          </button>
+        </div>
+
+        {{#if unreviewed}}{{#if ai}}
+          <p class="text-sm text-base-content/60 mb-3">
+            The AI reviews at most {{max_reviews}} batches of findings per check (up to 8 of one package each), most severe and exposed first. The rest follow in the next checks{{#if running}}; this check is still reviewing{{/if}}.
+          </p>
+        {{/if}}{{/if}}
+
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
+          <div class="flex gap-1.5 flex-wrap">
+            <button type="button" class="btn btn-xs sm:btn-sm rounded-full font-normal" :class="show === 'open' ? 'btn-neutral' : 'btn-ghost bg-base-100 border-base-300'" @click="show = 'open'">Open</button>
+            <button type="button" class="btn btn-xs sm:btn-sm rounded-full font-normal" :class="show === 'all' ? 'btn-neutral' : 'btn-ghost bg-base-100 border-base-300'" @click="show = 'all'">Everything</button>
+          </div>
+          <label class="input input-sm sm:input-md w-full sm:w-80 sm:ml-auto">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 opacity-50 shrink-0" aria-hidden="true"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.45 4.39l3.08 3.08a.75.75 0 11-1.06 1.06l-3.08-3.08A7 7 0 012 9z" clip-rule="evenodd"/></svg>
+            <input type="search" x-model="q" class="grow" placeholder="Search CVE, package or service" aria-label="Search findings" autocomplete="off">
+          </label>
+        </div>
+
+        <div class="space-y-2">
+          {{#each groups}}
+            <details id="f-{{id}}" class="group bg-base-100 rounded-box shadow" data-status="{{status}}" data-search="{{search}}" x-show="visible($el)">
+              <summary class="list-none cursor-pointer p-3 sm:p-4 flex items-start gap-3 [&::-webkit-details-marker]:hidden">
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="badge badge-sm {{status_class}}">{{status_label}}</span>
+                    <span class="badge badge-sm badge-outline {{severity_class}}">{{severity}}{{#if cvss}} · {{cvss}}{{/if}}</span>
+                    <span class="font-mono text-xs sm:text-sm font-medium">{{vuln_id}}</span>
+                  </div>
+                  <div class="mt-1 text-sm">
+                    <span class="font-medium">{{package}}</span> <span class="text-base-content/60">{{version}}</span>
+                    <span class="text-base-content/50">· {{place_summary}}</span>
+                  </div>
+                  {{#if summary}}<p class="mt-1 text-sm text-base-content/80">{{summary}}</p>{{else}}{{#if title}}<p class="mt-1 text-sm text-base-content/60">{{title}}</p>{{/if}}{{/if}}
+                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 shrink-0 mt-0.5 opacity-50 transition-transform group-open:rotate-180" aria-hidden="true"><path fill-rule="evenodd" d="M5.2 7.2a.75.75 0 011.06 0L10 10.94l3.74-3.74a.75.75 0 111.06 1.06l-4.27 4.27a.75.75 0 01-1.06 0L5.2 8.26a.75.75 0 010-1.06z" clip-rule="evenodd"/></svg>
+              </summary>
+              <div class="px-3 sm:px-4 pb-4 pt-1 border-t border-base-content/10 space-y-3 text-sm">
+                {{#if explanation}}
+                  <div>
+                    <div class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-1">Why</div>
+                    <p>{{explanation}}</p>
+                  </div>
+                {{/if}}
+                {{#if action}}
+                  <div>
+                    <div class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-1">What to do</div>
+                    <p>{{action}}</p>
+                  </div>
+                {{/if}}
+                <div class="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <div class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-1">Where</div>
+                    <ul class="space-y-0.5">
+                      {{#each places}}<li><span class="font-mono text-xs break-all">{{name}}</span>{{#if detail}} <span class="text-base-content/60">— {{detail}}</span>{{/if}}</li>{{/each}}
+                    </ul>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-1">In use</div>
+                    <p class="{{loaded_class}}">{{loaded}}</p>
+                    {{#each exposure}}<p class="text-base-content/70">{{this}}</p>{{/each}}
+                  </div>
+                </div>
+                {{#if notes}}
+                  <ul class="list-disc pl-5 text-base-content/70 space-y-0.5">
+                    {{#each notes}}<li>{{this}}</li>{{/each}}
+                  </ul>
+                {{/if}}
+                {{#if description}}
+                  <details class="text-base-content/70">
+                    <summary class="cursor-pointer text-xs font-semibold uppercase tracking-wide text-base-content/50">Advisory</summary>
+                    {{#if title}}<p class="mt-1 font-medium">{{title}}</p>{{/if}}
+                    <p class="mt-1 whitespace-pre-line">{{description}}</p>
+                  </details>
+                {{/if}}
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-base-content/50 pt-1">
+                  {{#if fixed_version}}<span>Fixed in {{fixed_version}}</span>{{/if}}
+                  <span>Found by {{scanners}}</span>
+                  {{#if by}}<span>Verdict: {{by}}{{#if confidence}} ({{confidence}} confidence){{/if}}</span>{{/if}}
+                  <span class="font-mono" title="neo security accept {{id}}">id {{id}}</span>
+                  {{#if url}}<a class="link" href="{{url}}" target="_blank" rel="noopener noreferrer">Details</a>{{/if}}
+                </div>
+              </div>
+            </details>
+          {{/each}}
+        </div>
+
+        <p class="mt-6 text-xs text-base-content/50">
+          Mark a finding as not relevant with <code class="font-mono">neo security accept &lt;id&gt;</code> on the server; it stays that way across checks. <code class="font-mono">neo security reset &lt;id&gt;</code> has it reviewed again.
+        </p>
+      {{/if}}
+    </div>
+    <script>
+      for (const t of document.querySelectorAll('time[data-ts]')) {
+        const s = Number(t.dataset.ts);
+        if (!s) continue;
+        const d = new Date(s * 1000);
+        t.dateTime = d.toISOString();
+        t.textContent = d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+        t.title = d.toString();
+      }
+    </script>
+  </body>
+</html>

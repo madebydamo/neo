@@ -128,6 +128,11 @@ enum Commands {
         #[command(subcommand)]
         action: SecretsAction,
     },
+    /// Vulnerability scan of the system and the container images (services.security).
+    Security {
+        #[command(subcommand)]
+        action: commands::security::SecurityAction,
+    },
     /// The backup (services.backup): encryption key and reading it from elsewhere.
     Backup {
         #[command(subcommand)]
@@ -205,6 +210,13 @@ fn run(cli: Cli) -> Result<()> {
             let _ = Cli::command().print_help();
             return Ok(());
         }
+    };
+
+    // Runs as root (scan) or as the report page's user; needs neither the
+    // settings nor the homeserver re-exec below.
+    let command = match command {
+        Commands::Security { action } => return commands::security::security(action),
+        other => other,
     };
 
     let etc_settings = PathBuf::from("/etc/neo/settings.toml");
@@ -331,6 +343,8 @@ fn run(cli: Cli) -> Result<()> {
             SecretsAction::Disable => commands::secrets::disable(&config_path, dry_run),
             SecretsAction::Rekey => commands::secrets::rekey(&config_path, dry_run),
         },
+        // Dispatched before the settings are loaded (see above).
+        Commands::Security { action } => commands::security::security(action),
         Commands::Backup { action } => match action {
             BackupAction::RotateKey => commands::backup::rotate_key(&doc, dry_run, sudo_cmd),
             BackupAction::ExtractConfig {
@@ -408,7 +422,8 @@ fn command_lock(command: &Commands) -> Option<(LockSpec, OpInfo, Option<Operatio
         | Commands::Lg
         | Commands::Generation { .. }
         | Commands::Restore(_)
-        | Commands::Backup { .. } => None,
+        | Commands::Backup { .. }
+        | Commands::Security { .. } => None,
     }
 }
 

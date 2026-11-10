@@ -14,6 +14,7 @@ pub mod nuke;
 pub mod paste_settings;
 pub mod restore;
 pub mod secrets;
+pub mod security;
 pub mod update;
 pub mod update_inputs;
 pub mod web;
