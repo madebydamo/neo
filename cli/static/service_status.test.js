@@ -180,3 +180,30 @@ test('apply: failed request paints grey unknown', () => {
   assert.equal(a.attrs['data-state'], 'none');
   assert.equal(a.attrs['aria-label'], 'immich: status unknown');
 });
+
+test('paintFresh: re-rendered dots take the last state when it covers their units', () => {
+  const unpainted = (els) => ({
+    querySelectorAll: () => els.filter((e) => e.getAttribute('data-state') === null),
+  });
+  const same = fakeEl({ 'data-service-status': 'immich', 'data-units': 'docker-immich-db docker-immich' });
+  const grown = fakeEl({ 'data-service-status': 'pihole', 'data-units': 'docker-pihole gravity' });
+  const added = fakeEl({ 'data-service-status': 'vikunja', 'data-units': 'vikunja' });
+  const painted = fakeEl({ 'data-service-status': 'immich', 'data-units': 'docker-immich', 'data-state': 'ok' });
+  const left = dots.paintFresh(unpainted([same, grown, added, painted]), {
+    services: {
+      immich: {
+        units: [
+          { name: 'docker-immich', active: 'active', load: 'loaded', timer: false },
+          { name: 'docker-immich-db', active: 'failed', load: 'loaded', timer: false },
+        ],
+      },
+      pihole: { units: [{ name: 'docker-pihole', active: 'active', load: 'loaded', timer: false }] },
+    },
+  });
+  assert.equal(left, 2);
+  assert.equal(same.attrs['data-state'], 'failed');
+  assert.equal(grown.attrs['data-state'], undefined);
+  assert.equal(added.attrs['data-state'], undefined);
+  assert.equal(painted.attrs['data-state'], 'ok');
+  assert.equal(dots.paintFresh(unpainted([grown]), null), 1);
+});

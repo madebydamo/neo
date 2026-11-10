@@ -128,16 +128,40 @@
     }
   }
 
+  /**
+   * Paint unpainted dots under `scope` from an earlier response, where it covered
+   * exactly the dot's units (a re-rendered grid shows the last state, not "checking",
+   * until the next request answers). Returns how many dots are still unpainted.
+   */
+  function paintFresh(scope, resp) {
+    var els = scope.querySelectorAll('[data-service-status]:not([data-state])');
+    var left = 0;
+    for (var i = 0; i < els.length; i++) {
+      var svc = resp && resp.services && resp.services[els[i].getAttribute('data-service-status')];
+      var units = words(els[i].getAttribute('data-units'));
+      var known = svc && svc.units && svc.units.map(function (u) { return u.name; });
+      if (known && known.length === units.length && units.every(function (u) { return known.indexOf(u) >= 0; })) {
+        paint(els[i], summarize(entriesFor(resp, els[i].getAttribute('data-service-status'))));
+      } else {
+        left++;
+      }
+    }
+    return left;
+  }
+
   var POLL_MS = 15000;
 
   var dots = {
     POLL_MS: POLL_MS,
     collectRequest: collectRequest,
     apply: apply,
+    paintFresh: paintFresh,
     _timer: null,
     _inflight: false,
     _again: false,
     _win: null,
+    /** Last successful response (paints re-rendered dots at once). */
+    _last: null,
 
     /** One batched request for all dots on the page (coalesces overlapping calls). */
     refresh: function () {
@@ -159,7 +183,10 @@
         body: JSON.stringify(req.body),
       })
         .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (resp) { apply(doc, resp || {}); })
+        .then(function (resp) {
+          dots._last = resp;
+          apply(doc, resp || {});
+        })
         .catch(function () { apply(doc, {}); })
         .then(done, done);
     },
@@ -197,14 +224,14 @@
         else dots._schedule(); // clears the timer while hidden
       });
 
-      // htmx swaps (grid partial, nav-services) may bring new dots: fetch once for them.
+      // htmx swaps (grid partial, nav-services, a newer evaluation's grid) may bring
+      // new dots: paint them from the last response, then fetch once for them. The
+      // whole page is checked: after an outerHTML swap detail.target is the replaced
+      // (detached, already painted) element, not the new one.
       var pendingSwap = null;
-      doc.addEventListener('htmx:afterSettle', function (evt) {
-        var t = evt && evt.detail && evt.detail.target;
-        if (!t || !t.querySelector) return;
-        var fresh = (t.matches && t.matches('[data-service-status]')) ||
-          t.querySelector('[data-service-status]:not([data-state])');
-        if (!fresh) return;
+      doc.addEventListener('htmx:afterSettle', function () {
+        if (!doc.querySelector('[data-service-status]:not([data-state])')) return;
+        paintFresh(doc, dots._last);
         if (pendingSwap) win.clearTimeout(pendingSwap);
         pendingSwap = win.setTimeout(function () { pendingSwap = null; dots.kick(); }, 50);
       });
