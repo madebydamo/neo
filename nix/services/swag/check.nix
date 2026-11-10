@@ -57,5 +57,24 @@
 
       touch "$out"
     '';
+
+    # Regression: the PROXY-protocol port stays on loopback and out of the firewall.
+    # nginx takes the visitor address from the PROXY header of any private peer, so
+    # an open port lets every device in the LAN choose the address SWAG sees.
+    checks.swag-proxy-protocol-loopback = pkgs.runCommand "swag-proxy-protocol-loopback" {} ''
+      set -euo pipefail
+      module=${./default.nix}
+
+      uses="$(grep -nF 'localHttpsProxyProtocolPort' "$module")"
+      [ -n "$uses" ]
+      open="$(printf '%s\n' "$uses" | grep -vF '"127.0.0.1:''${toString cfg.localHttpsProxyProtocolPort}:' || true)"
+      if [ -n "$open" ]; then
+        echo "ERROR: SWAG's PROXY-protocol port may only be published on 127.0.0.1:" >&2
+        printf '%s\n' "$open" >&2
+        exit 1
+      fi
+
+      touch "$out"
+    '';
   };
 }

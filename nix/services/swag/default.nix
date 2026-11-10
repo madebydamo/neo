@@ -249,8 +249,6 @@
           networking.firewall.extraStopCommands = "
             iptables -D nixos-fw -i br+ -j ACCEPT
           ";
-          networking.firewall.allowedTCPPorts = [cfg.localHttpsProxyProtocolPort];
-
           systemd.services.docker-swag = {
             preStart = lib.concatStringsSep "\n" ([
                 "rm -r ${appdataSwag}/nginx/proxy-confs || true"
@@ -297,7 +295,9 @@
             ports = [
               "${toString cfg.localHttpPort}:80"
               "${toString cfg.localHttpsPort}:443"
-              "${toString cfg.localHttpsProxyProtocolPort}:${toString ppContainerPort}"
+              # Loopback only: nginx believes the PROXY header of any private peer,
+              # so whoever reaches this port chooses the visitor address SWAG sees.
+              "127.0.0.1:${toString cfg.localHttpsProxyProtocolPort}:${toString ppContainerPort}"
             ];
             capabilities = {
               NET_ADMIN = true;

@@ -48,7 +48,8 @@
         }
       '';
 
-      # Trust private peers that may send PROXY protocol (streamproxy veth, docker, rathole/localhost).
+      # Trust private peers that may send PROXY protocol. The host publishes the port on
+      # loopback only (rathole, streamproxy-swag-pp), so they arrive from the docker gateway.
       realIpConf = ''
         set_real_ip_from 10.0.0.0/8;
         set_real_ip_from 172.16.0.0/12;

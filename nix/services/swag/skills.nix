@@ -19,7 +19,7 @@
         - Proxy confs: `appdata/swag/nginx/proxy-confs/<sub>.subdomain.conf`
         - Dual HTTPS listeners (`listen-https.conf`):
           - **443** plain TLS — LAN / direct
-          - **8443** TLS + PROXY protocol — streamproxy / rathole (host port `localHttpsProxyProtocolPort`, 9982 when streamproxy co-located)
+          - **8443** TLS + PROXY protocol — streamproxy / rathole (host port `localHttpsProxyProtocolPort` on 127.0.0.1 only, 9982 when streamproxy co-located)
         - Docker mods: swag-dashboard + swag-dbip
         - Geo lists: `services.swag.geo` (empty = unrestricted); `ipWhitelist` / `ipBlacklist` (IP/CIDR) beat country/continent rules
         - Real client IPs: only on the PROXY-protocol path; old access.log lines stay private-proxy IPs until new traffic

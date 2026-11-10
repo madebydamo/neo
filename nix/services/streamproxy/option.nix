@@ -5,7 +5,10 @@
     ...
   }:
     with lib;
-    with {inherit (lib.neo) mkOption mkEnableOption;}; {
+    with {inherit (lib.neo) mkOption mkEnableOption;}; let
+      # The submodule below shadows `config`.
+      swagEnabled = config.neo.services.swag.enabled or false;
+    in {
       options.neo.services.streamproxy = mkOption {
         type = types.submodule (
           {config, ...}: let
@@ -117,11 +120,13 @@
                   description = "Automatically assigned ports for each streamproxy entry";
                 };
               }
-              // lib.neo.mkSystemdUnits [
-                "streamproxy-local80"
-                "streamproxy-local443"
-                "container@streamproxy"
-              ]
+              // lib.neo.mkSystemdUnits ([
+                  "streamproxy-local80"
+                  "streamproxy-local443"
+                  "container@streamproxy"
+                ]
+                # Only exists next to a local SWAG.
+                ++ lib.optional swagEnabled "streamproxy-swag-pp")
               // lib.neo.mkServiceMeta {
                 category = "Core";
                 license = {

@@ -89,7 +89,7 @@
                 type = types.port;
                 internal = true;
                 default = 8443;
-                description = "Host port mapped to container 8443 (TLS + PROXY protocol for streamproxy/rathole). Overridden to 9982 with streamproxy.";
+                description = "Loopback port mapped to container 8443 (TLS + PROXY protocol for streamproxy/rathole). Overridden to 9982 with streamproxy.";
               };
               geo = mkOption {
                 type = types.submodule {

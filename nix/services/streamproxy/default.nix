@@ -12,7 +12,8 @@
       swagCfg = config.neo.services.swag;
       swagEnabled = swagCfg.enabled;
       swagHttp = swagCfg.localHttpPort;
-      # PROXY-protocol HTTPS port on local SWAG (plain 443 stays for LAN).
+      # PROXY-protocol HTTPS port on local SWAG (plain 443 stays for LAN). Loopback
+      # only on the host; streamproxy-swag-pp hands it to the container.
       swagHttpsPP = swagCfg.localHttpsProxyProtocolPort;
       swagDomain = swagCfg.domain;
       streamproxyIp = "192.168.100.11";
@@ -181,7 +182,24 @@
         systemd.services = {
           streamproxy-local80 = streamproxyForwarding 80;
           streamproxy-local443 = streamproxyForwarding 443;
+          # SWAG publishes its PROXY-protocol port on loopback only, which the
+          # container cannot reach: pass it on from the container's host address.
+          streamproxy-swag-pp = mkIf swagEnabled {
+            description = "Forward the streamproxy container to SWAG's PROXY-protocol port";
+            after = ["container@streamproxy.service"];
+            # The address lives on the container's veth and goes away with it.
+            partOf = ["container@streamproxy.service"];
+            wantedBy = ["multi-user.target" "container@streamproxy.service"];
+
+            serviceConfig = {
+              ExecStart = "${pkgs.socat}/bin/socat TCP-LISTEN:${toString swagHttpsPP},bind=${localIp},fork,reuseaddr TCP:127.0.0.1:${toString swagHttpsPP}";
+              Restart = "always";
+              RestartSec = 2;
+              DynamicUser = true;
+            };
+          };
         };
+        networking.firewall.interfaces."ve-streamproxy".allowedTCPPorts = mkIf swagEnabled [swagHttpsPP];
 
         containers.streamproxy = {
           autoStart = true;
