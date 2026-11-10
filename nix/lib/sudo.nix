@@ -8,6 +8,9 @@
 #   2. /run/current-system/sw/bin/<name> (secure_path / current system)
 #   3. /nix/store/*-<pname>-*/bin/<name> (versioned store paths / generations)
 #   4. /nix/store/*-<pname>/bin/<name> (unversioned, e.g. writeShellApplication)
+#
+# The globs rely on `Defaults fast_glob` (nix/modules/core/base.nix): without it
+# sudo reads all of /nix/store for each of them on every call.
 {lib, ...}: {
   libExtensions.sudo = {
     neo = rec {

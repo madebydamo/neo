@@ -19,6 +19,14 @@
       requireDir = "/home/homeserver";
     };
   in {
+    # The lib.neo.mkSudoCommand rules glob /nix/store/*-<pname>-*/bin/… With
+    # glob(3) sudo lists the whole store for each such rule on every call
+    # (about 2 s per `sudo -n` from neo-web in the VM); fnmatch(3) matches the
+    # same paths (`*` never crosses `/`) without reading the filesystem.
+    security.sudo.extraConfig = ''
+      Defaults fast_glob
+    '';
+
     boot.loader = {
       grub = {
         enable = true;
