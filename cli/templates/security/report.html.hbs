@@ -24,7 +24,9 @@
          x-data="{ show: 'open', q: '',
                    visible(el) {
                      const s = el.dataset.status;
-                     const okS = this.show === 'all' || (this.show === 'open' ? s !== 'harmless' : s === this.show);
+                     const okS = this.show === 'all'
+                       || (this.show === 'new' ? el.dataset.new === 'true'
+                         : this.show === 'open' ? s !== 'harmless' : s === this.show);
                      const okQ = !this.q || this.q.toLowerCase().split(/\s+/).every(w => (el.dataset.search || '').includes(w));
                      return okS && okQ;
                    } }">
@@ -35,13 +37,21 @@
           <span class="text-xl sm:text-2xl font-bold tracking-tight">neo</span>
           <span class="text-base sm:text-lg font-medium text-base-content/60 truncate">security</span>
         </div>
-        <div class="flex-none flex items-center gap-2 pr-1 sm:pr-2 text-xs sm:text-sm text-base-content/60">
-          {{#if running}}
+        {{!-- Check state: painted by the script at the end (polls /status). --}}
+        <div id="scan-state" class="flex-none flex items-center gap-2 pr-1 sm:pr-2 text-xs sm:text-sm text-base-content/60"
+             data-scanning="{{#if scanning}}true{{/if}}{{#if running}}true{{/if}}" data-finished="{{finished_at}}">
+          <span data-when="busy" class="hidden items-center gap-2">
             <span class="loading loading-ring loading-sm text-info"></span>
             <span>Check running…</span>
-          {{else}}{{#unless empty}}
-            <span class="hidden sm:inline">Last check <time data-ts="{{finished_at}}">–</time></span>
-          {{/unless}}{{/if}}
+          </span>
+          <button type="button" data-when="done" class="hidden btn btn-sm btn-primary" onclick="location.reload()">New results · Reload</button>
+          <span data-when="idle" class="hidden items-center gap-2">
+            {{#unless empty}}<span class="hidden md:inline">Last check <time data-ts="{{finished_at}}">–</time></span>{{/unless}}
+            <button type="button" class="btn btn-sm btn-ghost gap-1.5 px-2" onclick="requestCheck(this)" title="Check the system and all images now">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0112.9-5.2L19.5 9M19.5 4.5V9H15M19.5 12a7.5 7.5 0 01-12.9 5.2L4.5 15M4.5 19.5V15H9"/></svg>
+              <span class="hidden sm:inline">Check now</span>
+            </button>
+          </span>
           {{#if assistant}}{{> partials/agent_launch context="security:general" title="Security assistant"}}{{/if}}
         </div>
       </header>
@@ -50,7 +60,7 @@
         <div class="card bg-base-100 shadow">
           <div class="card-body">
             <h2 class="card-title">No check has run yet</h2>
-            <p class="text-sm text-base-content/70">The first check runs on its schedule. To start one now, run <code class="font-mono text-xs bg-base-200 px-1.5 py-0.5 rounded">systemctl start neo-security-scan</code> on the server. It downloads the vulnerability databases first, so it takes a while.</p>
+            <p class="text-sm text-base-content/70">The first check runs on its schedule, or now with Check now at the top. It downloads the vulnerability databases first, so it takes a while.</p>
           </div>
         </div>
       {{else}}
@@ -59,6 +69,7 @@
           <p class="text-sm text-base-content/60 mt-0.5">
             Known security holes in the server's software{{#if system}} (NixOS system){{/if}} and {{images}} container image{{#unless (eq images 1)}}s{{/unless}}.
             {{raw_findings}} scanner hits became {{group_count}} findings{{#if below_floor}}, {{below_floor}} below {{floor}} left out{{/if}}.
+            {{#if new_count}}<span class="font-medium text-base-content/80">{{new_count}} new since the last check.</span> {{/if}}
             {{#if ai}}Reviewed by {{ai}}.{{else}}No AI review is set up, so nothing is sorted out yet.{{/if}}
           </p>
         </div>
@@ -106,6 +117,7 @@
         <div class="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
           <div class="flex gap-1.5 flex-wrap">
             <button type="button" class="btn btn-xs sm:btn-sm rounded-full font-normal" :class="show === 'open' ? 'btn-neutral' : 'btn-ghost bg-base-100 border-base-300'" @click="show = 'open'">Open</button>
+            {{#if new_count}}<button type="button" class="btn btn-xs sm:btn-sm rounded-full font-normal" :class="show === 'new' ? 'btn-neutral' : 'btn-ghost bg-base-100 border-base-300'" @click="show = 'new'">New ({{new_count}})</button>{{/if}}
             <button type="button" id="show-all" class="btn btn-xs sm:btn-sm rounded-full font-normal" :class="show === 'all' ? 'btn-neutral' : 'btn-ghost bg-base-100 border-base-300'" @click="show = 'all'">Everything</button>
           </div>
           <label class="input input-sm sm:input-md w-full sm:w-80 sm:ml-auto">
@@ -116,10 +128,11 @@
 
         <div class="space-y-2">
           {{#each groups}}
-            <details id="f-{{id}}" class="group bg-base-100 rounded-box shadow scroll-mt-24 sm:scroll-mt-28" data-status="{{status}}" data-search="{{search}}" x-show="visible($el)">
+            <details id="f-{{id}}" class="group bg-base-100 rounded-box shadow scroll-mt-24 sm:scroll-mt-28" data-status="{{status}}" data-new="{{#if new}}true{{/if}}" data-search="{{search}}" x-show="visible($el)">
               <summary class="list-none cursor-pointer p-3 sm:p-4 flex items-start gap-3 [&::-webkit-details-marker]:hidden">
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-1.5">
+                    {{#if new}}<span class="badge badge-sm badge-info">New</span>{{/if}}
                     <span class="badge badge-sm {{status_class}}">{{status_label}}</span>
                     <span class="badge badge-sm badge-outline {{severity_class}}">{{severity}}{{#if cvss}} · {{cvss}}{{/if}}</span>
                     <span class="font-mono text-xs sm:text-sm font-medium">{{vuln_id}}</span>
@@ -133,6 +146,9 @@
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 shrink-0 mt-0.5 opacity-50 transition-transform group-open:rotate-180" aria-hidden="true"><path fill-rule="evenodd" d="M5.2 7.2a.75.75 0 011.06 0L10 10.94l3.74-3.74a.75.75 0 111.06 1.06l-4.27 4.27a.75.75 0 01-1.06 0L5.2 8.26a.75.75 0 010-1.06z" clip-rule="evenodd"/></svg>
               </summary>
               <div class="px-3 sm:px-4 pb-4 pt-1 border-t border-base-content/10 space-y-3 text-sm">
+                {{#if note}}
+                  <p class="text-xs text-base-content/60">{{note}}</p>
+                {{/if}}
                 {{#if explanation}}
                   <div>
                     <div class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-1">Why</div>
@@ -170,14 +186,38 @@
                     <p class="mt-1 whitespace-pre-line">{{description}}</p>
                   </details>
                 {{/if}}
-                {{#if ../assistant}}
-                  <button type="button" class="btn btn-sm gap-1.5"
-                          data-neo-agent="security:{{id}}" data-neo-agent-title="{{vuln_id}} in {{package}}"
-                          data-neo-agent-starter="Does {{vuln_id}} in {{package}} matter on my server, and what can I do?">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 015.5 4h13A1.5 1.5 0 0120 5.5v9a1.5 1.5 0 01-1.5 1.5H10l-4 4v-4H5.5A1.5 1.5 0 014 14.5z"/><path d="M8.5 9.5h7M8.5 12.5h4"/></svg>
-                    Ask the assistant
-                  </button>
-                {{/if}}
+                {{!-- Decisions (decisions.json, also neo security accept|reset). --}}
+                <div class="flex flex-wrap items-center gap-2" x-data="{ accepting: false, reason: '', busy: false, err: '' }">
+                  {{#if ../assistant}}
+                    <button type="button" class="btn btn-sm gap-1.5"
+                            data-neo-agent="security:{{id}}" data-neo-agent-title="{{vuln_id}} in {{package}}"
+                            data-neo-agent-starter="Does {{vuln_id}} in {{package}} matter on my server, and what can I do?">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 015.5 4h13A1.5 1.5 0 0120 5.5v9a1.5 1.5 0 01-1.5 1.5H10l-4 4v-4H5.5A1.5 1.5 0 014 14.5z"/><path d="M8.5 9.5h7M8.5 12.5h4"/></svg>
+                      Ask the assistant
+                    </button>
+                  {{/if}}
+                  {{#if accepted}}
+                    <button type="button" class="btn btn-sm btn-ghost" :disabled="busy"
+                            @click="busy = true; decideFinding('{{id}}', 'reset').catch(e => { err = e.message; busy = false })"
+                            title="Undo: the AI reviews it again">Undo “not relevant”</button>
+                  {{else}}
+                    <button type="button" class="btn btn-sm" x-show="!accepting"
+                            @click="accepting = true; $nextTick(() => $refs.reason.focus())">Not relevant here</button>
+                    {{#if reviewable}}
+                      <button type="button" class="btn btn-sm btn-ghost" x-show="!accepting" :disabled="busy"
+                              @click="busy = true; decideFinding('{{id}}', 'reset').catch(e => { err = e.message; busy = false })"
+                              title="Have the AI look at it again">Review again</button>
+                    {{/if}}
+                    <form class="flex flex-wrap items-center gap-2 w-full" x-show="accepting" x-cloak
+                          @submit.prevent="busy = true; decideFinding('{{id}}', 'accept', reason).catch(e => { err = e.message; busy = false })">
+                      <input x-ref="reason" x-model="reason" maxlength="500" class="input input-sm flex-1 min-w-48"
+                             placeholder="Why? Optional, e.g. we do not use that feature" aria-label="Reason">
+                      <button type="submit" class="btn btn-sm btn-primary" :disabled="busy">Mark as not relevant</button>
+                      <button type="button" class="btn btn-sm btn-ghost" @click="accepting = false">Cancel</button>
+                    </form>
+                  {{/if}}
+                  <span class="text-xs text-error" x-show="err" x-text="err"></span>
+                </div>
                 <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-base-content/50 pt-1">
                   {{#if fixed_version}}<span>Fixed in {{fixed_version}}</span>{{/if}}
                   <span>Found by {{scanners}}</span>
@@ -191,7 +231,7 @@
         </div>
 
         <p class="mt-6 text-xs text-base-content/50">
-          Mark a finding as not relevant with <code class="font-mono">neo security accept &lt;id&gt;</code> on the server; it stays that way across checks. <code class="font-mono">neo security reset &lt;id&gt;</code> has it reviewed again.
+          “Not relevant here” stays across checks and later versions of the package while the finding is still reported. On the server the same works with <code class="font-mono">neo security accept &lt;id&gt;</code> and <code class="font-mono">neo security reset &lt;id&gt;</code>.
         </p>
       {{/if}}
     </div>
@@ -207,6 +247,54 @@
         requestAnimationFrame(() => d.scrollIntoView({ block: 'start' }));
       }
       window.addEventListener('hashchange', openFinding);
+
+      // Check now + live state. A finished check offers a reload instead of
+      // reloading itself, so an open chat is not cut off.
+      const stateEl = document.getElementById('scan-state');
+      function paintState(mode) {
+        for (const el of stateEl.querySelectorAll('[data-when]')) {
+          const on = el.dataset.when === mode;
+          el.classList.toggle('hidden', !on);
+          el.classList.toggle('inline-flex', on && el.tagName === 'SPAN');
+        }
+      }
+      let polling = null;
+      function poll() {
+        if (polling) return;
+        paintState('busy');
+        polling = setInterval(async () => {
+          try {
+            const st = await (await fetch('/status', { credentials: 'same-origin' })).json();
+            if (!st.running && !st.requested) {
+              clearInterval(polling);
+              polling = null;
+              paintState(String(st.finished_at) !== stateEl.dataset.finished ? 'done' : 'idle');
+            }
+          } catch (_) { /* keep polling */ }
+        }, 10000);
+      }
+      // Accept / undo / review again, then reload on this finding.
+      async function decideFinding(id, action, reason) {
+        const r = await fetch('/findings/' + id + '/' + action, { method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(action === 'accept' ? { reason: reason || '' } : {}) });
+        if (!r.ok) throw new Error((await r.text()) || r.statusText);
+        location.hash = 'f-' + id;
+        location.reload();
+      }
+      async function requestCheck(btn) {
+        btn.disabled = true;
+        try {
+          const r = await fetch('/scan', { method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' }, body: '{}' });
+          if (!r.ok) throw new Error(await r.text());
+          poll();
+        } catch (e) {
+          btn.disabled = false;
+          btn.title = 'Could not start a check: ' + e.message;
+          btn.classList.add('text-error');
+        }
+      }
+      if (stateEl.dataset.scanning) poll(); else paintState('idle');
       openFinding();
       for (const t of document.querySelectorAll('time[data-ts]')) {
         const s = Number(t.dataset.ts);

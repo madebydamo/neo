@@ -7,7 +7,8 @@
 # /proc/<pid>/maps of every process (what a vulnerable library is loaded by).
 #
 # neo-security-web (homeserver): `neo security serve`, the read-only report
-# page on 127.0.0.1:port; SWAG + tinyauth in front. It only reads report.json;
+# page on 127.0.0.1:port; SWAG + tinyauth in front. It reads report.json and
+# writes only decisions.json (the operator's accepts and review requests);
 # with Hermes' API on it also carries neo web's chat drawer (ask about a
 # finding, @ to tag findings).
 #
@@ -25,6 +26,16 @@
     hermes = config.neo.services.hermes;
     appdata = cfg.appdata;
     cacheDir = "/var/cache/neo-security";
+    # Check now (the page, as homeserver) and the update hooks (root) leave a
+    # request here; neo-security-scan.path starts the scan. Content: `manual`,
+    # `update` (skipped when nothing changed) or `update <system>` (waits until
+    # that system is the running one).
+    requestDir = "/run/neo-security";
+    requestFile = "${requestDir}/scan-request";
+    requestUpdate = what: ''
+      mkdir -p ${requestDir}
+      [ -e ${requestFile} ] || echo ${what} > ${requestFile}
+    '';
 
     # Hermes' API server runs when its gateway token is set (≥16 chars).
     hermesApiOn =
@@ -89,6 +100,7 @@
     environment = {
       NEO_SECURITY_CONFIG = toString securityConfig;
       NEO_SECURITY_DIR = appdata;
+      NEO_SECURITY_REQUEST = requestFile;
       DOCKER_BINARY_PATH = "${config.virtualisation.docker.package}/bin/docker";
     };
   in {
@@ -129,7 +141,14 @@
 
         systemd.tmpfiles.rules = [
           "d ${appdata} 0755 homeserver homeserver -"
+          "d ${requestDir} 0755 homeserver homeserver -"
         ];
+
+        systemd.paths.neo-security-scan = {
+          description = "Start a security check when one is requested";
+          wantedBy = ["paths.target"];
+          pathConfig.PathExists = requestFile;
+        };
 
         # `neo security show|accept|triage` from a root shell finds the data
         # and the AI settings here (the units get it through the env).
@@ -165,7 +184,7 @@
               "GRYPE_DB_CACHE_DIR=${cacheDir}/grype"
               "TRIVY_CACHE_DIR=${cacheDir}/trivy"
             ];
-            ExecStart = "${neoPkg}/bin/neo security scan";
+            ExecStart = "${neoPkg}/bin/neo security scan --request ${requestFile}";
             Nice = 10;
             IOSchedulingClass = "idle";
             TimeoutStartSec = "4h";
@@ -207,10 +226,28 @@
             ProtectHome = true;
             PrivateTmp = true;
             NoNewPrivileges = true;
-            ReadOnlyPaths = [appdata];
+            # decisions.json (Not relevant here / Review again); the scan
+            # only reads it. report.json and verdicts.json stay the scan's.
+            ReadWritePaths = [appdata requestDir];
           };
+          # systemctl is-active neo-security-scan for the page's check state.
+          path = [pkgs.systemd];
         };
       }
+      (lib.mkIf cfg.scanAfterUpdates {
+        # A switch to another system (neo activate, the system updater):
+        # check it once it is the running one. Not at boot, where
+        # /run/current-system does not exist yet.
+        system.activationScripts.neo-security-after-switch = ''
+          if [ -e /run/current-system ] && [ "$(readlink -f /run/current-system)" != "$(readlink -f "$systemConfig")" ]; then
+            ${requestUpdate "\"update $(readlink -f \"$systemConfig\")\""}
+          fi
+        '';
+        # After the image updater: the scan skips itself when no image changed.
+        systemd.services.neo-docker-updater.serviceConfig.ExecStartPost =
+          lib.mkIf (config.neo.services.docker-updater.enabled or false)
+          "+${pkgs.writeShellScript "neo-security-after-image-update" (requestUpdate "update")}";
+      })
     ]);
   };
 }

@@ -8,10 +8,11 @@ use std::path::Path;
 
 use super::ai::{osv_record, Client};
 use super::config::Config;
+use super::decisions::{self, Decisions};
 use super::evidence::{image_load, unit_owners, ProcIndex};
 use super::model::{
-    group_key, stable_id, Evidence, Finding, Group, Origin, Report, Severity, Status, Target,
-    Verdict, Verdicts,
+    group_key, key_version, package_key, stable_id, Evidence, Finding, Group, Origin, Report,
+    Severity, Status, Target, Verdict, Verdicts,
 };
 use super::scan::{first_line, Container};
 use crate::utils::command::now_secs;
@@ -55,6 +56,8 @@ pub fn group(hits: Vec<Located>, floor: Severity) -> (Vec<Group>, usize) {
             targets: Vec::new(),
             evidence: Evidence::default(),
             verdict: None,
+            new: false,
+            previous: None,
         });
         g.severity = g.severity.max(f.severity);
         g.cvss = match (g.cvss, f.cvss) {
@@ -202,6 +205,7 @@ pub fn rule_verdict(g: &Group) -> Option<Verdict> {
         action: action.into(),
         by: "rule".into(),
         at: now_secs(),
+        note: None,
     };
     match (g.origin, g.status.as_deref()) {
         (Origin::Nix, Some("err_not_vulnerable_based_on_repology")) => Some(v(
@@ -278,6 +282,49 @@ fn batches(groups: &[Group], order: &[usize]) -> Vec<Vec<usize>> {
     out
 }
 
+/// The newest AI verdict for the same finding in another version of the
+/// package, with that version.
+fn earlier_verdict(verdicts: &Verdicts, g: &Group) -> Option<(String, Verdict)> {
+    let prefix = package_key(g.origin, &g.vuln_id, &g.package);
+    verdicts
+        .range(prefix.clone()..)
+        .take_while(|(k, _)| k.starts_with(&prefix))
+        .filter(|(k, v)| *k != &g.key && v.by.starts_with("ai:"))
+        .max_by_key(|(k, v)| (v.at, (*k).clone()))
+        .map(|(k, v)| (key_version(k).to_string(), v.clone()))
+}
+
+/// Flag groups whose finding (any version) was not in the previous report.
+/// The first report has nothing to compare with. A part the previous check
+/// failed to scan (the system, one image) is not compared either: everything
+/// in it would look new.
+pub fn mark_new(groups: &mut [Group], previous: Option<&Report>) {
+    let Some(prev) = previous else {
+        return;
+    };
+    let system_failed = prev
+        .errors
+        .iter()
+        .any(|e| e.starts_with("System scan failed"));
+    let image_failed = |name: &str| {
+        prev.errors
+            .iter()
+            .any(|e| e.starts_with(&format!("Image {name} failed")))
+    };
+    let seen: std::collections::HashSet<String> = prev
+        .groups
+        .iter()
+        .map(|g| package_key(g.origin, &g.vuln_id, &g.package))
+        .collect();
+    for g in groups {
+        let comparable = match g.origin {
+            Origin::Nix => !system_failed,
+            Origin::Image => !g.targets.iter().any(|t| image_failed(&t.name)),
+        };
+        g.new = comparable && !seen.contains(&package_key(g.origin, &g.vuln_id, &g.package));
+    }
+}
+
 /// Rules and cached verdicts, then the AI for open groups (up to the budget).
 /// Saves the report after every review so the page shows progress.
 pub fn review(
@@ -285,14 +332,27 @@ pub fn review(
     report: &mut Report,
     verdicts: &mut Verdicts,
     redo_ai: bool,
+    decisions: &Decisions,
     dir: &Path,
     save: &dyn Fn(&Report, &Verdicts) -> Result<()>,
 ) -> Result<()> {
     for g in report.groups.iter_mut() {
-        let cached = verdicts.get(&g.key).filter(|v| v.by == "user" || !redo_ai);
-        g.verdict = match cached {
-            Some(v) if v.by == "user" => Some(v.clone()),
-            _ => rule_verdict(g).or_else(|| cached.cloned()),
+        // Operator verdicts live in decisions.json (older reports kept them here).
+        let cached = verdicts.get(&g.key).filter(|v| !redo_ai && v.by != "user");
+        g.verdict = rule_verdict(g).or_else(|| cached.cloned());
+        if let Some(v) = decisions::accept_for(decisions, g) {
+            g.verdict = Some(v);
+        } else if decisions::wants_review(decisions, g) {
+            g.verdict = None;
+        }
+        // An update changed the package version but the finding is still
+        // reported: the AI verdict for the earlier version goes along as context.
+        g.previous = match (&g.verdict, earlier_verdict(verdicts, g)) {
+            (None, Some((version, v))) => Some(Verdict {
+                note: Some(version),
+                ..v
+            }),
+            _ => None,
         };
     }
     let client = match Client::from_config(&cfg.ai) {
@@ -310,7 +370,12 @@ pub fn review(
     let mut open: Vec<usize> = (0..report.groups.len())
         .filter(|&i| report.groups[i].verdict.is_none())
         .collect();
-    open.sort_by_key(|&i| review_order(cfg, &report.groups[i]));
+    open.sort_by_key(|&i| {
+        (
+            !decisions::wants_review(decisions, &report.groups[i]),
+            review_order(cfg, &report.groups[i]),
+        )
+    });
     let batches = batches(&report.groups, &open);
     let total = batches.len();
     let mut failures = 0;
@@ -431,6 +496,7 @@ mod tests {
             action: String::new(),
             by: "ai:x".into(),
             at: 0,
+            note: None,
         };
         assert_eq!(guard(&cfg, &groups[0], v.clone()).status, Status::Attention);
         let sure = Verdict {
@@ -455,6 +521,94 @@ mod tests {
         let b = batches(&groups, &order);
         assert_eq!(b.len(), 3);
         assert_eq!(b.iter().map(Vec::len).max(), Some(2));
+    }
+
+    #[test]
+    fn earlier_ai_verdicts_become_context_accepts_apply() {
+        let (groups, _) = group(
+            vec![
+                hit("CVE-1", "libssl3", Severity::High, "a"),
+                hit("CVE-2", "zlib", Severity::High, "a"),
+            ],
+            Severity::Low,
+        );
+        let mut verdicts = Verdicts::new();
+        verdicts.insert(
+            group_key(Origin::Image, "CVE-2", "zlib", "0.9"),
+            Verdict {
+                status: Status::Harmless,
+                confidence: "high".into(),
+                summary: "s".into(),
+                explanation: "e".into(),
+                action: "a".into(),
+                by: "ai:x".into(),
+                at: 1,
+                note: None,
+            },
+        );
+        let mut d = Decisions::new();
+        d.insert(
+            group_key(Origin::Image, "CVE-1", "libssl3", "0.9"),
+            decisions::Decision {
+                kind: decisions::Kind::Accept,
+                reason: "r".into(),
+                at: 1,
+            },
+        );
+        let cfg: Config = serde_json::from_str("{}").unwrap();
+        let mut report = Report {
+            groups,
+            ..Default::default()
+        };
+        let dir = std::env::temp_dir();
+        review(
+            &cfg,
+            &mut report,
+            &mut verdicts,
+            false,
+            &d,
+            &dir,
+            &|_, _| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(report.groups[0].verdict.as_ref().unwrap().by, "user");
+        assert!(report.groups[1].verdict.is_none());
+        let prev = report.groups[1].previous.as_ref().unwrap();
+        assert_eq!(prev.note.as_deref(), Some("0.9"));
+    }
+
+    #[test]
+    fn new_findings_against_the_previous_report() {
+        let (mut groups, _) = group(
+            vec![
+                hit("CVE-1", "p", Severity::High, "a"),
+                hit("CVE-2", "p", Severity::High, "a"),
+            ],
+            Severity::Low,
+        );
+        mark_new(&mut groups, None);
+        assert!(groups.iter().all(|g| !g.new));
+        let (prev, _) = group(vec![hit("CVE-1", "p", Severity::High, "b")], Severity::Low);
+        let prev = Report {
+            groups: prev,
+            ..Default::default()
+        };
+        mark_new(&mut groups, Some(&prev));
+        assert!(!groups[0].new);
+        assert!(groups[1].new);
+        // A failed system scan before does not stop image findings from being new.
+        let prev = Report {
+            errors: vec!["System scan failed: no deriver".into()],
+            ..prev
+        };
+        mark_new(&mut groups, Some(&prev));
+        assert!(groups[1].new);
+        let prev = Report {
+            errors: vec!["Image a failed: timeout".into()],
+            ..prev
+        };
+        mark_new(&mut groups, Some(&prev));
+        assert!(!groups[1].new);
     }
 
     #[test]

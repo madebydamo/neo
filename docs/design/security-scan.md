@@ -41,9 +41,21 @@ containers → image, URL, ingress, tinyauth) to a JSON file
    name match; repology class; Trivy status).
 4. **Rules.** Repology says not vulnerable → harmless. Trivy `will_not_fix` →
    waiting. No AI needed.
-5. **Cache.** `verdicts.json`, keyed by origin|vuln|package|version. An
-   operator verdict (`neo security accept`) always wins; AI verdicts are reused
-   until `neo security triage --all` or `reset`.
+5. **Cache and decisions.** AI verdicts are cached in `verdicts.json` (the
+   scan's), keyed by origin|vuln|package|version, and reused until
+   `neo security triage --all`. The operator's decisions live in
+   `decisions.json`, written by the page's buttons (as homeserver) and
+   `neo security accept|reset`, only read by the scan, and laid over every read
+   of the report, so a decision taken during a running check is not lost:
+   - **Not relevant here** (accept) wins over any verdict, and carries over to
+     later versions of the package while the finding is still reported (with
+     the note "accepted for version X; still reported in Y").
+   - **Review again** / **Undo** hides older verdicts and queues a review-only
+     run (request `triage`) in which those findings go first.
+   An AI verdict for an earlier version goes to the review of the new version as
+   `previous_verdict`.
+   Findings whose vulnerability × package (any version) was not in the previous
+   report are marked **new** (badge and filter).
 6. **AI review** of the open groups, most severe / internet-facing / loaded
    first, up to `ai.maxReviews` requests per run. One OpenAI-compatible chat
    completion per batch (up to 8 findings of the same package, version and
@@ -55,6 +67,17 @@ containers → image, URL, ingress, tinyauth) to a JSON file
    internet-facing service is only dismissed with high confidence.
 
 The report is saved after every review, so the page shows progress.
+
+## Triggers
+
+`neo-security-scan.service` runs from the timer (`schedule`), the page's
+**Check now** and, with `scanAfterUpdates`, after updates. Requests are a file,
+`/run/neo-security/scan-request` (`manual`, `triage`, `update`,
+`update <system>`), watched by `neo-security-scan.path`, so the page needs no
+privileges. An activation script requests `update <new system>` on a switch to
+another system (not at boot); neo-docker-updater's `ExecStartPost` requests
+`update`. An `update` request is skipped when the running system and the set of
+image ids equal the last report's.
 
 ## AI source
 

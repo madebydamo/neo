@@ -130,6 +130,9 @@ pub struct Verdict {
     /// "rule", "user" or "ai:<model>".
     pub by: String,
     pub at: u64,
+    /// Shown with the verdict, e.g. an accept carried over from another version.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,6 +157,13 @@ pub struct Group {
     pub targets: Vec<Target>,
     pub evidence: Evidence,
     pub verdict: Option<Verdict>,
+    /// Not in the previous check (same vulnerability and package, any version).
+    #[serde(default)]
+    pub new: bool,
+    /// The AI verdict for an earlier version of the package (`note` = that
+    /// version), for the review.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous: Option<Verdict>,
 }
 
 impl Group {
@@ -175,6 +185,10 @@ pub struct Report {
     pub finished_at: u64,
     pub system: Option<String>,
     pub images: Vec<String>,
+    /// Docker image ids scanned; with `system` they tell whether anything
+    /// changed since (a check requested after an update is skipped otherwise).
+    #[serde(default)]
+    pub image_ids: Vec<String>,
     /// Findings left out below the severity floor.
     pub below_floor: usize,
     /// Raw scanner hits before grouping.
@@ -199,11 +213,21 @@ pub fn stable_id(key: &str) -> String {
 }
 
 pub fn group_key(origin: Origin, vuln_id: &str, package: &str, version: &str) -> String {
+    format!("{}{version}", package_key(origin, vuln_id, package))
+}
+
+/// The key without the version: the same finding in any version of the package.
+pub fn package_key(origin: Origin, vuln_id: &str, package: &str) -> String {
     let o = match origin {
         Origin::Nix => "nix",
         Origin::Image => "image",
     };
-    format!("{o}|{vuln_id}|{package}|{version}")
+    format!("{o}|{vuln_id}|{package}|")
+}
+
+/// The package version a key (and its cached verdict) is for.
+pub fn key_version(key: &str) -> &str {
+    key.rsplit_once('|').map_or("", |(_, v)| v)
 }
 
 #[cfg(test)]

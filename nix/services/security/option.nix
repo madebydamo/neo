@@ -45,6 +45,15 @@
                 ui = lib.neo.ui.mkUi {label = "How often";};
               };
 
+              # Activation script (system switch) and neo-docker-updater ExecStartPost.
+              scanAfterUpdates = mkOption {
+                type = types.bool;
+                default = true;
+                rank = 12;
+                description = "Also check right after the system or the apps were updated, so new security holes show up at once. Skipped when an update changed nothing.";
+                ui = lib.neo.ui.mkUi {label = "Check after updates";};
+              };
+
               minSeverity = mkOption {
                 type = types.enum ["low" "medium" "high" "critical"];
                 default = "high";

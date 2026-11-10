@@ -11,19 +11,20 @@
 pub mod ai;
 pub mod chat;
 pub mod config;
+pub mod decisions;
 pub mod evidence;
 pub mod model;
 pub mod scan;
 pub mod serve;
 pub mod triage;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::Subcommand;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::utils::command::{is_root, now_secs};
 use config::{data_dir, Config};
-use model::{Origin, Report, Status, Target, Verdict, Verdicts};
+use model::{Origin, Report, Status, Target, Verdicts};
 use triage::Located;
 
 #[derive(Subcommand, Debug)]
@@ -43,6 +44,11 @@ pub enum SecurityAction {
         /// system's derivation must be in the local store).
         #[arg(long, value_name = "PATH")]
         system: Option<String>,
+        /// Request file of the page's Check now button or an update hook
+        /// (`neo-security-scan.path`). It is removed; one that says `update`
+        /// skips the check when the system and the images did not change.
+        #[arg(long, value_name = "FILE")]
+        request: Option<PathBuf>,
     },
     /// Review the last scan's findings again, without scanning.
     Triage {
@@ -78,7 +84,28 @@ pub fn security(action: SecurityAction) -> Result<()> {
             no_nix,
             no_images,
             system,
+            request,
         } => {
+            let reason = request.as_deref().and_then(|p| {
+                let r = std::fs::read_to_string(p).ok();
+                let _ = std::fs::remove_file(p);
+                r.map(|r| r.trim().to_string())
+            });
+            // Review again from the page: no scan, just the review.
+            if reason.as_deref() == Some("triage") {
+                return run_triage(&dir, false);
+            }
+            // `update <system>` (a switch): start once that system runs.
+            if let Some(target) = reason.as_deref().and_then(|r| r.strip_prefix("update ")) {
+                wait_for_system(target.trim());
+            }
+            let after_update = reason
+                .as_deref()
+                .is_some_and(|r| r.split_whitespace().next() == Some("update"));
+            if after_update && !changed_since_last(&dir)? {
+                eprintln!("security: system and images unchanged since the last check, skipped");
+                return Ok(());
+            }
             if !is_root() {
                 eprintln!(
                     "security: not root, so other users' processes stay out of the in-use check"
@@ -86,20 +113,16 @@ pub fn security(action: SecurityAction) -> Result<()> {
             }
             scan_all(&dir, no_ai, !no_nix, !no_images, system)
         }
-        SecurityAction::Triage { all } => {
-            require_root()?;
-            let cfg = Config::load()?;
-            let mut report = load_report(&dir)?;
-            let mut verdicts = load_verdicts(&dir)?;
-            report.errors.retain(|e| !e.starts_with("AI review"));
-            let work = work_dir(&dir)?;
-            triage::review(&cfg, &mut report, &mut verdicts, all, &work, &|r, v| {
-                save(&dir, r, v)
-            })
-        }
+        SecurityAction::Triage { all } => run_triage(&dir, all),
         SecurityAction::Show { all } => show(&load_report(&dir)?, all),
-        SecurityAction::Accept { id, reason } => set_user_verdict(&dir, &id, Some(reason)),
-        SecurityAction::Reset { id } => set_user_verdict(&dir, &id, None),
+        SecurityAction::Accept { id, reason } => {
+            println!("✓ {}", decisions::decide(&dir, &id, Some(&reason))?);
+            Ok(())
+        }
+        SecurityAction::Reset { id } => {
+            println!("✓ {} (next check)", decisions::decide(&dir, &id, None)?);
+            Ok(())
+        }
     }
 }
 
@@ -115,6 +138,35 @@ fn work_dir(dir: &Path) -> Result<std::path::PathBuf> {
     let work = dir.join("work");
     std::fs::create_dir_all(&work).with_context(|| format!("create {}", work.display()))?;
     Ok(work)
+}
+
+/// Wait (up to 15 minutes) until `/run/current-system` is `target`: the
+/// activation script requests the check before the switch finishes.
+fn wait_for_system(target: &str) {
+    for _ in 0..180 {
+        if scan::current_system().ok().as_deref() == Some(target) {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(5));
+    }
+    eprintln!("security: {target} did not become the running system, checking what runs");
+}
+
+/// Whether the system or the set of images differs from the last report.
+fn changed_since_last(dir: &Path) -> Result<bool> {
+    let Ok(prev) = load_raw_report(dir) else {
+        return Ok(true);
+    };
+    let cfg = Config::load()?;
+    if prev.system.as_deref() != scan::current_system().ok().as_deref() {
+        return Ok(true);
+    }
+    let mut cs = scan::list_containers()?;
+    scan::add_configured(&mut cs, &cfg);
+    let now: std::collections::BTreeSet<&str> = cs.iter().map(|c| c.image_id.as_str()).collect();
+    let before: std::collections::BTreeSet<&str> =
+        prev.image_ids.iter().map(String::as_str).collect();
+    Ok(now != before)
 }
 
 fn scan_all(
@@ -190,6 +242,7 @@ fn scan_all(
                     target: target.clone(),
                 }));
                 report.images.push(image_ref);
+                report.image_ids.push(image_id.clone());
             }
             Err(e) => report.errors.push(format!(
                 "Image {image_ref} failed: {}",
@@ -199,15 +252,24 @@ fn scan_all(
     }
 
     report.raw_findings = hits.len();
+    let previous = load_raw_report(dir).ok();
     let (mut groups, below) = triage::group(hits, cfg.min_severity);
     report.below_floor = below;
     triage::collect_evidence(&cfg, &mut groups, &containers);
+    triage::mark_new(&mut groups, previous.as_ref());
     report.groups = groups;
 
     let mut verdicts = load_verdicts(dir)?;
-    let result = triage::review(&cfg, &mut report, &mut verdicts, false, &work, &|r, v| {
-        save(dir, r, v)
-    });
+    let decisions = decisions::load(dir);
+    let result = triage::review(
+        &cfg,
+        &mut report,
+        &mut verdicts,
+        false,
+        &decisions,
+        &work,
+        &|r, v| save(dir, r, v),
+    );
     report.finished_at = now_secs();
     save(dir, &report, &verdicts)?;
     result?;
@@ -220,11 +282,39 @@ fn scan_all(
     Ok(())
 }
 
-pub fn load_report(dir: &Path) -> Result<Report> {
+fn run_triage(dir: &Path, all: bool) -> Result<()> {
+    require_root()?;
+    let cfg = Config::load()?;
+    let mut report = load_raw_report(dir)?;
+    let mut verdicts = load_verdicts(dir)?;
+    let decisions = decisions::load(dir);
+    report.errors.retain(|e| !e.starts_with("AI review"));
+    let work = work_dir(dir)?;
+    triage::review(
+        &cfg,
+        &mut report,
+        &mut verdicts,
+        all,
+        &decisions,
+        &work,
+        &|r, v| save(dir, r, v),
+    )
+}
+
+/// The last report as the scan wrote it.
+fn load_raw_report(dir: &Path) -> Result<Report> {
     let p = dir.join("report.json");
     let text =
         std::fs::read_to_string(&p).with_context(|| format!("no report yet ({})", p.display()))?;
     serde_json::from_str(&text).with_context(|| format!("parse {}", p.display()))
+}
+
+/// The last report with the operator's decisions laid over it (what the page,
+/// the chat and `show` see).
+pub fn load_report(dir: &Path) -> Result<Report> {
+    let mut r = load_raw_report(dir)?;
+    decisions::apply(&mut r, &decisions::load(dir));
+    Ok(r)
 }
 
 fn load_verdicts(dir: &Path) -> Result<Verdicts> {
@@ -248,38 +338,6 @@ fn save(dir: &Path, report: &Report, verdicts: &Verdicts) -> Result<()> {
     std::fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
     write_json(&dir.join("verdicts.json"), verdicts)?;
     write_json(&dir.join("report.json"), report)
-}
-
-fn set_user_verdict(dir: &Path, id: &str, reason: Option<String>) -> Result<()> {
-    let mut report = load_report(dir)?;
-    let mut verdicts = load_verdicts(dir)?;
-    let g = report
-        .groups
-        .iter_mut()
-        .find(|g| g.id == id)
-        .ok_or_else(|| anyhow!("no finding {id} in the last report"))?;
-    match reason {
-        Some(reason) => {
-            let v = Verdict {
-                status: Status::Harmless,
-                confidence: "high".into(),
-                summary: "Accepted by the operator.".into(),
-                explanation: reason,
-                action: "Nothing to do.".into(),
-                by: "user".into(),
-                at: now_secs(),
-            };
-            verdicts.insert(g.key.clone(), v.clone());
-            g.verdict = Some(v);
-            println!("✓ {} in {} accepted", g.vuln_id, g.package);
-        }
-        None => {
-            verdicts.remove(&g.key);
-            g.verdict = triage::rule_verdict(g);
-            println!("✓ {} in {} will be reviewed again", g.vuln_id, g.package);
-        }
-    }
-    save(dir, &report, &verdicts)
 }
 
 fn show(report: &Report, all: bool) -> Result<()> {

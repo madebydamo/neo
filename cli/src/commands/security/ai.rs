@@ -230,6 +230,8 @@ Answer with only one JSON object, no other text, with one entry per vulnerabilit
 {\"verdicts\": [{\"vulnerability\": the id as given,\n \"status\": \"attention\" | \"waiting\" | \"harmless\",\n \
 \"confidence\": \"low\" | \"medium\" | \"high\",\n \"summary\": one plain sentence for a non-expert,\n \
 \"explanation\": 2-4 sentences with the reasons, citing the evidence,\n \"action\": what the operator can do, one sentence}]}\n\n\
+A previous_verdict is the review of the same vulnerability in an earlier version of the package \
+on this server: check whether it still holds for the installed version.\n\n\
 status meanings:\n\
 - attention: real and relevant here (reachable code, exposed service, or serious enough to act on).\n\
 - waiting: real, but only the image maintainers or nixpkgs can fix it and it is not urgent here.\n\
@@ -280,6 +282,10 @@ fn user_prompt(batch: &[(&Group, Option<Value>)]) -> String {
                 "description": g.description.as_deref().map(|d| truncate(d, 1200)),
                 "url": g.url,
                 "osv": osv,
+                "previous_verdict": g.previous.as_ref().map(|v| json!({
+                    "for_version": v.note,
+                    "status": v.status, "summary": v.summary, "explanation": v.explanation,
+                })),
             })
         })
         .collect();
@@ -346,6 +352,7 @@ pub fn parse_verdicts(content: &str) -> Result<Vec<(String, Verdict)>> {
                     action: truncate(raw.action.trim(), 300),
                     by: String::new(),
                     at: now_secs(),
+                    note: None,
                 },
             ))
         })

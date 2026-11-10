@@ -7,7 +7,9 @@
 use anyhow::{Context, Result};
 use rocket::fs::FileServer;
 use rocket::http::ContentType;
-use rocket::{get, routes};
+use rocket::http::Status as HttpStatus;
+use rocket::serde::json::Json;
+use rocket::{get, post, routes};
 use rocket_dyn_templates::Template;
 use serde::Serialize;
 
@@ -22,7 +24,18 @@ pub fn serve() -> Result<()> {
     rt.block_on(async {
         rocket::build()
             .mount("/static", FileServer::from(env_or("STATIC_DIR", "static")))
-            .mount("/", routes![index, report_json, health])
+            .mount(
+                "/",
+                routes![
+                    index,
+                    report_json,
+                    health,
+                    status,
+                    request_scan,
+                    accept,
+                    reset
+                ],
+            )
             .mount("/", chat::routes())
             .manage::<chat::Host>(std::sync::Arc::new(super::chat::SecurityHost))
             .attach(Template::fairing())
@@ -40,6 +53,107 @@ pub fn serve() -> Result<()> {
 #[get("/health")]
 fn health() -> &'static str {
     "ok"
+}
+
+/// Where the Check now button leaves a request; `neo-security-scan.path`
+/// starts the (root) scan when it appears, so this server needs no rights.
+fn request_file() -> String {
+    env_or("NEO_SECURITY_REQUEST", "/run/neo-security/scan-request")
+}
+
+/// The scan unit is running (a oneshot is `activating` while it works).
+fn scan_running() -> bool {
+    std::process::Command::new("systemctl")
+        .args(["is-active", "neo-security-scan.service"])
+        .output()
+        .is_ok_and(|o| {
+            matches!(
+                String::from_utf8_lossy(&o.stdout).trim(),
+                "active" | "activating"
+            )
+        })
+}
+
+fn scan_requested() -> bool {
+    std::path::Path::new(&request_file()).exists()
+}
+
+#[derive(Serialize)]
+struct ScanState {
+    running: bool,
+    requested: bool,
+    finished_at: u64,
+}
+
+fn scan_state() -> ScanState {
+    ScanState {
+        running: scan_running(),
+        requested: scan_requested(),
+        finished_at: load_report(&data_dir()).map_or(0, |r| r.finished_at),
+    }
+}
+
+#[get("/status")]
+fn status() -> Json<ScanState> {
+    Json(scan_state())
+}
+
+#[derive(serde::Deserialize)]
+struct ScanReq {}
+
+/// Check now. JSON only, so a cross-site form cannot trigger it.
+#[post("/scan", format = "json", data = "<_req>")]
+fn request_scan(_req: Json<ScanReq>) -> Result<Json<ScanState>, (HttpStatus, String)> {
+    if !scan_running() {
+        std::fs::write(request_file(), "manual\n").map_err(|e| {
+            (
+                HttpStatus::InternalServerError,
+                format!("could not request a check: {e}"),
+            )
+        })?;
+    }
+    Ok(Json(scan_state()))
+}
+
+/// One writer at a time for decisions.json.
+static DECIDE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn decide(id: &str, reason: Option<&str>) -> Result<Json<serde_json::Value>, (HttpStatus, String)> {
+    if !id.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err((HttpStatus::BadRequest, "unknown finding".into()));
+    }
+    let _guard = DECIDE.lock().unwrap_or_else(|e| e.into_inner());
+    let line = super::decisions::decide(&data_dir(), id, reason)
+        .map_err(|e| (HttpStatus::BadRequest, format!("{e:#}")))?;
+    Ok(Json(serde_json::json!({ "ok": true, "message": line })))
+}
+
+#[derive(serde::Deserialize)]
+struct AcceptReq {
+    #[serde(default)]
+    reason: String,
+}
+
+/// Not relevant here (kept across checks and later versions).
+#[post("/findings/<id>/accept", format = "json", data = "<req>")]
+fn accept(id: &str, req: Json<AcceptReq>) -> Result<Json<serde_json::Value>, (HttpStatus, String)> {
+    decide(id, Some(&req.reason))
+}
+
+/// Undo an accept or review again: queues a review-only run (after a running
+/// check, through the same request file as Check now).
+#[post("/findings/<id>/reset", format = "json", data = "<_req>")]
+fn reset(id: &str, _req: Json<ScanReq>) -> Result<Json<serde_json::Value>, (HttpStatus, String)> {
+    let out = decide(id, None)?;
+    if !scan_requested() {
+        std::fs::write(request_file(), "triage\n").map_err(|e| {
+            (
+                HttpStatus::InternalServerError,
+                format!("could not queue the review: {e}"),
+            )
+        })?;
+    }
+    Ok(out)
 }
 
 #[get("/report.json")]
@@ -74,8 +188,10 @@ fn index() -> Template {
             ..Default::default()
         },
     };
+    let st = scan_state();
     let view = Page {
         assistant: agent::available(),
+        scanning: st.running || st.requested,
         ..view
     };
     Template::render("security/report", view)
@@ -87,7 +203,10 @@ struct Page {
     /// Hermes is reachable: show the chat drawer and its buttons.
     assistant: bool,
     empty: bool,
+    /// Report still being written (reviews in progress).
     running: bool,
+    /// The scan unit runs or a check was requested.
+    scanning: bool,
     started_at: u64,
     finished_at: u64,
     ai: Option<String>,
@@ -103,6 +222,7 @@ struct Page {
     waiting: usize,
     harmless: usize,
     unreviewed: usize,
+    new_count: usize,
     groups: Vec<Row>,
 }
 
@@ -130,6 +250,14 @@ struct Row {
     action: Option<String>,
     by: Option<String>,
     confidence: Option<String>,
+    /// E.g. an accept carried over from an earlier version.
+    note: Option<String>,
+    /// You marked it as not relevant (shows Undo instead of the accept form).
+    accepted: bool,
+    /// An AI or rule verdict that can be reviewed again.
+    reviewable: bool,
+    /// Not in the previous check.
+    new: bool,
     loaded: String,
     loaded_class: &'static str,
     exposure: Vec<String>,
@@ -267,6 +395,10 @@ fn row(g: &Group) -> Row {
         confidence: v
             .filter(|v| v.by.starts_with("ai:"))
             .map(|v| v.confidence.clone()),
+        note: v.and_then(|v| v.note.clone()),
+        accepted: v.is_some_and(|v| v.by == "user"),
+        reviewable: v.is_some_and(|v| v.by != "user"),
+        new: g.new,
         loaded,
         loaded_class,
         exposure: g.evidence.exposure.clone(),
@@ -300,6 +432,7 @@ fn page(r: &Report, theme: String, floor: Severity, max_reviews: usize) -> Page 
         assistant: false,
         empty: false,
         running: r.finished_at == 0,
+        scanning: false,
         started_at: r.started_at,
         finished_at: r.finished_at,
         ai: r.ai.clone(),
@@ -315,6 +448,7 @@ fn page(r: &Report, theme: String, floor: Severity, max_reviews: usize) -> Page 
         waiting: count(Some(Status::Waiting)),
         harmless: count(Some(Status::Harmless)),
         unreviewed: count(None),
+        new_count: r.groups.iter().filter(|g| g.new).count(),
         groups: groups.into_iter().map(row).collect(),
     }
 }

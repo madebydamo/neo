@@ -305,6 +305,8 @@ mod tests {
             }],
             evidence: Evidence::default(),
             verdict: None,
+            new: false,
+            previous: None,
         }
     }
 
