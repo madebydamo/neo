@@ -74,7 +74,15 @@ impl QueryKey {
         }
     }
 
-    /// Lists of services and plugins: wait for a structural change to land.
+    /// Forms and what saves read (secret paths, plugin owners) must match the
+    /// files they write: never served from an older structure. Read-only pages
+    /// (guides, privacy map, theme, option index) may be.
+    fn waits_for_structure(&self) -> bool {
+        self.structural() || matches!(self, Self::Pane { .. } | Self::SecretPaths)
+    }
+
+    /// Lists of services and plugins: computed before a structural change
+    /// swaps in, since the pages listing services wait for them.
     fn structural(&self) -> bool {
         match self {
             Self::Services | Self::Navigator | Self::PluginOwners => true,
@@ -471,7 +479,7 @@ impl EvalPool {
                 let st = self.st();
                 let busy = st.building.is_some() || st.restart.is_some();
                 let structural_wait =
-                    key.structural() && st.building == Some(ChangeKind::Structural);
+                    key.waits_for_structure() && st.building == Some(ChangeKind::Structural);
                 match &st.serving {
                     Some(g) if !structural_wait => Some(Ok((g.clone(), st.latest.clone()))),
                     None if !busy => Self::failure_error(&st).map(Err),
@@ -1170,6 +1178,16 @@ mod tests {
         }
         .structural());
         assert!(!QueryKey::Theme.structural());
+        // Forms and the secret list a save routes by never come from an older structure.
+        assert!(QueryKey::Pane {
+            core: false,
+            name: "a".into()
+        }
+        .waits_for_structure());
+        assert!(QueryKey::SecretPaths.waits_for_structure());
+        assert!(QueryKey::PluginOwners.waits_for_structure());
+        assert!(!QueryKey::Guides.waits_for_structure());
+        assert!(!QueryKey::Privacy.waits_for_structure());
     }
 
     #[test]
