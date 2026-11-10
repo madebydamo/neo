@@ -411,7 +411,7 @@
     };
   }
 
-  var KIND_LABEL = { service: 'App', option: 'Setting', guide: 'Guide', privacy: 'Privacy' };
+  var KIND_LABEL = { service: 'App', option: 'Setting', guide: 'Guide', privacy: 'Privacy', finding: 'Finding' };
 
   var api = {
     KIND_LABEL: KIND_LABEL,

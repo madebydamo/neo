@@ -64,6 +64,19 @@ The report is saved after every review, so the page shows progress.
 root-only secrets template and goes to curl on stdin, never argv. Package
 names and CVE details leave the machine to that service.
 
+## Chat
+
+With Hermes' API on, the report page carries neo web's chat drawer: the same
+routes (`web/chat.rs`), drawer, `@` popup and Hermes session client, with the
+page's own `ChatHost` (`cli/src/commands/security/chat.rs`). The header
+Assistant button opens `security:general` (the report summary goes with the
+first message); "Ask the assistant" on a finding opens `security:<id>` with that
+finding's evidence and verdict. `@` lists the findings, tokens are the CVE id
+(`@CVE-2026-1234`, or `@CVE-…:<package>` when several packages share it); a
+tagged finding goes along as a `<neo-references>` block. These chats are
+listed under Chats on the report page only, neo web's only there. The page key
+is the gateway token (`neo-security-chat-key`, readable by homeserver).
+
 ## Not done
 
 - OpenVEX export of the verdicts for other tools.

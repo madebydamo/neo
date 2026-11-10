@@ -1,6 +1,8 @@
 //! The report page: read-only, renders report.json with neo's own CSS
 //! (`/static/neo-ui.css`) so it looks like the neo web UI. Served on loopback
-//! behind SWAG + tinyauth; changes go through the `neo security` CLI.
+//! behind SWAG + tinyauth; changes go through the `neo security` CLI. With
+//! Hermes on, neo web's chat drawer and its routes (`web::chat`) are mounted
+//! too, with this page's contexts and `@` findings (`chat.rs`).
 
 use anyhow::{Context, Result};
 use rocket::fs::FileServer;
@@ -12,6 +14,7 @@ use serde::Serialize;
 use super::config::{data_dir, Config};
 use super::load_report;
 use super::model::{Group, Origin, Report, Severity, Status};
+use crate::commands::web::{agent, chat};
 use crate::utils::command::env_or;
 
 pub fn serve() -> Result<()> {
@@ -20,6 +23,8 @@ pub fn serve() -> Result<()> {
         rocket::build()
             .mount("/static", FileServer::from(env_or("STATIC_DIR", "static")))
             .mount("/", routes![index, report_json, health])
+            .mount("/", chat::routes())
+            .manage::<chat::Host>(std::sync::Arc::new(super::chat::SecurityHost))
             .attach(Template::fairing())
             .configure(
                 rocket::Config::figment()
@@ -69,12 +74,18 @@ fn index() -> Template {
             ..Default::default()
         },
     };
+    let view = Page {
+        assistant: agent::available(),
+        ..view
+    };
     Template::render("security/report", view)
 }
 
 #[derive(Serialize, Default)]
 struct Page {
     theme: String,
+    /// Hermes is reachable: show the chat drawer and its buttons.
+    assistant: bool,
     empty: bool,
     running: bool,
     started_at: u64,
@@ -286,6 +297,7 @@ fn page(r: &Report, theme: String, floor: Severity, max_reviews: usize) -> Page 
     };
     Page {
         theme,
+        assistant: false,
         empty: false,
         running: r.finished_at == 0,
         started_at: r.started_at,

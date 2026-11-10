@@ -28,7 +28,7 @@
       if (it.hint) hint.push(it.hint);
       if (it.kind === 'service' && !it.enabled) hint.push('not installed');
       if (it.secret) hint.push('secret, value stays hidden');
-      var fallback = it.kind === 'option' ? '⚙' : it.kind === 'guide' ? '☰' : it.kind === 'privacy' ? '◎' : '▣';
+      var fallback = it.kind === 'option' ? '⚙' : it.kind === 'guide' ? '☰' : it.kind === 'privacy' ? '◎' : it.kind === 'finding' ? '!' : '▣';
       return h(
         'div',
         {

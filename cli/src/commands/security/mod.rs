@@ -9,6 +9,7 @@
 //! serve   the report page (neo-security-web)
 
 pub mod ai;
+pub mod chat;
 pub mod config;
 pub mod evidence;
 pub mod model;

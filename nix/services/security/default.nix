@@ -7,7 +7,9 @@
 # /proc/<pid>/maps of every process (what a vulnerable library is loaded by).
 #
 # neo-security-web (homeserver): `neo security serve`, the read-only report
-# page on 127.0.0.1:port; SWAG + tinyauth in front. It only reads report.json.
+# page on 127.0.0.1:port; SWAG + tinyauth in front. It only reads report.json;
+# with Hermes' API on it also carries neo web's chat drawer (ask about a
+# finding, @ to tag findings).
 #
 # Scanner databases (NVD for vulnix, grype, Trivy, OSV cache) are caches in
 # /var/cache/neo-security, not appdata: no snapshots or backups of them.
@@ -104,6 +106,16 @@
           }
         ];
 
+        # The report page's chat drawer (neo web's, web::chat) talks to Hermes'
+        # API server with the gateway token, like neo-web's own drawer.
+        neo.core.secrets.templates."neo-security-chat-key" = lib.mkIf hermesApiOn {
+          content = hermes.gatewayToken;
+          owner = "homeserver";
+          group = "homeserver";
+          mode = "0400";
+          restartUnits = ["neo-security-web.service"];
+        };
+
         # Root only: the scan sends it as Bearer to the AI service.
         neo.core.secrets.templates."neo-security-ai-key" = lib.mkIf (useHermes || customKeyOn) {
           content =
@@ -180,6 +192,10 @@
             // {
               ROCKET_ADDRESS = "127.0.0.1";
               ROCKET_PORT = toString cfg.port;
+            }
+            // lib.optionalAttrs hermesApiOn {
+              NEO_HERMES_URL = "http://127.0.0.1:${toString hermes.gatewayPort}";
+              NEO_HERMES_TOKEN_FILE = config.neo.core.secrets.templates."neo-security-chat-key".path;
             };
           serviceConfig = {
             User = "homeserver";

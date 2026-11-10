@@ -201,7 +201,8 @@ pub fn context_of(id: &str) -> String {
             rest = head;
         }
     }
-    for kind in ["service", "guide"] {
+    // `security`: the security report's chats (`security:general`, `security:<finding>`).
+    for kind in ["service", "guide", "security"] {
         if let Some(name) = rest.strip_prefix(kind).and_then(|r| r.strip_prefix('-')) {
             if !name.is_empty() {
                 return format!("{kind}:{name}");
@@ -676,6 +677,10 @@ mod tests {
         assert_eq!(
             context_of("neo-service-pi-hole-1730000000"),
             "service:pi-hole"
+        );
+        assert_eq!(
+            context_of("neo-security-general-1730000000"),
+            "security:general"
         );
         assert_eq!(
             context_of("neo-guide-adblock-at-home"),
