@@ -48,9 +48,9 @@
               # Activation script (system switch) and neo-docker-updater ExecStartPost.
               scanAfterUpdates = mkOption {
                 type = types.bool;
-                default = true;
+                default = false;
                 rank = 12;
-                description = "Also check right after the system or the apps were updated, so new security holes show up at once. Skipped when an update changed nothing.";
+                description = "Also check right after the system or the apps were updated, so new security holes show up at once. Off: only the schedule and Check now start a check, which saves AI usage.";
                 ui = lib.neo.ui.mkUi {label = "Check after updates";};
               };
 

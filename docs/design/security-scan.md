@@ -77,7 +77,13 @@ The report is saved after every review, so the page shows progress.
 privileges. An activation script requests `update <new system>` on a switch to
 another system (not at boot); neo-docker-updater's `ExecStartPost` requests
 `update`. An `update` request is skipped when the running system and the set of
-image ids equal the last report's.
+image ids equal the last report's. `scanAfterUpdates` is off by default (each
+check costs AI requests), so only the timer and Check now start one.
+
+A switch never touches the scan unit (`restartIfChanged = false`,
+`stopIfChanged = false`): restarting a changed oneshot made `neo activate`
+wait for the whole scan and its AI review. A running check goes on with the
+old config; the next one uses the new.
 
 ## AI source
 

@@ -158,6 +158,11 @@
           description = "Neo security scan (system + container images)";
           after = ["network-online.target" "docker.service"] ++ lib.optional useHermes "hermes-agent.service";
           wants = ["network-online.target"];
+          # A switch never restarts or stops a running check (a restart of a
+          # changed oneshot would block the switch until the scan and its AI
+          # review end); the next run picks up the new config.
+          restartIfChanged = false;
+          stopIfChanged = false;
           inherit environment;
           path = [
             neoPkg
