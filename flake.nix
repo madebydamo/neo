@@ -13,8 +13,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     import-tree.url = "github:denful/import-tree";
+    # Pinned to the last revision before the switch to pnpm (2026-11-06):
+    # later main does not evaluate on the nixpkgs release neo follows
+    # (pnpm.override missing). Unpin once it does and
+    # NousResearch/hermes-agent#152542 (patchelf patch vs. patchelf 0.15) is
+    # merged; until then see the patchelf swap in nix/services/hermes/default.nix.
     hermes-agent = {
-      url = "github:NousResearch/hermes-agent";
+      url = "github:NousResearch/hermes-agent/44ec783afd1193afb7576d9c01d7fe9d18c87339";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.pyproject-nix.follows = "pyproject-nix";
     };
