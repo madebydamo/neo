@@ -99,7 +99,7 @@
               ];
             }
             // lib.neo.mkContainerDefinitions {
-              gitea = "gitea/gitea:28.3.0";
+              gitea = "gitea/gitea:28";
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/gitea"
             // lib.neo.mkServiceMeta {
