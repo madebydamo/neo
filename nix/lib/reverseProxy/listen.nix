@@ -12,7 +12,7 @@
       swagIpv6Network = "swag-ipv6";
 
       # Dual listeners: plain TLS for LAN/Tailscale; PROXY protocol for streamproxy/rathole.
-      # ingress-access.conf applies per-vhost posture (local / tailscale / web).
+      # ingress-access.conf applies per-vhost posture (local / tailscale / netbird / web).
       # error-pages.conf serves the neo 404 page for nginx-generated 404s.
       listenHttpsConf = ''
         listen 443 ssl;

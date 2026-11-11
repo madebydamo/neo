@@ -441,7 +441,7 @@ config.neo.services.${name}.proxyConf = lib.mkDefault ''
 
 **tinyauth.** With auth on, the UI answers `302` to the tinyauth login. Anything a client calls without a browser session (health checks, mobile apps, API tokens, share links, CalDAV, webhooks) needs a regex in `auth.publicPaths`. Those paths are then protected only by the app's own auth.
 
-**Ingress.** `ingress` (`local`, `tailscale`, `web`) is per service and enforced by `listen-https.conf`. You do not need to do anything, as long as hand-written blocks include it.
+**Ingress.** `ingress` (`local`, `tailscale`, `netbird`, `web`) is per service and enforced by `listen-https.conf`. You do not need to do anything, as long as hand-written blocks include it.
 
 ### skills.nix
 

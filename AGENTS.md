@@ -61,7 +61,7 @@ Naming: options camelCase under `neo.services.*`; plain-string descriptions; vol
 
 **SWAG traps:** `include /config/nginx/proxy.conf` already sets Upgrade/Connection and proxy timeouts — **do not re-set** them (426 WebSockets / `proxy_*_timeout` duplicate kills all vhosts).
 
-**ingress:** per-service multi-select (`local` / `tailscale` / `web`) via `mkReverseProxyOptions`; default all three. Omitting `web` denies that vhost on the shared rathole/PROXY-protocol listener (neo 404 page) — not a per-app rathole port.
+**ingress:** per-service multi-select (`local` / `tailscale` / `netbird` / `web`) via `mkReverseProxyOptions`; default all four. `netbird` matches `services.netbird.networkRange` and wins over the LAN and Tailscale ranges; the PROXY-protocol port is always `web`. SWAG also sits on the IPv6-only `swag-ipv6` network so IPv6 visitors keep their address (public IPv6 = `web`). Omitting `web` denies that vhost on the shared rathole/PROXY-protocol listener (neo 404 page) — not a per-app rathole port.
 
 **tinyauth:** default edge auth. Health probes need `auth.publicPaths` (e.g. `^/api/v1/info/status$`). UI stays 302 → tinyauth.
 

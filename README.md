@@ -36,7 +36,7 @@ Full steps: [Installation guide](docs/INSTALL.md).
     <td width="50%"><img src="docs/images/service-status.jpg" alt="Immich status tab: running units with start, restart, update and logs" /></td>
   </tr>
   <tr>
-    <td><b>Configure without YAML.</b> Each service gets a form with plain-language options in tidy sections: where it's reachable from (home network, Tailscale, internet), whether it needs a login, and more.</td>
+    <td><b>Configure without YAML.</b> Each service gets a form with plain-language options in tidy sections: where it's reachable from (home network, Tailscale, NetBird, internet), whether it needs a login, and more.</td>
     <td><b>See what's running.</b> Live status for every container, with start, stop, restart, image pull and logs one click away. Snapshots and clearing app data live right next to it.</td>
   </tr>
 </table>
@@ -85,12 +85,12 @@ If the machine at home has no public IP, route the traffic with [streamproxy](do
 
 - **Your machine.** The homeserver is hardware you control.
 - **Home or anywhere.** Host it at home. Host it anywhere. Safe on a public Wi-Fi uplink.
-- **Fine-grained access control.** Per service: reachable on the LAN, on Tailscale, on the public web, or any mix. Per person: which apps they may open.
+- **Fine-grained access control.** Per service: reachable on the LAN, on Tailscale or NetBird, on the public web, or any mix. Per person: which apps they may open.
 - **Edge protection.** Allow or block countries and IP ranges. Ban IPs that keep failing to log in, bad bots and exploit scanners (fail2ban, on by default).
 
 ### Privacy
 
-- **LAN privacy.** Pi-hole across the network. WireGuard egress for the apps you choose. Tailscale for private reach. NTP for the LAN.
+- **LAN privacy.** Pi-hole across the network. WireGuard egress for the apps you choose. Tailscale or NetBird for private reach. NTP for the LAN.
 - **Snapshots.** Automatic ZFS snapshots of all Neo data. Restore one service, or everything, from the web UI.
 - **Backup and restore.** Nightly copy to another computer or a disk, as files or ZFS snapshots. `neo restore` rebuilds a machine from the config repo and that backup in one command.
 - **Encrypted secrets.** Passwords and tokens encrypted with sops, readable by the machine and your SSH keys. The config repo can go to GitHub, and a dead machine reinstalls itself from it with `neo restore`. [Secrets](docs/INSTALL.md#secrets-and-encryption).
@@ -112,7 +112,7 @@ Enable what you want in the web UI.
 - **Security.** Tinyauth (login in front of every app), Authentik (single sign-on), Vaultwarden (passwords)
 - **Calendar and contacts.** RustiCal (CalDAV, CardDAV), Calino, iCal subscriptions
 - **Utilities.** Vikunja (tasks), Mealie (recipes), Karakeep (bookmarks), SearXNG (search), pastebin, change detection, Activepieces (automation), Dawarich (location history), Webtop and Firefox (in the browser)
-- **Network.** Pi-hole, Tailscale, WireGuard VPN (Gluetun), NTP, Rathole and streamproxy (no public IP)
+- **Network.** Pi-hole, Tailscale, NetBird, WireGuard VPN (Gluetun), NTP, Rathole and streamproxy (no public IP)
 - **Monitoring.** Beszel
 - **AI support.** Hermes
 - **Core.** Neo web, SWAG (HTTPS and routing), system and container updaters

@@ -24,8 +24,9 @@
                 };
               };
               # Answers every local DNS name (services.swag.domain and subdomains) with this
-              # address via FTLCONF_misc_dnsmasq_lines. Required with Tailscale split DNS, so
-              # Pi-hole binds only this address and leaves the Tailscale IP for dnsmasq.
+              # address via FTLCONF_misc_dnsmasq_lines. Required with Tailscale split DNS or
+              # NetBird DNS, so Pi-hole binds only this address and leaves the Tailscale IP
+              # for dnsmasq and loopback port 53 for NetBird's resolver.
               localIP = mkOption {
                 type = types.nullOr types.str;
                 default = null;

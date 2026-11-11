@@ -45,12 +45,12 @@
                 ui = lib.neo.ui.mkUi {label = "Homeserver name";};
               };
               # Tunnels only HTTP (Let's Encrypt HTTP-01); the _https service is dropped.
-              # Asserted: needs Pi-hole with localIP or Tailscale split DNS, so hostnames
-              # still resolve privately.
+              # Asserted: needs Pi-hole with localIP, Tailscale split DNS or NetBird app
+              # names, so hostnames still resolve privately.
               certificateOnly = mkOption {
                 type = types.bool;
                 default = false;
-                description = "Use the tunnel only to get HTTPS certificates; your apps stay reachable only at home or over Tailscale. Needs Pi-hole with Home network address set, or Tailscale split DNS.";
+                description = "Use the tunnel only to get HTTPS certificates; your apps stay reachable only at home or over Tailscale or NetBird. Needs Pi-hole with Home network address set, App names over Tailscale, or App names over NetBird.";
                 rank = 50;
                 ui = lib.neo.ui.mkUi {label = "Certificates only (keep apps private)";};
               };

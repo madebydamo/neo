@@ -1,4 +1,4 @@
-# Per-service ingress posture (LAN / Tailscale / public web via rathole).
+# Per-service ingress posture (LAN / Tailscale / NetBird / public web via rathole).
 #
 # Rathole is a shared tunnel (HTTP 80 + SWAG PROXY-protocol HTTPS). There are
 # no per-app rathole listen ports. "web" off means this vhost is denied on the
@@ -7,7 +7,7 @@
 {lib, ...}: let
   inherit (lib) concatMapStrings elem optionalString unique;
 
-  defaultIngress = ["local" "tailscale" "web"];
+  defaultIngress = ["local" "tailscale" "netbird" "web"];
 
   hostKeys = svc:
     unique (
@@ -31,13 +31,18 @@ in {
       ingressVariants = defaultIngress;
 
       # HTTP-context maps + geo. Included from nginx.conf (see swag-patcher).
+      # netbirdRanges: the NetBird network's address ranges (empty without
+      # the client). They lie in private or Tailscale space, so they are
+      # asked first.
       mkIngressMapsConf = {
         services,
         proxyProtocolPort ? 8443,
+        netbirdRanges ? [],
       }: ''
         ## Neo-managed — per-service ingress classification and allow maps.
-        ## Class: PROXY-protocol port → web; RFC1918/loopback/ULA → local;
-        ## Tailscale CGNAT/ULA → tailscale; other 443 → web (direct public).
+        ## Class: PROXY-protocol port → web; NetBird range → netbird;
+        ## RFC1918/loopback/ULA → local; Tailscale CGNAT/ULA → tailscale;
+        ## other 443 → web (direct public).
         ## IPv6 visitors keep their address (SWAG's swag-ipv6 network), so a
         ## home device on a public IPv6 address counts as web.
 
@@ -58,21 +63,23 @@ in {
             fd7a:115c:a1e0::/48 1;
         }
 
+        geo $ingress_is_netbird {
+            default 0;
+        ${concatMapStrings (r: "    ${r} 1;\n") netbirdRanges}}
+
         map $server_port $ingress_via_web {
             default 0;
             ${toString proxyProtocolPort} 1;
         }
 
-        map "$ingress_via_web:$ingress_is_lan:$ingress_is_tailscale" $ingress_class {
+        map "$ingress_via_web:$ingress_is_netbird:$ingress_is_lan:$ingress_is_tailscale" $ingress_class {
             default web;
-            "1:0:0" web;
-            "1:1:0" web;
-            "1:0:1" web;
-            "1:1:1" web;
-            "0:1:0" local;
-            "0:0:1" tailscale;
-            "0:1:1" tailscale;
-            "0:0:0" web;
+            "~^1:" web;
+            "~^0:1:" netbird;
+            "0:0:1:0" local;
+            "0:0:0:1" tailscale;
+            "0:0:1:1" tailscale;
+            "0:0:0:0" web;
         }
 
         map $host $ingress_allow_local {
@@ -82,6 +89,10 @@ in {
         map $host $ingress_allow_tailscale {
             default 1;
         ${denyLines services "tailscale"}}
+
+        map $host $ingress_allow_netbird {
+            default 1;
+        ${denyLines services "netbird"}}
 
         map $host $ingress_allow_web {
             default 1;
@@ -98,6 +109,9 @@ in {
         }
         if ($ingress_class = tailscale) {
             set $ingress_ok $ingress_allow_tailscale;
+        }
+        if ($ingress_class = netbird) {
+            set $ingress_ok $ingress_allow_netbird;
         }
         if ($ingress_class = web) {
             set $ingress_ok $ingress_allow_web;

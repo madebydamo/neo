@@ -9,17 +9,20 @@
 # user-modified and will not pick up a later change to the host file.
 # Host-network containers keep the copied nameservers directly.
 #
-# Tailscale accept-dns installs those nameservers through resolvconf after
-# network-online. Until then the host file is only "options edns0". Containers
-# started in that window (Jellyfin on the host network, and any other local
-# container) never learn a nameserver.
+# Tailscale accept-dns and NetBird DNS install those nameservers through
+# resolvconf after network-online. Until then the host file is only "options
+# edns0" or the DHCP resolver. Containers started in that window (Jellyfin on
+# the host network, and any other local container) never learn a nameserver,
+# or never learn the private names.
 #
 # neo-host-dns blocks OCI container start until the host file has a nameserver.
 # The same wait runs before every container start, so a later restart cannot
 # snapshot a hole while resolvconf is rewriting the file. With Tailscale
-# accept-dns, the wait also requires tailscale's resolvconf registration, so
-# the snapshot is the host's MagicDNS resolver. No DNS option is exposed:
-# local containers use the host resolver.
+# accept-dns or NetBird DNS, the wait also requires that client's resolvconf
+# registration (key `tailscale` or `wt0`), so the snapshot is its resolver. Not
+# on the machine that hosts the NetBird network: its client connects only after
+# SWAG and the control plane run. No DNS option is exposed: local containers
+# use the host resolver.
 #
 # Stop. `docker stop` delivers SIGTERM. A container that does not exit 0 makes
 # `docker run` return 143, and systemd records the stop as failure. 143 is
@@ -29,9 +32,9 @@
   waitBody = ''
     set -euo pipefail
     resolv="''${NEO_RESOLV_CONF:-/etc/resolv.conf}"
-    key="''${NEO_RESOLVCONF_TAILSCALE:-/run/resolvconf/keys/tailscale}"
-    wait_tailscale="''${NEO_WAIT_TAILSCALE:-0}"
-    deadline_sec="''${NEO_TAILSCALE_DEADLINE_SEC:-90}"
+    # Empty: no private network client to wait for.
+    key="''${NEO_RESOLVCONF_KEY:-}"
+    deadline_sec="''${NEO_KEY_DEADLINE_SEC:-90}"
     max_wait="''${NEO_MAX_WAIT_SEC:-}"
 
     has_nameserver() {
@@ -40,7 +43,7 @@
 
     ready() {
       has_nameserver || return 1
-      if [ "$wait_tailscale" = 1 ] && [ ! -e "$key" ]; then
+      if [ -n "$key" ] && [ ! -e "$key" ]; then
         return 1
       fi
       return 0
@@ -49,9 +52,9 @@
     deadline=$((SECONDS + deadline_sec))
     start=$SECONDS
     while ! ready; do
-      if [ "$wait_tailscale" = 1 ] && [ "$SECONDS" -ge "$deadline" ]; then
+      if [ -n "$key" ] && [ "$SECONDS" -ge "$deadline" ]; then
         if has_nameserver; then
-          echo "neo-host-dns: tailscale DNS did not register within ''${deadline_sec}s; containers will use the current host resolv.conf" >&2
+          echo "neo-host-dns: $key did not register within ''${deadline_sec}s; containers will use the current host resolv.conf" >&2
           exit 0
         fi
       fi
@@ -72,12 +75,19 @@
     ts = config.neo.services.tailscale;
     # accept-dns is what installs the host nameservers (MagicDNS).
     waitForTailscale = ts.enabled && ts.acceptDns;
+    # Only one of them may own host DNS (asserted in the netbird service).
+    waitForNetbird =
+      (config.neo.services.netbird.enabled or false)
+      && (config.neo.services.netbird.acceptDns or false)
+      && !(config.neo.services.netbird-server.enabled or false);
+    key =
+      if waitForTailscale
+      then "/run/resolvconf/keys/tailscale"
+      else if waitForNetbird
+      then "/run/resolvconf/keys/wt0"
+      else "";
     waitScriptText = ''
-      export NEO_WAIT_TAILSCALE=${
-        if waitForTailscale
-        then "1"
-        else "0"
-      }
+      export NEO_RESOLVCONF_KEY=${key}
       ${waitBody}
     '';
     # Separate process so this does not change shell options in other preStart scripts.
@@ -88,8 +98,14 @@
         neo-host-dns = {
           description = "Wait until host DNS is installed for containers";
           wantedBy = ["multi-user.target"];
-          after = ["network-online.target"] ++ lib.optional waitForTailscale "tailscale-up.service";
-          wants = ["network-online.target"] ++ lib.optional waitForTailscale "tailscale-up.service";
+          after =
+            ["network-online.target"]
+            ++ lib.optional waitForTailscale "tailscale-up.service"
+            ++ lib.optional waitForNetbird "netbird.service";
+          wants =
+            ["network-online.target"]
+            ++ lib.optional waitForTailscale "tailscale-up.service"
+            ++ lib.optional waitForNetbird "netbird.service";
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
@@ -138,6 +154,11 @@ in {
     '';
     dhcpResolv = pkgs.writeText "resolv-dhcp" ''
       nameserver 192.168.178.1
+      options edns0
+    '';
+    netbirdResolv = pkgs.writeText "resolv-netbird" ''
+      search netbird.selfhosted
+      nameserver 127.0.0.153
       options edns0
     '';
     tailscaleResolv = pkgs.writeText "resolv-tailscale" ''
@@ -191,7 +212,7 @@ in {
     orderingOk =
       lib.elem "neo-host-dns.service" (jellyfin.after or [])
       && lib.elem "neo-host-dns.service" filebrowserWants
-      && lib.hasInfix "NEO_WAIT_TAILSCALE=1" dnsScript
+      && lib.hasInfix "NEO_RESOLVCONF_KEY=/run/resolvconf/keys/tailscale" dnsScript
       && lib.hasInfix "neo-host-dns-wait" jellyfinPre;
     # SIGTERM from docker stop must not leave the unit failed.
     stopOk = (jellyfin.serviceConfig.SuccessExitStatus or "") == "143";
@@ -217,13 +238,13 @@ in {
         echo "=== $name ==="
         set +e
         env \
-          NEO_RESOLVCONF_TAILSCALE="$tmp/tailscale" \
+          NEO_RESOLVCONF_KEY="$tmp/key" \
           NEO_MAX_WAIT_SEC=0 \
           "$@" \
           ${script}
         rc=$?
         set -e
-        rm -f "$tmp/tailscale"
+        rm -f "$tmp/key"
         if [ "$expect" = ok ] && [ "$rc" -ne 0 ]; then
           echo "FAIL $name: expected success, got $rc" >&2
           fail=1
@@ -234,17 +255,22 @@ in {
       }
 
       # The file Docker copied into long-running Jellyfin: options, no nameserver.
-      try empty fail NEO_WAIT_TAILSCALE=0 NEO_RESOLV_CONF=${emptyResolv}
-      try magic ok NEO_WAIT_TAILSCALE=0 NEO_RESOLV_CONF=${magicResolv}
+      # No key: only a nameserver is needed. NEO_RESOLVCONF_KEY= clears the
+      # path that try() sets.
+      try empty fail NEO_RESOLVCONF_KEY= NEO_RESOLV_CONF=${emptyResolv}
+      try magic ok NEO_RESOLVCONF_KEY= NEO_RESOLV_CONF=${magicResolv}
       try tailscale-not-registered fail \
-        NEO_WAIT_TAILSCALE=1 NEO_TAILSCALE_DEADLINE_SEC=0 NEO_RESOLV_CONF=${emptyResolv}
+        NEO_KEY_DEADLINE_SEC=0 NEO_RESOLV_CONF=${emptyResolv}
       # A nameserver that arrived before tailscale is not MagicDNS yet.
       # After the deadline, containers still get that current host file.
       try tailscale-deadline ok \
-        NEO_WAIT_TAILSCALE=1 NEO_TAILSCALE_DEADLINE_SEC=0 NEO_RESOLV_CONF=${dhcpResolv}
-      touch "$tmp/tailscale"
+        NEO_KEY_DEADLINE_SEC=0 NEO_RESOLV_CONF=${dhcpResolv}
+      touch "$tmp/key"
       try tailscale-registered ok \
-        NEO_WAIT_TAILSCALE=1 NEO_RESOLV_CONF=${tailscaleResolv}
+        NEO_RESOLV_CONF=${tailscaleResolv}
+      touch "$tmp/key"
+      try netbird-registered ok \
+        NEO_RESOLV_CONF=${netbirdResolv}
 
       rm -rf "$tmp"
       if [ "$fail" -ne 0 ]; then

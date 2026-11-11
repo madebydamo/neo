@@ -87,6 +87,8 @@ the app has **Require login** on. Each app has a **Reachable from** setting unde
 - **Home network:** devices at home.
 - **Tailscale:** your own devices anywhere, see
   [Keep your app traffic private with Tailscale](guide:private-traffic-tailscale).
+- **NetBird:** your own devices anywhere, over your own private network, see
+  [Keep your app traffic private with NetBird](guide:private-traffic-netbird).
 - **Internet:** everyone, through the tunnel.
 
 Untick **Internet** for apps only your household needs. Visitors from the
@@ -97,11 +99,11 @@ internet then get a "not found" page. Certificates keep renewing either way.
 > and count as **Internet**. Before you untick it, give them a direct way to the
 > server: [Pi-hole](service:pihole) with its
 > [home network address](option:pihole.localIP) set (see
-> [Block ads for the whole home](guide:adblock-at-home)), or Tailscale.
+> [Block ads for the whole home](guide:adblock-at-home)), Tailscale or NetBird.
 
 > [!tip]
 > Want the tunnel only for certificates, with no app reachable from the
 > internet? Turn on
 > [certificates only](option:rathole.certificateOnly). It needs Pi-hole with its
-> home network address set, or Tailscale split DNS, so your devices still find
-> the apps.
+> home network address set, or app names over Tailscale or NetBird, so your
+> devices still find the apps.

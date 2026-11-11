@@ -197,6 +197,7 @@
             content = lib.neo.mkIngressMapsConf {
               services = appServices;
               proxyProtocolPort = ppContainerPort;
+              netbirdRanges = lib.neo.netbirdRanges config;
             };
           })
           (lib.neo.mkActivationScriptForFile config {

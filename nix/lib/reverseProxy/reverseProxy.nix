@@ -3,6 +3,7 @@
 {lib, ...}: let
   neoUi = (import ../ui.nix {inherit lib;}).libExtensions.ui.neo.ui;
   inherit (neoUi.groups) access advanced;
+  inherit ((import ./ingress.nix {inherit lib;}).libExtensions.ingress.neo) ingressVariants;
   publicHost = config: cfg: let
     domain = config.neo.services.swag.domain or null;
     subdomain = cfg.subdomain or null;
@@ -55,11 +56,11 @@ in {
 
           ingress =
             mkOption {
-              type = types.listOf (types.enum ["local" "tailscale" "web"]);
-              default = ["local" "tailscale" "web"];
+              type = types.listOf (types.enum ingressVariants);
+              default = ingressVariants;
               # Internet = public HTTPS via the rathole/streamproxy listener; unticked
               # places get the neo 404 page. Let's Encrypt HTTP-01 on port 80 is always allowed.
-              description = "Where this app can be opened from. Places not ticked are blocked. Home network means devices at home, Tailscale your own devices anywhere, Internet everyone.";
+              description = "Where this app can be opened from. Places not ticked are blocked. Home network means devices at home, Tailscale and NetBird your own devices anywhere, Internet everyone.";
             }
             // {
               rank = 105;
@@ -67,10 +68,11 @@ in {
                 group = access;
                 label = "Reachable from";
                 summary = true;
-                choices = ["local" "tailscale" "web"];
+                choices = ingressVariants;
                 choiceLabels = {
                   local = "Home network";
                   tailscale = "Tailscale";
+                  netbird = "NetBird";
                   web = "Internet";
                 };
               };

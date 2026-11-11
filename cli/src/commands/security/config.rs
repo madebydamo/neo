@@ -74,6 +74,7 @@ impl ServiceInfo {
             .map(|i| match i.as_str() {
                 "web" => "the internet",
                 "tailscale" => "Tailscale",
+                "netbird" => "NetBird",
                 "local" => "the home network",
                 other => other,
             })

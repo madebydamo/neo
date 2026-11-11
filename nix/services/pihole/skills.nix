@@ -32,6 +32,7 @@
         ## Pitfalls
         - Breaking Pi-hole DNS can break local name resolution for the whole LAN if clients use it
         - With `services.tailscale.splitDns`, `localIP` is required; Pi-hole then publishes LAN:53 only so Tailscale dnsmasq can bind the tailnet address
+        - With NetBird's `services.netbird.acceptDns`, `localIP` is required too: NetBird's resolver binds 127.0.0.153:53
 
         ## Verification
         - DNS query works; admin UI login with webPassword

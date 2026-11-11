@@ -54,7 +54,7 @@ You only need to expose **ports 80 and 443**. Nothing else is required for norma
 | **Authentik** (optional) | A full identity provider on your own machine. Tinyauth can use it as an OAuth provider, and apps can use it directly for OIDC, SAML or LDAP. |
 | **App single sign-on** | Some apps sign you in from the tinyauth login, so there is no second password. Docmost is one. |
 
-Each service also chooses where it can be reached (`ingress`): on the **LAN**, on **Tailscale**, on the **public web**, or any mix.
+Each service also chooses where it can be reached (`ingress`): on the **LAN**, on **Tailscale**, on **NetBird**, on the **public web**, or any mix.
 
 ## Automatic updates
 
@@ -122,7 +122,7 @@ flowchart LR
 
 DNS still points at the **public** side. Streamproxy does not decrypt anything; it passes the encrypted traffic through. Your **data stays on the homeserver**. You need a working tunnel (rathole) and a matching streamproxy entry. See [INSTALL.md](INSTALL.md#no-public-ip-streamproxy).
 
-Public exposure is **per service** via **`ingress`** (`local` / `tailscale` / `web`), not a global rathole on/off for each app. Rathole remains a shared tunnel; omitting `web` for a service returns the neo 404 page on that public vhost. To drop **all** public HTTPS at once, use **`rathole.certificateOnly`** (HTTP-01 / certs only). Details: [INSTALL.md](INSTALL.md#per-service-ingress).
+Public exposure is **per service** via **`ingress`** (`local` / `tailscale` / `netbird` / `web`), not a global rathole on/off for each app. Rathole remains a shared tunnel; omitting `web` for a service returns the neo 404 page on that public vhost. To drop **all** public HTTPS at once, use **`rathole.certificateOnly`** (HTTP-01 / certs only). Details: [INSTALL.md](INSTALL.md#per-service-ingress).
 
 ## For the curious (optional technical notes)
 

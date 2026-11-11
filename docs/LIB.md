@@ -50,7 +50,7 @@ Merge these with `//` into `neo.services.<name>`'s `options`.
 
 | Function | Arguments (defaults) | Adds |
 |----------|---------------------|------|
-| `mkReverseProxyOptions` | `{ subdomain ? null, auth ? null, customDomains ? [] }`. `auth` is `{ enabled ? true, publicPaths ? [], available ? true }` | `subdomain` (rank 100), `ingress` (105, `["local" "tailscale" "web"]`), `auth.{enabled,publicPaths}` (120), `customDomains` (130), internal `proxyConf`. All in the Access group. `available = false` hides `auth` and defaults it off |
+| `mkReverseProxyOptions` | `{ subdomain ? null, auth ? null, customDomains ? [] }`. `auth` is `{ enabled ? true, publicPaths ? [], available ? true }` | `subdomain` (rank 100), `ingress` (105, `["local" "tailscale" "netbird" "web"]`), `auth.{enabled,publicPaths}` (120), `customDomains` (130), internal `proxyConf`. All in the Access group. `available = false` hides `auth` and defaults it off |
 | `mkVpnOptions` | `{ containers ? [], internalContainers ? [], ports ? [], networks ? [], enabled ? false }` | `vpn.enabled` (110, Access group) plus internal `vpn.containers`, `internalContainers`, `ports`, `networks`. When enabled, `containers` join gluetun's network; `ports` must be unique across VPN-routed services. `networks` is also applied to `containers` and `internalContainers` |
 | `mkContainerDefinitions` | Attrset `{ <container> = "<image>"; … }` plus optional `extraUnits ? []`, `timerUnits ? []`, `rank ? 300` | `containers.<container>` image options (Advanced group), internal `systemdUnits` (`docker-<container>` + extras + timers), internal `systemdTimers` |
 | `mkSystemdUnits` | List of unit names without `.service` | Internal `systemdUnits`. For services without containers |

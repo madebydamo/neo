@@ -400,7 +400,7 @@ One public IP and one homeserver? Run SWAG on that IP and leave streamproxy off.
 
 ### Per-service ingress
 
-Each reverse-proxied service has an **`ingress`** multi-select: **`local`** (LAN), **`tailscale`** (tailnet), **`web`** (public HTTPS via rathole/streamproxy). Pick any combination; the default is all three (same behaviour as before). Dropping **`web`** makes that vhost return the neo **404** page on the public PROXY-protocol path; HTTP-01 on port 80 still works so certificates renew. Example — pastebin LAN-only:
+Each reverse-proxied service has an **`ingress`** multi-select: **`local`** (LAN), **`tailscale`** (tailnet), **`netbird`** (the NetBird network, by `services.netbird.networkRange`), **`web`** (public HTTPS via rathole/streamproxy, or a visitor on a public address, IPv6 included). Pick any combination; the default is all four. A list written before NetBird existed does not contain `netbird`: the build warns which apps are closed to NetBird. Dropping **`web`** makes that vhost return the neo **404** page on the public PROXY-protocol path; HTTP-01 on port 80 still works so certificates renew. Example — pastebin LAN-only:
 
 ```toml
 [services.pastebin]

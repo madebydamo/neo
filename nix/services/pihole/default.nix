@@ -10,6 +10,9 @@
       cfg = config.neo.services.pihole;
       piholeData = cfg.appdata;
       splitDnsActive = lib.neo.splitDnsActive config;
+      # NetBird's resolver binds port 53 on a loopback address, which a
+      # wildcard publish would take.
+      netbirdDnsActive = lib.neo.netbirdDnsActive config;
       names = lib.neo.localDnsNamesFromConfig config;
       dnsMasqLines = concatStringsSep ";" (
         map (n: "address=/${n}/${cfg.localIP}") names
@@ -20,6 +23,10 @@
           {
             assertion = !(splitDnsActive && cfg.localIP == null);
             message = "neo.services.pihole.localIP must be set when Tailscale split DNS is enabled, so Pi-hole binds only the LAN address and leaves the Tailscale IP for dnsmasq.";
+          }
+          {
+            assertion = !(netbirdDnsActive && cfg.localIP == null);
+            message = "neo.services.pihole.localIP must be set when NetBird's \"Use NetBird DNS\" is on, so Pi-hole binds only the LAN address and leaves port 53 on loopback for NetBird's resolver.";
           }
         ];
 
@@ -50,7 +57,7 @@
             "${piholeData}:/etc/pihole"
           ];
           ports = lib.neo.piholeDnsPublishPorts {
-            inherit splitDnsActive;
+            splitDnsActive = splitDnsActive || netbirdDnsActive;
             localIP = cfg.localIP;
           };
           extraOptions = [

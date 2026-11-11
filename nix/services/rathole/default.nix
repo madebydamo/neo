@@ -39,7 +39,7 @@
         assertions = [
           {
             assertion = !cfg.certificateOnly || lib.neo.privateHostnameDnsActive config;
-            message = "neo.services.rathole.certificateOnly requires Pi-hole with localIP or Tailscale split DNS, so services remain reachable on LAN or the tailnet after public HTTPS is dropped.";
+            message = "neo.services.rathole.certificateOnly requires Pi-hole with localIP, Tailscale split DNS or NetBird app names (services.netbird.appNames), so services remain reachable on LAN, the tailnet or the NetBird network after public HTTPS is dropped.";
           }
         ];
         # The token is a secret: rendered at activation, handed to the

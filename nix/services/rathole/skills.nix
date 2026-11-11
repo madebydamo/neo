@@ -18,14 +18,14 @@
         - Client service with token, remoteAddr, ports
         - Pairs with streamproxy on public machine
         - `certificateOnly`: HTTP tunnel only (Let's Encrypt); no public HTTPS (global)
-        - Per-service `ingress` (local / tailscale / web) gates the SWAG vhost; rathole itself stays a shared tunnel
+        - Per-service `ingress` (local / tailscale / netbird / web) gates the SWAG vhost; rathole itself stays a shared tunnel
 
         ## Credentials
         - `services.rathole.token` must match server entry
 
         ## Pitfalls
         - Token mismatch = silent connection failure
-        - `certificateOnly` needs Pi-hole with `localIP` or Tailscale split DNS
+        - `certificateOnly` needs Pi-hole with `localIP`, Tailscale split DNS or NetBird `appNames`
 
         ## Verification
         - Tunnel up; public HTTPS reaches local SWAG unless `certificateOnly`
