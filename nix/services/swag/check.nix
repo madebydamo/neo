@@ -76,5 +76,14 @@
 
       touch "$out"
     '';
+
+    # Regression: SWAG keeps an IPv6 network. Without one Docker's userland proxy
+    # turns every IPv6 visitor into the IPv4 gateway, a "Home network" address.
+    checks.swag-ipv6-source = pkgs.runCommand "swag-ipv6-source" {} ''
+      set -euo pipefail
+      grep -qF -- '"--network=''${lib.neo.swagIpv6Network}"' ${./default.nix}
+      grep -qF -- '--ipv6 --ipv4=false' ${../../modules/core/docker-network.nix}
+      touch "$out"
+    '';
   };
 }

@@ -36,8 +36,10 @@ in {
         proxyProtocolPort ? 8443,
       }: ''
         ## Neo-managed — per-service ingress classification and allow maps.
-        ## Class: PROXY-protocol port → web; RFC1918/loopback → local;
+        ## Class: PROXY-protocol port → web; RFC1918/loopback/ULA → local;
         ## Tailscale CGNAT/ULA → tailscale; other 443 → web (direct public).
+        ## IPv6 visitors keep their address (SWAG's swag-ipv6 network), so a
+        ## home device on a public IPv6 address counts as web.
 
         geo $ingress_is_lan {
             default 0;

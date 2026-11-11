@@ -255,7 +255,6 @@
                 "rm -r ${appdataSwag}/nginx/site-confs || true"
                 "rm -f ${appdataSwag}/nginx/proxy.conf || true"
                 "rm -f ${appdataSwag}/nginx/nginx.conf || true"
-                "/bin/sh -c '${pkgs.docker}/bin/docker network ls --format \"{{.Name}}\" | grep -q \"^internal$\" || ${pkgs.docker}/bin/docker network create internal'"
                 (lib.neo.mkEnsureDirs config [
                   appdataSwag
                   "${appdataSwag}/nginx"
@@ -304,6 +303,8 @@
             };
             extraOptions = [
               "--network=internal"
+              # IPv6 visitors keep their address (docker-network.nix).
+              "--network=${lib.neo.swagIpv6Network}"
               "--add-host=host.docker.internal:host-gateway"
             ];
           };

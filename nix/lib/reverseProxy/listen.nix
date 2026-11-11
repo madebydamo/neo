@@ -7,6 +7,10 @@
 
       httpsListenInclude = "  include /config/nginx/listen-https.conf;\n";
 
+      # IPv6-only Docker network SWAG joins next to `internal`, so a visitor's
+      # IPv6 address reaches nginx (nix/modules/core/docker-network.nix).
+      swagIpv6Network = "swag-ipv6";
+
       # Dual listeners: plain TLS for LAN/Tailscale; PROXY protocol for streamproxy/rathole.
       # ingress-access.conf applies per-vhost posture (local / tailscale / web).
       # error-pages.conf serves the neo 404 page for nginx-generated 404s.
