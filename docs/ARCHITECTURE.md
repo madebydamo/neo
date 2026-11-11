@@ -39,7 +39,7 @@ From your side it is still "HTTPS to my domain".
 | Step | What happens |
 |------|----------------|
 | On the internet | Traffic is **encrypted (TLS)**. Passers-by and random servers do not see your content in the clear. |
-| At the front door | **SWAG** (Nginx with automatic Let's Encrypt certificates) decrypts. It can drop visitors from countries or IP ranges you block, and ban IPs that keep failing (fail2ban). |
+| At the front door | **SWAG** (Nginx with automatic Let's Encrypt certificates) decrypts. It can drop visitors from countries or IP ranges you block, and ban IPs that keep failing (fail2ban) or that CrowdSec knows as attackers (optional). |
 | The login | **tinyauth** asks who you are, then checks that you may open this app. Many apps also have **their own login**, so almost everything has two locks. |
 | Between apps | Services talk on an **internal** network. They are not each hanging on a public port. |
 | Back to you | The response is **encrypted again** before it leaves the server. |

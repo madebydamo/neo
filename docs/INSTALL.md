@@ -582,7 +582,7 @@ Without `identity.sops.yaml` (plain secrets, or a repo that was never encrypted 
 4. **Activate** from the UI. The changes preview shows what will change first, including updated flake inputs and plugins  
 5. Leave **system-updater** (and **docker-updater**) on if you want hands-off upgrades  
 6. Optional: [encrypt secrets](#secrets-and-encryption) and push the config repo, so the machine can be [rebuilt from it](#rebuild-a-machine-from-its-config-repo)
-7. Optional: set up [backups](#backups) (local ZFS snapshots, and the **backup** service to another computer or disk), and the SWAG **Geo & IP filter** and **Auto ban** sections if the machine is on the public web  
+7. Optional: set up [backups](#backups) (local ZFS snapshots, and the **backup** service to another computer or disk), and the SWAG **Geo & IP filter**, **Auto ban** and **CrowdSec** sections if the machine is on the public web  
 
 Restart and shut down live under **Settings → Power**. Booting an older generation lives under **Versioning**.
 

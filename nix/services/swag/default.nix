@@ -285,7 +285,10 @@
                 EXTRA_DOMAINS = concatStringsSep "," (proxyPassDomains ++ customDomains);
                 SWAG_AUTORELOAD = "true";
                 SWAG_AUTORELOAD_WATCHLIST = "/config/etc/letsencrypt";
-                DOCKER_MODS = "linuxserver/mods:swag-dashboard|linuxserver/mods:swag-dbip";
+                DOCKER_MODS = concatStringsSep "|" (
+                  ["linuxserver/mods:swag-dashboard" "linuxserver/mods:swag-dbip"]
+                  ++ optional cfg.crowdsec.enabled "linuxserver/mods:swag-crowdsec"
+                );
                 # No jails selected: SWAG skips fail2ban setup and the daemon.
                 DISABLE_F2B = boolToString (autoBan.jails == []);
               };

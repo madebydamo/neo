@@ -9,7 +9,7 @@
       service = "swag";
       inherit config;
       description = "SWAG reverse proxy, TLS, proxy-confs, certificates, dashboard, geo";
-      tags = ["neo" "swag" "nginx" "tls" "dashboard" "goaccess" "geoip" "dbip"];
+      tags = ["neo" "swag" "nginx" "tls" "dashboard" "goaccess" "geoip" "dbip" "crowdsec"];
       title = "Neo · SWAG (edge reverse proxy)";
       body = ''
         ## When to Use
@@ -20,9 +20,16 @@
         - Dual HTTPS listeners (`listen-https.conf`):
           - **443** plain TLS — LAN / direct
           - **8443** TLS + PROXY protocol — streamproxy / rathole (host port `localHttpsProxyProtocolPort` on 127.0.0.1 only, 9982 when streamproxy co-located)
-        - Docker mods: swag-dashboard + swag-dbip
+        - Docker mods: swag-dashboard + swag-dbip (+ swag-crowdsec with CrowdSec)
         - Geo lists: `services.swag.geo` (empty = unrestricted); `ipWhitelist` / `ipBlacklist` (IP/CIDR) beat country/continent rules
         - Real client IPs: only on the PROXY-protocol path; old access.log lines stay private-proxy IPs until new traffic
+
+        ## CrowdSec (`services.swag.crowdsec`, off by default)
+        - Container `crowdsec` (local API http://crowdsec:8080, internal network) reads SWAG's nginx logs; state in `appdata/swag/crowdsec-engine`
+        - SWAG loads the `swag-crowdsec` mod (lua bouncer, live mode): banned public IPs get 403; private IPs are never checked
+        - `crowdsec-bouncer.service` registers bouncer `swag` with the generated key (`appdata/swag/neo/crowdsec-bouncer.env`) and reloads nginx; reruns when either container restarts
+        - `docker exec crowdsec cscli decisions list` / `alerts list` / `decisions delete --ip <ip>` (unban) / `bouncers list` / `metrics`
+        - Runs alongside fail2ban (`autoBan`); an IP can be banned by either
 
         ## Procedures
         1. Domain/email set; container healthy

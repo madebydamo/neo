@@ -23,6 +23,13 @@
         icon = lib.neo.ui.icons.shield;
         rank = 120;
       };
+      crowdsecGroup = lib.neo.ui.mkGroup {
+        id = "crowdsec";
+        label = "CrowdSec";
+        description = "Block known attackers with a blocklist shared by thousands of servers";
+        icon = lib.neo.ui.icons.globe;
+        rank = 130;
+      };
       # SWAG's stock fail2ban jails (filters ship in the image).
       jailLabels = {
         nginx-http-auth = "Failed basic auth";
@@ -200,6 +207,52 @@
                 rank = 60;
                 ui = lib.neo.ui.mkUi {group = autoBanGroup;};
               };
+              # CrowdSec engine container (local API on the internal network) reading
+              # SWAG's nginx logs + the swag-crowdsec bouncer mod in SWAG (crowdsec.nix).
+              crowdsec = mkOption {
+                type = types.submodule {
+                  options = {
+                    enabled = mkOption {
+                      type = types.bool;
+                      default = false;
+                      description = "Block attackers on all your apps at once: break-in attempts, password guessing and scans. Your home network is never blocked.";
+                      rank = 0;
+                      ui = lib.neo.ui.mkUi {
+                        label = "Use CrowdSec";
+                        summary = true;
+                      };
+                    };
+                    # DISABLE_ONLINE_API when false: no signals pushed to and no
+                    # community blocklist pulled from the CrowdSec Central API.
+                    community = mkOption {
+                      type = types.bool;
+                      default = true;
+                      description = "Share the addresses that attack you with CrowdSec and get their list of known attackers in return. Off keeps everything on this server, but only blocks attackers it has seen itself.";
+                      rank = 10;
+                      ui = lib.neo.ui.mkUi {
+                        label = "Community blocklist";
+                        visibleWhen = "enabled";
+                      };
+                    };
+                    # COLLECTIONS: hub collections installed on every start.
+                    collections = mkOption {
+                      type = types.listOf types.str;
+                      default = ["crowdsecurity/nginx" "crowdsecurity/http-cve"];
+                      description = "Detection rules from the CrowdSec hub, e.g. crowdsecurity/wordpress. The defaults cover web scans, password guessing and known exploits.";
+                      rank = 20;
+                      example = ["crowdsecurity/nginx" "crowdsecurity/http-cve" "crowdsecurity/wordpress"];
+                      ui = lib.neo.ui.mkUi {
+                        label = "Detection rules";
+                        visibleWhen = "enabled";
+                      };
+                    };
+                  };
+                };
+                default = {};
+                description = "Block known attackers before they reach your apps, using a blocklist shared by thousands of servers.";
+                rank = 70;
+                ui = lib.neo.ui.mkUi {group = crowdsecGroup;};
+              };
             }
             # Dashboard UI at https://swag.<domain>/ (docker-mod + GoAccess).
             // lib.neo.mkReverseProxyOptions {
@@ -207,10 +260,18 @@
             }
             // lib.neo.mkContainerDefinitions {
               swag = "lscr.io/linuxserver/swag:latest";
-              extraUnits = [
-                "swag-cert-reloader"
-                "swag-patcher"
-              ];
+              # Image option always declared; the container only runs with crowdsec.enabled.
+              crowdsec = "crowdsecurity/crowdsec:latest";
+            }
+            // {
+              systemdUnits = mkOption {
+                type = types.listOf types.str;
+                default =
+                  ["docker-swag" "swag-cert-reloader" "swag-patcher"]
+                  ++ optionals config.neo.services.swag.crowdsec.enabled ["docker-crowdsec" "crowdsec-bouncer"];
+                internal = true;
+                description = "Systemd units of SWAG and, with CrowdSec, its engine and bouncer registration.";
+              };
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/swag"
             // lib.neo.mkServiceMeta {
@@ -228,7 +289,8 @@
               notes = ''
                 SWAG (nginx with Certbot) terminates TLS and proxies to the apps on the internal Docker network. Certificates come from Let's Encrypt or ZeroSSL for the domain, all subdomains and the proxyPass domains.
                 Loads the swag-dashboard and swag-dbip mods (GoAccess analytics and GeoIP). Country and IP allow/deny lists live under geo (empty = unrestricted; IP rules win over country rules); fail2ban jails and never-ban IPs under autoBan (no jails = fail2ban off).
-                Image: lscr.io/linuxserver/swag:latest.
+                CrowdSec (off by default) runs the CrowdSec engine next to SWAG on its nginx logs and adds the swag-crowdsec bouncer mod, which answers banned visitors with 403. Private addresses are never banned; the bouncer key is generated and registered automatically. Community blocklist sends attacking IPs, scenario and time to the CrowdSec Central API and pulls its blocklist. Runs alongside Auto ban. Unban: `docker exec crowdsec cscli decisions delete --ip <ip>`.
+                Images: lscr.io/linuxserver/swag:latest, crowdsecurity/crowdsec:latest.
               '';
               projectUrl = "https://docs.linuxserver.io/general/swag/";
               githubUrl = "https://github.com/linuxserver/docker-swag";

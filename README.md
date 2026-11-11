@@ -86,7 +86,7 @@ If the machine at home has no public IP, route the traffic with [streamproxy](do
 - **Your machine.** The homeserver is hardware you control.
 - **Home or anywhere.** Host it at home. Host it anywhere. Safe on a public Wi-Fi uplink.
 - **Fine-grained access control.** Per service: reachable on the LAN, on Tailscale or NetBird, on the public web, or any mix. Per person: which apps they may open.
-- **Edge protection.** Allow or block countries and IP ranges. Ban IPs that keep failing to log in, bad bots and exploit scanners (fail2ban, on by default).
+- **Edge protection.** Allow or block countries and IP ranges. Ban IPs that keep failing to log in, bad bots and exploit scanners (fail2ban, on by default), and optionally block known attackers with CrowdSec's shared blocklist (off by default, one switch).
 
 ### Privacy
 
