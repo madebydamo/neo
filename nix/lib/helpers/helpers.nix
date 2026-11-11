@@ -60,6 +60,18 @@ in {
           inputs = [];
         };
 
+        # 32 random bytes, base64 (openssl rand -base64 32), for keys that
+        # must decode to 32 bytes (NetBird store.encryptionKey).
+        randomKeyBase64 = mkHelper {
+          id = "random-key-base64";
+          kind = "button";
+          label = "Generate";
+          description = "Fill with a random 32-byte key in base64.";
+          apply = "set";
+          script = scripts + "/random-key-base64.sh";
+          inputs = [];
+        };
+
         bcryptUser = mkHelper {
           id = "bcrypt-user";
           kind = "form";

@@ -1,5 +1,5 @@
 # Regression: nginx must start even when a proxied hostname is missing from DNS.
-# Literal hostnames in proxy_pass are resolved at config load; NXDOMAIN is [emerg]
+# Literal hostnames in proxy_pass and grpc_pass are resolved at config load; NXDOMAIN is [emerg]
 # and takes every vhost down. Container names / public names belong in nginx
 # variables (request-time DNS via resolver.conf). IPs and host.docker.internal
 # (/etc/hosts extra_hosts; resolver does not read hosts) may stay literal.
@@ -14,7 +14,7 @@
 
       hits="$(
         grep -RInE --include='*.nix' --include='*.conf' \
-          'proxy_pass https?://(\$\{|[A-Za-z_])' \
+          '(proxy|grpc)_pass (https?|grpcs?)://(\$\{|[A-Za-z_])' \
           "$services" "$lib" "$templates" \
         | grep -E '(/swag\.nix:|/swag/|/reverseProxy/|/templates/plugin/)' \
         | grep -v 'host\.docker\.internal' \

@@ -112,7 +112,7 @@ Enable what you want in the web UI.
 - **Security.** Tinyauth (login in front of every app), Authentik (single sign-on), Vaultwarden (passwords)
 - **Calendar and contacts.** RustiCal (CalDAV, CardDAV), Calino, iCal subscriptions
 - **Utilities.** Vikunja (tasks), Mealie (recipes), Karakeep (bookmarks), SearXNG (search), pastebin, change detection, Activepieces (automation), Dawarich (location history), Webtop and Firefox (in the browser)
-- **Network.** Pi-hole, Tailscale, NetBird, WireGuard VPN (Gluetun), NTP, Rathole and streamproxy (no public IP)
+- **Network.** Pi-hole, Tailscale, NetBird (also its own control plane), WireGuard VPN (Gluetun), NTP, Rathole and streamproxy (no public IP)
 - **Monitoring.** Beszel
 - **AI support.** Hermes
 - **Core.** Neo web, SWAG (HTTPS and routing), system and container updaters

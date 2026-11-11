@@ -67,7 +67,7 @@
           echo "$(( ($1 >> 24) & 255 )).$(( ($1 >> 16) & 255 )).$(( ($1 >> 8) & 255 )).$(( $1 & 255 ))"
         }
 
-        cidr=$(ip -4 -o addr show dev ${wg} 2>/dev/null | awk '{print $4}' | head -n1)
+        cidr=$(ip -4 -o addr show dev ${wg} 2>/dev/null | awk '{print $4}' | head -n1 || true)
         if [ -z "$cidr" ]; then
           echo "netbird-check: ${wg} has no address yet; is the server in the network?" >&2
           exit 1

@@ -194,6 +194,7 @@ Do not add per-service code to the web UI. If the generic form is not enough, a 
 | `mkHelper` | `{ id, kind, script, label ? "Generate", description ? "", apply ? "set", inputs ? [] }`. `kind` is `"button"` (no inputs) or `"form"` (needs `inputs`: list of `{ name, type, label, required, placeholder }`, `type` e.g. `"str"`, `"password"`). `apply` is `"set"` or `"append"`. `script` is a path to a bash script that reads the form as JSON on stdin and prints the value on stdout | Helper for `mkOption { helper = …; }` |
 | `helpers.randomToken` | | Button: 32 random bytes as hex |
 | `helpers.randomToken32Hex` | | Button: 16 random bytes as 32 hex characters |
+| `helpers.randomKeyBase64` | | Button: 32 random bytes, base64 |
 | `helpers.bcryptUser` | | Form (username, password): `user:bcrypt-hash` line |
 | `helpers.mkpasswdSha512` | | Form (password): SHA-512 crypt hash |
 
