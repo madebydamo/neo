@@ -22,6 +22,27 @@
     neoToolsOn = cfg.neoToolsToken != null && cfg.neoToolsToken != "" && (neoCfg.enabled or false);
     neoHermesAuth = lib.neo.mkNeoHermesAuth pkgs ./oauth.py;
 
+    # hermes-agent builds its pm packages (node, ripgrep, …) with a patchelf
+    # carrying a fix for patchelf 0.19.2 (NixOS/patchelf#674). That patch does
+    # not apply to the patchelf 0.15 nixpkgs ships, which has no such bug, so
+    # use the stock one there. Turns itself off on patchelf 0.19+; drop it
+    # once NousResearch/hermes-agent#152542 is in the pinned revision.
+    upstreamPackage = inputs.hermes-agent.packages.${pkgs.stdenv.hostPlatform.system}.default;
+    hermesPackage =
+      if lib.versionOlder pkgs.patchelf.version "0.19"
+      then
+        upstreamPackage.override (prev: {
+          pmPackages = lib.mapAttrs (_: drv:
+            drv.overrideAttrs (old: {
+              nativeBuildInputs = map (i:
+                if lib.getName i == "patchelf"
+                then pkgs.patchelf
+                else i) (old.nativeBuildInputs or []);
+            }))
+          prev.pmPackages;
+        })
+      else upstreamPackage;
+
     # Only pin model.* when the operator set them. Omitting keys leaves config.yaml
     # free for OAuth / prior values (Nix merge preserves user keys it does not declare).
     # Hermes managed mode still blocks dashboard saves.
@@ -300,6 +321,8 @@
 
       services.hermes-agent = {
         enable = true;
+        # Every user (gateway, dashboard, supervise) reads this package.
+        package = hermesPackage;
         stateDir = cfg.stateDir;
         workingDirectory = "${cfg.stateDir}/workspace";
         addToSystemPackages = true;
