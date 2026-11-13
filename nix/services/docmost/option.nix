@@ -174,7 +174,7 @@
                 Neo sets APP_URL to the public HTTPS address. The health endpoint skips tinyauth; the UI stays behind it.
                 With single sign-on, workspace admins become admins of every space within about a minute, and lose that when they stop being workspace admins.
                 To give someone only one space: allow them just Docmost in tinyauth, remove "Everyone" from General after adding your own people to it, then add them to that space, directly after they signed in once, or through a group from Groups to copy.
-                Group membership is copied at sign-in, so someone who is already signed in joins a new group the next time they sign in.
+                Role and group membership are copied at sign-in. With single sign-on a Docmost session lasts 5 days, after which tinyauth signs people back in, usually without asking, so someone who is already signed in joins a new group within 5 days, or right away after signing out and back in.
                 All members can still see the names and emails of other members.
                 If Neo can no longer update Docmost's database, usually after a Docmost update, new sign-ins are blocked with a message until that is fixed. People already signed in stay signed in.
               '';

@@ -214,9 +214,18 @@ def ensure_group(name):
 
 
 def sync_groups(user, groups):
-    for name in SYNC_GROUPS:
-        if name in groups:
-            service.call("/groups/members/add", {"groupId": ensure_group(name)["id"], "userIds": [user["id"]]})
+    """Add the user to the Docmost group of each SYNC_GROUPS entry they are in, and log it."""
+    if not SYNC_GROUPS:
+        return
+    matched = [name for name in SYNC_GROUPS if name in groups]
+    for name in matched:
+        # Adding someone who is already a member changes nothing.
+        service.call("/groups/members/add", {"groupId": ensure_group(name)["id"], "userIds": [user["id"]]})
+    # The sign-in groups show why a group did not match (spelling, Entra object IDs).
+    log(
+        f"{user.get('email')}: groups to copy: {', '.join(matched) or 'none'}"
+        f" (sign-in groups: {', '.join(groups)[:300] or 'none'})"
+    )
 
 
 def failed_sql():

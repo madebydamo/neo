@@ -94,10 +94,17 @@
           virtualisation.oci-containers.containers = {
             docmost = {
               image = cfg.containers.docmost;
-              environment = {
-                APP_URL = lib.neo.publicUrl config cfg;
-                REDIS_URL = "redis://docmost-redis:6379";
-              };
+              environment =
+                {
+                  APP_URL = lib.neo.publicUrl config cfg;
+                  REDIS_URL = "redis://docmost-redis:6379";
+                }
+                # With SSO, a short session sends people through the bridge (and its
+                # role / group sync) every few days; tinyauth signs them back in
+                # without a prompt. Docmost's default is 90 days.
+                // lib.optionalAttrs ssoActive {
+                  JWT_TOKEN_EXPIRES_IN = "5d";
+                };
               volumes = [
                 "${appdata}/storage:/app/data/storage"
               ];
@@ -231,7 +238,7 @@
 
           # The service account creates the workspace, so it alone would administer
           # General, and Docmost's space checks ignore the workspace role. A timer
-          # rather than the sign-in bridge: sessions last 90 days, and the bridge has
+          # rather than the sign-in bridge: sessions last 5 days, and the bridge has
           # no database access and cannot see spaces its account is not in. Grants
           # carry added_by_id = service account, so only those are revoked; a space
           # role given by hand stays.
