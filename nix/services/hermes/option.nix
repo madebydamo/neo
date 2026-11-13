@@ -263,6 +263,31 @@
                 default = "${config.neo.core.volumes.appdata}/hermes";
                 description = "State directory for Hermes data (HERMES_HOME inside)";
               };
+
+              # Inbound webhooks (hermes/webhook.nix): other modules add routes,
+              # e.g. monitoring's Grafana alerts. Senders sign with the HMAC key
+              # in webhook.secretFile (generated, never in Nix).
+              webhook = {
+                routes = mkOption {
+                  type = types.attrsOf (types.attrsOf types.anything);
+                  internal = true;
+                  default = {};
+                  description = "Hermes webhook routes (platforms.webhook.extra.routes), without secrets";
+                };
+                port = mkOption {
+                  type = types.port;
+                  internal = true;
+                  default = 8644;
+                  description = "Port of the Hermes webhook listener (reachable from this host and its containers)";
+                };
+                secretFile = mkOption {
+                  type = types.str;
+                  internal = true;
+                  readOnly = true;
+                  default = "${config.neo.services.hermes.stateDir}/neo/webhook.secret";
+                  description = "File holding the webhook HMAC key (raw), readable by the homeserver group";
+                };
+              };
             }
             // lib.neo.mkReverseProxyOptions {subdomain = "hermes";}
             // lib.neo.mkSystemdUnits [
