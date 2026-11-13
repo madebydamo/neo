@@ -28,10 +28,15 @@
         - The agent here writes over loopback (Loki 127.0.0.1:${toString cfg.lokiPort}, Prometheus 127.0.0.1:${toString cfg.prometheusPort});
           other servers go through SWAG `/ingest/loki/api/v1/push` and `/ingest/prometheus/api/v1/write` with `Authorization: Bearer <ingestToken>`.
         - Containers sit on their own Docker network `monitoring` (with SWAG only); Grafana is not on `internal`.
-        - Neo seeds dashboards once (folder Neo: Overview, Server, Logs, Logins and access; folder ISO 27001: evidence for
-          Annex A controls) and alert rules (`grafana-seed.service`). After that they are ordinary Grafana objects: edit them
-          freely. Neo never overwrites an existing uid; deleting one brings Neo's version back on the next Grafana restart.
-          Datasources (uids `prometheus`, `loki`) and the contact point `Assistant` are provisioned and read-only.
+        - Two kinds of dashboards and alert rules:
+          - Provided (read-only, Grafana refuses to save them; Neo replaces them on updates): folders Neo and ISO 27001
+            from this server's configuration, and folder Apps with dashboards the monitoring agents send for the apps on
+            their machine (`neo.monitoring.apps.<service>.dashboards`). Neo's alert rules are provided too.
+          - User: everything people or you create. Neo never touches these.
+          To change a provided dashboard, save a copy under a new uid ("Save as", or the API below) and change that.
+          Datasources (uids `prometheus`, `loki`) and the contact point `Assistant` are provided as well.
+        - App metrics: apps declare endpoints in `neo.monitoring.apps.<service>.metrics`; the agent on the machine running
+          the app scrapes them, labels `service`, `endpoint`, `host`, `job="app/<service>"`.
 
         ## Querying (read-only, on this server)
         ```bash
@@ -55,15 +60,16 @@
         g http://127.0.0.1:3000/api/dashboards/uid/neo-overview | jq .dashboard  # read one
         # create or update: {"dashboard": {...model, "uid": "my-uid", "id": null}, "folderUid": "neo", "overwrite": true, "message": "why"}
         g -X POST http://127.0.0.1:3000/api/dashboards/db -d @- < dashboard.json
-        g http://127.0.0.1:3000/api/folders                                    # folders: neo, neo-iso27001
+        g http://127.0.0.1:3000/api/folders                                    # provided: neo, neo-iso27001, neo-apps
         g http://127.0.0.1:3000/api/v1/provisioning/alert-rules                # alert rules (same API to POST/PUT/DELETE)
         ```
         - Datasource refs: `{"type":"prometheus","uid":"prometheus"}` and `{"type":"loki","uid":"loki"}`. Copy panel shapes
           from a seeded dashboard; use the labels above, keep usernames/IPs out of `by (…)` on Prometheus.
         - Alert rules you create via the API: send `X-Disable-Provenance: true`, so people can still edit them in the UI.
           Route them to the `Assistant` contact point (the default policy) to reach the owner.
-        - Check every query returns data (`/api/v1/query` above) before saving; give the dashboard a new uid instead of
-          changing a seeded one when the owner wants Neo's version kept.
+        - Check every query returns data (`/api/v1/query` above) before saving. Saving over a provided dashboard
+          (folders Neo, ISO 27001, Apps) fails with "Cannot save provisioned dashboard": copy it to a new uid in another
+          folder (create one with `POST /api/folders`) and say so.
         - Grafana keeps a version history: `GET /api/dashboards/uid/<uid>/versions`, restore via the UI.
 
         ## Alerts

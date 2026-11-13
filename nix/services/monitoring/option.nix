@@ -108,7 +108,7 @@
               notes = ''
                 Grafana with Prometheus (numbers) and Loki (logs). Turn on Monitoring agent on every server that should report, including this one.
                 Other servers send to https://<grafana subdomain>/ingest/… with the ingest token; those paths skip the homeserver login.
-                Everyone who passes the homeserver login is a Grafana admin. Neo adds its dashboards (folders Neo and ISO 27001) and alert rules once; after that they are yours to change. Delete one to get Neo's version back on the next restart of Grafana.
+                Everyone who passes the homeserver login is a Grafana admin. Dashboards in the folders Neo, ISO 27001 and Apps and Neo's alert rules are provided: read-only, updated with Neo and the apps (Apps come from the monitoring agent of the machine running each app). Use Save as to change a copy; your own dashboards and rules are never touched.
               '';
               projectUrl = "https://grafana.com/oss/";
               githubUrl = "https://github.com/grafana/grafana";
