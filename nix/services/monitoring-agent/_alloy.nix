@@ -9,6 +9,8 @@
   vhosts,
   uptimeTargets,
   swagLogsOn,
+  # neo.monitoring.scrapeTargets: {service, endpoint, container|address, port, network, path, scheme, interval}
+  appTargets ? [],
 }: let
   inherit (lib) concatMapStrings concatStringsSep optionalString;
   str = builtins.toJSON;
@@ -26,6 +28,105 @@
       concatStringsSep "{{ else }}" (map (v: ''{{ if eq .vhost "${v.host}" }}${v.service}'') vhosts)
       + "{{ else }}other"
       + concatMapStrings (_: "{{ end }}") vhosts;
+
+  ident = s: builtins.replaceStrings ["-" "."] ["_" "_"] s;
+  appComponent = t: "app_${ident t.service}_${ident t.endpoint}";
+  appLabels = t: ''
+    rule {
+      replacement  = ${str t.path}
+      target_label = "__metrics_path__"
+    }
+    rule {
+      replacement  = ${str t.scheme}
+      target_label = "__scheme__"
+    }
+    rule {
+      replacement  = ${str t.service}
+      target_label = "service"
+    }
+    rule {
+      replacement  = ${str t.endpoint}
+      target_label = "endpoint"
+    }
+    rule {
+      replacement  = ${str "app/${t.service}"}
+      target_label = "job"
+    }
+  '';
+  # Optional metric relabeling per endpoint (neo.monitoring.apps.*.metrics.*.relabel).
+  fwd = t:
+    if (t.relabel or []) == []
+    then "prometheus.remote_write.neo.receiver"
+    else "prometheus.relabel.${appComponent t}.receiver";
+  relabelRule = r: let
+    labelOnly = r.action == "labeldrop" || r.action == "labelkeep";
+  in ''
+    rule {
+      ${optionalString (!labelOnly) "source_labels = ${str r.sourceLabels}"}
+      regex         = ${str r.regex}
+      action        = ${str r.action}
+      ${optionalString (r.targetLabel != null) "target_label = ${str r.targetLabel}"}
+      ${optionalString (r.action == "replace") "replacement = ${str r.replacement}"}
+    }
+  '';
+  relabelBlock = t:
+    optionalString ((t.relabel or []) != []) ''
+      prometheus.relabel ${str (appComponent t)} {
+        ${concatMapStrings relabelRule t.relabel}
+        forward_to = [prometheus.remote_write.neo.receiver]
+      }
+    '';
+  appScrape = t: let
+    c = appComponent t;
+  in
+    if t.container != null
+    then ''
+      // ${t.service} / ${t.endpoint}: container ${t.container}:${toString t.port}${t.path}
+      discovery.relabel ${str c} {
+        targets = discovery.docker.apps.targets
+        rule {
+          source_labels = ["__meta_docker_container_name"]
+          regex         = ${str "/${t.container}"}
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_docker_network_name"]
+          regex         = ${str t.network}
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_docker_network_ip"]
+          replacement   = ${str "$1:${toString t.port}"}
+          target_label  = "__address__"
+        }
+        rule {
+          source_labels = ["__address__"]
+          target_label  = "instance"
+        }
+        ${appLabels t}
+      }
+
+      prometheus.scrape ${str c} {
+        targets         = discovery.relabel.${c}.output
+        scrape_interval = ${str t.interval}
+        forward_to      = [${fwd t}]
+      }
+      ${relabelBlock t}
+    ''
+    else ''
+      // ${t.service} / ${t.endpoint}: ${t.address}${t.path}
+      discovery.relabel ${str c} {
+        targets = [{ "__address__" = ${str t.address} }]
+        ${appLabels t}
+      }
+
+      prometheus.scrape ${str c} {
+        targets         = discovery.relabel.${c}.output
+        scrape_interval = ${str t.interval}
+        forward_to      = [${fwd t}]
+      }
+      ${relabelBlock t}
+    '';
 
   okCodes = lib.range 200 208 ++ lib.range 300 308 ++ [401 403];
   blackboxConfig = builtins.toJSON {
@@ -389,5 +490,17 @@ in ''
       scrape_timeout  = "15s"
       forward_to      = [prometheus.remote_write.neo.receiver]
     }
+  ''}
+
+  ${optionalString (appTargets != []) ''
+    // ── App metrics (neo.monitoring.apps) ───────────────────────────────────
+
+    ${optionalString (builtins.any (t: t.container != null) appTargets) ''
+      discovery.docker "apps" {
+        host             = "unix:///var/run/docker.sock"
+        refresh_interval = "30s"
+      }
+    ''}
+    ${concatMapStrings appScrape appTargets}
   ''}
 ''

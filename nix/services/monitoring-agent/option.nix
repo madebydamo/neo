@@ -77,6 +77,7 @@
             }
             // lib.neo.mkContainerDefinitions {
               alloy = "grafana/alloy:latest";
+              extraUnits = ["monitoring-agent-publish"];
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/monitoring-agent"
             // lib.neo.mkServiceMeta {
