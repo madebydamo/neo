@@ -8,6 +8,7 @@ The interactive CLI is a client of the gateway: turns, tools and their plugin ho
 the `hermes gateway` service, which has neither the hc ids nor this terminal. So the plugin
 reports from the CLI process instead, by wrapping the client's turn (`GatewayAgent`): working
 while a turn runs, blocked while it waits on an approval or question, then done/error/idle.
+/clear, /new, /reset and /resume report idle again, so the card starts over.
 Subagents run in the gateway and never reach the client, so only the user's turns count.
 """
 
@@ -87,7 +88,35 @@ def _patch_client() -> bool:
         if event in handlers:
             handlers[event] = _blocking(handlers[event], kind)
     cls._herdr_status = True
+    _patch_session_switch()
     return True
+
+
+def _fresh(fn):
+    """A new or resumed conversation starts the card over (Claude Code does the same on /clear)."""
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            _report("idle")
+
+    return wrapper
+
+
+def _patch_session_switch() -> None:
+    # /clear, /new and /reset all rotate the session through new_session. With the gateway
+    # owning the session, the client never fires on_session_reset, so wrap the method itself.
+    for module, cls_name, method in (
+        ("hermes_cli.cli_session_mixin", "CLISessionMixin", "new_session"),
+        ("hermes_cli.cli_commands_mixin", "CLICommandsMixin", "_handle_resume_command"),
+    ):
+        try:
+            cls = getattr(__import__(module, fromlist=[cls_name]), cls_name)
+            setattr(cls, method, _fresh(getattr(cls, method)))
+        except (ImportError, AttributeError):
+            logger.warning("herdr-status: no %s.%s; that reset is not reported", cls_name, method)
 
 
 def _interactive_chat() -> bool:
