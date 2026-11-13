@@ -8,6 +8,9 @@
 # "Home network" address. With an IPv6 endpoint Docker forwards the connection
 # and keeps its source address. The apps stay on IPv4: most listen on IPv4 only,
 # and an IPv6 address in Docker's DNS would send their clients there first.
+#
+# `neo.core.dockerNetworks`: more IPv4 networks a module needs for itself,
+# e.g. `monitoring` (Grafana, Loki, Prometheus and SWAG only).
 {...}: {
   flake.modules.nixos.docker-network = {
     config,
@@ -22,6 +25,10 @@
       exists() { ${docker} network inspect "$1" >/dev/null 2>&1; }
 
       exists internal || ${docker} network create internal >/dev/null
+      ${lib.concatMapStrings (n: ''
+          exists ${n} || ${docker} network create ${n} >/dev/null
+        '')
+        config.neo.core.dockerNetworks}
 
       if ! exists ${ipv6Net}; then
         if ! ${docker} network create --ipv6 --ipv4=false ${ipv6Net} >/dev/null; then
@@ -32,7 +39,14 @@
       fi
     '';
   in {
-    systemd.services = lib.mkMerge [
+    options.neo.core.dockerNetworks = lib.mkOption {
+      type = lib.types.listOf (lib.types.strMatching "[a-z][a-z0-9-]*");
+      default = [];
+      internal = true;
+      description = "Extra Docker networks to create next to internal (one per isolated group of containers)";
+    };
+
+    config.systemd.services = lib.mkMerge [
       {
         neo-docker-network = {
           description = "Docker networks for the apps";
