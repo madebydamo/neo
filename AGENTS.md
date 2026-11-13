@@ -33,7 +33,7 @@ NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) + Rust *
 
 1. `option.nix` — `enabled`, `// lib.neo.mkReverseProxyOptions`, `mkContainerDefinitions`, `mkAppdata`, `mkServiceMeta`, `mkSkillOptions`
 2. `default.nix` — `mkIf`, activation dirs, `oci-containers` on `networks = ["internal"]`
-3. `swag.nix` if public; `skills.nix` for Hermes (`mkServiceSkill`)
+3. `swag.nix` if public; `skills.nix` for Hermes (`mkServiceSkill`); `monitoring.nix` for metrics and a Grafana dashboard (`neo.monitoring.apps.<name>`, `lib.neo.grafana`, see below)
 4. Enable in **`settings.toml`**: `[services.<name>] enabled = true`
 5. `git add` → **`just launch`** → smoke test below → `just format && just check`
 
@@ -64,6 +64,8 @@ Naming: options camelCase under `neo.services.*`; plain-string descriptions; vol
 **ingress:** per-service multi-select (`local` / `tailscale` / `netbird` / `web`) via `mkReverseProxyOptions`; default all four. `netbird` matches `services.netbird.networkRange` and wins over the LAN and Tailscale ranges; the PROXY-protocol port is always `web`. SWAG also sits on the IPv6-only `swag-ipv6` network so IPv6 visitors keep their address (public IPv6 = `web`). Omitting `web` denies that vhost on the shared rathole/PROXY-protocol listener (neo 404 page) — not a per-app rathole port.
 
 **tinyauth:** default edge auth. Health probes need `auth.publicPaths` (e.g. `^/api/v1/info/status$`). UI stays 302 → tinyauth.
+
+**Monitoring:** `monitoring` (Grafana, Prometheus, Loki on their own Docker network with SWAG) on one machine, `monitoring-agent` (Alloy) on every machine. Apps declare Prometheus endpoints and dashboards in `neo.monitoring.apps.<service>` (`nix/modules/core/monitoring.nix`, example `nix/services/immich/monitoring.nix`); the agent of the machine running the app scrapes them and sends the dashboards to the server (`/ingest/dashboards`, Apps folder). Dashboards and alert rules Neo or apps provide are file-provisioned and read-only; what users or Hermes create is theirs. Exporters are switched on with `config.neo.monitoring.collecting`. Design: [docs/design/monitoring.md](docs/design/monitoring.md).
 
 **Hermes:** per-service `skills.nix` → `neo-<name>`; use `mkServiceSkill`; credentials = real settings keys only. Collector: `nix/services/hermes/skills.nix`. `hermes.herdr` (`nix/services/hermes/herdr.nix`) lets the Herdr desktop app start Hermes over SSH as admin: linger for admin's hc core, and a `hermes` shim in admin's PATH that sudo-runs the CLI as the hermes user (never a second HERMES_HOME). hc itself comes from `hc machine add --install`, not from Neo.
 

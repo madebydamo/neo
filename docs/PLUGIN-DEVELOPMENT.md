@@ -14,6 +14,7 @@ Coding agents asked to "turn this project into a Neo plugin": follow the [checkl
 - [Development loop](#development-loop)
 - [Turn your project into a Neo plugin (checklist)](#turn-your-project-into-a-neo-plugin-checklist)
 - [Service files in detail](#service-files-in-detail)
+- [Metrics and dashboards](#metrics-and-dashboards)
 - [Other service shapes](#other-service-shapes)
 - [Texts for the web UI](#texts-for-the-web-ui)
 - [Guides](#guides)
@@ -213,6 +214,11 @@ Work through every item. Each one exists because it is easy to forget.
 
 - [ ] `config.neo.services.<name>.skill.conf = lib.neo.mkServiceSkill { service; inherit config; description; body; };`
 - [ ] The body names only settings keys that exist (`services.<name>.<option>`), and real units, paths and URLs.
+
+**`monitoring.nix`** ([details](#metrics-and-dashboards))
+
+- [ ] If the app has a Prometheus endpoint: `neo.monitoring.apps.${name}.metrics.<endpoint> = { container = name; port = …; }`, the exporter switched on with `lib.mkIf config.neo.monitoring.collecting`.
+- [ ] A dashboard in `neo.monitoring.apps.${name}.dashboards.<id>` built with `lib.neo.grafana`, every query filtered with `appSelector name` (or `host=~"$host"` for container numbers and logs).
 
 **Verify** ([details](#verify-on-the-host))
 
@@ -475,6 +481,42 @@ Hermes, Neo's AI assistant, gets one skill per enabled service that sets `skill.
 ```
 
 `mkServiceSkill` adds an "About", a live-config table (URL, units, containers, appdata, auth, public paths) and an ops cheatsheet from `cfg`. Only mention settings keys that exist. Hermes collects skills only from enabled services with `skill.enabled = true`.
+
+## Metrics and dashboards
+
+With Monitoring on, every machine runs an agent that already collects the app's logs (`{job="journal", unit="docker-<container>.service"}`), container numbers (`container_*{name="<container>"}`), web requests (`neo_http_requests_total{service="<name>"}`) and an uptime check. A plugin adds its own metrics and a dashboard in `modules/services/<svc>/monitoring.nix` (template: `modules/services/example/monitoring.nix`, real example: `$NEO/nix/services/immich/monitoring.nix`):
+
+```nix
+{...}: {
+  neoPlugin.modules.myapp-monitoring = {config, lib, plugin, ...}: let
+    name = plugin.name "myapp";
+    cfg = config.neo.services.${name};
+    sel = lib.neo.grafana.appSelector name;   # service="<name>", host=~"$host"
+  in {
+    config = lib.mkIf cfg.enabled {
+      # Exporter on only while an agent scrapes it.
+      virtualisation.oci-containers.containers.${name}.environment =
+        lib.mkIf config.neo.monitoring.collecting { METRICS_ENABLED = "true"; };
+
+      neo.monitoring.apps.${name} = {
+        metrics.main = { container = name; port = 9100; };
+        dashboards.overview = {
+          title = "MyApp${plugin.label}";
+          panels = with lib.neo.grafana; [
+            (stat { title = "Users"; w = 6; h = 4; targets = [(pq "max(myapp_users{${sel}})" "")]; })
+            (timeseries { title = "Jobs"; targets = [(pq "sum by (kind) (rate(myapp_jobs_total{${sel}}[$__rate_interval]))" "{{kind}}")]; })
+          ];
+        };
+      };
+    };
+  };
+}
+```
+
+- The agent on the machine that runs the plugin scrapes `metrics.*` (labels `service`, `endpoint`, `host`) and sends `dashboards.*` to the Monitoring server. That server shows them read-only in the **Apps** folder and replaces them when the plugin changes; it does not need the plugin itself.
+- Names that carry a value (`myapp_jobs_upload_total`) become labels with `relabel` rules on the endpoint; see `LIB.md` → Metrics and dashboards.
+- Panels without `gridPos` are laid out automatically; `w`/`h` are 24-column grid units.
+- Check on a host: `curl -s 127.0.0.1:9090/api/v1/query --data-urlencode 'query=up{service="<name>"}'` on the Monitoring server, and the dashboard under Apps.
 
 ## Other service shapes
 

@@ -17,6 +17,8 @@ Everything a plugin (or a core service) can read from `config.neo` and call from
 | `config.neo.core.git.users` | list of str, internal | Append a local user that needs the machine git key and tokens |
 | `config.neo.services.swag.domain` | null or str, `null` | Primary domain; public URL is `https://<subdomain>.<domain>` |
 | `config.neo.services.tinyauth.enabled` | bool | Whether edge auth runs (`authBlock` already checks it) |
+| `config.neo.monitoring.apps.<service>` | attrs, `{}` | Metrics endpoints and Grafana dashboards of an app; see [Metrics and dashboards](#metrics-and-dashboards-libneografana) |
+| `config.neo.monitoring.collecting` | bool, read-only | True while the monitoring agent runs on this machine: turn the app's metrics exporter on with it |
 | `config.neo.services.<name>.*` | | Your own options, plus `subdomain`, `auth`, `containers`, `appdata`, `systemdUnits` from the helpers. Other services' options can be read the same way (guard with `or`, the service may be off) |
 
 The `homeserver` user and group own all appdata. It is in the `docker` group.
@@ -146,6 +148,60 @@ systemd.services.docker-myapp.preStart = lib.concatStringsSep "\n" [
 | `getSkillServices` | `config` | Enabled services with `skill.enabled` and a `skill.conf`; **internal** |
 
 `references` and `scripts` map file names to contents, written as `references/<name>.md` and `scripts/<name>` next to the skill.
+
+### Metrics and dashboards: `lib.neo.grafana`
+
+An app declares what it exports and how to show it in `neo.monitoring.apps.<service>` (`nix/modules/core/monitoring.nix`); only entries whose service is enabled on the machine count (`enabled` defaults to `neo.services.<service>.enabled`). The monitoring agent on that machine scrapes the endpoints and sends the dashboards to the Monitoring server, which shows them read-only in the **Apps** folder: the server needs neither the app nor the plugin. Example: `nix/services/immich/monitoring.nix`.
+
+```nix
+neo.monitoring.apps.${name} = {
+  metrics.main = { container = name; port = 9090; };          # or address = "127.0.0.1:9100";
+  dashboards.overview = {
+    title = "MyApp";
+    panels = with lib.neo.grafana; [
+      (stat { title = "Users"; w = 6; h = 4; targets = [(pq "max(myapp_users{${appSelector name}})" "")]; })
+      (timeseries { title = "Requests"; targets = [(pq "sum(rate(myapp_requests_total{${appSelector name}}[$__rate_interval]))" "requests")]; unit = "reqps"; })
+    ];
+  };
+};
+# Turn the app's exporter on only while it is scraped:
+virtualisation.oci-containers.containers.${name}.environment = lib.mkIf config.neo.monitoring.collecting { METRICS = "true"; };
+```
+
+| `metrics.<endpoint>` field | Default | Meaning |
+|---|---|---|
+| `container` + `port` | | Container (use `plugin.name`) and port; found on `network` |
+| `network` | `"internal"` | Docker network the agent reaches the container on |
+| `address` | | `host:port` instead, for services outside Docker |
+| `path`, `scheme`, `interval` | `/metrics`, `http`, `30s` | |
+| `relabel` | `[]` | Metric relabel rules `{ sourceLabels ? ["__name__"], regex, targetLabel, replacement ? "$1", action ? "replace" }` (`keep`, `drop`, `labeldrop`, `labelkeep`), e.g. to turn `app_jobs_upload_total` into `app_jobs_total{task="upload"}` |
+
+Every scraped series gets `service`, `endpoint`, `host` and `job = "app/<service>"`. Container numbers (`container_*{name}`) and logs (`{job="journal", unit="docker-<container>.service"}`) exist for every app without declaring anything.
+
+| `dashboards.<id>` field | Default | Meaning |
+|---|---|---|
+| `title`, `description` | | |
+| `panels` | `[]` | Panels from the helpers below |
+| `variables` | `[]` | More template variables; `host` (servers that report the service) is always first |
+| `time` | `"now-24h"` | Default range |
+| `json` | `null` | Path of a Grafana JSON model instead of `panels` (e.g. exported from Grafana) |
+
+Neo sets the uid (`app-<service>-<id>`), tags and the `host` variable. Filter every query with `appSelector "<service>"` (`service="<service>", host=~"$host"`).
+
+| `lib.neo.grafana` | Arguments | Returns |
+|---|---|---|
+| `pq` / `pqInstant` | `expr legend` | Prometheus query target (range / instant table) |
+| `lq` / `lqLegend` | `expr` / `expr legend` | Loki query target |
+| `timeseries`, `bars`, `stat`, `bargauge`, `table`, `stateTimeline`, `logs` | `{ title, targets, w ? 12, h ? 8, gridPos ? null, unit, min, max, decimals, thresholds, mappings, description, options, custom, overrides, transformations, datasource }` | Panel; without `gridPos` it is placed automatically (24 columns, left to right) |
+| `panel` | same plus `type` | Any other panel type |
+| `text` | `{ content, title ? "", w ? 24, h ? 3 }` | Markdown panel |
+| `row` | `title y` (`y = null` in automatic layout) | Section header |
+| `dashboard` | `{ uid, title, panels, variables, time, refresh, links, tags, description }` | Dashboard model (Neo's own; apps use `neo.monitoring.apps`) |
+| `queryVar` | `{ name, label, query, datasource ? prom, multi ? true, includeAll ? true }` | Template variable |
+| `appSelector` | `service` | `service="<service>", host=~"$host"` |
+| `thresholdsGreenRed` | `steps` | Thresholds starting green; `steps = [{ color; value; }]` |
+| `upDown` | | Value mapping 0 = Down, 1 = Up |
+| `prom`, `loki`, `pos x y w h`, `layout`, `hostVar` | | Datasource refs, a fixed gridPos, the layout pass, a server variable |
 
 ### Web UI metadata: `lib.neo.ui`
 

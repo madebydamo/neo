@@ -54,11 +54,29 @@ Every series and stream carries `host` (`services.monitoring-agent.name`, defaul
 
 Uptime checks target `https://<subdomain>.<domain>/` of every app on the machine whose `ingress` includes `web`, plus `extraUptimeTargets`. They go out through public DNS, so on a rathole setup they take the same path as a visitor. 2xx, 3xx, 401 and 403 count as up (tinyauth answers 302). For a view from outside the machine's own network, list the apps of server A in `extraUptimeTargets` of server B.
 
-## Dashboards and alerts
+## Dashboards and alerts: provided and user
 
-`monitoring/_grafana.nix` (folder **Neo**: Overview, Server, Logs, Logins and access) and `monitoring/_iso27001.nix` (folder **ISO 27001**) generate the dashboards and alert rules. They are **seeds**: `grafana-seed.service` (`mkSetupService`, runs whenever Grafana starts) creates each folder, dashboard and rule whose uid does not exist yet through the API, rules with `X-Disable-Provenance`. Existing uids are never touched, so edits by people or Hermes stay; deleting one restores Neo's version on the next start. The default notification policy is pointed at the assistant only while it is still Grafana's untouched default, and the org home dashboard is set to the overview only while unset. Datasources and the `Assistant` contact point (it carries the HMAC wiring) stay file-provisioned and read-only.
+Two kinds, never mixed:
+
+| | Where it comes from | In Grafana |
+|---|---|---|
+| **Provided** | Neo's own dashboards (`monitoring/_grafana.nix`: folder **Neo**; `_iso27001.nix`: **ISO 27001**) and alert rules, from the server's store. App dashboards (`neo.monitoring.apps.*.dashboards`), from the agent of each machine running the app: folder **Apps** | File-provisioned, `allowUiUpdates = false`: Grafana refuses to save them ("Cannot save provisioned dashboard", alert rules: provenance `file`). Replaced whenever the files change, removed with them. People copy one with Save as |
+| **User** | People in the UI, Hermes through the API (`docker exec grafana curl -H 'Remote-User: hermes' …`) | Ordinary objects; Neo never touches them |
+
+Datasources and the `Assistant` contact point are provided too. The notification policy and the home dashboard belong to the users: `grafana-seed` only sets them (policy → Assistant, home → Overview) while they still are Grafana's defaults.
 
 Alert rules (folder Neo): app does not answer (5 min), server stopped reporting, disk over 90 %, systemd unit failed, many failed sign-ins (10 in 15 min), more than 20 % server errors, certificate expires in less than 10 days. ISO 27001: clock not synchronised, backup overdue (26 h), logs dropped, no logs from a server.
+
+## App metrics and dashboards
+
+`neo.monitoring.apps.<service>` (`nix/modules/core/monitoring.nix`) is set by any service or plugin next to its code, e.g. `nix/services/immich/monitoring.nix`. Entries count on a machine only while their service is enabled there.
+
+- `metrics.<endpoint>`: a container and port (found through Docker discovery on `network`, default `internal`) or an address. The agent scrapes it with labels `service`, `endpoint`, `host`, `job="app/<service>"`, and applies the endpoint's `relabel` rules (e.g. Immich's `immich_jobs_<task>_<status>_total` → `immich_jobs_total{task, status}`). `neo.monitoring.collecting` tells the app whether to switch its exporter on.
+- `dashboards.<id>`: panels from `lib.neo.grafana` (or a JSON model). Neo sets uid `app-<service>-<id>`, tags and a `host` variable (`label_values({service="<service>"}, host)`).
+
+**Definition and data may live on different machines.** The dashboard travels with the metrics: `monitoring-agent-publish` on the machine that runs the app sends its rendered dashboards to the server. On the server itself it copies them into `appdata/monitoring/apps/<source>/`; elsewhere it PUTs `https://<grafana>/ingest/dashboards/<source>/<uid>.json` with the ingest token, which SWAG stores there with WebDAV (`dav_methods PUT DELETE`, regex-restricted names, no reads). Dashboards that machine published before and no longer has are deleted. It runs on every change of the set and hourly, so a reset server fills up again. So the server needs neither the app nor the plugin. When several machines run the same app they send the same uid; Grafana shows one, and its `host` variable switches between them.
+
+The generated Alloy config is checked with `alloy validate` at build time (syntax and references); a wrong component argument still only shows when Alloy starts, so the generator keeps every app input typed.
 
 ### ISO 27001
 
@@ -77,4 +95,4 @@ The Hermes listener binds all interfaces on port 8644, which is not opened in th
 
 ## Storage
 
-Everything lives under `appdata/monitoring/{grafana,prometheus,loki}` and `appdata/monitoring-agent` (Alloy's WAL and positions), so snapshots, backup and Clear appdata cover it. Retention: `logRetentionDays` (Loki compactor) and `metricRetentionDays` (Prometheus TSDB).
+Everything lives under `appdata/monitoring/{grafana,prometheus,loki,apps}` and `appdata/monitoring-agent` (Alloy's WAL and positions), so snapshots, backup and Clear appdata cover it. Retention: `logRetentionDays` (Loki compactor) and `metricRetentionDays` (Prometheus TSDB).
