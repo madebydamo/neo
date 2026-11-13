@@ -258,9 +258,13 @@
           neo.core.secrets.containerEnv.alloy = mkIf (remote && tokenSet) {
             NEO_INGEST_TOKEN = cfg.token;
           };
+        })
 
-          # Sign-in events: tinyauth's audit stream, as JSON the agent parses.
-          virtualisation.oci-containers.containers.tinyauth.environment = mkIf tinyauth.enabled {
+        # Sign-in events: tinyauth's audit stream, as JSON the agent parses.
+        # Guarded here: containers.tinyauth.* would create the container even
+        # with tinyauth off.
+        (mkIf (cfg.enabled && tinyauth.enabled) {
+          virtualisation.oci-containers.containers.tinyauth.environment = {
             TINYAUTH_LOG_JSON = "true";
             TINYAUTH_LOG_STREAMS_AUDIT_ENABLED = "true";
           };

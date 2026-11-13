@@ -350,6 +350,7 @@
         };
 
         neo.core.dockerNetworks = [network];
+        # The monitoring assertion requires SWAG, so the swag container exists.
         virtualisation.oci-containers.containers.swag.extraOptions = ["--network=${network}"];
 
         systemd.services.grafana-seed = lib.neo.mkSetupService {

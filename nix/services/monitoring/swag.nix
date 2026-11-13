@@ -43,10 +43,15 @@
     config.neo.core.secrets.templates = lib.mkIf (cfg.enabled && tokenSet) check.templates;
 
     # SWAG writes the uploaded app dashboards (as PUID, like appdata).
-    config.systemd.services.docker-swag.preStart = lib.mkIf cfg.enabled (lib.mkAfter (lib.neo.mkEnsureDirs config [cfg.appdata "${cfg.appdata}/apps"]));
-    config.virtualisation.oci-containers.containers.swag.volumes = lib.mkIf cfg.enabled [
-      "${cfg.appdata}/apps:/neo-app-dashboards"
-    ];
+    # SWAG writes the uploaded app dashboards (as PUID, like appdata). Guard on
+    # both: a definition under containers.swag would create the container even
+    # with SWAG off.
+    config.systemd.services = lib.mkIf (cfg.enabled && config.neo.services.swag.enabled) {
+      docker-swag.preStart = lib.mkAfter (lib.neo.mkEnsureDirs config [cfg.appdata "${cfg.appdata}/apps"]);
+    };
+    config.virtualisation.oci-containers.containers = lib.mkIf (cfg.enabled && config.neo.services.swag.enabled) {
+      swag.volumes = ["${cfg.appdata}/apps:/neo-app-dashboards"];
+    };
 
     config.neo.services.monitoring.proxyConf = lib.mkDefault (lib.neo.mkSwagServer {
       inherit cfg;
