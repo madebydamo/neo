@@ -1,0 +1,11 @@
+name: herdr-status
+version: 1.0.0
+description: "Reports each Hermes turn to herdr-core (OSC 7501) so the Herdr board shows a card for this agent. Does nothing outside an hc terminal."
+author: Neo
+provides_hooks:
+  - pre_llm_call
+  - pre_tool_call
+  - on_human_input_request
+  - on_human_input_resolved
+  - subagent_start
+  - on_session_end
