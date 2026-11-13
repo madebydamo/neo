@@ -243,6 +243,20 @@
                 };
               };
 
+              # nix/services/hermes/herdr.nix: admin linger, `hermes` shim, sudo rule.
+              herdr = mkOption {
+                type = types.bool;
+                default = false;
+                rank = 87;
+                description = ''
+                  Start Hermes on this server from the Herdr desktop app on your computer, signed in over SSH as admin.
+                  It shares Hermes' memory, skills and AI login with the chat and Telegram.
+                '';
+                ui = lib.neo.ui.mkUi {
+                  label = "Open in Herdr";
+                };
+              };
+
               stateDir = mkOption {
                 type = types.str;
                 internal = true;
@@ -272,6 +286,7 @@
                 Hermes Agent by Nous Research. It needs an AI provider: an API key or a login under llm.
                 Talks over Telegram, Discord, Slack, WhatsApp, Signal, email, the CLI and its web dashboard. Has persistent memory, writes and improves its own skills, runs scheduled automations and subagents in a sandbox.
                 Every enabled service publishes a skill, so Hermes knows how this server is set up.
+                Open in Herdr: on your computer run `hc machine add admin@<server> --install` once, then pick Hermes under "Start an agent" in that machine's space. It runs as the hermes user, like the gateway.
               '';
               replaces = ["ChatGPT" "Google Assistant"];
               privacy = ["assistant"];

@@ -65,7 +65,7 @@ Naming: options camelCase under `neo.services.*`; plain-string descriptions; vol
 
 **tinyauth:** default edge auth. Health probes need `auth.publicPaths` (e.g. `^/api/v1/info/status$`). UI stays 302 → tinyauth.
 
-**Hermes:** per-service `skills.nix` → `neo-<name>`; use `mkServiceSkill`; credentials = real settings keys only. Collector: `nix/services/hermes/skills.nix`.
+**Hermes:** per-service `skills.nix` → `neo-<name>`; use `mkServiceSkill`; credentials = real settings keys only. Collector: `nix/services/hermes/skills.nix`. `hermes.herdr` (`nix/services/hermes/herdr.nix`) lets the Herdr desktop app start Hermes over SSH as admin: linger for admin's hc core, and a `hermes` shim in admin's PATH that sudo-runs the CLI as the hermes user (never a second HERMES_HOME). hc itself comes from `hc machine add --install`, not from Neo.
 
 **Git identity:** `neo.core.git` (`nix/modules/core/git.nix`) is the one machine git user: SSH key `/var/lib/neo/git/id_ed25519` (root:neo-git 0640), `tokens` (git credential helper + Nix `access-tokens`), `knownHosts`, `userName`/`userEmail` (system gitconfig, config repo commits). A module whose user needs git appends to the internal `neo.core.git.users`; never hand-roll per-service ssh/git config. Root is not a member (switch reuses fetched inputs).
 
