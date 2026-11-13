@@ -46,7 +46,7 @@ If this skill and `$NEO` disagree, `$NEO` wins: it is the version the plugin bui
 
 Each one is enforced by a check or breaks something an operator relies on.
 
-- **One file per concern, all auto-imported.** `modules/services/<svc>/{option,default,swag,skills}.nix`, each defining `neoPlugin.modules.<svc>[-option|-swag|-skills]` (unique names). Never `imports = [ ./sibling.nix ]`. Files starting with `_` are skipped (helpers, data).
+- **One file per concern, all auto-imported.** `modules/services/<svc>/{option,default,swag,skills,monitoring}.nix`, each defining `neoPlugin.modules.<svc>[-option|-swag|-skills|-monitoring]` (unique names). Never `imports = [ ./sibling.nix ]`. Files starting with `_` are skipped (helpers, data).
 - **Every name through `plugin.name`.** `name = plugin.name "<svc>";` then use `name` for the `neo.services` key, containers, sidecars (`"${name}-db"`), units, appdata, subdomain, users, secret templates, guide ids and `service:` links. Titles get `${plugin.label}`. Core services (`swag`, `tinyauth`) keep their names. `nix flake check` (`neo-plugin-instances`) fails on any miss.
 - **Once-per-machine parts.** A module that brings something shared by every copy cannot pass `neo-plugin-instances`: list it in `neoPlugin.checkExclude` (`PLUGIN-DEVELOPMENT.md` → Prefixes). Never for a name you could prefix.
 - **Git sees only tracked files.** An untracked icon, script or module is silently missing. `git add` before every build.
@@ -60,6 +60,7 @@ Each one is enforced by a check or breaks something an operator relies on.
 - **Settings are API.** Every option is a key in operators' `settings.toml`; renaming or removing one breaks their evaluation. Add options, do not rename them.
 - **Use the helper.** Sudo (`mkSudoExtraRules`), git (`neo.core.git.users`), host listeners (`127.0.0.1` + `mkDockerToLocalhostForward`), UI widgets (generic `ui` metadata; a new widget belongs in Neo, not the plugin).
 - **Ship a `skills.nix`** (`mkServiceSkill`) so Neo's assistant can operate the service. Name only settings keys, units and paths that exist.
+- **Metrics and dashboards in `monitoring.nix`.** `neo.monitoring.apps.${name} = { metrics.<endpoint> = { container = name; port; }; dashboards.<id> = { title; panels = with lib.neo.grafana; [...]; }; }`. Filter every query with `lib.neo.grafana.appSelector name`; switch the app's exporter on only with `lib.mkIf config.neo.monitoring.collecting`. The agent of the machine running the plugin scrapes and sends the dashboard to the Monitoring server (read-only, folder Apps), so it works when Monitoring runs elsewhere. `PLUGIN-DEVELOPMENT.md` → Metrics and dashboards.
 
 ## 4. Verify
 
