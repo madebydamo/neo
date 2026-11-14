@@ -31,7 +31,7 @@ This repo is a **Neo plugin**: a Nix flake that adds services to a Neo homeserve
 - `name = plugin.name "<svc>"` for every service key, container, unit, appdata dir, subdomain, user and secret name. Titles get `${plugin.label}`.
 - All state under `"${config.neo.core.volumes.appdata}/${name}"` (`mkAppdata`, `mkEnsureDirs`). Nothing in `/var/lib`.
 - Secrets: `lib.neo.mkSecretOption`, passed only through `neo.core.secrets.containerEnv` / `.templates`. Never in `environment` or scripts.
-- Containers on `networks = ["internal"]`, no published web ports. Health/API paths called without a login go in `auth.publicPaths`.
+- Containers on `networks = [(lib.neo.docker.serviceNetwork name)]` (each service its own network; another service only through its public URL or `lib.neo.docker.mkLink`), no published web ports. Health/API paths called without a login go in `auth.publicPaths`.
 - Every unit in `mkContainerDefinitions { extraUnits; }` or `mkSystemdUnits`; post-start config with `lib.neo.mkSetupService`.
 - Metrics and dashboards go in `neo.monitoring.apps.${name}`; queries filter with `lib.neo.grafana.appSelector name`; exporters only on with `config.neo.monitoring.collecting`.
 - Texts are for non-technical operators: `tagline`/`description` say what they get, technical facts go in `notes` or Nix comments.

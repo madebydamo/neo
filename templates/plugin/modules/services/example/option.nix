@@ -22,7 +22,7 @@
                 type = types.port;
                 internal = true;
                 default = 80;
-                description = "Port the container listens on inside the internal network";
+                description = "Port the container listens on inside its Docker network";
               };
               # Service-specific options use ranks 10–89 (see nix/lib/option.nix in neo).
               greeting = mkOption {
@@ -46,7 +46,7 @@
             # Delete this block if the service does not need it.
             // lib.neo.mkVpnOptions {
               containers = [name];
-              networks = ["internal"];
+              networks = [(lib.neo.docker.serviceNetwork name)];
               ports = [80];
             }
             # containers.<name> = image. Overridable in settings; drives updates and the units list.

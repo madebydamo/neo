@@ -21,7 +21,7 @@
         Questions about the example page, its greeting text, or container health.
 
         ## Architecture notes
-        - One container: `${name}` (`containers.${name}`, port ${toString cfg.port}) on the internal network
+        - One container: `${name}` (`containers.${name}`, port ${toString cfg.port}) on its own Docker network `app-${name}`
         - Appdata is mounted at `/config`. Neo rewrites `www/index.html` from `services.${name}.greeting` on every start
         - `/health` is on publicPaths (tinyauth bypass). Everything else is behind tinyauth
 

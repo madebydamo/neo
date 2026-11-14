@@ -1,5 +1,6 @@
 # Example service implementation.
-# One OCI container on the `internal` network; SWAG reaches it as http://<name>:80.
+# One OCI container on its own network (app-<name>); SWAG reaches it as http://<name>:80.
+# Containers of other services cannot reach it (docs/design/network-isolation.md).
 # `name` is "example", or "<prefix>-example" when the plugin is added under a prefix:
 # use it for the service, container, unit and appdata names (never the literal).
 # More units: add containers to mkContainerDefinitions (docker-<name> each), and list
@@ -43,7 +44,7 @@
           volumes = [
             "${appdata}:/config"
           ];
-          networks = ["internal"];
+          networks = [(lib.neo.docker.serviceNetwork name)];
         };
       };
     };

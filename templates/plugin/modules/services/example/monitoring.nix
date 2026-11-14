@@ -18,7 +18,7 @@
     config = lib.mkIf cfg.enabled {
       neo.monitoring.apps.${name} = {
         # metrics.main = {
-        #   container = name;   # scraped over the internal network
+        #   container = name;   # scraped over its own network
         #   port = 9113;
         #   path = "/metrics";
         # };
