@@ -50,6 +50,43 @@
       set -euo pipefail
       docker=${dockerBin}
       exists() { "$docker" network inspect "$1" >/dev/null 2>&1; }
+
+      # A free /24 of 172.16.0.0/12 (the range Neo reserves for Docker) that
+      # overlaps no Docker network and no host route. Docker only reads its
+      # address pool when the daemon starts, and NixOS never restarts Docker on
+      # a switch: on a running server Docker's old pools (about 31 networks)
+      # run out, so Neo picks the subnet itself.
+      ip2int() { local IFS=.; read -r a b c d <<<"$1"; echo $(( (a << 24) | (b << 16) | (c << 8) | d )); }
+      used_ranges() {
+        {
+          "$docker" network inspect -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}' $("$docker" network ls -q)
+          ${pkgs.iproute2}/bin/ip -4 route show table all | ${pkgs.gawk}/bin/awk '$1 ~ /^[0-9.]+(\/[0-9]+)?$/ {print $1}'
+        } | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(/[0-9]+)?$' | while read -r cidr; do
+          local net=''${cidr%/*} len=32
+          [ "$net" != "$cidr" ] && len=''${cidr#*/}
+          local start size
+          start=$(ip2int "$net")
+          size=$(( 1 << (32 - len) ))
+          start=$(( start & ~(size - 1) ))
+          echo "$start $(( start + size - 1 ))"
+        done
+      }
+      free_subnet() {
+        local used base=$(ip2int 172.16.0.0) i lo hi s e clash
+        used=$(used_ranges)
+        for (( i = 0; i < 4096; i++ )); do
+          lo=$(( base + i * 256 )); hi=$(( lo + 255 )); clash=0
+          while read -r s e; do
+            [ -n "$s" ] || continue
+            if (( lo <= e && s <= hi )); then clash=1; break; fi
+          done <<<"$used"
+          if [ "$clash" = 0 ]; then
+            echo "$(( lo >> 24 & 255 )).$(( lo >> 16 & 255 )).$(( lo >> 8 & 255 )).0/24"
+            return 0
+          fi
+        done
+        return 1
+      }
       in_use() { [ "$("$docker" network inspect -f '{{len .Containers}}' "$1")" != 0 ]; }
 
       # ensure NAME INTERNAL(true|false) SUBNET GATEWAY BRIDGE (last three may be "")
@@ -78,7 +115,10 @@
         fi
         local args=(--label neo.managed=1)
         [ "$internal" = true ] && args+=(--internal)
-        [ -n "$subnet" ] && args+=(--subnet "$subnet")
+        if [ -z "$subnet" ]; then
+          subnet=$(free_subnet) || { echo "network $name: no free /24 left in 172.16.0.0/12" >&2; failed=1; return 0; }
+        fi
+        args+=(--subnet "$subnet")
         [ -n "$gateway" ] && args+=(--gateway "$gateway")
         [ -n "$bridge" ] && args+=(-o "com.docker.network.bridge.name=$bridge")
         if "$docker" network create "''${args[@]}" "$name" >/dev/null; then
@@ -222,21 +262,41 @@
             description = "Docker networks for the apps";
             after = ["docker.service"];
             requires = ["docker.service"];
+            # Runs again when Docker restarts.
+            partOf = ["docker.service"];
             wantedBy = ["multi-user.target"];
             serviceConfig = {
               Type = "oneshot";
               RemainAfterExit = true;
-              ExecStart = script;
+              ExecStart = "${pkgs.util-linux}/bin/flock /run/neo-docker-network.lock ${script}";
             };
           };
         }
         # Wants, not Requires: a restart of this unit (a new script) must not
         # restart every container.
+        #
+        # partOf docker: the units only Require docker.service, so a restart of
+        # Docker stopped every app and left it stopped. Now they restart with it.
+        #
+        # preStart: a container whose network is missing (Docker restarted
+        # under a switch, a race with this unit) fails with "network … not
+        # found" until systemd gives up. Each one checks its own networks right
+        # before `docker run` and creates missing ones (locked, the same script).
         (lib.mapAttrs' (
             _: container:
               lib.nameValuePair container.serviceName {
                 after = ["neo-docker-network.service"];
                 wants = ["neo-docker-network.service"];
+                partOf = ["docker.service"];
+                preStart = lib.mkBefore ''
+                  for net in ${lib.escapeShellArgs (lib.filter (n: n != "host" && n != "none" && !(lib.hasPrefix "container:" n)) (docker.containerNetworks container))}; do
+                    if ! ${dockerBin} network inspect "$net" >/dev/null 2>&1; then
+                      echo "network $net missing, creating the app networks"
+                      ${pkgs.util-linux}/bin/flock /run/neo-docker-network.lock ${script} || true
+                      break
+                    fi
+                  done
+                '';
               }
           )
           containers)
