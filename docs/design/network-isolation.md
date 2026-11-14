@@ -80,8 +80,18 @@ Docker's default pools give about 31 bridge networks (172.17–31.0.0/16 plus
 16 × /20 of 192.168.0.0/16), too few for 40 services, and the 192.168 slices
 collide with home networks. `default-address-pools = [{ base = "172.16.0.0/12";
 size = 24; }]` gives 4096 /24 networks, in the range the NetBird check already
-reserves for Docker. Existing networks keep their subnets. Changing the daemon
-settings restarts Docker once on upgrade.
+reserves for Docker. Existing networks keep their subnets. NixOS never
+restarts Docker on a switch (`restartIfChanged = false`), so a running daemon
+keeps its old pools until the next reboot: on hattori (25+ services) they ran
+out. `neo-docker-network` therefore picks every subnet itself, the first /24 of
+172.16.0.0/12 that overlaps no Docker network and no host route, and passes
+`--subnet`.
+
+Container units are `PartOf=docker.service` (they only `Requires` it, which
+stopped every app on a Docker restart and left it stopped), and each one
+checks its own networks in `preStart` and runs the network script (under a
+lock shared with the unit) when one is missing, instead of failing with
+"network … not found" until systemd gives up.
 
 ### Service networks
 
