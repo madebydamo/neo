@@ -588,6 +588,7 @@
         content = ''
           **A.8.20 Network security, A.8.16 Monitoring activities (anomalies), A.5.7 Threat intelligence, A.5.24–A.5.26 Incident management.**
           All web traffic enters through SWAG. Refused requests, scans and automatic bans show attempts against the servers.
+          With CrowdSec on: [CrowdSec](/d/app-swag-crowdsec) shows active bans, detected attacks and the community blocklist.
         '';
       })
       (bars {
