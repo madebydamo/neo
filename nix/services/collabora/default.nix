@@ -24,95 +24,103 @@
       # domain env: regex of allowed storage hosts (escaped dots, | -joined).
       domainRegex = concatStringsSep "|" (map escapeDots nextcloudHosts);
     in {
-      config = mkIf cfg.enabled {
-        assertions = [
-          {
-            assertion = cfgNextcloud.enabled;
-            message = "neo.services.collabora: can only be enabled if neo.services.nextcloud is also enabled.";
-          }
-        ];
-
-        virtualisation.oci-containers.containers.collabora = {
-          image = cfg.containers.collabora;
-          # CODE 26.04+ entrypoint is coolwsd --use-env-vars, which ignores
-          # extra_params. Pass SSL overrides as cmd so they append to the
-          # entrypoint (reverse proxy terminates TLS; container speaks plain HTTP).
-          cmd = [
-            "--o:ssl.enable=false"
-            "--o:ssl.termination=true"
-          ];
-          environment = {
-            domain = domainRegex;
-            aliasgroup1 = aliasgroup1;
-            server_name = collaboraUrl;
-            # Skip self-signed cert generation when SSL is disabled at the app layer.
-            DONT_GEN_SSL_CERT = "1";
-          };
-          # Image HEALTHCHECK runs `coolwsd --probe` (TLS) against the listen
-          # port. With ssl.enable=false that is plain HTTP: probe still exits 0
-          # but floods logs every ~30s with "Looks like SSL/TLS traffic on plain
-          # http port". CODE image has no curl for an HTTP probe alternative.
-          extraOptions = [
-            "--no-healthcheck"
-          ];
-          capabilities = {
-            MKNOD = true;
-            SYS_ADMIN = true;
-          };
-          networks = ["internal"];
-        };
-
-        # Non-blocking setup (lib.neo.mkSetupService): retries every 60s until
-        # occ succeeds, then stays active (exited). Re-runs when a nextcloud or
-        # collabora container restarts.
-        systemd.services.collabora-setup = lib.neo.mkSetupService {
-          inherit pkgs;
-          name = "collabora-setup";
-          description = "Nextcloud post-install configuration (collabora)";
-          containers = ["nextcloud-db" "nextcloud-redis" "nextcloud" "collabora"];
-          attachTo = ["collabora"];
-          after = ["nextcloud-setup.service"];
-          wants = ["nextcloud-setup.service"];
-          retryInterval = 60;
-          script = let
-            docker = "${pkgs.docker}/bin/docker";
-            occ = "${docker} exec --user www-data nextcloud php occ";
-          in ''
-            echo "Configuring Collabora integration..."
-
-            # Wait until Nextcloud is out of maintenance / upgrade so occ app
-            # commands and richdocuments:* are available (mkSetupService retries).
-            status_out="$(${occ} status 2>/dev/null)" || {
-              echo "Nextcloud occ status not ready" >&2
-              exit 1
+      config = mkIf cfg.enabled (mkMerge [
+        # Nextcloud calls Collabora's WOPI endpoint inside Docker
+        # (wopi_url below); only these two containers share the link.
+        (lib.neo.docker.mkLink {
+          name = "nextcloud-collabora";
+          containers = ["nextcloud" "collabora"];
+        })
+        {
+          assertions = [
+            {
+              assertion = cfgNextcloud.enabled;
+              message = "neo.services.collabora: can only be enabled if neo.services.nextcloud is also enabled.";
             }
-            if echo "$status_out" | grep -Eq 'maintenance:[[:space:]]*true'; then
-              echo "Nextcloud still in maintenance mode" >&2
-              exit 1
-            fi
-            if echo "$status_out" | grep -Eq 'needsDbUpgrade:[[:space:]]*true'; then
-              echo "Nextcloud needs DB upgrade" >&2
-              exit 1
-            fi
+          ];
 
-            ${occ} app:install richdocuments || true
-            ${occ} app:disable richdocuments
-            ${occ} app:disable richdocumentscode
-            ${occ} app:enable richdocuments
+          virtualisation.oci-containers.containers.collabora = {
+            image = cfg.containers.collabora;
+            # CODE 26.04+ entrypoint is coolwsd --use-env-vars, which ignores
+            # extra_params. Pass SSL overrides as cmd so they append to the
+            # entrypoint (reverse proxy terminates TLS; container speaks plain HTTP).
+            cmd = [
+              "--o:ssl.enable=false"
+              "--o:ssl.termination=true"
+            ];
+            environment = {
+              domain = domainRegex;
+              aliasgroup1 = aliasgroup1;
+              server_name = collaboraUrl;
+              # Skip self-signed cert generation when SSL is disabled at the app layer.
+              DONT_GEN_SSL_CERT = "1";
+            };
+            # Image HEALTHCHECK runs `coolwsd --probe` (TLS) against the listen
+            # port. With ssl.enable=false that is plain HTTP: probe still exits 0
+            # but floods logs every ~30s with "Looks like SSL/TLS traffic on plain
+            # http port". CODE image has no curl for an HTTP probe alternative.
+            extraOptions = [
+              "--no-healthcheck"
+            ];
+            capabilities = {
+              MKNOD = true;
+              SYS_ADMIN = true;
+            };
+            networks = ["internal"];
+          };
 
-            ${occ} list 2>/dev/null | grep -q richdocuments || {
-              echo "richdocuments occ commands not available yet" >&2
-              exit 1
-            }
+          # Non-blocking setup (lib.neo.mkSetupService): retries every 60s until
+          # occ succeeds, then stays active (exited). Re-runs when a nextcloud or
+          # collabora container restarts.
+          systemd.services.collabora-setup = lib.neo.mkSetupService {
+            inherit pkgs;
+            name = "collabora-setup";
+            description = "Nextcloud post-install configuration (collabora)";
+            containers = ["nextcloud-db" "nextcloud-redis" "nextcloud" "collabora"];
+            attachTo = ["collabora"];
+            after = ["nextcloud-setup.service"];
+            wants = ["nextcloud-setup.service"];
+            retryInterval = 60;
+            script = let
+              docker = "${pkgs.docker}/bin/docker";
+              occ = "${docker} exec --user www-data nextcloud php occ";
+            in ''
+              echo "Configuring Collabora integration..."
 
-            ${occ} config:app:set richdocuments wopi_url --value 'http://collabora:9980'
-            ${occ} config:app:set richdocuments public_wopi_url --value "https://${collaboraUrl}"
-            ${occ} config:app:set richdocuments wopi_callback_url --value "https://${nextcloudUrl}"
-            ${occ} config:app:set richdocuments wopi_allowlist --value "0.0.0.0/0"
-            ${occ} richdocuments:activate-config
-            echo "Collabora setup completed."
-          '';
-        };
-      };
+              # Wait until Nextcloud is out of maintenance / upgrade so occ app
+              # commands and richdocuments:* are available (mkSetupService retries).
+              status_out="$(${occ} status 2>/dev/null)" || {
+                echo "Nextcloud occ status not ready" >&2
+                exit 1
+              }
+              if echo "$status_out" | grep -Eq 'maintenance:[[:space:]]*true'; then
+                echo "Nextcloud still in maintenance mode" >&2
+                exit 1
+              fi
+              if echo "$status_out" | grep -Eq 'needsDbUpgrade:[[:space:]]*true'; then
+                echo "Nextcloud needs DB upgrade" >&2
+                exit 1
+              fi
+
+              ${occ} app:install richdocuments || true
+              ${occ} app:disable richdocuments
+              ${occ} app:disable richdocumentscode
+              ${occ} app:enable richdocuments
+
+              ${occ} list 2>/dev/null | grep -q richdocuments || {
+                echo "richdocuments occ commands not available yet" >&2
+                exit 1
+              }
+
+              ${occ} config:app:set richdocuments wopi_url --value 'http://collabora:9980'
+              ${occ} config:app:set richdocuments public_wopi_url --value "https://${collaboraUrl}"
+              ${occ} config:app:set richdocuments wopi_callback_url --value "https://${nextcloudUrl}"
+              ${occ} config:app:set richdocuments wopi_allowlist --value "0.0.0.0/0"
+              ${occ} richdocuments:activate-config
+              echo "Collabora setup completed."
+            '';
+          };
+        }
+      ]);
     };
 }
