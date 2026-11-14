@@ -34,9 +34,9 @@
             description = "Docker container that serves the metrics (use plugin.name in plugins). The agent finds its address on `network`.";
           };
           network = mkOption {
-            type = types.str;
-            default = "internal";
-            description = "Docker network the agent reaches the container on.";
+            type = types.nullOr types.str;
+            default = null;
+            description = "Docker network the agent reaches the container on. Default: the container's first network (its service network, or internal).";
           };
           address = mkOption {
             type = types.nullOr types.str;
@@ -225,9 +225,27 @@
           type = types.listOf types.attrs;
           internal = true;
           readOnly = true;
-          default = concatLists (mapAttrsToList (service: app:
-            mapAttrsToList (endpoint: m: m // {inherit service endpoint;}) app.metrics)
-          active);
+          default = let
+            containers = config.virtualisation.oci-containers.containers;
+            networkOf = m:
+              if m.network != null || m.container == null
+              then m.network
+              else let
+                nets = optionals (containers ? ${m.container}) (lib.neo.docker.containerNetworks containers.${m.container});
+              in
+                if nets == []
+                then lib.neo.docker.sharedNetwork
+                else head nets;
+          in
+            concatLists (mapAttrsToList (service: app:
+              mapAttrsToList (endpoint: m:
+                m
+                // {
+                  inherit service endpoint;
+                  network = networkOf m;
+                })
+              app.metrics)
+            active);
           description = "Metric endpoints of enabled apps, flattened (service, endpoint, container/address, …)";
         };
 
