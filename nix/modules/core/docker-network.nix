@@ -11,6 +11,11 @@
 # networks. SWAG is on it; everything on it reaches everything else on it.
 # Kept as is so those plugins keep working.
 #
+# `neo-host`: the only bridge from which the host accepts connections (its
+# own services: neo web, Hermes, Vikunja, …). Fixed bridge name and subnet;
+# SWAG and Grafana (alerts to Hermes) join it (`lib.neo.docker.mkHostAccess`).
+# Any other container gets no answer from host ports.
+#
 # `swag-ipv6`: IPv6 only, SWAG alone. Without an IPv6 network Docker hands an
 # IPv6 connection to a published port to its userland proxy, which reconnects
 # over IPv4 from the gateway: SWAG saw every IPv6 visitor as 172.18.0.1, a
@@ -47,28 +52,48 @@
       exists() { "$docker" network inspect "$1" >/dev/null 2>&1; }
       in_use() { [ "$("$docker" network inspect -f '{{len .Containers}}' "$1")" != 0 ]; }
 
-      # ensure NAME INTERNAL(true|false)
+      # ensure NAME INTERNAL(true|false) SUBNET GATEWAY BRIDGE (last three may be "")
       ensure() {
-        local name=$1 internal=$2 current
+        local name=$1 internal=$2 subnet=$3 gateway=$4 bridge=$5 want current
+        local cur_internal cur_subnet cur_bridge
+        want="$internal|$subnet|$bridge"
         if exists "$name"; then
-          current=$("$docker" network inspect -f '{{.Internal}}' "$name")
-          [ "$current" = "$internal" ] && return 0
+          IFS='|' read -r cur_internal cur_subnet cur_bridge < <(
+            "$docker" network inspect -f '{{.Internal}}|{{range .IPAM.Config}}{{.Subnet}}{{end}}|{{index .Options "com.docker.network.bridge.name"}}' "$name"
+          )
+          # An empty subnet / bridge name means "any".
+          [ -z "$subnet" ] && cur_subnet=
+          [ -z "$bridge" ] && cur_bridge=
+          current="$cur_internal|$cur_subnet|$cur_bridge"
+          [ "$current" = "$want" ] && return 0
           if in_use "$name"; then
-            echo "network $name: keeps internal=$current until its containers stop" >&2
+            echo "network $name: is $current, should be $want; recreated once its containers stop" >&2
             return 0
           fi
           "$docker" network rm "$name" >/dev/null
         fi
         local args=(--label neo.managed=1)
         [ "$internal" = true ] && args+=(--internal)
-        "$docker" network create "''${args[@]}" "$name" >/dev/null
-        echo "network $name: created"
+        [ -n "$subnet" ] && args+=(--subnet "$subnet")
+        [ -n "$gateway" ] && args+=(--gateway "$gateway")
+        [ -n "$bridge" ] && args+=(-o "com.docker.network.bridge.name=$bridge")
+        if "$docker" network create "''${args[@]}" "$name" >/dev/null; then
+          echo "network $name: created"
+        else
+          echo "network $name: could not be created ($want)" >&2
+          failed=1
+        fi
       }
+      failed=0
 
-      ${lib.concatStrings (lib.mapAttrsToList (name: net: ''
-          ensure ${lib.escapeShellArg name} ${lib.boolToString net.internal}
+      # Fixed subnets first, before the pool hands their range to another network.
+      ${lib.concatStrings (map (name: let
+          net = ipv4Networks.${name};
+          arg = v: lib.escapeShellArg (toString (lib.defaultTo "" v));
+        in ''
+          ensure ${lib.escapeShellArg name} ${lib.boolToString net.internal} ${arg net.subnet} ${arg net.gateway} ${arg net.bridgeName}
         '')
-        ipv4Networks)}
+        (lib.sort (a: b: (ipv4Networks.${a}.subnet != null) && (ipv4Networks.${b}.subnet == null)) (lib.attrNames ipv4Networks)))}
 
       if ! exists ${ipv6Net}; then
         if ! "$docker" network create --label neo.managed=1 --ipv6 --ipv4=false ${ipv6Net} >/dev/null; then
@@ -96,16 +121,34 @@
           echo "network $name: removed"
         fi
       done
+      exit "$failed"
     '';
   in {
     options.neo.core = {
       docker = {
         networks = lib.mkOption {
           type = lib.types.attrsOf (lib.types.submodule {
-            options.internal = lib.mkOption {
-              type = lib.types.bool;
-              default = false;
-              description = "Docker --internal: containers on it get no route to the internet.";
+            options = {
+              internal = lib.mkOption {
+                type = lib.types.bool;
+                default = false;
+                description = "Docker --internal: containers on it get no route to the internet.";
+              };
+              subnet = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "Fixed IPv4 subnet; null takes one from the address pool.";
+              };
+              gateway = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "Gateway address with a fixed subnet.";
+              };
+              bridgeName = lib.mkOption {
+                type = lib.types.nullOr (lib.types.strMatching "[a-z][a-z0-9-]{0,14}");
+                default = null;
+                description = "Fixed Linux bridge interface name, for firewall rules (at most 15 characters).";
+              };
             };
           });
           default = {};
@@ -128,10 +171,27 @@
     };
 
     config = {
-      neo.core.docker.networks =
-        lib.genAttrs
-        ([docker.sharedNetwork ipv6Net] ++ config.neo.core.dockerNetworks ++ docker.usedNetworks containers)
-        (_: {});
+      neo.core.docker.networks = lib.mkMerge [
+        (lib.genAttrs
+          ([docker.sharedNetwork ipv6Net] ++ config.neo.core.dockerNetworks ++ docker.usedNetworks containers)
+          (_: {}))
+        (lib.mkIf (lib.elem docker.hostNetwork (docker.usedNetworks containers)) {
+          ${docker.hostNetwork} = {
+            subnet = docker.hostSubnet;
+            gateway = docker.hostGateway;
+            bridgeName = docker.hostNetwork;
+          };
+        })
+      ];
+
+      # Containers reach host ports from neo-host only (see above). Docker's
+      # own rules still forward published ports and the internet.
+      networking.firewall.extraCommands = ''
+        iptables -I nixos-fw 1 -i ${docker.hostNetwork} -j ACCEPT
+      '';
+      networking.firewall.extraStopCommands = ''
+        iptables -D nixos-fw -i ${docker.hostNetwork} -j ACCEPT 2>/dev/null || true
+      '';
 
       # Docker's default pools allow about 31 bridge networks and hand out
       # 192.168.x.0/20 slices that collide with home networks. /24s of

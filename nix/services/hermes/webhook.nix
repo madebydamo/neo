@@ -5,7 +5,8 @@
 # senders such as Grafana's provisioning `$__file{}`) and webhook.env (dotenv,
 # appended to $HERMES_HOME/.env as WEBHOOK_SECRET, the routes' shared secret).
 # The listener binds all interfaces on webhook.port; the firewall keeps it to
-# this host and its Docker bridges (swag accepts br+), which is where senders run.
+# this host and the neo-host Docker bridge (lib.neo.docker.mkHostAccess),
+# which senders such as Grafana join.
 {...}: {
   flake.modules.nixos.hermes-webhook = {
     config,

@@ -19,6 +19,25 @@
       # Network of a link (see mkLink).
       linkNetwork = name: "link-${name}";
 
+      # The one way from a container to services on the host itself (neo web,
+      # Hermes, Vikunja, …): a network with a fixed bridge name and subnet.
+      # The firewall accepts host traffic from this bridge only, so other
+      # containers cannot reach host ports. Members (SWAG, Grafana for
+      # alerts) reach the host as host.docker.internal = hostGateway.
+      hostNetwork = "neo-host";
+      hostSubnet = "172.31.255.0/24";
+      hostGateway = "172.31.255.1";
+
+      # Module fragment: `container` may reach services on the host as
+      # host.docker.internal. Only for containers that must; everything on
+      # neo-host can also reach the other members. Merge with lib.mkMerge.
+      mkHostAccess = container: {
+        virtualisation.oci-containers.containers.${container} = {
+          networks = lib.mkAfter [hostNetwork];
+          extraOptions = ["--add-host=host.docker.internal:${hostGateway}"];
+        };
+      };
+
       # Name of one `networks` entry: "app-x" or "name=app-x,alias=y" → "app-x".
       networkName = entry: let
         m = builtins.match "name=([^,]+).*" entry;

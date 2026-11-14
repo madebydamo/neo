@@ -52,7 +52,9 @@
   containers = cfg.virtualisation.oci-containers.containers;
   owner = docker.containerService cfg;
   links = cfg.neo.core.docker.links;
-  shared = [docker.sharedNetwork neoLib.neo.swagIpv6Network];
+  shared = [docker.sharedNetwork neoLib.neo.swagIpv6Network docker.hostNetwork];
+  # Containers that may reach host services: each one is a conscious choice.
+  hostMembers = ["grafana" "swag"];
   # Containers that may sit on several services' networks.
   hubs = ["swag" "vpn"];
 
@@ -103,6 +105,12 @@
       "SWAG is not on ${net}, the network of proxied service ${s}")
     (lib.attrNames (neoLib.neo.getProxiedServices cfg));
 
+  hostProblems =
+    lib.optional (members docker.hostNetwork != hostMembers)
+    "${docker.hostNetwork} (host services) has ${lib.concatStringsSep " " (members docker.hostNetwork)}, expected ${lib.concatStringsSep " " hostMembers}"
+    ++ lib.optional (lib.any (lib.hasInfix "host-gateway") (lib.concatMap (c: c.extraOptions or []) (lib.attrValues containers)))
+    "a container uses host-gateway; join ${docker.hostNetwork} with lib.neo.docker.mkHostAccess instead";
+
   # Each VPN-routed container answers by name on its service network only.
   gluetun = lib.concatStringsSep " " (containers.vpn.networks or []);
   aliasProblems =
@@ -111,7 +119,7 @@
     ++ lib.optional (lib.hasInfix "--network-alias" (lib.concatStringsSep " " (containers.vpn.extraOptions or [])))
     "gluetun uses --network-alias, which Docker applies to the first network only";
 
-  all = problems ++ aliasProblems;
+  all = problems ++ aliasProblems ++ hostProblems;
 in {
   perSystem = {pkgs, ...}: {
     checks.docker-network-isolation = pkgs.runCommand "docker-network-isolation" {} ''

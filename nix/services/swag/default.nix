@@ -252,12 +252,6 @@
             }
           ];
 
-          networking.firewall.extraCommands = "
-            iptables -I nixos-fw 1 -i br+ -j ACCEPT
-          ";
-          networking.firewall.extraStopCommands = "
-            iptables -D nixos-fw -i br+ -j ACCEPT
-          ";
           systemd.services.docker-swag = {
             preStart = lib.concatStringsSep "\n" ([
                 "rm -r ${appdataSwag}/nginx/proxy-confs || true"
@@ -319,7 +313,10 @@
                 "--network=${lib.neo.docker.sharedNetwork}"
                 # IPv6 visitors keep their address (docker-network.nix).
                 "--network=${lib.neo.swagIpv6Network}"
-                "--add-host=host.docker.internal:host-gateway"
+                # Services on the host (neo web, Hermes, …): the only bridge the
+                # host accepts connections from (docker-network.nix).
+                "--network=${lib.neo.docker.hostNetwork}"
+                "--add-host=host.docker.internal:${lib.neo.docker.hostGateway}"
               ]
               ++ map (n: "--network=${n}") appNetworks;
           };

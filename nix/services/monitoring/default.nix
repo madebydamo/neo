@@ -312,8 +312,9 @@
               GF_NEWS_NEWS_FEED_ENABLED = "false";
               GF_UNIFIED_ALERTING_ENABLED = "true";
             };
-            networks = [network];
-            extraOptions = optional alertsOn "--add-host=host.docker.internal:host-gateway";
+            # Alerts go to Hermes' webhook on the host.
+            networks = [network] ++ optional alertsOn lib.neo.docker.hostNetwork;
+            extraOptions = optional alertsOn "--add-host=host.docker.internal:${lib.neo.docker.hostGateway}";
           };
 
           prometheus = {
