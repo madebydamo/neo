@@ -469,6 +469,19 @@ in ''
       regex         = "neo_.+|alloy_build_info|loki_write_(sent|dropped)_entries_total|prometheus_remote_storage_samples_(total|failed_total|dropped_total)"
       action        = "keep"
     }
+    // loki_write_* name the Loki endpoint in "host"; keep it as "endpoint"
+    // and let remote_write add this server's host label.
+    rule {
+      source_labels = ["__name__", "host"]
+      regex         = "loki_write_.+;(.+)"
+      target_label  = "endpoint"
+    }
+    rule {
+      source_labels = ["__name__"]
+      regex         = "loki_write_.+"
+      target_label  = "host"
+      replacement   = ""
+    }
     rule {
       regex  = "component_id|component_path|filename"
       action = "labeldrop"
@@ -517,9 +530,12 @@ in ''
     // ── App metrics (neo.monitoring.apps) ───────────────────────────────────
 
     ${optionalString (builtins.any (t: t.container != null) appTargets) ''
+      // Every network of a container, not only its first: gluetun (vpn)
+      // serves the apps routed through it on their own networks.
       discovery.docker "apps" {
-        host             = "unix:///var/run/docker.sock"
-        refresh_interval = "30s"
+        host                = "unix:///var/run/docker.sock"
+        refresh_interval    = "30s"
+        match_first_network = false
       }
     ''}
     ${concatMapStrings appScrape appTargets}
