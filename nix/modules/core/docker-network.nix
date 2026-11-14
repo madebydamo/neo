@@ -108,7 +108,7 @@
       {
         "$docker" network ls --filter label=neo.managed=1 --format '{{.Name}}'
         ${lib.concatMapStrings (n: ''
-          exists ${n} && echo ${n}
+          if exists ${n}; then echo ${n}; fi
         '')
         legacyNetworks}
       } | sort -u | while read -r name; do
