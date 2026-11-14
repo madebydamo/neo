@@ -514,8 +514,10 @@ With Monitoring on, every machine runs an agent that already collects the app's 
 }
 ```
 
-- The agent on the machine that runs the plugin scrapes `metrics.*` (labels `service`, `endpoint`, `host`) and sends `dashboards.*` to the Monitoring server. That server shows them read-only in the **Apps** folder and replaces them when the plugin changes; it does not need the plugin itself.
-- Names that carry a value (`myapp_jobs_upload_total`) become labels with `relabel` rules on the endpoint; see `LIB.md` → Metrics and dashboards.
+- The agent on the machine that runs the plugin scrapes `metrics.*` (labels `service`, `scrape`, `host`) and sends `dashboards.*` to the Monitoring server. That server shows them read-only in the **Apps** folder and replaces them when the plugin changes; it does not need the plugin itself.
+- Names that carry a value (`myapp_jobs_upload_total`) become labels with `relabel` rules on the endpoint (`lib.neo.monitoring.nameToLabels`); see `LIB.md` → Metrics and dashboards.
+- An endpoint that needs a credential: `auth = "bearer"` or `"basic"` and give the app `config.neo.monitoring.apps.${name}.scrapeToken` (through `neo.core.secrets.containerEnv`, gated on `collecting`). The token is generated on the machine; there is no setting for it.
+- Metrics served on the app's public port: `neo.monitoring.apps.${name}.hidePaths = [ "/metrics" ];` makes SWAG answer 404 there.
 - Panels without `gridPos` are laid out automatically; `w`/`h` are 24-column grid units.
 - Check on a host: `curl -s 127.0.0.1:9090/api/v1/query --data-urlencode 'query=up{service="<name>"}'` on the Monitoring server, and the dashboard under Apps.
 

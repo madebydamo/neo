@@ -35,7 +35,7 @@ Work in a checkout of `github:madebydamo/neo` (`git clone https://github.com/mad
 | Disko / boot loader | `nix/modules/disko/`, `core/base.nix` | `just test-disko-boot` (`just launch` never tests the boot loader); boot scripts must never fail a switch |
 | Plugin interface | `nix/lib/plugin.nix`, `nix/output/plugin-flake-module.nix`, `templates/plugin` | The id/label rules exist in three places plus widget JS; keep them equal. Update `docs/PLUGIN-DEVELOPMENT.md` and the `neo-plugin` skill |
 | Guide | `nix/guides/<id>/`, `AGENTS.md` → Guides | One outcome, real settings links, non-technical reader |
-| Monitoring, app metrics, dashboards | `docs/design/monitoring.md`, `nix/services/monitoring{,-agent}`, `nix/modules/core/monitoring.nix`, `nix/lib/grafana.nix` | Labels and metric names are shared by the agent (`_alloy.nix`) and the dashboards: change both. App dashboards via `neo.monitoring.apps`, never by hand in Grafana. Provided dashboards stay read-only |
+| Monitoring, app metrics, dashboards | `docs/design/monitoring.md`, `nix/services/monitoring{,-agent}`, `nix/modules/core/monitoring.nix`, `nix/lib/grafana.nix` | Labels and metric names are shared by the agent (`_alloy.nix`) and the dashboards: change both. App dashboards via `neo.monitoring.apps`, never by hand in Grafana; one `monitoring.nix` per app (exporter on via `collecting`, `scrapeToken` for credentials, `hidePaths` for public metrics paths). Our label is `scrape`, not `endpoint`. Provided dashboards stay read-only |
 | Assistant (Hermes) | `nix/services/hermes/`, `AGENTS.md` → Assistant chat | Proposals write nothing until the user saves; secrets never pass through the agent |
 
 ## 3. Loop

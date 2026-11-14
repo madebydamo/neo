@@ -21,6 +21,11 @@
         #   container = name;   # scraped over its own network
         #   port = 9113;
         #   path = "/metrics";
+        #   auth = "bearer";    # token: the generated scrapeToken, see below
+        # };
+        # hidePaths = [ "/metrics" ];  # when metrics are on the public port
+        # neo.core.secrets.containerEnv.${name} = lib.mkIf config.neo.monitoring.collecting {
+        #   METRICS_TOKEN = config.neo.monitoring.apps.${name}.scrapeToken;
         # };
         # Turn the exporter on only while an agent scrapes it:
         # virtualisation.oci-containers.containers.${name}.environment =

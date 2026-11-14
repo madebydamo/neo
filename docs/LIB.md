@@ -189,15 +189,27 @@ neo.monitoring.apps.${name} = {
 virtualisation.oci-containers.containers.${name}.environment = lib.mkIf config.neo.monitoring.collecting { METRICS = "true"; };
 ```
 
-| `metrics.<endpoint>` field | Default | Meaning |
+| `metrics.<scrape>` field | Default | Meaning |
 |---|---|---|
 | `container` + `port` | | Container (use `plugin.name`) and port; found on `network` |
 | `network` | `null` | Docker network the agent reaches the container on; `null` = the container's first network |
 | `address` | | `host:port` instead, for services outside Docker |
 | `path`, `scheme`, `interval` | `/metrics`, `http`, `30s` | |
 | `relabel` | `[]` | Metric relabel rules `{ sourceLabels ? ["__name__"], regex, targetLabel, replacement ? "$1", action ? "replace" }` (`keep`, `drop`, `labeldrop`, `labelkeep`), e.g. to turn `app_jobs_upload_total` into `app_jobs_total{task="upload"}` |
+| `params` | `{}` | URL query parameters, `attrsOf (listOf str)` (multi-target exporters: `{ target = ["db:5432"]; }`) |
+| `auth` | `"none"` | `"bearer"` (Authorization: Bearer `token`) or `"basic"` (`username`, password `token`) |
+| `username` | `"neo-metrics"` | Basic-auth user |
+| `token` | the app's `scrapeToken` | Credential; may be a secret placeholder: it only reaches the agent's rendered env file, never `config.alloy` (assertion) |
+| `headers` | `{}` | Extra request headers, not secret (`{ "X-Forwarded-Proto" = "https"; }`) |
 
-Every scraped series gets `service`, `endpoint`, `host` and `job = "app/<service>"`. Container numbers (`container_*{name}`) and logs (`{job="journal", unit="docker-<container>.service"}`) exist for every app without declaring anything.
+Every scraped series gets `service`, `scrape` (the endpoint's name), `host` and `job = "app/<service>"`. Container numbers (`container_*{name}`) and logs (`{job="journal", unit="docker-<container>.service"}`) exist for every app without declaring anything.
+
+| `neo.monitoring.apps.<service>` field | Meaning |
+|---|---|
+| `scrapeToken` | Read-only. A 64-hex secret per app, derived (`lib.neo.secrets.sha256`) from one key the machine generates itself (`neo.core.secrets.generated.metrics`); the operator never sets it. Give it to the app through `neo.core.secrets.containerEnv` or a secrets template, gated on `collecting`; the scrape uses it by default |
+| `hidePaths` | Paths SWAG answers with 404 on the app's sites: exact (`"/metrics"` → `location = /metrics`) or a prefix (`"^~ /admin/"`). For metrics served on the public port. Always applies, also without an agent |
+
+`lib.neo.monitoring`: `nameToLabels regex labels name` (relabel rules that turn parts of a metric name into labels, see Immich), `dropOtelScope` (drops `otel_scope_*` labels and `target_info`), `hidePathLocations paths` (the nginx lines `hidePaths` produces).
 
 | `dashboards.<id>` field | Default | Meaning |
 |---|---|---|
