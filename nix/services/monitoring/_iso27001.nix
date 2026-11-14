@@ -120,6 +120,8 @@
         title = "A.8.8 Days since last system update";
         gridPos = pos 16 7 4 4;
         targets = [(pq ''max(${timerAgeHours "neo-auto-update.timer"}) / 24'' "")];
+        # systemd forgets the last run of a timer at a restart.
+        noValue = "None since restart";
         unit = "d";
         decimals = 1;
         thresholds = thresholdsGreenRed [(orange 8) (red 31)];

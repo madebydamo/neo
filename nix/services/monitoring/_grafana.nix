@@ -184,17 +184,27 @@
       })
 
       (row "Uptime and app health" 11)
+      # Only apps that were down at some point in the range: a row per app
+      # does not fit once a server runs a few dozen of them.
       (stateTimeline {
-        title = "Uptime checks";
+        title = "Uptime checks with problems";
         gridPos = pos 0 12 12 10;
-        description = "Each app's web address, checked every 30 seconds by the monitoring agents.";
-        targets = [(pq "probe_success" "{{target}}")];
+        description = "Web addresses that did not answer at some point in the selected time, checked every 30 seconds by the monitoring agents. Empty when every app answered the whole time.";
+        targets = [(pq ''label_replace(probe_success and on (target) (min_over_time(probe_success[$__range]) < 1), "app", "$1", "target", "https?://([^/]+)/?.*")'' "{{app}}")];
+        noValue = "Every app answered the whole time";
       })
       (stateTimeline {
-        title = "Apps";
+        title = "Apps with stopped containers";
         gridPos = pos 12 12 12 10;
-        description = "Up when every container of the app runs.";
-        targets = [(pq ''min by (host, service) (neo_service_unit{kind="container"} * on (host, name) group_left () node_systemd_unit_state{state="active"})'' "{{service}} ({{host}})")];
+        description = "Apps where a container was not running at some point in the selected time. Empty when all of them ran the whole time.";
+        targets = [
+          (pq ''
+            min by (host, service) (neo_service_unit{kind="container"} * on (host, name) group_left () node_systemd_unit_state{state="active"})
+            and on (host, service)
+            (min_over_time((min by (host, service) (neo_service_unit{kind="container"} * on (host, name) group_left () node_systemd_unit_state{state="active"}))[$__range:1m]) < 1)
+          '' "{{service}} ({{host}})")
+        ];
+        noValue = "All apps ran the whole time";
       })
       (bargauge {
         title = "Uptime per app";
@@ -286,7 +296,14 @@
     uid = "neo-server";
     title = "Server";
     time = "now-6h";
-    variables = [(hostVar // {multi = false;})];
+    # One server at a time: the queries compare host="$host" (no "All").
+    variables = [
+      (hostVar
+        // {
+          multi = false;
+          includeAll = false;
+        })
+    ];
     panels = [
       (stat {
         title = "Running since";
