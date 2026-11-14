@@ -23,7 +23,8 @@
   }: let
     cfg = config.neo.services.monitoring;
     sel = lib.neo.grafana.appSelector "monitoring";
-    agent = ''job="alloy"'';
+    # The agent's self-scrape honours Alloy's own labels: job="integrations/self".
+    agent = ''job=~"alloy|integrations/self"'';
     containers = ''host=~"$host", name=~"grafana|prometheus|loki"'';
   in {
     config = lib.mkIf cfg.enabled {
