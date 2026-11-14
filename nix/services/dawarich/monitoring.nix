@@ -44,6 +44,8 @@
       };
 
       neo.monitoring.apps.dawarich = {
+        # The web app serves /metrics on its public site while the exporter is on.
+        hidePaths = ["/metrics"];
         metrics.sidekiq = {
           container = "dawarich-sidekiq";
           port = 9394;
