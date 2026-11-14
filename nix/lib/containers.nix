@@ -27,6 +27,8 @@ in {
       # The image and dataPath are tied to the data on disk: never change them
       # for an existing install without a dump and restore.
       # `health` takes the dockerHealthOptions arguments; cmd defaults to pg_isready.
+      # `network`: the service's network (lib.neo.docker.serviceNetwork); the
+      # shared `internal` by default for older callers.
       mkPostgresSidecar = config: {
         name,
         image,
@@ -39,6 +41,7 @@ in {
         environment ? {},
         health ? null,
         extraOptions ? [],
+        network ? "internal",
       }: {
         systemd.services."docker-${name}".preStart = mkEnsureDirs config ["${appdata}/${dataDir}"];
         neo.core.secrets.containerEnv = lib.optionalAttrs (password != null) {
@@ -56,13 +59,13 @@ in {
           extraOptions =
             extraOptions
             ++ lib.optionals (health != null) (dockerHealthOptions ({cmd = "pg_isready -U ${user} -d ${db}";} // health));
-          networks = ["internal"];
+          networks = [network];
         };
       };
 
       # Redis container for one service. Without appdata it keeps nothing on disk.
       # A module fragment for mkMerge. `health` takes the dockerHealthOptions
-      # arguments; cmd defaults to redis-cli ping.
+      # arguments; cmd defaults to redis-cli ping. `network` as for mkPostgresSidecar.
       mkRedisSidecar = config: {
         name,
         image,
@@ -70,6 +73,7 @@ in {
         dataDir ? "redisdata",
         cmd ? [],
         health ? null,
+        network ? "internal",
       }: {
         systemd.services = lib.optionalAttrs (appdata != null) {
           "docker-${name}".preStart = mkEnsureDirs config ["${appdata}/${dataDir}"];
@@ -78,7 +82,7 @@ in {
           inherit image cmd;
           volumes = lib.optional (appdata != null) "${appdata}/${dataDir}:/data";
           extraOptions = lib.optionals (health != null) (dockerHealthOptions ({cmd = "redis-cli ping";} // health));
-          networks = ["internal"];
+          networks = [network];
         };
       };
 
