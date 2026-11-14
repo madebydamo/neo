@@ -97,7 +97,7 @@
               w = 4;
               h = 4;
               description = "Devices that cannot reach each other directly and send their traffic through this server.";
-              targets = [(pq "sum(relay_peers{${sel}}) or vector(0)" "")];
+              targets = [(pq "sum({__name__=~\"relay_peers_(active|idle)\", ${sel}}) or vector(0)" "")];
               options.colorMode = "value";
               thresholds = thresholdsGreenRed [];
             })
@@ -131,7 +131,7 @@
               targets = [
                 (pq "sum(management_grpc_connected_streams{${sel}})" "connected")
                 (pq "sum(signal_active_peers{${sel}})" "signal")
-                (pq "sum(relay_peers{${sel}})" "relay")
+                (pq "sum({__name__=~\"relay_peers_(active|idle)\", ${sel}})" "relay")
               ];
             })
 
