@@ -39,10 +39,6 @@
     eng = metric: ''${metric}{${sel}}'';
   in {
     config = lib.mkMerge [
-      # Same priority as the option's default, so it adds to the units from
-      # mkContainerDefinitions instead of replacing them. Not under mkIf: a
-      # definition of neo.services.searxng must not depend on cfg.enabled.
-      {neo.services.searxng.systemdUnits = lib.mkOptionDefault ["searxng-metrics"];}
       (lib.mkIf cfg.enabled {
         neo.core.secrets.templates.${tokenTemplate} = lib.mkIf collecting {
           content = app.scrapeToken;

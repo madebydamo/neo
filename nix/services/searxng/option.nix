@@ -28,6 +28,8 @@
             // lib.neo.mkContainerDefinitions {
               "searxng-redis" = "docker.io/valkey/valkey:8-alpine";
               searxng = "docker.io/searxng/searxng:latest";
+              # monitoring.nix: puts the metrics password into settings.yml
+              extraUnits = ["searxng-metrics"];
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/searxng"
             // lib.neo.mkServiceMeta {
