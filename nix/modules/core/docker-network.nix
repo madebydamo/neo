@@ -58,6 +58,10 @@
         local cur_internal cur_subnet cur_bridge
         want="$internal|$subnet|$bridge"
         if exists "$name"; then
+          # Not created by Neo (internal, a plugin's own network): never touch it.
+          if [ "$("$docker" network inspect -f '{{index .Labels "neo.managed"}}' "$name")" != 1 ]; then
+            return 0
+          fi
           IFS='|' read -r cur_internal cur_subnet cur_bridge < <(
             "$docker" network inspect -f '{{.Internal}}|{{range .IPAM.Config}}{{.Subnet}}{{end}}|{{index .Options "com.docker.network.bridge.name"}}' "$name"
           )
