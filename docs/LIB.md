@@ -88,8 +88,8 @@ The build fails if a placeholder would end up in a container or unit `environmen
 | Function | Arguments | Returns |
 |----------|-----------|---------|
 | `toOciBindMounts` | List of `{ localPath, containerPath }` | List of `"host:container"` strings |
-| `mkPostgresSidecar` | `config`, `{ name, image, appdata, db, user ? db, password ? null, dataPath ? "/var/lib/postgresql/data", dataDir ? "pgdata", environment ? {}, health ? null, extraOptions ? [] }` | Module fragment for `mkMerge`: the Postgres container on `internal`, its data directory, `POSTGRES_PASSWORD` through the secrets |
-| `mkRedisSidecar` | `config`, `{ name, image, appdata ? null, dataDir ? "redisdata", cmd ? [], health ? null }` | Module fragment for `mkMerge`: the Redis container on `internal`; without `appdata` it keeps nothing on disk |
+| `mkPostgresSidecar` | `config`, `{ name, image, appdata, db, user ? db, password ? null, dataPath ? "/var/lib/postgresql/data", dataDir ? "pgdata", environment ? {}, health ? null, extraOptions ? [], network ? "internal" }` | Module fragment for `mkMerge`: the Postgres container on `network` (pass `docker.serviceNetwork <service>`), its data directory, `POSTGRES_PASSWORD` through the secrets |
+| `mkRedisSidecar` | `config`, `{ name, image, appdata ? null, dataDir ? "redisdata", cmd ? [], health ? null, network ? "internal" }` | Module fragment for `mkMerge`: the Redis container on `network`; without `appdata` it keeps nothing on disk |
 | `dockerHealthOptions` | `{ cmd, interval, timeout, retries, startPeriod ? null }` | `--health-*` flags for `extraOptions` |
 | `linuxserverEnv` | `config` | `{ PUID; PGID; TZ; }` from `neo.core.uid`, `gid` and `timeZone`; merge into a container's `environment` with `//` |
 | `mkSetupService` | `{ pkgs, name, description, script, containers ? [], attachTo ? containers, after ? [], wants ? [], requires ? [], bindsTo ? [], partOf ? [], before ? [], wantedBy ? [], path ? [], environment ? {}, retryInterval ? 60, maxAttempts ? null, blocking ? false, serviceConfig ? {}, unitConfig ? {} }` | A `systemd.services.<name>` value. `After`/`Requires` on `docker-<c>` for each of `containers`; `docker-<c>` of `attachTo` wants it. `script` is one attempt under `bash -e`, retried every `retryInterval` s until exit 0 (`null` = one attempt, then `Restart=on-failure`); `maxAttempts` gives up. `RemainAfterExit` always; `Type=simple`, or `oneshot` with `blocking = true` |
@@ -98,6 +98,27 @@ The build fails if a placeholder would end up in a container or unit `environmen
 | `planServiceTargets` | `{ services, exclude ? [ "dnsmasq" "neo-web" "neo-bootstrap" "swag-patcher" "nginx" ] }` | `neo-<service>.target` plan; **internal** |
 
 List every setup unit in the service's `systemdUnits` (`extraUnits` or `mkSystemdUnits`). An assertion fails evaluation for setup units that are not listed in an enabled service's `systemdUnits`, so define them inside `mkIf cfg.enabled`.
+
+### Docker networks: `lib.neo.docker`
+
+Each service runs on its own network, so containers of different services cannot reach each other (design: [design/network-isolation.md](design/network-isolation.md)). Name the network in `networks`; `neo-docker-network` creates every network a container names and removes empty ones no one declares. SWAG joins `app-<service>` of every proxied service on its own.
+
+| Name | Arguments | Returns |
+|------|-----------|---------|
+| `docker.serviceNetwork` | Service name (`plugin.name "<service>"` in plugins) | `"app-<service>"`: put every container of the service there |
+| `docker.mkLink` | `{ name, containers }` | Module fragment for `mkMerge`: network `link-<name>` joined by exactly `containers` (any service, core or plugin), after their own network. For endpoints only reachable inside Docker; prefer the other app's public URL |
+| `docker.mkHostAccess` | Container name | Module fragment: the container joins `neo-host` and reaches host services (bound to `127.0.0.1` with `mkDockerToLocalhostForward`, or all interfaces) as `host.docker.internal`. Only the `neo-host` bridge may connect to host ports |
+| `docker.sharedNetwork` | | `"internal"`: the shared network of plugins written before service networks; SWAG is on it, everything on it reaches everything else on it |
+| `docker.hostNetwork`, `hostSubnet`, `hostGateway` | | `"neo-host"`, `172.31.255.0/24`, `172.31.255.1` |
+| `docker.containerNetworks`, `usedNetworks`, `containerService`, `networkName`, `isCreatedNetwork` | | Readers for checks and tooling; **internal** |
+| `config.neo.core.docker.networks.<name>` | `{ internal ? false, subnet ? null, gateway ? null, bridgeName ? null }` | Flags of a network (`internal` = no route to the internet); **internal** |
+
+```nix
+virtualisation.oci-containers.containers.${name} = {
+  image = cfg.containers.${name};
+  networks = [(lib.neo.docker.serviceNetwork name)];
+};
+```
 
 ### Directories and files
 
@@ -171,7 +192,7 @@ virtualisation.oci-containers.containers.${name}.environment = lib.mkIf config.n
 | `metrics.<endpoint>` field | Default | Meaning |
 |---|---|---|
 | `container` + `port` | | Container (use `plugin.name`) and port; found on `network` |
-| `network` | `"internal"` | Docker network the agent reaches the container on |
+| `network` | `null` | Docker network the agent reaches the container on; `null` = the container's first network |
 | `address` | | `host:port` instead, for services outside Docker |
 | `path`, `scheme`, `interval` | `/metrics`, `http`, `30s` | |
 | `relabel` | `[]` | Metric relabel rules `{ sourceLabels ? ["__name__"], regex, targetLabel, replacement ? "$1", action ? "replace" }` (`keep`, `drop`, `labeldrop`, `labelkeep`), e.g. to turn `app_jobs_upload_total` into `app_jobs_total{task="upload"}` |
@@ -258,7 +279,7 @@ Do not add per-service code to the web UI. If the generic form is not enough, a 
 
 | Function / value | Arguments | Returns |
 |------------------|-----------|---------|
-| `mkDockerToLocalhostForward` | A port or list of ports | NixOS config (`mkIf`) with iptables DNAT so containers reach `host.docker.internal:<port>` on a service bound to `127.0.0.1`. Merge with `lib.mkMerge` |
+| `mkDockerToLocalhostForward` | A port or list of ports | NixOS config (`mkIf`) with iptables DNAT from the `neo-host` bridge, so SWAG (and containers with `docker.mkHostAccess`) reach `host.docker.internal:<port>` on a service bound to `127.0.0.1`. Merge with `lib.mkMerge` |
 | `mkSudoExtraRules` | `{ users ? [], groups ? [], runAs ? null, commands ? [], all ? false, options ? ["NOPASSWD" "SETENV"] }`. Each command is `{ package, name, options?, pname? }` or `{ command, options? }`. `runAs` is a string | Value for `security.sudo.extraRules` |
 | `mkSudoCommand` | `{ package, name, options ? defaultSudoCommandOptions, pname ? package.pname }` | The four path forms sudo may see for one binary |
 | `defaultSudoCommandOptions` | | `["NOPASSWD" "SETENV"]` |

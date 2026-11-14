@@ -18,7 +18,7 @@ Why Neo is built the way it is. Read this before changing Neo or writing a plugi
 
 **All mutable state in appdata.** Everything a service writes lives under `${config.neo.core.volumes.appdata}/<name>`, owned by the `homeserver` user. That single rule is what makes Clear appdata, snapshots, backups and restore work for every service without per-service code. Never `/var/lib/<name>`, never `DynamicUser`.
 
-**One front door.** Web traffic enters through SWAG (TLS, geo filters) and tinyauth (login), reaches containers over the `internal` Docker network, and leaves encrypted. No service publishes its web port. Each service chooses where it is reachable (`ingress`: local, Tailscale, web). Paths that skip the login are explicit regexes in `auth.publicPaths`.
+**One front door.** Web traffic enters through SWAG (TLS, geo filters) and tinyauth (login), reaches containers over the service's own Docker network, and leaves encrypted. Services cannot reach each other's containers or the host's own services; the rare exception is an explicit link. No service publishes its web port. Each service chooses where it is reachable (`ingress`: local, Tailscale, web). Paths that skip the login are explicit regexes in `auth.publicPaths`.
 
 **Secrets never touch the Nix store.** Passwords, tokens and keys are declared with `mkSecretOption`, may be encrypted at rest, and reach services only through rendered files at activation. The build refuses a secret in an `environment`, a script or `/etc`. Agents never see secret values.
 

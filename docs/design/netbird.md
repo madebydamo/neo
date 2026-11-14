@@ -330,12 +330,12 @@ Category Network. Tagline "Your own private network between your devices". `repl
 
 | Container | Image | Network | Ports |
 |-----------|-------|---------|-------|
-| `netbird-server` | `netbirdio/netbird-server:<pinned>` | `internal` | `3478/udp` published and opened |
-| `netbird-dashboard` | `netbirdio/dashboard:<pinned>` | `internal` | none |
+| `netbird-server` | `netbirdio/netbird-server:<pinned>` | `app-netbird-server` | `3478/udp` published and opened |
+| `netbird-dashboard` | `netbirdio/dashboard:<pinned>` | `app-netbird-server` | none |
 
 - `config.yaml` is a `neo.core.secrets.templates` file mounted read-only. It holds
   `exposedAddress = https://<subdomain>.<domain>:443`, `auth.issuer = …/oauth2`, the redirect URIs,
-  `store.engine = sqlite`, `reverseProxy.trustedHTTPProxies` = the `internal` Docker subnet, and
+  `store.engine = sqlite`, `reverseProxy.trustedHTTPProxies` = the Docker range `172.16.0.0/12` (SWAG reaches it on `app-netbird-server`), and
   the three secrets.
 - Data: `${appdata}/netbird-server` → `/var/lib/netbird` (`mkAppdata`). Four SQLite files. Covered
   by snapshots and backup. `notes`: Clear appdata deletes the whole network, every device has to

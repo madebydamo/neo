@@ -22,7 +22,7 @@ flowchart TB
     EDGE --> SWAG[SWAG · TLS termination, filters, routing]
     SWAG --> AUTH[tinyauth · login gate]
     AUTH --> APP[Service container]
-    APP -->|"internal network · not exposed to the internet"| SWAG
+    APP -->|"its own network · not exposed to the internet"| SWAG
     SWAG -->|"HTTPS · encrypted again"| USER
   end
 ```
@@ -101,11 +101,11 @@ flowchart TB
   SYS --> APPS[Apps · files photos vault media …]
   SYS --> HERMES[Hermes · AI assistant]
   SYS --> DATA[Your data on disk]
-  SYS --> FW[Firewall · internal networks]
+  SYS --> FW[Firewall · one network per app]
 ```
 
 - **Neo web**: where normal users spend their time. Saved edits wait as pending changes until you apply them; each activation is a commit in your configuration repo, so you can see what changed and go back.
-- **Apps**: open source services you enable. They store data under Neo's volume layout on *your* disks.
+- **Apps**: open source services you enable. They store data under Neo's volume layout on *your* disks. Each app runs on its own network: only SWAG reaches it, and a compromised app cannot talk to another app's database or to Neo itself.
 - **Hermes**: an AI assistant that knows each enabled service and can operate the machine for you. You choose the AI provider.
 - **Plugins**: optional packs of extra apps or Nix bits ([PLUGINS.md](PLUGINS.md)). Same security front door.
 

@@ -68,7 +68,7 @@ If the machine at home has no public IP, route the traffic with [streamproxy](do
 
 ### Every day
 
-- **Opinionated defaults.** A firewalled host, services on an internal network, packaging chosen for you.
+- **Opinionated defaults.** A firewalled host, every service on its own network so one app cannot reach another, packaging chosen for you.
 - **Simple web interface.** Full control in the browser. Enable a service, edit it, preview the changes, apply them, revert an edit before it goes live. Start, stop and restart services, read their logs, restart or shut down the machine.
 - **User management.** Add people. Choose the services each person or group may open. Sign in with a password, or with an OAuth provider such as Authentik, Google or Microsoft Entra ID.
 - **Automatic HTTPS.** Certificates stay current. Traffic stays encrypted until it reaches your server.

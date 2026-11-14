@@ -32,7 +32,7 @@ NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) + Rust *
 ## Add a service
 
 1. `option.nix` — `enabled`, `// lib.neo.mkReverseProxyOptions`, `mkContainerDefinitions`, `mkAppdata`, `mkServiceMeta`, `mkSkillOptions`
-2. `default.nix` — `mkIf`, activation dirs, `oci-containers` on `networks = ["internal"]`
+2. `default.nix` — `mkIf`, activation dirs, `oci-containers` on `networks = [(lib.neo.docker.serviceNetwork "<name>")]` (sidecars: `network =` the same)
 3. `swag.nix` if public; `skills.nix` for Hermes (`mkServiceSkill`); `monitoring.nix` for metrics and a Grafana dashboard (`neo.monitoring.apps.<name>`, `lib.neo.grafana`, see below)
 4. Enable in **`settings.toml`**: `[services.<name>] enabled = true`
 5. `git add` → **`just launch`** → smoke test below → `just format && just check`
@@ -60,6 +60,8 @@ Naming: options camelCase under `neo.services.*`; plain-string descriptions; vol
 **Secrets:** declare passwords/tokens/keys with `lib.neo.mkSecretOption` (keep the type/default you would use, e.g. `nullOr str`). Never put a secret into a container/unit `environment`, `/etc` text or a script: use `neo.core.secrets.containerEnv.<container> = { VAR = …; }` (rendered env file) or `neo.core.secrets.templates."<name>" = { content; owner; mode; restartUnits; }` and its `.path` (`LoadCredential` for DynamicUser). The value is a placeholder on encrypted configs, so never hash/encode a secret at eval: use `lib.neo.secrets.sha256` / `base64` / `jsonString` (computed at activation), and `lib.neo.secrets.swagSnippet` for SWAG conf lines that carry a secret. For a secret inside JSON/JS use `lib.neo.secrets.jsonString`; a file a service expects at a fixed path takes `copies = [ path ]`. Operators switch storage (inline → `secrets.yaml` → encrypted `secrets.sops.yaml`) in Settings → Secrets or with `neo secrets split|enable|disable|rekey`; `neo restore <repo>` reinstalls from the repo with the escrowed host key. See `docs/design/secrets.md`, `nix/modules/core/secrets.nix`.
 
 **SWAG traps:** `include /config/nginx/proxy.conf` already sets Upgrade/Connection and proxy timeouts — **do not re-set** them (426 WebSockets / `proxy_*_timeout` duplicate kills all vhosts).
+
+**Docker networks:** each service has its own network `app-<service>` (`lib.neo.docker.serviceNetwork`); containers of different services cannot reach each other, and the flake check `docker-network-isolation` fails when a network mixes services. SWAG joins the network of every proxied service; gluetun joins the networks of VPN-routed ones (aliases per network). A service that must call another one inside Docker declares a link (`lib.neo.docker.mkLink { name; containers; }`, e.g. Nextcloud ↔ Collabora); otherwise use the other app's public URL. The shared `internal` network stays for plugins that use it (built-ins never do). Host services (neo web, Hermes, Vikunja) are reachable only from the `neo-host` bridge (SWAG; `lib.neo.docker.mkHostAccess` for a container that must); the firewall no longer accepts every bridge. `neo-docker-network` creates every network a container names and removes empty ones no one declares. Design: [docs/design/network-isolation.md](docs/design/network-isolation.md).
 
 **ingress:** per-service multi-select (`local` / `tailscale` / `netbird` / `web`) via `mkReverseProxyOptions`; default all four. `netbird` matches `services.netbird.networkRange` and wins over the LAN and Tailscale ranges; the PROXY-protocol port is always `web`. SWAG also sits on the IPv6-only `swag-ipv6` network so IPv6 visitors keep their address (public IPv6 = `web`). Omitting `web` denies that vhost on the shared rathole/PROXY-protocol listener (neo 404 page) — not a per-app rathole port.
 
@@ -221,9 +223,10 @@ just logs docker-<name>
 just exec 'docker exec swag curl -sS -m 10 http://<container>:<port>/…'   # internal
 curl -sk -m 20 -w "\n%{http_code}\n" "https://<sub>.<domain>/health…"     # public (publicPaths)
 curl -sk -m 20 -D - -o /dev/null "https://<sub>.<domain>/"                # expect 302 → tinyauth
+just exec 'docker exec <container> getent hosts <other-service-container> || echo isolated'  # must print isolated
 ```
 
-**Pass:** unit active, internal OK, public health **200** (if bypassed), UI **302** to tinyauth, no SWAG `emerg`. Iterate: fix → `git add` → `just launch`.
+**Pass:** unit active, internal OK, public health **200** (if bypassed), UI **302** to tinyauth, no SWAG `emerg`, other services' containers do not resolve. Iterate: fix → `git add` → `just launch`.
 
 ```bash
 # Debug extras

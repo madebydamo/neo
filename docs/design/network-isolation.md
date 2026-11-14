@@ -1,231 +1,179 @@
-# Network isolation: one Docker network per service (plan)
+# Network isolation: one Docker network per service
 
-Status: plan, not implemented.
+Status: implemented. Code: `nix/lib/docker.nix` (`lib.neo.docker`),
+`nix/modules/core/docker-network.nix`, check `nix/output/network-isolation-check.nix`.
 
 ## Goal
 
-Today every app container sits on one bridge network, `internal`. Any container
-can open a connection to any other: a compromised Pastebin can talk to the
-Immich database or Vaultwarden directly, without going through SWAG and tinyauth.
+Before, every app container sat on one bridge network, `internal`, and the host
+accepted any connection from any Docker bridge. Any container could reach any
+other (a compromised Pastebin could talk to the Immich database or Vaultwarden
+directly, without SWAG and tinyauth) and the host's own services: the Neo web UI
+answered every container without a login.
 
-After this change:
+Now:
 
-- Each built-in service gets its own network `app-<service>`. Only that
-  service's containers are on it (plus SWAG when the service has a site, and
-  gluetun when it is VPN-routed).
+- Each built-in service has its own network `app-<service>`
+  (`lib.neo.docker.serviceNetwork`). Only that service's containers are on it,
+  plus SWAG when the service has a site and gluetun when it is VPN-routed.
 - SWAG joins the networks of the services it proxies.
-- A service that really needs another service's container declares a **link**:
-  a small network with just the containers involved.
-- **`internal` stays exactly as it is** for plugins: same name, SWAG on it,
-  every container that names it can reach every other one on it. Plugins opt
-  into isolation by switching to `lib.neo.docker.serviceNetwork`; nothing is
-  rewritten behind their back.
-- `lib.neo` gets declarative Docker network tooling, so nobody writes
-  `docker network create` in a script again.
-- A flake check and the VM smoke test prove isolation.
+- A service that needs another service's container declares a **link**
+  (`lib.neo.docker.mkLink`): a small network with just those containers.
+- Host services (neo web, Hermes, Vikunja, security, backup-store,
+  iSponsorBlockTV) answer only the `neo-host` bridge, which SWAG and Grafana
+  join (`lib.neo.docker.mkHostAccess`).
+- **`internal` stays as it was** for plugins: same name, SWAG on it, everything
+  on it reaches everything else on it. Plugins opt in by switching to
+  `serviceNetwork`; nothing is rewritten behind their back.
+- Networks are declared by naming them; `neo-docker-network` creates and
+  removes them.
+- The flake check `docker-network-isolation` and the VM smoke test prove it.
 
-Out of scope (follow-ups at the end): no-internet networks for databases,
-host-network containers. One gluetun shared by all VPN-routed apps stays.
+Kept: one gluetun shared by all VPN-routed apps (see VPN).
 
-## Today (inventory)
+## Who talks to whom
 
-| Who | How they talk | Effect of isolation |
-|-----|---------------|---------------------|
-| SWAG → every app | Container name (`set $upstream_app <name>`) | SWAG joins each proxied service's network: unchanged |
-| SWAG → tinyauth | `http://tinyauth:<port>/api/auth/nginx` (`nix/lib/reverseProxy/authorization.nix`) | tinyauth is an app with a site: unchanged |
-| SWAG → native services (neo web, Hermes, Vikunja, security, backup-store, iSponsorBlockTV) | `host.docker.internal` | Unchanged |
-| SWAG `proxyPass` routes | Operator-entered `http://host:port` | SWAG stays on `internal`, so plugin containers keep working; a route to a built-in container by name would need the public URL (documented) |
-| Inside one service (app → its db/redis/chrome/meilisearch/webengine/sso/mcp/cron) | Container names | Same network: unchanged |
-| SWAG → crowdsec | `http://crowdsec:8080` | Both in the `swag` service: unchanged |
-| **Nextcloud → Collabora** | `wopi_url = http://collabora:9980` (`nix/services/collabora/default.nix`) | **Needs a link** |
-| Grafana / Prometheus / Loki + SWAG | Own `monitoring` network already | Becomes `app-monitoring` through the generic mechanism |
-| Monitoring agent (Alloy, host network) → app metrics | Docker discovery filtered on `network` (default `"internal"`, `nix/modules/core/monitoring.nix`) | Default follows the container's network. Host → bridge is not blocked by Docker |
-| netbird-server setup | `docker inspect … Networks "internal"` (`nix/services/netbird-server/default.nix`) | Read its own network |
-| VPN-routed containers | `networks = ["container:vpn"]`; gluetun joins `vpn.networks` of every routed service with `--network-alias=<routed container>` | See VPN below |
-| Apps → other apps' public URLs (immich-drop → Immich, ical-sync/calino → Rustical, Collabora → Nextcloud callback) | `https://<sub>.<domain>` through the host and SWAG | Unchanged, and the preferred way between apps |
-| Hermes skills ("curl http://bentopdf:8080 from internal network") | Hermes is native with Docker access, uses `docker exec swag curl …` | Works; wording of a few skills changes |
-| Karakeep → `http://ollama:11434` | Only an example in an option text | Text: use a public URL |
-| beszel-agent (host network) → `http://beszel:8090` | Container name from the host network | Check whether that works today at all; no isolation change |
-| **Plugins** (high_sea, fortilegends, example) | `networks = ["internal"]`; high_sea's declarr calls `radarr`, `sonarr`, `prowlarr`, `lidarr`, `bazarr`, `tdarr`, `deemix`, `flaresolverr`, all in high_sea; qbittorrent via gluetun | Stay on `internal`: unchanged. None of them calls a built-in container by name |
+| Who | How | Now |
+|-----|-----|-----|
+| SWAG → every app | Container name (`set $upstream_app <name>`) | SWAG on each proxied service's network |
+| SWAG → tinyauth | `http://tinyauth:<port>/api/auth/nginx` | tinyauth is an app with a site |
+| SWAG → host services | `host.docker.internal` | `neo-host` (gateway `172.31.255.1`) |
+| SWAG `proxyPass` routes | Operator-entered `http://host:port` | SWAG stays on `internal`, so plugin containers keep working; a built-in container needs its public URL |
+| Inside one service (app → db/redis/chrome/meilisearch/webengine/sso/mcp/cron) | Container names | Same network |
+| SWAG → crowdsec | `http://crowdsec:8080` | Both in the `swag` service (`app-swag`) |
+| Nextcloud → Collabora | `wopi_url = http://collabora:9980` | Link `link-nextcloud-collabora` |
+| Grafana → Hermes webhook | `host.docker.internal` | Grafana joins `neo-host` while alerts are on |
+| Monitoring agent (Alloy, host network) → app metrics | Docker discovery on `network` | Default: the container's first network. Host → bridge is not blocked |
+| netbird-server setup | `docker inspect` of its address | Reads `app-netbird-server` |
+| VPN-routed containers | `networks = ["container:vpn"]` | gluetun on the routed services' networks, aliases per network |
+| Apps → other apps' public URLs (immich-drop → Immich, ical-sync/calino → Rustical, Collabora → Nextcloud callback) | `https://<sub>.<domain>` through the host and SWAG | Unchanged (published ports are forwarded, not host input), and the preferred way between apps |
+| Hermes skills | Native, with Docker access: `docker exec swag curl …` | Unchanged (SWAG is on every network) |
+| Plugins (high_sea, fortilegends, example) | `networks = ["internal"]`; high_sea's declarr calls radarr, sonarr, prowlarr, … | Unchanged. None calls a built-in container by name |
 
-Searched: every `http://`/`redis://`/`postgres://` host in `nix/`,
-`templates/` and the local plugin checkouts, every `networks =`, `--network`,
-`--network-alias`, `--add-host`. No other cross-service container name is used.
-
-**The one behaviour change for plugins:** built-in containers leave `internal`,
-so a plugin container that called a built-in one by name (e.g.
-`http://immich-server:2283`) would no longer resolve it. None of the known
-plugins does; such a plugin uses the public URL or a link (`mkLink` works across
-plugin and core). Called out in the release notes and `docs/PLUGIN-DEVELOPMENT.md`.
+**The one behaviour change for plugins:** built-in containers left `internal`,
+so a plugin container cannot call a built-in one by name (e.g.
+`http://immich-server:2283`) or reach a host service through its gateway. None
+of the known plugins does; such a plugin uses the public URL, a link or
+`mkHostAccess`. `docs/PLUGIN-DEVELOPMENT.md` says so.
 
 ## Design
 
-### 1. Network tooling: `neo.core.docker.networks`
+### Network tooling
 
-Replaces `neo.core.dockerNetworks` (list, kept as an alias for one release) and
-the hand-written script in `nix/modules/core/docker-network.nix`.
+`neo.core.docker.networks.<name> = { internal; subnet; gateway; bridgeName; }`
+is filled from the containers: every network a container names (in `networks`
+or `--network=` in `extraOptions`) is declared, plus `internal` and
+`swag-ipv6`. `neo.core.dockerNetworks` (list) still works.
 
-```nix
-neo.core.docker.networks.<name> = {
-  ipv6 = false;      # IPv6-only network (swag-ipv6 today)
-  internal = false;  # docker --internal: no route to the internet (follow-up use)
-};
-```
+`neo-docker-network.service` (oneshot, every container `After`/`Wants` it):
 
-`internal` (the network) and `swag-ipv6` are declared through it too, always.
+- Creates missing networks with `--label neo.managed=1`; fixed-subnet networks
+  first, before the pool could hand out their range.
+- Leaves an existing unlabelled network of the same name alone (`internal`).
+- Recreates a network whose flags differ once no container uses it; until then
+  it logs.
+- Removes managed networks no one declares once empty, so a disabled service
+  leaves no network behind. The pre-label `monitoring` network goes the same
+  way. `internal` is never removed.
 
-`neo-docker-network.service` reconciles instead of only creating:
+Docker's default pools give about 31 bridge networks (172.17–31.0.0/16 plus
+16 × /20 of 192.168.0.0/16), too few for 40 services, and the 192.168 slices
+collide with home networks. `default-address-pools = [{ base = "172.16.0.0/12";
+size = 24; }]` gives 4096 /24 networks, in the range the NetBird check already
+reserves for Docker. Existing networks keep their subnets. Changing the daemon
+settings restarts Docker once on upgrade.
 
-- Creates missing networks with `--label neo.managed=1` plus the flags.
-- Adopts an existing network of the same name without the label (the
-  `internal` and `monitoring` networks of current installs), never fails on it.
-- Recreates a network whose flags changed only when no container uses it;
-  otherwise logs and keeps it.
-- Removes managed networks that are no longer declared and have no containers,
-  so a disabled service leaves no network behind. `internal` is never removed.
+### Service networks
 
-**Address space.** Docker's default pools give about 31 bridge networks
-(172.17–31.0.0/16 plus 16 × /20 of 192.168.0.0/16). 40 services plus links run
-out, and the 192.168 slices collide with home LANs. Set
-`virtualisation.docker.daemon.settings.default-address-pools =
-[{ base = "172.16.0.0/12"; size = 24; }]`: 4096 /24 networks, inside the range
-the NetBird assertion already reserves for Docker. Existing networks keep their
-subnets; new ones get /24s.
+Built-in services name `lib.neo.docker.serviceNetwork "<service>"`;
+`mkPostgresSidecar` and `mkRedisSidecar` take `network` (default `internal`, so
+plugin callers are unchanged).
 
-Lib helpers (`nix/lib/docker.nix`, documented in `docs/LIB.md`):
+Rejected: rewriting `internal` to the owning service's network automatically.
+It breaks high_sea, whose separate services talk to each other. Rejected: one
+network per container with allow lists (a bridge has no per-pair rules).
 
-| Helper | Returns |
-|--------|---------|
-| `lib.neo.docker.serviceNetwork name` | `"app-${name}"` (plugins pass `plugin.name "<service>"`) |
-| `lib.neo.docker.mkLink { name; containers; }` | Module fragment: network `link-<name>`, joined by exactly those containers |
-| `lib.neo.docker.containerService config` | `{ <container> = <service>; }` from `containers` keys and `docker-*` entries of `systemdUnits`; used by the check and monitoring |
+### SWAG
 
-### 2. Service networks
+SWAG joins its networks with `docker run --network=…`: `internal`, `swag-ipv6`,
+`neo-host`, and `app-<service>` of every enabled proxied service that has
+containers there. That list changes exactly when a site is added or removed,
+which already changes SWAG's `SUBDOMAINS` / `EXTRA_DOMAINS` and restarts it, so
+it adds no restarts. Restarting an app does not touch SWAG.
 
-A module `nix/modules/core/service-networks.nix` declares `app-<service>` for
-every enabled service that has a container on it (detected from the containers'
-`networks`, so a plugin that opts in gets its network created the same way).
-
-Built-in services switch explicitly: the ~40 `networks = ["internal"]` lines,
-`mkPostgresSidecar`, `mkRedisSidecar` and the `mkVpnOptions { networks = … }`
-calls take `lib.neo.docker.serviceNetwork "<service>"`. The sidecar helpers get
-a `network` argument (default `"internal"`, so plugins calling them are
-unchanged); built-in callers pass the service network.
-
-`"internal"` is never rewritten. Rejected: rewriting `internal` to the owning
-service's network automatically (breaks high_sea, whose services talk to each
-other). Rejected: one network per container with allow lists (a bridge has no
-per-pair rules; it would need our own iptables).
-
-The plugin template moves to `serviceNetwork` so new plugins start isolated; a
-plugin whose services talk to each other uses one `mkLink` for that group, or
-stays on `internal`.
-
-### 3. SWAG
-
-SWAG joins its networks through `docker run --network=…` flags as today:
-`internal`, `swag-ipv6`, and `app-<service>` of every enabled service that has
-a site (a `proxyConf`). Services without a site are not joined.
-
-That list changes exactly when an app with a site is enabled or disabled, which
-already changes SWAG's `SUBDOMAINS` / `EXTRA_DOMAINS` environment and restarts
-SWAG. So no extra restarts, and no runtime `docker network connect` machinery.
-Restarting an app does not touch SWAG.
-
-The monitoring module's `swag.extraOptions = ["--network=monitoring"]` goes
-away: covered by the rule above.
-
-### 4. Links between services
+### Links
 
 ```nix
-# nix/services/collabora/default.nix (inside mkIf nextcloud.enabled)
 (lib.neo.docker.mkLink { name = "nextcloud-collabora"; containers = ["nextcloud" "collabora"]; })
 ```
 
-Only `nextcloud` and `collabora` sit on `link-nextcloud-collabora`; the
-Nextcloud database does not see Collabora. A link is an explicit, reviewable
-statement in the service that needs it. Prefer the public URL when the app
-supports it; a link is for internal-only endpoints (WOPI here).
+The link network goes after each container's own network (`mkAfter`): tools
+that read the first network (monitoring, `docker inspect`) keep the service
+network. An assertion fails when a link container does not exist or cannot join
+(a VPN-routed container shares gluetun's namespace).
 
-`mkLink` appends the network to each container's `networks`, so it works on
-any container, core or plugin.
+### Host services
 
-### 5. VPN (one shared gluetun, as today)
+The host used to accept every bridge (`iptables -I nixos-fw -i br+ -j ACCEPT`)
+and DNAT loopback services from every bridge. Now the network `neo-host` has a
+fixed bridge name and subnet (`172.31.255.0/24`); the firewall accepts and
+DNATs from `-i neo-host` only, and its members get
+`--add-host=host.docker.internal:172.31.255.1`. Members: SWAG, and Grafana
+while alerts go to Hermes. The firewall start removes the old `br+`/`docker0`
+DNAT rules. Containers keep the internet and published ports (Docker forwards
+those; they never hit the host's input chain).
 
-gluetun joins the networks of every VPN-routed service (`vpn.networks`), and
-routed containers share its network namespace:
+### VPN (one shared gluetun)
 
-- SWAG and the service's own containers reach routed containers through
-  gluetun's aliases. With several networks the alias must be set per network
-  (`--network=name=app-searxng,alias=searxng`): a single `--network-alias`
-  applies only to the first network. Verify on Docker 29 in the VM.
-- Each alias goes on the routed service's own networks only, so `app-firefox`
-  does not resolve `searxng`.
-- Containers routed through gluetun share one network namespace, so they reach
-  each other on localhost, and gluetun sits on all their networks. That's
-  accepted by choice and documented as a known limit.
+- gluetun joins the networks of every VPN-routed service, with the aliases of
+  the routed containers per network (`--network=name=app-searxng,alias=searxng`).
+  `--network-alias` would apply to the first network only (verified on
+  Docker 29), and per network `app-firefox` does not resolve `searxng`.
+- `vpn.networks` is applied with `mkDefault`: a container that names its own
+  networks keeps them. Adding it on top listed the network twice, which
+  Docker 29 refuses (`network … is specified multiple times`); that also broke
+  non-routed high_sea services.
+- Known limit, by choice: routed containers share gluetun's network namespace,
+  so they reach each other on localhost, and gluetun sits on all their
+  networks (including `internal` for routed plugin containers).
 
-### 6. Monitoring
+### Monitoring
 
-- `neo.monitoring.apps.<service>.metrics.<e>.network` defaults to the first
-  bridge network of `container` (from its `networks`), so built-in apps get
-  `app-<service>` and plugins on `internal` keep `internal`.
-- The `monitoring` service's own network becomes `app-monitoring`; the old
-  `monitoring` network is removed once empty (it is adopted as managed).
+`neo.monitoring.apps.<service>.metrics.<e>.network` defaults to the
+container's first network. Grafana, Prometheus and Loki moved from their own
+`monitoring` network to `app-monitoring`, which only SWAG joins besides them.
 
 ## Checks
 
-- **Flake check `docker-network-isolation`** (eval of the homeserver template
-  with many services on): every network except `internal` and `swag-ipv6`
-  holds containers of one service, or is a `link-*`; the only allowed foreign
-  members are SWAG and gluetun. No built-in container is on `internal`. Fails
-  with the offending network and containers.
-- **Eval assertion**: `mkLink` containers exist.
-- **Plugin check**: build the dev config with high_sea enabled; its containers
-  are still on `internal` and declarr's targets resolve (VM).
-- **VM smoke test** (added to AGENTS.md):
+- **`docker-network-isolation`** (flake check): every built-in service on,
+  searxng and changedetection VPN-routed, crowdsec on. Fails when a network
+  other than `internal`/`swag-ipv6`/`neo-host` holds containers of two
+  services (SWAG and gluetun excepted), a link holds other containers than
+  declared, a built-in container is on `internal` or on Docker's default
+  bridge, a container names a network twice, SWAG misses a proxied service's
+  network, gluetun lacks per-network aliases, `neo-host` has other members
+  than SWAG and Grafana, or a container uses `host-gateway`.
+- **VM smoke test** (AGENTS.md): SWAG reaches every app; a container does not
+  resolve, nor connect by IP to, another service's container; plugins on
+  `internal` still resolve each other.
 
-  ```bash
-  just exec 'docker exec swag curl -sS -m 5 -o /dev/null -w "%{http_code}\n" http://immich-server:2283/'   # reachable
-  just exec 'docker exec nextcloud curl -sS -m 5 http://collabora:9980/hosting/discovery | head -c 80'       # link works
-  just exec 'docker exec pastebin getent hosts immich-database || echo isolated'                            # must print isolated
-  just exec 'docker exec declarr getent hosts radarr'                                                       # plugin on internal unchanged
-  just exec 'docker network ls --filter label=neo.managed=1'
-  ```
-
-  Plus the usual per-service checks for every service enabled in the dev
-  settings, since every built-in container is recreated once.
-
-## Rollout
-
-1. `nix/lib/docker.nix`, `neo.core.docker.networks`, reconcile script, address
-   pools; `neo.core.dockerNetworks` as an alias. (`nix:`)
-2. `service-networks.nix`; sidecar helpers get `network`. (`nix:`)
-3. Built-in services switch to `serviceNetwork` (one mechanical commit). (`nix:`)
-4. SWAG joins proxied services' networks; drop the monitoring `--network=`
-   override. (`swag:`)
-5. Nextcloud ↔ Collabora link. (`collabora:`)
-6. VPN per-network aliases. (`vpn:`)
-7. Monitoring default network, netbird-server inspect. (`monitoring:`,
-   `netbird-server:`)
-8. Flake check + smoke test steps. (`nix:`)
-9. Docs: AGENTS.md (Add a service, SWAG, smoke test), `docs/LIB.md`,
-   `docs/PLUGIN-DEVELOPMENT.md` (internal stays; how to opt in; built-ins left
-   internal), `docs/ARCHITECTURE.md`, plugin template and its AGENTS.md,
-   `agent/skills/neo-plugin` and `neo-core`, skill texts that say "from
-   internal network", Karakeep's ollama example. (`docs:`, `agent:`)
-
-Upgrade of an existing install: the first switch recreates every built-in
-container (their `--network` changes) and SWAG, so apps restart once, like an
-image update. Plugin containers are not touched. No data moves.
+Verified in the VM (Docker 29.9): upgrade from an install with `internal` and
+`monitoring` (networks created, `monitoring` removed, all apps up); live switch;
+SWAG → every app (HTTP 200), host services (neo web, Hermes) and crowdsec;
+Nextcloud ↔ Collabora over the link, Collabora not reaching the Nextcloud
+database; no cross-service name resolution, connections by IP time out
+(Nextcloud → Immich database, plugin → Immich, Pastebin → Grafana and Loki);
+no container but SWAG/Grafana reaches host ports; internet and hairpin to
+published 443 still work; high_sea's sonarr → radarr/prowlarr on `internal`;
+VPN aliases on `app-searxng` and `internal`; Immich metrics scraped on
+`app-immich`; disabling a service removes its network and SWAG leaves it.
 
 ## Follow-ups
 
-- `internal = true` (no internet) for networks that only hold databases and
-  caches: a second per-service network `app-<service>-data` with the app and
-  its sidecars, the sidecars off the main one.
+- `internal = true` (no internet) for databases and caches: a second network
+  `app-<service>-data` with the app and its sidecars only.
 - Move high_sea and fortilegends to `serviceNetwork` (+ one link for the
-  high_sea group) in their own repos.
+  high_sea services that talk to each other) in their own repos.
 - Host-network containers (Alloy, beszel-agent, iSponsorBlockTV) are outside
-  this scheme; review whether any can move to a bridge.
+  this scheme.
 - Show a service's network and links in the web UI's Advanced section.
