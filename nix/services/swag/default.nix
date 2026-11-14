@@ -10,6 +10,14 @@
       config = let
         cfg = config.neo.services.swag;
         appServices = lib.neo.getProxiedServices config;
+        # The network of every proxied service that has containers on it
+        # (lib.neo.docker.serviceNetwork). Changes exactly when a site is
+        # added or removed, which restarts SWAG anyway (SUBDOMAINS).
+        # Without swag itself: its own networks must not feed this list.
+        appNetworks = let
+          used = lib.neo.docker.usedNetworks (removeAttrs config.virtualisation.oci-containers.containers ["swag"]);
+        in
+          filter (n: elem n used) (map lib.neo.docker.serviceNetwork (attrNames appServices));
         # (service name, subdomain) for every enabled proxied service.
         subdomainClaims =
           mapAttrsToList (name: svc: {
@@ -305,12 +313,15 @@
             capabilities = {
               NET_ADMIN = true;
             };
-            extraOptions = [
-              "--network=internal"
-              # IPv6 visitors keep their address (docker-network.nix).
-              "--network=${lib.neo.swagIpv6Network}"
-              "--add-host=host.docker.internal:host-gateway"
-            ];
+            extraOptions =
+              [
+                # Shared network of plugins that do not use their own (docker-network.nix).
+                "--network=${lib.neo.docker.sharedNetwork}"
+                # IPv6 visitors keep their address (docker-network.nix).
+                "--network=${lib.neo.swagIpv6Network}"
+                "--add-host=host.docker.internal:host-gateway"
+              ]
+              ++ map (n: "--network=${n}") appNetworks;
           };
 
           systemd.services."swag-cert-reloader" = {
