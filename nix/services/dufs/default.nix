@@ -42,7 +42,7 @@
               "${config.neo.core.volumes.documents}:/data/Documents"
             ]
             ++ lib.neo.toOciBindMounts cfg.additionalMountPoints;
-          networks = ["internal"];
+          networks = [(lib.neo.docker.serviceNetwork "dufs")];
         };
 
         # The password is a secret: DUFS_AUTH reaches the container through

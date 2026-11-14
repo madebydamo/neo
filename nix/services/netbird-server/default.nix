@@ -38,7 +38,7 @@
         umask 077
         mkdir -p "$state"
 
-        server_ip=$(docker inspect -f '{{with index .NetworkSettings.Networks "internal"}}{{.IPAddress}}{{end}}' netbird-server 2>/dev/null || true)
+        server_ip=$(docker inspect -f '{{with index .NetworkSettings.Networks "${lib.neo.docker.serviceNetwork "netbird-server"}"}}{{.IPAddress}}{{end}}' netbird-server 2>/dev/null || true)
         if [ -z "$server_ip" ]; then
           echo "netbird-server-setup: container netbird-server not running yet" >&2
           exit 1
@@ -216,7 +216,7 @@
               "${appdata}/data:/var/lib/netbird"
             ];
             ports = ["${toString cfg.stunPort}:${toString cfg.stunPort}/udp"];
-            networks = ["internal"];
+            networks = [(lib.neo.docker.serviceNetwork "netbird-server")];
           };
 
           netbird-dashboard = {
@@ -235,7 +235,7 @@
               NGINX_SSL_PORT = "443";
               LETSENCRYPT_DOMAIN = "none";
             };
-            networks = ["internal"];
+            networks = [(lib.neo.docker.serviceNetwork "netbird-server")];
           };
         };
 

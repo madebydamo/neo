@@ -25,7 +25,7 @@
             volumes = [
               "${appdata}:/datastore"
             ];
-            networks = ["internal"];
+            networks = [(lib.neo.docker.serviceNetwork "changedetection")];
           };
 
           changedetection-webengine = {
@@ -35,7 +35,7 @@
             extraOptions = [
               "--shm-size=2gb"
             ];
-            networks = ["internal"];
+            networks = [(lib.neo.docker.serviceNetwork "changedetection")];
           };
         };
       };

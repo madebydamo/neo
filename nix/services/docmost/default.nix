@@ -58,6 +58,7 @@
     in {
       config = mkIf cfg.enabled (mkMerge [
         (lib.neo.mkPostgresSidecar config {
+          network = lib.neo.docker.serviceNetwork "docmost";
           name = "docmost-db";
           image = cfg.containers."docmost-db";
           inherit appdata;
@@ -67,6 +68,7 @@
           dataPath = "/var/lib/postgresql";
         })
         (lib.neo.mkRedisSidecar config {
+          network = lib.neo.docker.serviceNetwork "docmost";
           name = "docmost-redis";
           image = cfg.containers."docmost-redis";
           inherit appdata;
@@ -108,7 +110,7 @@
               volumes = [
                 "${appdata}/storage:/app/data/storage"
               ];
-              networks = ["internal"];
+              networks = [(lib.neo.docker.serviceNetwork "docmost")];
             };
 
             docmost-sso = mkIf ssoActive {
@@ -129,7 +131,7 @@
                 "${./sso.py}:/app/sso.py:ro"
                 "${sqlStatusDir}:${sqlStatusMount}:ro"
               ];
-              networks = ["internal"];
+              networks = [(lib.neo.docker.serviceNetwork "docmost")];
             };
 
             docmost-mcp = mkIf mcpActive {
@@ -152,7 +154,7 @@
                 "${./mcp.py}:/app/mcp.py:ro"
                 "${sqlStatusDir}:${sqlStatusMount}:ro"
               ];
-              networks = ["internal"];
+              networks = [(lib.neo.docker.serviceNetwork "docmost")];
             };
           };
 

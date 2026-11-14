@@ -61,6 +61,7 @@
     in {
       config = mkIf cfg.enabled (mkMerge [
         (lib.neo.mkPostgresSidecar config {
+          network = lib.neo.docker.serviceNetwork "authentik";
           name = "authentik-db";
           image = cfg.containers."authentik-db";
           inherit appdata;
@@ -123,7 +124,7 @@
                 runAs
                 "--shm-size=512m"
               ];
-              networks = ["internal"];
+              networks = [(lib.neo.docker.serviceNetwork "authentik")];
             };
 
             authentik-worker = {
@@ -140,7 +141,7 @@
                 runAs
                 "--shm-size=512m"
               ];
-              networks = ["internal"];
+              networks = [(lib.neo.docker.serviceNetwork "authentik")];
             };
           };
         }

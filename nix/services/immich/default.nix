@@ -10,6 +10,7 @@
     in {
       config = mkIf cfg.enabled (mkMerge [
         (lib.neo.mkPostgresSidecar config {
+          network = lib.neo.docker.serviceNetwork "immich";
           name = "immich-database";
           image = cfg.containers."immich-database";
           inherit (cfg) appdata;
@@ -24,6 +25,7 @@
           extraOptions = ["--shm-size=128mb"];
         })
         (lib.neo.mkRedisSidecar config {
+          network = lib.neo.docker.serviceNetwork "immich";
           name = "immich-redis";
           image = cfg.containers."immich-redis";
           health = {
@@ -51,7 +53,7 @@
                 "${cfg.appdata}/server:/data"
                 "/etc/localtime:/etc/localtime:ro"
               ];
-              networks = ["internal"];
+              networks = [(lib.neo.docker.serviceNetwork "immich")];
             };
 
             immich-machine-learning = {
@@ -59,7 +61,7 @@
               volumes = [
                 "${cfg.appdata}/cache:/cache"
               ];
-              networks = ["internal"];
+              networks = [(lib.neo.docker.serviceNetwork "immich")];
             };
           };
         }

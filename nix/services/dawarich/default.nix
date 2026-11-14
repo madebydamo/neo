@@ -50,6 +50,7 @@
     in {
       config = mkIf cfg.enabled (mkMerge [
         (lib.neo.mkPostgresSidecar config {
+          network = lib.neo.docker.serviceNetwork "dawarich";
           name = "dawarich-db";
           image = cfg.containers."dawarich-db";
           inherit appdata;
@@ -66,6 +67,7 @@
           };
         })
         (lib.neo.mkRedisSidecar config {
+          network = lib.neo.docker.serviceNetwork "dawarich";
           name = "dawarich-redis";
           image = cfg.containers."dawarich-redis";
           inherit appdata;
@@ -146,7 +148,7 @@
                 "--health-retries=30"
                 "--health-start-period=60s"
               ];
-              networks = ["internal"];
+              networks = [(lib.neo.docker.serviceNetwork "dawarich")];
             };
 
             dawarich-sidekiq = {
@@ -164,7 +166,7 @@
                 "${appdata}/watched:/var/app/tmp/imports/watched"
                 "${appdata}/storage:/var/app/storage"
               ];
-              networks = ["internal"];
+              networks = [(lib.neo.docker.serviceNetwork "dawarich")];
             };
           };
         }

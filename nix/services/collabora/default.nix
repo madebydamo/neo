@@ -66,7 +66,7 @@
               MKNOD = true;
               SYS_ADMIN = true;
             };
-            networks = ["internal"];
+            networks = [(lib.neo.docker.serviceNetwork "collabora")];
           };
 
           # Non-blocking setup (lib.neo.mkSetupService): retries every 60s until

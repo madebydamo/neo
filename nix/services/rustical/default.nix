@@ -46,7 +46,7 @@
           volumes = [
             "${appdata}:/var/lib/rustical"
           ];
-          networks = ["internal"];
+          networks = [(lib.neo.docker.serviceNetwork "rustical")];
         };
 
         # The password is a secret: provisioning reads it from a rendered file

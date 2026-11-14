@@ -52,12 +52,12 @@
             volumes = [
               "${appdata}/db:/var/lib/mysql"
             ];
-            networks = ["internal"];
+            networks = [(lib.neo.docker.serviceNetwork "nextcloud")];
           };
 
           nextcloud-redis = {
             image = cfg.containers."nextcloud-redis";
-            networks = ["internal"];
+            networks = [(lib.neo.docker.serviceNetwork "nextcloud")];
           };
 
           nextcloud = {
@@ -76,7 +76,7 @@
             volumes = [
               "${appdata}/html:/var/www/html"
             ];
-            networks = ["internal"];
+            networks = [(lib.neo.docker.serviceNetwork "nextcloud")];
           };
 
           nextcloud-cron = {
@@ -96,7 +96,7 @@
             volumes = [
               "${appdata}/html:/var/www/html"
             ];
-            networks = ["internal"];
+            networks = [(lib.neo.docker.serviceNetwork "nextcloud")];
           };
         };
 

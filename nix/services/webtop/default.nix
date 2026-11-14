@@ -32,7 +32,7 @@
           extraOptions = [
             "--shm-size=1gb"
           ];
-          networks = ["internal"];
+          networks = [(lib.neo.docker.serviceNetwork "webtop")];
         };
       };
     };

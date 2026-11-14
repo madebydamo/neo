@@ -1,5 +1,5 @@
 # Monitoring server: Grafana + Prometheus + Loki on their own Docker network
-# (`monitoring`, shared with SWAG only).
+# (`app-monitoring`, shared with SWAG only).
 #
 # Agents (monitoring-agent) write logs to Loki's push API and numbers to
 # Prometheus' remote-write receiver: the one on this machine over loopback
@@ -26,8 +26,8 @@
 
       # Own network, shared with SWAG only: Loki and Prometheus have no
       # authentication and Grafana trusts the Remote-User header, so no other
-      # container may reach them.
-      network = "monitoring";
+      # container may reach them. SWAG joins it because the service has a site.
+      network = lib.neo.docker.serviceNetwork "monitoring";
 
       alertsOn = cfg.assistantAlerts && hermes.enabled;
       hermesSecretPath = "/etc/grafana/neo/hermes-webhook.secret";
@@ -348,10 +348,6 @@
             networks = [network];
           };
         };
-
-        neo.core.dockerNetworks = [network];
-        # The monitoring assertion requires SWAG, so the swag container exists.
-        virtualisation.oci-containers.containers.swag.extraOptions = ["--network=${network}"];
 
         systemd.services.grafana-seed = lib.neo.mkSetupService {
           inherit pkgs;

@@ -53,7 +53,7 @@
           volumes =
             ["${dataDir}:/var/lib/registry"]
             ++ optional authEnabled "${htpasswd}:/auth/htpasswd:ro";
-          networks = ["internal"];
+          networks = [(lib.neo.docker.serviceNetwork "registry")];
         };
       };
     };

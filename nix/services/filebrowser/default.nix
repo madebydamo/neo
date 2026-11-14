@@ -44,7 +44,7 @@
               "${config.neo.core.volumes.appdata}:/srv/AppData"
             ]
             ++ lib.neo.toOciBindMounts cfg.additionalMountPoints;
-          networks = ["internal"];
+          networks = [(lib.neo.docker.serviceNetwork "filebrowser")];
         };
       };
     };

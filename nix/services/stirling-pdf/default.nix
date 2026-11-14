@@ -44,7 +44,7 @@
             "${appdata}/customFiles:/customFiles:rw"
             "${appdata}/pipeline:/pipeline"
           ];
-          networks = ["internal"];
+          networks = [(lib.neo.docker.serviceNetwork "stirling-pdf")];
         };
       };
     };

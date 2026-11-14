@@ -11,6 +11,7 @@
     in {
       config = mkIf cfg.enabled (mkMerge [
         (lib.neo.mkPostgresSidecar config {
+          network = lib.neo.docker.serviceNetwork "paperless";
           name = "paperless-db";
           image = cfg.containers."paperless-db";
           inherit appdata;
@@ -19,6 +20,7 @@
           password = cfg.dbPassword;
         })
         (lib.neo.mkRedisSidecar config {
+          network = lib.neo.docker.serviceNetwork "paperless";
           name = "paperless-redis";
           image = cfg.containers."paperless-redis";
           inherit appdata;
@@ -65,7 +67,7 @@
                 "${appdata}/export:/usr/src/paperless/export"
                 "${appdata}/consume:/usr/src/paperless/consume"
               ];
-              networks = ["internal"];
+              networks = [(lib.neo.docker.serviceNetwork "paperless")];
             };
           };
         }

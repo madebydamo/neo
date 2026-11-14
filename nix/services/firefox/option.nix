@@ -42,7 +42,7 @@
             }
             // lib.neo.mkVpnOptions {
               containers = ["firefox"];
-              networks = ["internal"];
+              networks = [(lib.neo.docker.serviceNetwork "firefox")];
               ports = [3060 3061 8083];
             }
             // lib.neo.mkContainerDefinitions {

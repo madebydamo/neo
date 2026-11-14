@@ -28,7 +28,7 @@
             "22000:22000/udp"
             "21027:21027/udp"
           ];
-          networks = ["internal"];
+          networks = [(lib.neo.docker.serviceNetwork "syncthing")];
         };
 
         # insecureAdminAccess lets SWAG (which strips Authorization) proxy the GUI

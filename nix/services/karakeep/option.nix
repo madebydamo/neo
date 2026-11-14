@@ -119,7 +119,7 @@
               # Crawl + outbound AI/fetch traffic; meilisearch stays on internal only.
               containers = ["karakeep" "karakeep-chrome"];
               internalContainers = ["karakeep-meilisearch"];
-              networks = ["internal"];
+              networks = [(lib.neo.docker.serviceNetwork "karakeep")];
               # Web UI + Chrome remote debugging (shared gluetun netns; must not collide with other VPN services).
               ports = [3000 9222];
             }

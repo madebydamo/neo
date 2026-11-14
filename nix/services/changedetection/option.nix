@@ -25,7 +25,7 @@
             }
             // lib.neo.mkVpnOptions {
               containers = ["changedetection" "changedetection-webengine"];
-              networks = ["internal"];
+              networks = [(lib.neo.docker.serviceNetwork "changedetection")];
               ports = [5000 4444 4445];
             }
             // lib.neo.mkContainerDefinitions {

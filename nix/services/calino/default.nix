@@ -15,7 +15,7 @@
           environment = {
             TZ = config.neo.core.timeZone;
           };
-          networks = ["internal"];
+          networks = [(lib.neo.docker.serviceNetwork "calino")];
         };
       };
     };
