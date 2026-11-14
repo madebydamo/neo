@@ -152,6 +152,33 @@
           g() { docker exec grafana curl -sS -o /dev/null -w '%{http_code}' -H 'Remote-User: neo' -H 'Content-Type: application/json' "$@"; }
           get() { docker exec grafana curl -sS -H 'Remote-User: neo' "$@"; }
           [ "$(g ${api}/api/health)" = 200 ]
+
+          # Alert rule files name their folder by title, and on the first start
+          # Grafana provisions them before the dashboard folders (fixed uids)
+          # exist: the rules land in a second folder of the same title. Remove
+          # such a copy when it holds nothing but Neo's provisioned rules; after a
+          # restart the rules find Neo's folder by its title.
+          folders=$(get ${api}/api/folders)
+          rules=$(get ${api}/api/v1/provisioning/alert-rules)
+          moved=0
+          ${concatStrings (mapAttrsToList (uid: f: ''
+              for dup in $(jq -r --arg t ${escapeShellArg f.title} '.[] | select(.title == $t and .uid != "${uid}") | .uid' <<<"$folders"); do
+                dashboards=$(get "${api}/api/search?type=dash-db&folderUIDs=$dup" | jq length)
+                other=$(jq --arg u "$dup" '[.[] | select(.folderUID == $u and .provenance != "file")] | length' <<<"$rules")
+                if [ "$dashboards" != 0 ] || [ "$other" != 0 ]; then
+                  echo "folder $dup (${f.title}) is a copy of ${uid} but has content of its own; left alone" >&2
+                  continue
+                fi
+                code=$(g -X DELETE "${api}/api/folders/$dup?forceDeleteRules=true")
+                case "$code" in 2*) echo "removed duplicate folder $dup (${f.title})"; moved=1 ;; *) echo "removing folder $dup failed: HTTP $code" >&2; exit 1 ;; esac
+              done
+            '')
+            grafanaLib.folders)}
+          if [ "$moved" = 1 ]; then
+            # The rules come back from their file into Neo's folder.
+            systemctl restart --no-block docker-grafana.service
+            exit 1
+          fi
           # Open the overview on the home page unless someone picked another one.
           home=$(get ${api}/api/org/preferences | jq -r '.homeDashboardUID // ""')
           if [ -z "$home" ]; then
@@ -355,7 +382,7 @@
           name = "grafana-seed";
           description = "Set Grafana's home dashboard and alert routing while they are defaults";
           containers = ["grafana"];
-          path = [pkgs.docker pkgs.jq];
+          path = [pkgs.docker pkgs.jq pkgs.systemd];
           retryInterval = 15;
           script = seedScript;
         };
