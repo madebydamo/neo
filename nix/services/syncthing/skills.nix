@@ -15,7 +15,7 @@
         Device pairing, folder sync, GUI issues, ignore patterns.
 
         ## Architecture notes
-        - GUI not published on the host (:8384); only on Docker `internal` via SWAG + tinyauth
+        - GUI not published on the host (:8384); only on its Docker network `app-syncthing` via SWAG + tinyauth
         - Sync ports 22000/tcp+udp and 21027/udp stay published for peers
         - insecureAdminAccess patch allows reverse proxy while tinyauth is the edge gate
 

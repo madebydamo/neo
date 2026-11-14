@@ -24,7 +24,7 @@
         - Do not use `@`, `:`, or `|` in the password (dufs `-a` rule syntax)
 
         ## Procedures
-        1. Probe `http://dufs:5000/__dufs__/health` from the internal network
+        1. Probe `http://dufs:5000/__dufs__/health` from the SWAG container (`docker exec swag curl …`)
         2. Open the public URL, pass tinyauth — UI should list Media and Documents
         3. Point WebDAV clients at the public URL with username/password (HTTP Basic)
 

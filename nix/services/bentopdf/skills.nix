@@ -26,7 +26,7 @@
 
         ## Procedures
         1. systemctl status docker-bentopdf
-        2. curl http://bentopdf:8080/config.json (from internal network)
+        2. curl http://bentopdf:8080/config.json (from the SWAG container: `docker exec swag curl …`)
         3. Open public URL and authenticate via tinyauth
 
         ## Pitfalls

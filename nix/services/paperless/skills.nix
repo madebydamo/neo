@@ -32,7 +32,7 @@
         ## Procedures
         1. Health-check containers (derived cheatsheet)
         2. UI login via tinyauth then Paperless
-        3. API: use token header; base URL external or internal docker name `paperless`
+        3. API: use token header; base URL external (other apps cannot reach the container `paperless` by name)
 
         ## Pitfalls
         - Do not clear appdata without confirmation — destroys documents DB

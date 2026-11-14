@@ -58,7 +58,7 @@
           ## Edge traffic
           - **SWAG** terminates TLS on 80/443 (or streamproxy tunnel ports).
           - **tinyauth** is the first login gate for most UIs (`tinyauth-location.conf`).
-          - Backends sit on Docker network **`internal`** (or host units via `host.docker.internal`).
+          - Each service's containers sit on their own Docker network **`app-<service>`**; other services' containers cannot reach them. SWAG is on all of them (probe with `docker exec swag curl http://<container>:<port>/`). Plugins may still use the shared network `internal`. Host units are reached via `host.docker.internal` from SWAG only.
           - Domain: ${
             if domain != null
             then domain
@@ -342,7 +342,7 @@
         then domain
         else "(unset — configure services.swag.domain)"
       }
-      - Edge: SWAG (TLS) → tinyauth (most UIs) → service on Docker `internal` or host
+      - Edge: SWAG (TLS) → tinyauth (most UIs) → service on its Docker network `app-<service>` (plugins: `internal`) or host
       - Only 80/443 need to be reachable for normal web access (or streamproxy tunnel)
 
       ## How to change configuration

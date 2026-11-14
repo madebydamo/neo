@@ -27,7 +27,7 @@
 
         ## Procedures
         1. systemctl status docker-stirling-pdf
-        2. curl http://stirling-pdf:8080/api/v1/info/status (from internal network)
+        2. curl http://stirling-pdf:8080/api/v1/info/status (from the SWAG container: `docker exec swag curl …`)
         3. Open public URL and authenticate via tinyauth
 
         ## Pitfalls

@@ -16,7 +16,7 @@
         Push, pull, list or delete private container images.
 
         ## Architecture notes
-        - CNCF Distribution (`registry:3`) on the internal network, port 5000; SWAG proxies the public host without tinyauth
+        - CNCF Distribution (`registry:3`) on its own Docker network `app-registry`, port 5000; SWAG proxies the public host without tinyauth
         - Data at appdata `data/` (mounted as /var/lib/registry)
 
         ## Credentials

@@ -36,7 +36,7 @@
         ## Verification
         - docker logs collabora | grep "SSL support" → disabled + termination enabled
         - docker logs collabora should not repeat "SSL/TLS traffic on plain http port"
-        - curl -sS http://collabora:9980/hosting/discovery (from internal net)
+        - curl -sS http://collabora:9980/hosting/discovery (from the SWAG or nextcloud container)
         - Open a document from Nextcloud (primary and any customDomain) in browser editor
         - collabora-setup active (exited); richdocuments:activate-config OK
       '';

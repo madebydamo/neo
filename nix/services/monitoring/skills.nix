@@ -18,7 +18,7 @@
         web errors, and Grafana alerts (an alert may arrive as a webhook event for you to look into).
 
         ## Architecture notes
-        - Containers `grafana`, `prometheus`, `loki` on the `internal` network; data under `${cfg.appdata}`.
+        - Containers `grafana`, `prometheus`, `loki`; data under `${cfg.appdata}`.
         - Every server runs `monitoring-agent` (Grafana Alloy). It sends:
           - journald (Loki `{job="journal", host, unit, level}`), SWAG access logs (`{job="swag", service, status_class}`),
             sign-ins from tinyauth and sshd (`{event="login"|"logout", result, provider}`, username/ip as structured metadata);
@@ -27,7 +27,7 @@
             `neo_http_requests_total{service,status_class}`. Every series has `host`.
         - The agent here writes over loopback (Loki 127.0.0.1:${toString cfg.lokiPort}, Prometheus 127.0.0.1:${toString cfg.prometheusPort});
           other servers go through SWAG `/ingest/loki/api/v1/push` and `/ingest/prometheus/api/v1/write` with `Authorization: Bearer <ingestToken>`.
-        - Containers sit on their own Docker network `monitoring` (with SWAG only); Grafana is not on `internal`.
+        - Containers sit on their own Docker network `app-monitoring` (with SWAG only); no other app's container can reach them. Grafana also joins `neo-host` for alerts to Hermes. The agent scrapes app metrics on each app's own network.
         - Two kinds of dashboards and alert rules:
           - Provided (read-only, Grafana refuses to save them; Neo replaces them on updates): folders Neo and ISO 27001
             from this server's configuration, and folder Apps with dashboards the monitoring agents send for the apps on

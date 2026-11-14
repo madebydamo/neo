@@ -32,7 +32,7 @@
 
         ## Procedures
         1. `systemctl status docker-rustical rustical-provision`
-        2. `curl http://rustical:4000/ping` (from the internal network / SWAG container)
+        2. `curl http://rustical:4000/ping` (from the SWAG container)
         3. Open the public URL, pass tinyauth — the RustiCal UI should load as that username
         4. Generate an app token in the frontend
         5. Point clients at `https://rustical.<domain>/` (root PROPFIND discovers CalDAV) or `https://rustical.<domain>/caldav` (Apple: `/caldav-compat`)

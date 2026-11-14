@@ -22,7 +22,7 @@
         - WebSocket internal default **8082**; all three listed in `vpn.ports` for conflict checks
         - `--shm-size=1gb` set for Chromium/Electron stability
         - Edge auth via tinyauth (container has no PASSWORD by default)
-        - **VPN** (`services.webtop.vpn.enabled`, default false): routes `webtop` through gluetun. Requires the shared `services.vpn` stack. UI still reaches the container via the VPN network alias on `internal`. Port **3000** is intentionally avoided so webtop can share gluetun with karakeep.
+        - **VPN** (`services.webtop.vpn.enabled`, default false): routes `webtop` through gluetun. Requires the shared `services.vpn` stack. UI still reaches the container through gluetun, which answers for `webtop` on `app-webtop`. Port **3000** is intentionally avoided so webtop can share gluetun with karakeep.
 
         ## Switching distro / desktop (Docker tag only)
         Change `services.webtop.containers.webtop` image to the same repo with another tag, then re-apply.

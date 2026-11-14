@@ -23,7 +23,7 @@
         - `--shm-size=1gb` required for modern sites (e.g. YouTube)
         - Edge auth via tinyauth (container has no PASSWORD by default)
         - Optional start URL / CLI: `services.firefox.firefoxCli` → `FIREFOX_CLI`
-        - **VPN** (`services.firefox.vpn.enabled`, default false): routes `firefox` through gluetun. Requires the shared `services.vpn` stack. UI still reaches the container via the VPN network alias on `internal`. Ports avoid webtop (3050/3051/8082) and karakeep (3000).
+        - **VPN** (`services.firefox.vpn.enabled`, default false): routes `firefox` through gluetun. Requires the shared `services.vpn` stack. UI still reaches the container through gluetun, which answers for `firefox` on `app-firefox`. Ports avoid webtop (3050/3051/8082) and karakeep (3000).
 
         ## settings.toml example
         ```toml

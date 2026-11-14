@@ -75,7 +75,7 @@
                 # OPENAI_BASE_URL (OpenAI-compatible API).
                 description = ''
                   Address of the AI service. The default is xAI.
-                  Examples: https://api.openai.com/v1 for OpenAI, http://ollama:11434/v1 for your own Ollama.
+                  Examples: https://api.openai.com/v1 for OpenAI, https://ollama.example.com/v1 for your own Ollama (its web address: other apps on this server cannot reach it by container name).
                 '';
                 ui = lib.neo.ui.mkUi {
                   group = aiGroup;
@@ -116,7 +116,7 @@
               ];
             }
             // lib.neo.mkVpnOptions {
-              # Crawl + outbound AI/fetch traffic; meilisearch stays on internal only.
+              # Crawl + outbound AI/fetch traffic; meilisearch stays on the service network only.
               containers = ["karakeep" "karakeep-chrome"];
               internalContainers = ["karakeep-meilisearch"];
               networks = [(lib.neo.docker.serviceNetwork "karakeep")];

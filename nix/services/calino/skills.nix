@@ -31,7 +31,7 @@
 
         ## Procedures
         1. `systemctl status docker-calino`
-        2. `curl http://calino:8080/` (from the internal network / SWAG container)
+        2. `curl http://calino:8080/` (from the SWAG container)
         3. Open the public URL, pass tinyauth
         4. In Calino settings, add CalDAV URL `https://rustical.<domain>/caldav` plus a RustiCal app token
         5. To subscribe to a public `.ics` / webcal feed: Settings → Sync → Subscribe to calendar, paste the feed URL, expand **Proxy URL** and enter `https://calino.<domain>/webcal-proxy`

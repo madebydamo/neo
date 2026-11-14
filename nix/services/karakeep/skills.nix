@@ -25,7 +25,7 @@
         - **Edge auth**: tinyauth protects the web UI. `/api/` is on `publicPaths` so browser extensions, mobile apps, and the CLI talk to Karakeep's own API auth (API keys / sessions).
         - **App login**: Karakeep still uses built-in NextAuth for in-app users (session JWTs). That is not optional. `nextauthSecret` is only a signing secret — not a password and not a replacement for tinyauth.
         - **Containers**: `karakeep` (web+workers), `karakeep-chrome` (headless crawl), `karakeep-meilisearch` (search index).
-        - **VPN** (`services.karakeep.vpn.enabled`): routes `karakeep` + `karakeep-chrome` through gluetun (outbound crawl/fetch). `karakeep-meilisearch` stays on `internal` only. Requires the shared `services.vpn` stack.
+        - **VPN** (`services.karakeep.vpn.enabled`): routes `karakeep` + `karakeep-chrome` through gluetun (outbound crawl/fetch). `karakeep-meilisearch` stays on the service network `app-karakeep` only. Requires the shared `services.vpn` stack.
         - **Settings** (`services.karakeep`):
           - `nextauthSecret`, `meiliMasterKey` — required when enabled; generate with the Neo UI helper (assertions fail otherwise).
           - `openaiApiKey` — optional; without it, crawl/search work but auto-tagging is skipped.
