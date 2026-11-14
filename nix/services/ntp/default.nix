@@ -17,8 +17,13 @@
             enabled = true;
             threshold = 1000;
           };
+          # rtcsync tells the kernel the clock is synchronised (node exporter's
+          # node_timex_sync_status, the ISO "Clocks in sync" panel); it replaces
+          # chrony's RTC trimming.
+          enableRTCTrimming = false;
           extraConfig = ''
             allow
+            rtcsync
           '';
         };
 
