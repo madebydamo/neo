@@ -98,7 +98,7 @@
               w = 4;
               h = 4;
               description = "New assets in the selected time range.";
-              targets = [(pq ''round(sum(increase(immich_repository_duration_count{${sel}, repository="asset", method="create"}[$__range])))'' "")];
+              targets = [(pq ''round(sum(increase(immich_repository_duration_count{${sel}, repository="asset", method="create"}[$__range]))) or vector(0)'' "")];
               options.colorMode = "value";
               thresholds = thresholdsGreenRed [];
             })
