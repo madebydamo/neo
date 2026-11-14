@@ -117,8 +117,10 @@ pub fn activate(
     } else {
         "completed"
     };
-    // reboot_pending: boot mode leaves the profile pointer ahead of /run/current-system.
-    let reboot_pending = mode == ActivationMode::Boot;
+    // reboot_pending: boot mode leaves the profile pointer ahead of /run/current-system;
+    // a switch can carry a change that only a restart applies (neo.core.rebootEpoch).
+    let restart_needed = reboot_epoch_raised();
+    let reboot_pending = mode == ActivationMode::Boot || restart_needed;
     op.write_state_extra(
         OpStatus::Success,
         phase,
@@ -138,6 +140,11 @@ pub fn activate(
                     ""
                 }
             );
+            if restart_needed {
+                println!(
+                    "This update needs a restart of the server to take full effect (reboot_pending)."
+                );
+            }
         }
         ActivationMode::Boot => {
             println!(
@@ -152,6 +159,21 @@ pub fn activate(
         }
     }
     Ok(())
+}
+
+/// The restart level (neo.core.rebootEpoch, nix/modules/core/reboot.nix) of a
+/// system; 0 for systems built before it existed.
+fn reboot_epoch(system: &str) -> u64 {
+    std::fs::read_to_string(format!("{system}/neo-reboot-epoch"))
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// True when the system profile carries a change that only a restart applies:
+/// its restart level is above the one the machine booted.
+fn reboot_epoch_raised() -> bool {
+    reboot_epoch("/nix/var/nix/profiles/system") > reboot_epoch("/run/booted-system")
 }
 
 /// The branches one activation commits to.

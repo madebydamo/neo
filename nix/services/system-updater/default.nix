@@ -13,6 +13,7 @@
     neo = self.packages.${pkgs.stdenv.hostPlatform.system}.neo;
     activationMode = cfg.activationMode;
     rebootAfterBoot = cfg.rebootAfterBoot;
+    rebootWhenRequired = cfg.rebootWhenRequired;
     path = [
       neo
       pkgs.git
@@ -70,6 +71,7 @@
             reboot_scheduled_at=""
             finished_at=""
             activation_mode=${lib.escapeShellArg activationMode}
+            reboot_when_required=${lib.boolToString rebootWhenRequired}
             reboot_after_boot=${
               if rebootAfterBoot
               then "true"
@@ -131,6 +133,12 @@
                 return 0
               fi
               if [ "$activation_mode" != boot ]; then
+                # A live switch can still carry a change that needs a restart
+                # (neo.core.rebootEpoch, nix/modules/core/reboot.nix).
+                if [ "$reboot_when_required" = true ] && /run/current-system/sw/bin/neo-reboot-required; then
+                  reboot_pending=true
+                  schedule_reboot "update needs a restart"
+                fi
                 return 0
               fi
               if [ "$reboot_after_boot" != true ]; then
@@ -141,7 +149,11 @@
                 echo "No reboot_pending (generation unchanged or already live); skipping host cycle"
                 return 0
               fi
-              echo "Scheduling delayed host cycle (activationMode=boot, generation changed, rebootAfterBoot=true, unit=neo-auto-update-apply, on-active=60s)"
+              schedule_reboot "activationMode=boot, generation changed, rebootAfterBoot=true"
+            }
+
+            schedule_reboot() {
+              echo "Scheduling delayed host cycle ($1, unit=neo-auto-update-apply, on-active=60s)"
               # Clear a leftover transient unit from a prior run (best-effort).
               /run/wrappers/bin/sudo systemctl reset-failed neo-auto-update-apply.service 2>/dev/null || true
               /run/wrappers/bin/sudo systemctl stop neo-auto-update-apply.timer 2>/dev/null || true
