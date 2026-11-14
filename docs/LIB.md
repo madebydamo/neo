@@ -225,7 +225,7 @@ Neo sets the uid (`app-<service>-<id>`), tags and the `host` variable. Filter ev
 |---|---|---|
 | `pq` / `pqInstant` | `expr legend` | Prometheus query target (range / instant table) |
 | `lq` / `lqLegend` | `expr` / `expr legend` | Loki query target |
-| `timeseries`, `bars`, `stat`, `bargauge`, `table`, `stateTimeline`, `logs` | `{ title, targets, w ? 12, h ? 8, gridPos ? null, unit, min, max, decimals, thresholds, mappings, description, options, custom, overrides, transformations, datasource }` | Panel; without `gridPos` it is placed automatically (24 columns, left to right) |
+| `timeseries`, `bars`, `stat`, `bargauge`, `table`, `stateTimeline`, `logs` | `{ title, targets, w ? 12, h ? 8, gridPos ? null, unit, min, max, decimals, thresholds, mappings, description, options, custom, overrides, transformations, datasource, interval ? "1m", noValue }` | Panel; without `gridPos` it is placed automatically (24 columns, left to right). `interval` is the shortest `$__interval` (`bars`: 5m), so `increase(x[$__interval])` always sees two samples; `noValue` replaces "No data". A `bargauge` runs Prometheus targets as instant queries, and Loki targets as range queries reduced to one sorted row per series |
 | `panel` | same plus `type` | Any other panel type |
 | `text` | `{ content, title ? "", w ? 24, h ? 3 }` | Markdown panel |
 | `row` | `title y` (`y = null` in automatic layout) | Section header |

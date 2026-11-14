@@ -77,8 +77,14 @@
       overrides ? [],
       transformations ? [],
       decimals ? null,
+      # Shortest step Grafana uses for $__interval. The Prometheus datasource
+      # says 30s (the scrape interval), so increase(x[$__interval]) would see a
+      # single sample and draw nothing; 1m always holds two.
+      interval ? "1m",
+      # Text shown instead of "No data".
+      noValue ? null,
     }: {
-      inherit title type datasource description options transformations;
+      inherit title type datasource description options transformations interval;
       gridPos =
         if gridPos != null
         then gridPos
@@ -95,6 +101,7 @@
           // lib.optionalAttrs (min != null) {inherit min;}
           // lib.optionalAttrs (max != null) {inherit max;}
           // lib.optionalAttrs (decimals != null) {inherit decimals;}
+          // lib.optionalAttrs (noValue != null) {inherit noValue;}
           // lib.optionalAttrs (thresholds != null) {inherit thresholds;};
         inherit overrides;
       };
@@ -142,7 +149,8 @@
         // args);
 
     bars = args:
-      timeseries (args
+      timeseries ({interval = "5m";}
+        // args
         // {
           custom = {
             drawStyle = "bars";
@@ -155,14 +163,19 @@
           };
         });
 
-    bargauge = args:
+    # A Loki bar gauge (e.g. topk(…) by user name) runs as a range query whose
+    # last value per series becomes one sorted row: Grafana draws a Loki
+    # instant result as a single nameless bar.
+    bargauge = args: let
+      isLoki = (args.datasource or prom) == loki;
+    in
       panel ({
           type = "bargauge";
           options = {
             reduceOptions = {
               calcs = ["lastNotNull"];
               fields = "";
-              values = false;
+              values = isLoki;
             };
             orientation = "horizontal";
             displayMode = "gradient";
@@ -172,7 +185,41 @@
             namePlacement = "left";
           };
         }
-        // args);
+        // args
+        # Prometheus: one instant value per series is all a bar gauge shows,
+        # and sort_desc/topk only order an instant result.
+        // lib.optionalAttrs (!isLoki) {
+          targets = map (t:
+            t
+            // {
+              instant = true;
+              range = false;
+            })
+          args.targets;
+        }
+        // lib.optionalAttrs isLoki {
+          targets = map (t: t // {queryType = "range";}) args.targets;
+          transformations =
+            [
+              {
+                id = "reduce";
+                options = {
+                  reducers = ["lastNotNull"];
+                  mode = "seriesToRows";
+                };
+              }
+              {
+                id = "sortBy";
+                options.sort = [
+                  {
+                    field = "Last *";
+                    desc = true;
+                  }
+                ];
+              }
+            ]
+            ++ (args.transformations or []);
+        });
 
     logs = args:
       panel ({
