@@ -17,6 +17,13 @@
 # On an unencrypted config the store source (holding the value) is also a
 # restartTrigger; with sops it only holds placeholders.
 #
+# Generated secrets (neo.core.secrets.generated.<name>): random keys the
+# machine makes itself and the operator never sees, kept in
+# /var/lib/neo/secrets-generated/<name> and copied to raw/generated/<name> on
+# every activation, so @NEO_SECRET:generated/<name>@ works like a setting with
+# both backends. Losing the file yields a new key; every consumer is a template
+# and gets re-rendered (and restarted) with it.
+#
 # Leak guard: a placeholder in a container or unit environment, or in an
 # /etc text file, is a build error. Those paths never get rendered.
 {...}: {
@@ -96,6 +103,7 @@
     };
 
     templates = cfg.templates;
+    generatedDir = "/var/lib/neo/secrets-generated";
     validName = name: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" name != null;
 
     sources = lib.mapAttrs (name: t: pkgs.writeText "neo-secret-template-${name}" t.text) templates;
@@ -204,6 +212,20 @@
         description = "Files rendered at activation with secret values filled in (see nix/lib/secrets.nix)";
       };
 
+      generated = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.submodule {
+          options.bytes = lib.mkOption {
+            type = lib.types.ints.between 16 128;
+            default = 32;
+            description = "Random bytes of the key (stored as hex)";
+          };
+        });
+        default = {};
+        internal = true;
+        visible = false;
+        description = "Keys generated on this machine, used as @NEO_SECRET:generated/<name>@ (lib.neo.secrets.mkPlaceholder \"generated/<name>\")";
+      };
+
       containerEnv = lib.mkOption {
         type = lib.types.attrsOf (lib.types.attrsOf lib.types.str);
         default = {};
@@ -245,6 +267,11 @@
               message = "neo.core.secrets: backend sops needs sopsFile (secrets.sops.yaml)";
             }
           ]
+          ++ lib.mapAttrsToList (name: _: {
+            assertion = validName name;
+            message = "neo.core.secrets.generated: \"${name}\" is not a valid file name";
+          })
+          cfg.generated
           ++ lib.mapAttrsToList (name: t: {
             assertion = validName name;
             message = "neo.core.secrets.templates: \"${name}\" is not a valid file name";
@@ -288,6 +315,18 @@
                 failed=1
               fi
               unset json
+            ''}
+              # Machine-generated keys: created once, copied in after the decrypt.
+              ${lib.optionalString (cfg.generated != {}) ''
+              install -d -m 0700 -o root -g root ${generatedDir} "$raw/generated"
+              ${lib.concatStrings (lib.mapAttrsToList (name: g: ''
+                  if [ ! -s ${generatedDir}/${name} ]; then
+                    ${pkgs.openssl}/bin/openssl rand -hex ${toString g.bytes} | ${pkgs.coreutils}/bin/tr -d '\n' > ${generatedDir}/${name}.tmp \
+                      && chmod 0400 ${generatedDir}/${name}.tmp && mv -f ${generatedDir}/${name}.tmp ${generatedDir}/${name}
+                  fi
+                  install -m 0400 -o root -g root ${generatedDir}/${name} "$raw/generated/${name}" || failed=1
+                '')
+                cfg.generated)}
             ''}
               # Placeholders are matched on a copy that drops each one once handled,
               # so a value that itself looks like a placeholder cannot loop.
