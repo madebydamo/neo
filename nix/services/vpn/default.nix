@@ -8,7 +8,10 @@
     with lib; let
       services = neo.getDockerNetworkServices config;
 
-      patch = value: {networks = value.vpn.networks;};
+      # mkDefault: a container that names its own networks keeps them. Adding
+      # vpn.networks on top would list a network twice, which Docker refuses
+      # ("network … is specified multiple times").
+      patch = value: {networks = mkDefault value.vpn.networks;};
       all-containers = value: value.vpn.internalContainers ++ value.vpn.containers;
       mapper = _: value: map (containerName: {${containerName} = patch value;}) (all-containers value);
 
@@ -33,8 +36,26 @@
       };
 
       routedContainerNames = flatten (map (service: service.vpn.containers) (attrValues services));
-      vpnAliases = map (name: "--network-alias=${name}") routedContainerNames;
       routedNetworks = lists.unique (flatten (mapAttrsToList (name: value: value.vpn.networks) services));
+      # Routed containers live in gluetun's namespace, so gluetun answers for
+      # their names. Per network: `--network-alias` would apply to the first
+      # network only, and each name must resolve only on its own service's
+      # networks (app-firefox must not resolve searxng).
+      aliasesOn = net:
+        unique (flatten (mapAttrsToList (
+            _: svc: optionals (elem net svc.vpn.networks) svc.vpn.containers
+          )
+          services));
+      gluetunNetworks =
+        map (
+          net: let
+            aliases = aliasesOn net;
+          in
+            if aliases == []
+            then net
+            else concatStringsSep "," (["name=${net}"] ++ map (a: "alias=${a}") aliases)
+        )
+        routedNetworks;
       patchedContainers = listToAttrs (map (name: nameValuePair name patch) routedContainerNames);
 
       # Each VPN-routed container joins gluetun's network namespace, so listen ports must be unique.
@@ -102,8 +123,7 @@
                 // optionalAttrs (cfg.firewallVpnInputPorts != null) {
                   FIREWALL_VPN_INPUT_PORTS = cfg.firewallVpnInputPorts;
                 };
-              networks = routedNetworks;
-              extraOptions = vpnAliases;
+              networks = gluetunNetworks;
             };
           }
           // patchedContainers;
