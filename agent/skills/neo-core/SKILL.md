@@ -30,6 +30,7 @@ Work in a checkout of `github:madebydamo/neo` (`git clone https://github.com/mad
 | New composite editor | `AGENTS.md` → Adding a new special UI | Widget partial + JS + `*.test.js`, `just test-widgets`, document it in AGENTS.md |
 | Settings write path | `settings::edit::apply_edit` | One write path for form, proposals and CLI; never a second one |
 | Secrets | `docs/design/secrets.md`, `nix/modules/core/secrets.nix` | Never a secret in `environment`, `/etc`, scripts or eval-time hashes |
+| Docker networks, container reachability | `docs/design/network-isolation.md`, `nix/lib/docker.nix`, `nix/modules/core/docker-network.nix` | Each service on `lib.neo.docker.serviceNetwork`; cross-service only via `mkLink` or the public URL; host services only from `neo-host` (`mkHostAccess`); keep `internal` for plugins; `docker-network-isolation` check |
 | Backup / restore | `docs/design/backup-restore.md`, `nix/services/backup`, `nix/services/backup-store`, `cli/src/commands/restore/`, `cli/src/bin/neo-store-gate.rs` | Change the backup and restore sides together; a new remote command needs a gate rule; update `docs/RESTORE.md` |
 | Disko / boot loader | `nix/modules/disko/`, `core/base.nix` | `just test-disko-boot` (`just launch` never tests the boot loader); boot scripts must never fail a switch |
 | Plugin interface | `nix/lib/plugin.nix`, `nix/output/plugin-flake-module.nix`, `templates/plugin` | The id/label rules exist in three places plus widget JS; keep them equal. Update `docs/PLUGIN-DEVELOPMENT.md` and the `neo-plugin` skill |
@@ -41,7 +42,7 @@ Work in a checkout of `github:madebydamo/neo` (`git clone https://github.com/mad
 
 1. `git add` new files (flakes only see tracked files).
 2. `just launch` (rebuild + boot the QEMU VM), wait for `just exec 'echo up'`.
-3. Smoke test from `AGENTS.md` → Live VM smoke test: unit active, internal curl from SWAG, public health 200, UI 302 to tinyauth, no SWAG `emerg`. Web UI changes: `just web` and look at the page.
+3. Smoke test from `AGENTS.md` → Live VM smoke test: unit active, internal curl from SWAG, public health 200, UI 302 to tinyauth, no SWAG `emerg`, other services' containers do not resolve. Web UI changes: `just web` and look at the page.
 4. `just format && just check` (also `just test-widgets` for UI JS).
 5. Commit in the repo style, one change per commit: `<area>: <what changed>` (`web:`, `nix:`, `docs:`, `cli:`, `guides:`, `hermes:`, `backup:`, `disko:`, a service name …).
 
