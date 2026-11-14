@@ -12,7 +12,7 @@
 #   };
 #
 # Only entries whose service is enabled on this machine count. The monitoring
-# agent here scrapes the endpoints (labels service, endpoint, host) and sends
+# agent here scrapes the endpoints (labels service, scrape, host) and sends
 # the dashboards to the Monitoring server, which shows them read-only in the
 # "Apps" folder. So a dashboard reaches the server even when only another
 # machine has the service or plugin; it updates whenever that machine's
@@ -26,89 +26,120 @@
     with lib; let
       outer = config;
 
-      metricType = types.submodule {
-        options = {
-          container = mkOption {
-            type = types.nullOr types.str;
-            default = null;
-            description = "Docker container that serves the metrics (use plugin.name in plugins). The agent finds its address on `network`.";
-          };
-          network = mkOption {
-            type = types.nullOr types.str;
-            default = null;
-            description = "Docker network the agent reaches the container on. Default: the container's first network (its service network, or internal).";
-          };
-          address = mkOption {
-            type = types.nullOr types.str;
-            default = null;
-            description = "host:port for a service that does not run in a container, e.g. 127.0.0.1:9100.";
-          };
-          port = mkOption {
-            type = types.nullOr types.port;
-            default = null;
-            description = "Metrics port inside the container (with `container`).";
-          };
-          path = mkOption {
-            type = types.str;
-            default = "/metrics";
-            description = "HTTP path of the Prometheus metrics.";
-          };
-          scheme = mkOption {
-            type = types.enum ["http" "https"];
-            default = "http";
-            description = "http or https.";
-          };
-          interval = mkOption {
-            type = types.str;
-            default = "30s";
-            description = "How often the agent scrapes.";
-          };
-          relabel = mkOption {
-            type = types.listOf (types.submodule {
-              options = {
-                sourceLabels = mkOption {
-                  type = types.listOf types.str;
-                  default = ["__name__"];
-                  description = "Labels whose values (joined with ;) the regex matches.";
+      generatedKey = lib.neo.secrets.mkPlaceholder "generated/metrics";
+
+      metricType = service:
+        types.submodule {
+          options = {
+            container = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = "Docker container that serves the metrics (use plugin.name in plugins). The agent finds its address on `network`.";
+            };
+            network = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = "Docker network the agent reaches the container on. Default: the container's first network (its service network, or internal).";
+            };
+            address = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = "host:port for a service that does not run in a container, e.g. 127.0.0.1:9100.";
+            };
+            port = mkOption {
+              type = types.nullOr types.port;
+              default = null;
+              description = "Metrics port inside the container (with `container`).";
+            };
+            path = mkOption {
+              type = types.str;
+              default = "/metrics";
+              description = "HTTP path of the Prometheus metrics.";
+            };
+            scheme = mkOption {
+              type = types.enum ["http" "https"];
+              default = "http";
+              description = "http or https.";
+            };
+            interval = mkOption {
+              type = types.str;
+              default = "30s";
+              description = "How often the agent scrapes.";
+            };
+            relabel = mkOption {
+              type = types.listOf (types.submodule {
+                options = {
+                  sourceLabels = mkOption {
+                    type = types.listOf types.str;
+                    default = ["__name__"];
+                    description = "Labels whose values (joined with ;) the regex matches.";
+                  };
+                  regex = mkOption {
+                    type = types.str;
+                    default = "(.*)";
+                    description = "RE2 regex, anchored on both ends.";
+                  };
+                  targetLabel = mkOption {
+                    type = types.nullOr types.str;
+                    default = null;
+                    description = "Label to write (for replace).";
+                  };
+                  replacement = mkOption {
+                    type = types.str;
+                    default = "$1";
+                    description = "Value written to targetLabel, with $1… from the regex.";
+                  };
+                  action = mkOption {
+                    type = types.enum ["replace" "keep" "drop" "labeldrop" "labelkeep"];
+                    default = "replace";
+                    description = "Prometheus relabel action.";
+                  };
                 };
-                regex = mkOption {
-                  type = types.str;
-                  default = "(.*)";
-                  description = "RE2 regex, anchored on both ends.";
-                };
-                targetLabel = mkOption {
-                  type = types.nullOr types.str;
-                  default = null;
-                  description = "Label to write (for replace).";
-                };
-                replacement = mkOption {
-                  type = types.str;
-                  default = "$1";
-                  description = "Value written to targetLabel, with $1… from the regex.";
-                };
-                action = mkOption {
-                  type = types.enum ["replace" "keep" "drop" "labeldrop" "labelkeep"];
-                  default = "replace";
-                  description = "Prometheus relabel action.";
-                };
-              };
-            });
-            default = [];
-            example = [
-              {
-                regex = "myapp_jobs_(.+)_total";
-                targetLabel = "task";
-              }
-              {
-                regex = "myapp_jobs_(.+)_total";
-                targetLabel = "__name__";
-                replacement = "myapp_jobs_total";
-              }
-            ];
-            description = "Metric relabel rules applied after each scrape, e.g. to turn names that carry a value (myapp_jobs_upload_total) into a label.";
+              });
+              default = [];
+              example = [
+                {
+                  regex = "myapp_jobs_(.+)_total";
+                  targetLabel = "task";
+                }
+                {
+                  regex = "myapp_jobs_(.+)_total";
+                  targetLabel = "__name__";
+                  replacement = "myapp_jobs_total";
+                }
+              ];
+              description = "Metric relabel rules applied after each scrape, e.g. to turn names that carry a value (myapp_jobs_upload_total) into a label.";
+            };
+            params = mkOption {
+              type = types.attrsOf (types.listOf types.str);
+              default = {};
+              example = {target = ["db:5432"];};
+              description = "URL query parameters of the scrape (multi-target exporters).";
+            };
+            auth = mkOption {
+              type = types.enum ["none" "bearer" "basic"];
+              default = "none";
+              description = "How the agent authenticates: none, bearer (Authorization: Bearer <token>) or basic (username and token as password).";
+            };
+            username = mkOption {
+              type = types.str;
+              default = "neo-metrics";
+              description = "User name for basic auth.";
+            };
+            token = mkOption {
+              type = types.str;
+              default = outer.neo.monitoring.apps.${service}.scrapeToken;
+              defaultText = "neo.monitoring.apps.<service>.scrapeToken";
+              description = "Bearer token or basic-auth password; may be a secret placeholder (it only reaches the agent's rendered environment).";
+            };
+            headers = mkOption {
+              type = types.attrsOf types.str;
+              default = {};
+              example = {"X-Forwarded-Proto" = "https";};
+              description = "Extra request headers (not secret: they are written into the agent's config).";
+            };
           };
         };
-      };
 
       dashboardType = types.submodule {
         options = {
@@ -153,9 +184,22 @@
             description = "Whether this machine runs the app (defaults to the service's enabled).";
           };
           metrics = mkOption {
-            type = types.attrsOf metricType;
+            type = types.attrsOf (metricType name);
             default = {};
-            description = "Prometheus endpoints the app exports, by name (label `endpoint`).";
+            description = "Prometheus endpoints the app exports, by name (label `scrape`).";
+          };
+          scrapeToken = mkOption {
+            type = types.str;
+            readOnly = true;
+            default = lib.neo.secrets.sha256 "neo-metrics:${name}:${generatedKey}";
+            defaultText = "a 64-hex token derived from this machine's generated metrics key";
+            description = "Secret token for this app's metrics, one per app, generated on the machine. Give it to the app (containerEnv, secrets templates), never to environment or the store.";
+          };
+          hidePaths = mkOption {
+            type = types.listOf types.str;
+            default = [];
+            example = ["/metrics" "^~ /admin/metrics/"];
+            description = "Paths SWAG answers with 404 on this app's sites (exact paths, or `^~ /prefix`), so metrics served on the public port never reach the Internet. Applies whether or not anything scrapes them.";
           };
           dashboards = mkOption {
             type = types.attrsOf dashboardType;
@@ -238,15 +282,15 @@
                 else head nets;
           in
             concatLists (mapAttrsToList (service: app:
-              mapAttrsToList (endpoint: m:
+              mapAttrsToList (scrape: m:
                 m
                 // {
-                  inherit service endpoint;
+                  inherit service scrape;
                   network = networkOf m;
                 })
               app.metrics)
             active);
-          description = "Metric endpoints of enabled apps, flattened (service, endpoint, container/address, …)";
+          description = "Metric endpoints of enabled apps, flattened (service, scrape, container/address, auth, token, …)";
         };
 
         dashboards = mkOption {
@@ -260,10 +304,12 @@
         };
       };
 
+      config.neo.core.secrets.generated.metrics = {};
+
       config.assertions = concatLists (mapAttrsToList (service: app:
-        mapAttrsToList (endpoint: m: {
+        mapAttrsToList (scrape: m: {
           assertion = (m.container != null) != (m.address != null) && (m.container == null || m.port != null);
-          message = "neo.monitoring.apps.${service}.metrics.${endpoint}: set either container and port, or address.";
+          message = "neo.monitoring.apps.${service}.metrics.${scrape}: set either container and port, or address.";
         })
         app.metrics)
       active);

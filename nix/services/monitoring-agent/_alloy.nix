@@ -9,8 +9,10 @@
   vhosts,
   uptimeTargets,
   swagLogsOn,
-  # neo.monitoring.scrapeTargets: {service, endpoint, container|address, port, network, path, scheme, interval}
+  # neo.monitoring.scrapeTargets: {service, scrape, container|address, port, network, path, scheme, interval, auth, …}
   appTargets ? [],
+  # target → env var holding its scrape credential (default.nix sets it in containerEnv.alloy)
+  scrapeEnv,
 }: let
   inherit (lib) concatMapStrings concatStringsSep optionalString;
   str = builtins.toJSON;
@@ -30,7 +32,7 @@
       + concatMapStrings (_: "{{ end }}") vhosts;
 
   ident = s: builtins.replaceStrings ["-" "."] ["_" "_"] s;
-  appComponent = t: "app_${ident t.service}_${ident t.endpoint}";
+  appComponent = t: "app_${ident t.service}_${ident t.scrape}";
   appLabels = t: ''
     rule {
       replacement  = ${str t.path}
@@ -45,8 +47,8 @@
       target_label = "service"
     }
     rule {
-      replacement  = ${str t.endpoint}
-      target_label = "endpoint"
+      replacement  = ${str t.scrape}
+      target_label = "scrape"
     }
     rule {
       replacement  = ${str "app/${t.service}"}
@@ -76,12 +78,29 @@
         forward_to = [prometheus.remote_write.neo.receiver]
       }
     '';
+  # Credentials, headers and query parameters of prometheus.scrape.
+  scrapeExtra = t:
+    optionalString (t.auth == "bearer") ''
+      bearer_token = sys.env(${str (scrapeEnv t)})
+    ''
+    + optionalString (t.auth == "basic") ''
+      basic_auth {
+        username = ${str t.username}
+        password = sys.env(${str (scrapeEnv t)})
+      }
+    ''
+    + optionalString (t.headers != {}) ''
+      http_headers = { ${concatStringsSep ", " (lib.mapAttrsToList (k: v: "${str k} = [${str v}]") t.headers)} }
+    ''
+    + optionalString (t.params != {}) ''
+      params = { ${concatStringsSep ", " (lib.mapAttrsToList (k: v: "${str k} = ${str v}") t.params)} }
+    '';
   appScrape = t: let
     c = appComponent t;
   in
     if t.container != null
     then ''
-      // ${t.service} / ${t.endpoint}: container ${t.container}:${toString t.port}${t.path}
+      // ${t.service} / ${t.scrape}: container ${t.container}:${toString t.port}${t.path}
       discovery.relabel ${str c} {
         targets = discovery.docker.apps.targets
         rule {
@@ -110,11 +129,12 @@
         targets         = discovery.relabel.${c}.output
         scrape_interval = ${str t.interval}
         forward_to      = [${fwd t}]
+        ${scrapeExtra t}
       }
       ${relabelBlock t}
     ''
     else ''
-      // ${t.service} / ${t.endpoint}: ${t.address}${t.path}
+      // ${t.service} / ${t.scrape}: ${t.address}${t.path}
       discovery.relabel ${str c} {
         targets = [{ "__address__" = ${str t.address} }]
         ${appLabels t}
@@ -124,6 +144,7 @@
         targets         = discovery.relabel.${c}.output
         scrape_interval = ${str t.interval}
         forward_to      = [${fwd t}]
+        ${scrapeExtra t}
       }
       ${relabelBlock t}
     '';

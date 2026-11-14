@@ -36,7 +36,7 @@
           To change a provided dashboard, save a copy under a new uid ("Save as", or the API below) and change that.
           Datasources (uids `prometheus`, `loki`) and the contact point `Assistant` are provided as well.
         - App metrics: apps declare endpoints in `neo.monitoring.apps.<service>.metrics`; the agent on the machine running
-          the app scrapes them, labels `service`, `endpoint`, `host`, `job="app/<service>"`.
+          the app scrapes them, labels `service`, `scrape`, `host`, `job="app/<service>"`.
 
         ## Querying (read-only, on this server)
         ```bash

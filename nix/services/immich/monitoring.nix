@@ -18,20 +18,7 @@
     cfg = config.neo.services.immich;
     sel = lib.neo.grafana.appSelector "immich";
 
-    nameToLabels = regex: labels: name:
-      lib.imap1 (i: l: {
-        inherit regex;
-        targetLabel = l;
-        replacement = "\$${toString i}";
-      })
-      labels
-      ++ [
-        {
-          inherit regex;
-          targetLabel = "__name__";
-          replacement = name;
-        }
-      ];
+    inherit (lib.neo.monitoring) nameToLabels;
 
     relabel =
       nameToLabels "immich_jobs_(.+)_([a-z]+)_total" ["task" "status"] "immich_jobs_total"

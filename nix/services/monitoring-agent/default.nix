@@ -99,8 +99,14 @@
         alloy validate ${alloyConfigRaw}
         cp ${alloyConfigRaw} $out
       '';
-      alloyConfigRaw = pkgs.writeText "config.alloy" (import ./_alloy.nix {
-        inherit lib hostName vhosts uptimeTargets swagLogsOn;
+      # Scrape credentials (neo.monitoring.apps.*.metrics.*.token) are secret
+      # placeholders: only the rendered env file of the container holds them.
+      authTargets = filter (t: t.auth != "none") config.neo.monitoring.scrapeTargets;
+      scrapeEnv = t: let
+        ident = s: toUpper (replaceStrings ["-" "."] ["_" "_"] s);
+      in "NEO_SCRAPE_${ident t.service}_${ident t.scrape}";
+      alloyText = import ./_alloy.nix {
+        inherit lib hostName vhosts uptimeTargets swagLogsOn scrapeEnv;
         appTargets = config.neo.monitoring.scrapeTargets;
         tokenSet = remote && tokenSet;
         lokiUrl =
@@ -111,7 +117,8 @@
           if remote
           then "${base}/ingest/prometheus/api/v1/write"
           else "http://127.0.0.1:${toString server.prometheusPort}/api/v1/write";
-      });
+      };
+      alloyConfigRaw = pkgs.writeText "config.alloy" alloyText;
 
       # App dashboards (neo.monitoring.dashboards) go to the server's
       # apps/<source>/ directory: copied when Monitoring runs here, else PUT to
@@ -177,6 +184,10 @@
             {
               assertion = !remote || tokenSet;
               message = "neo.services.monitoring-agent.token: set the ingest token of your Monitoring server (its Monitoring settings, Ingest token).";
+            }
+            {
+              assertion = !(lib.neo.secrets.hasPlaceholder alloyText) && all (t: t.token != "" && !(hasInfix t.token alloyText)) authTargets;
+              message = "monitoring-agent: a scrape credential is empty or would be written into config.alloy (store). Credentials go through neo.monitoring.apps.<service>.metrics.<scrape>.token only.";
             }
             {
               assertion = !remote || hasPrefix "https://" base || hasPrefix "http://" base;
@@ -255,9 +266,14 @@
             '';
           };
 
-          neo.core.secrets.containerEnv.alloy = mkIf (remote && tokenSet) {
-            NEO_INGEST_TOKEN = cfg.token;
-          };
+          neo.core.secrets.containerEnv.alloy = let
+            env =
+              optionalAttrs (remote && tokenSet) {
+                NEO_INGEST_TOKEN = cfg.token;
+              }
+              // listToAttrs (map (t: nameValuePair (scrapeEnv t) t.token) authTargets);
+          in
+            mkIf (env != {}) env;
         })
 
         # Sign-in events: tinyauth's audit stream, as JSON the agent parses.
