@@ -131,13 +131,22 @@
                 }
             ) (svc.customDomains or [])
         ) (attrValues appServices));
-        proxyConfScripts = map (
-          svc:
+        # neo.monitoring.apps.<name>.hidePaths: 404 locations in every server
+        # block of the app's conf (exact and ^~ locations win over `location /`
+        # and the tinyauth publicPaths regexes).
+        withHiddenPaths = name: conf: let
+          paths = config.neo.monitoring.apps.${name}.hidePaths or [];
+        in
+          if paths == []
+          then conf
+          else replaceStrings ["server {\n"] ["server {\n  # neo.monitoring.apps.${name}.hidePaths\n${lib.neo.monitoring.hidePathLocations paths}"] conf;
+        proxyConfScripts = mapAttrsToList (
+          name: svc:
             lib.neo.mkActivationScriptForFile config {
               filePath = "${appdataSwag}/nginx/proxy-confs/${svc.subdomain}.subdomain.conf";
-              content = svc.proxyConf;
+              content = withHiddenPaths name svc.proxyConf;
             }
-        ) (filter (svc: svc.proxyConf != null) (attrValues appServices));
+        ) (filterAttrs (_: svc: svc.proxyConf != null) appServices);
         proxyPassConfScripts =
           mapAttrsToList (
             domain: upstream:
@@ -229,28 +238,33 @@
         ];
       in
         mkIf cfg.enabled {
-          assertions = [
-            {
-              assertion = invalidSubdomains == [];
-              message = ''
-                neo.services.swag: every service subdomain must be lowercase a-z, digits and hyphens, start with a letter and not end with a hyphen.
-                Invalid subdomains:
-                ${invalidSubdomainMessage}
-              '';
-            }
-            {
-              assertion = duplicateSubdomains == [];
-              message = ''
-                neo.services.swag: service subdomains must be unique across all enabled proxied services.
-                Duplicate subdomains:
-                ${duplicateSubdomainMessage}
-              '';
-            }
-            {
-              assertion = intersectLists cfg.geo.ipWhitelist cfg.geo.ipBlacklist == [];
-              message = "neo.services.swag.geo: ranges listed in both ipWhitelist and ipBlacklist: ${concatStringsSep ", " (intersectLists cfg.geo.ipWhitelist cfg.geo.ipBlacklist)}";
-            }
-          ];
+          assertions =
+            mapAttrsToList (name: svc: {
+              assertion = (config.neo.monitoring.apps.${name}.hidePaths or []) == [] || hasInfix "server {\n" svc.proxyConf;
+              message = "neo.monitoring.apps.${name}.hidePaths: the SWAG conf of ${name} has no `server {` line to add the 404 locations to.";
+            }) (filterAttrs (_: svc: svc.proxyConf != null) appServices)
+            ++ [
+              {
+                assertion = invalidSubdomains == [];
+                message = ''
+                  neo.services.swag: every service subdomain must be lowercase a-z, digits and hyphens, start with a letter and not end with a hyphen.
+                  Invalid subdomains:
+                  ${invalidSubdomainMessage}
+                '';
+              }
+              {
+                assertion = duplicateSubdomains == [];
+                message = ''
+                  neo.services.swag: service subdomains must be unique across all enabled proxied services.
+                  Duplicate subdomains:
+                  ${duplicateSubdomainMessage}
+                '';
+              }
+              {
+                assertion = intersectLists cfg.geo.ipWhitelist cfg.geo.ipBlacklist == [];
+                message = "neo.services.swag.geo: ranges listed in both ipWhitelist and ipBlacklist: ${concatStringsSep ", " (intersectLists cfg.geo.ipWhitelist cfg.geo.ipBlacklist)}";
+              }
+            ];
 
           systemd.services.docker-swag = {
             preStart = lib.concatStringsSep "\n" ([
