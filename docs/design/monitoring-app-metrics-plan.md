@@ -1,6 +1,6 @@
 # Plan: app metrics endpoints and dashboards
 
-Status: plan, not implemented. Builds on [monitoring.md](monitoring.md) (`neo.monitoring.apps`, `lib.neo.grafana`, the Immich example in `nix/services/immich/monitoring.nix`).
+Status: phases 0 and 1 implemented (2026-11-14) and tested on the VM; alert rules and phase 2 open. Builds on [monitoring.md](monitoring.md) (`neo.monitoring.apps`, `lib.neo.grafana`, the Immich example in `nix/services/immich/monitoring.nix`).
 
 Goal: every app with a usable Prometheus endpoint gets **one file**, `nix/services/<app>/monitoring.nix`, that turns its exporter on, protects it, declares the scrape and ships a dashboard. Everything app-independent (secrets, auth in Alloy, label names, hiding paths from the internet) lives in shared code built once in phase 0, so each app file stays short.
 
@@ -210,3 +210,17 @@ Do these after phase 1, using the same pattern.
 - Which tinyauth/SWAG path rules already apply to Gitea (`auth = false` today); `hidePaths` must win over them.
 - SearXNG with VPN: the scrape container becomes `vpn`. `monitoring.nix` picks it from `cfg.vpn.enabled`.
 - Collabora's image is `latest`, so metric names may drift. The dashboard should tolerate missing series.
+
+## Implementation notes (phases 0 and 1)
+
+Differences from the plan above, and what the VM run showed:
+
+- The relabel helpers live in `lib.neo.monitoring` (`nameToLabels`, `dropOtelScope`, `hidePathLocations`), not `lib.neo.grafana`.
+- `hidePaths` are inserted by SWAG's proxy-conf writer (`swag/default.nix`) after every `server {` line of the app's conf; an assertion fails if a conf with `hidePaths` has none.
+- VM: every target `up == 1` (bearer: Gitea, Karakeep, Meilisearch; basic: Vikunja, SearXNG, Dawarich). Every hidden path returned 404, and `config.alloy` contained no placeholder or key. All app dashboard queries ran without errors. Panels stay empty until there is activity (no Syncthing folders, no searches, no peers).
+- NetBird: the names are OTel-translated (`management_grpc_connected_streams_ratio`, renamed by relabel; `*_duration_ms_milliseconds_bucket`). There is no `relay_peers`, only `relay_peers_active` and `relay_peers_idle`. Signal metrics appear only once peers connect.
+- Authentik: `authentik_main_request_duration_seconds` is a summary (`quantile`). `authentik_policies_engine_time_total_seconds` is dropped whole: dropping only `obj_pk` would leave duplicate series.
+- Gitea has no pull-request metric; its issue counts include PRs.
+- Dawarich exports yabeda names (`sidekiq_jobs_*_total`, …), not prometheus_exporter's. Its web app also serves `/metrics` publicly, so it has `hidePaths` too.
+- SearXNG's "counters" other than the request count are medians and percentages; the dashboard shows them as values.
+- The agent's self-scrape (`loki_write_*`, `prometheus_remote_storage_*`) carries `job="integrations/self"`, not `alloy`.
