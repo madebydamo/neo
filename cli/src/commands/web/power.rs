@@ -36,6 +36,21 @@ pub fn hold_until_down(lock: LockGuard) {
     });
 }
 
+/// The "Restart needed" note on the Power card; "" when no restart is due.
+pub fn restart_required_html(status: &crate::commands::activate::RestartStatus) -> String {
+    if !status.required {
+        return String::new();
+    }
+    let items: String = status
+        .reasons
+        .iter()
+        .map(|r| format!("<li>{}</li>", escape_html(&r.text)))
+        .collect();
+    format!(
+        r#"<div class="alert alert-warning text-sm mt-3" role="status"><div><div class="font-semibold">Restart needed</div><div class="text-xs">The last update takes full effect after a restart of the server:</div><ul class="list-disc ml-4 text-xs mt-1">{items}</ul></div></div>"#
+    )
+}
+
 /// Make generation `n` the boot default (`switch-to-configuration boot`).
 pub async fn set_boot_generation(n: u64) -> Result<(), String> {
     let sudo = sudo_cmd();

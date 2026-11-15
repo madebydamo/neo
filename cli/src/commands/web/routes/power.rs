@@ -6,7 +6,7 @@ use crate::commands::web::locks::Blocked;
 use crate::commands::web::power::{
     self, going_down_html, hold_until_down, power_lock, PowerAction,
 };
-use crate::commands::web::util::{alert_html, generation_ok, AlertKind};
+use crate::commands::web::util::{alert_html, generation_ok, proc, AlertKind};
 
 fn power_now(
     action: PowerAction,
@@ -18,6 +18,16 @@ fn power_now(
     power::schedule(action);
     hold_until_down(lock);
     Ok(RawHtml(going_down_html(action, msg)))
+}
+
+/// Settings → Power: why the server needs a restart to take an update in
+/// full (`neo-restart-required`); empty when it does not.
+#[get("/system/restart-required")]
+pub async fn system_restart_required() -> RawHtml<String> {
+    let status = proc::blocking(crate::commands::activate::restart_required)
+        .await
+        .unwrap_or_default();
+    RawHtml(power::restart_required_html(&status))
 }
 
 /// Current kernel boot id, polled by `static/reboot_watch.js` while the host restarts.

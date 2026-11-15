@@ -76,6 +76,7 @@ pub fn routes() -> Vec<rocket::Route> {
         branches::versioning_gen_switch,
         power::versioning_gen_boot,
         power::system_reboot,
+        power::system_restart_required,
         power::system_boot_id,
         power::system_poweroff,
         branches::versioning_note,

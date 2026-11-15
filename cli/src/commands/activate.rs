@@ -117,16 +117,20 @@ pub fn activate(
     } else {
         "completed"
     };
-    // reboot_pending: boot mode leaves the profile pointer ahead of /run/current-system;
-    // a switch can carry a change that only a restart applies (neo.core.rebootEpoch).
-    let restart_needed = reboot_epoch_raised();
-    let reboot_pending = mode == ActivationMode::Boot || restart_needed;
+    // reboot_pending: the new system needs a restart to take full effect (boot
+    // mode, new kernel, Docker on old settings, a raised restart trigger;
+    // nix/modules/core/restart.nix). Never restarts by itself.
+    let restart = restart_required();
+    let reboot_pending = restart.required || mode == ActivationMode::Boot;
     op.write_state_extra(
         OpStatus::Success,
         phase,
         None,
         Some(activation_branch),
-        Some(serde_json::json!({ "reboot_pending": reboot_pending })),
+        Some(serde_json::json!({
+            "reboot_pending": reboot_pending,
+            "restart_reasons": restart.reasons,
+        })),
     );
     record_gen_after_activate(config_path, activation_branch, has_changes);
     match mode {
@@ -140,10 +144,11 @@ pub fn activate(
                     ""
                 }
             );
-            if restart_needed {
-                println!(
-                    "This update needs a restart of the server to take full effect (reboot_pending)."
-                );
+            if restart.required {
+                println!("This update needs a restart of the server to take full effect:");
+                for r in &restart.reasons {
+                    println!("  - {}", r.text);
+                }
             }
         }
         ActivationMode::Boot => {
@@ -161,19 +166,29 @@ pub fn activate(
     Ok(())
 }
 
-/// The restart level (neo.core.rebootEpoch, nix/modules/core/reboot.nix) of a
-/// system; 0 for systems built before it existed.
-fn reboot_epoch(system: &str) -> u64 {
-    std::fs::read_to_string(format!("{system}/neo-reboot-epoch"))
-        .ok()
-        .and_then(|s| s.trim().parse().ok())
-        .unwrap_or(0)
+/// `neo-restart-required --json` (nix/modules/core/restart.nix) of the system profile.
+#[derive(Debug, Default, serde::Deserialize)]
+pub struct RestartStatus {
+    pub required: bool,
+    #[serde(default)]
+    pub reasons: Vec<RestartReason>,
 }
 
-/// True when the system profile carries a change that only a restart applies:
-/// its restart level is above the one the machine booted.
-fn reboot_epoch_raised() -> bool {
-    reboot_epoch("/nix/var/nix/profiles/system") > reboot_epoch("/run/booted-system")
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct RestartReason {
+    pub id: String,
+    pub text: String,
+}
+
+/// Whether the system profile needs a restart, and why. The script comes from
+/// the profile itself, so a boot-mode activation uses the new rules too;
+/// systems without it (built before it existed) report nothing.
+pub fn restart_required() -> RestartStatus {
+    const SCRIPT: &str = "/nix/var/nix/profiles/system/sw/bin/neo-restart-required";
+    let Ok(out) = Command::new(SCRIPT).arg("--json").output() else {
+        return RestartStatus::default();
+    };
+    serde_json::from_slice(&out.stdout).unwrap_or_default()
 }
 
 /// The branches one activation commits to.
