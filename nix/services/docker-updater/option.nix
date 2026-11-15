@@ -19,8 +19,10 @@
               # systemd OnCalendar expression.
               schedule = mkOption {
                 type = types.str;
-                default = "Sun *-*-* 04:00:00";
-                description = "When to check for and install app updates (default: Sundays at 4 AM). Accepts daily, weekly or a systemd calendar time such as Sun 04:00.";
+                # An hour after the system updater (daily 04:00), so the two do not
+                # start together; the system lock also makes them wait for each other.
+                default = "Sun *-*-* 05:00:00";
+                description = "When to check for and install app updates (default: Sundays at 5 AM, after the system update). Accepts daily, weekly or a systemd calendar time such as Sun 05:00.";
                 rank = 10;
                 ui = lib.neo.ui.mkUi {
                   label = "Update time";
