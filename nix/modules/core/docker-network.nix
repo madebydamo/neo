@@ -53,9 +53,10 @@
 
       # A free /24 of 172.16.0.0/12 (the range Neo reserves for Docker) that
       # overlaps no Docker network and no host route. Docker only reads its
-      # address pool when the daemon starts, and NixOS never restarts Docker on
-      # a switch: on a running server Docker's old pools (about 31 networks)
-      # run out, so Neo picks the subnet itself.
+      # address pool when the daemon starts. A switch restarts Docker when
+      # daemon.json changes, but dockerd can come back from the old unit and
+      # keep its old pools (about 31 networks) until the next restart
+      # (nix/modules/core/restart.nix), so Neo picks the subnet itself.
       ip2int() { local IFS=.; read -r a b c d <<<"$1"; echo $(( (a << 24) | (b << 16) | (c << 8) | d )); }
       used_ranges() {
         {
