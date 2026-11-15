@@ -57,13 +57,14 @@
               rebootWhenRequired = mkOption {
                 type = types.bool;
                 default = true;
-                # Scheduled runs: after a live switch whose new system has a higher
-                # neo.core.rebootEpoch than the booted one (nix/modules/core/reboot.nix),
-                # e.g. Docker daemon settings, systemd-run schedules a reboot 60s later.
-                description = "Restart the server after an update that only takes effect after a restart, such as a new Docker setup. Rare; without it the server keeps parts of the old setup until its next restart.";
+                # Scheduled runs in switch mode: when neo-restart-required (nix/modules/core/restart.nix)
+                # names a reason (new kernel, Docker on old settings, a raised restart trigger),
+                # systemd-run schedules a reboot 60s later. At most once per system and reasons.
+                description = "Restart the server after an update that only takes effect after a restart, such as a new Linux kernel. Rare; without it the server keeps parts of the old version until its next restart.";
                 rank = 17;
                 ui = lib.neo.ui.mkUi {
                   label = "Restart when an update needs it";
+                  visibleWhen = "activationMode=switch";
                 };
               };
               garbageCollectOlderThan = mkOption {

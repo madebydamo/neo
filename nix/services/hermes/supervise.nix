@@ -58,6 +58,16 @@
         else "neo-docker-updater.service"
       }
 
+      ${lib.optionalString (kind == "system") ''
+        Restarts: `restart_reasons` lists why the new version needs a restart of the server
+        (new Linux kernel, Docker still on old settings, a component that asked for one).
+        `reboot_scheduled=true` means the server restarts by itself about a minute later:
+        say so in one line, it is not a problem. Reasons without a scheduled restart: tell
+        the operator to restart when convenient (Settings → Power). `restart_not_applied=true`
+        means a restart already happened for the same reasons and did not clear them: that
+        is a warning. An empty `restart_reasons` needs no restart, whatever `reboot_pending`
+        said in older runs.
+      ''}
       Classify the outcome as broken, warning, or clean using systemd state and logs.
       - clean: do not send any message
       - warning (deprecations, migration hints, non-fatal issues): notify via `hermes send --to all`; do not roll anything back
