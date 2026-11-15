@@ -582,6 +582,19 @@ Use your plugin's inputs inside a NixOS module through the flake-parts arguments
 }
 ```
 
+### Changes that need a restart
+
+A change only a server restart applies (a kernel module the service loads at boot, a setting read once at startup by something outside the service) raises the service's restart trigger, inside its `mkIf cfg.enabled`:
+
+```nix
+neo.core.restart.triggers.${name} = {
+  level = 2;  # was 1: raise by one per such change, never lower it
+  reason = "Loads the new USB driver for the scanner.";
+};
+```
+
+Machines running the plugin restart once after updating to it (scheduled updates with **Restart when an update needs it**; Activate by hand only shows the reason). A machine where the service is off, or switched on after its last restart, does not restart; set `onEnable = true` when even switching it on needs one. Kernel versions, kernel boot options and Docker daemon settings are detected by themselves and need no trigger. `neo-restart-required` on the host shows what is due.
+
 ### System-level additions
 
 A plugin does not have to define a service. Any `neoPlugin.modules.<name>` is imported, so disks, packages or kernel tweaks are plain NixOS config. It will not show on the Services grid. A module that is not named per instance (a shared package, a kernel setting) is imported once per copy of the plugin, so keep it to definitions that merge (no option declarations), or the plugin can only be added once.

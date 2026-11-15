@@ -95,4 +95,6 @@ The web UI does the same under **Versioning**: switch to a generation, or **Boot
 
 Scheduled system-updater uses `services.system-updater.activationMode` (`switch` or `boot`). With `activationMode = "boot"`, `rebootAfterBoot` (default true) schedules a delayed host restart after a successful run that advanced the system profile, so the new generation becomes live; set it false to leave the reboot to you. Interactive `neo activate` and web Activate stay on live switch unless you pass `--mode` / `NEO_ACTIVATION_MODE`, and never restart the host because of this option.
 
+Some updates take full effect only after a restart: a new Linux kernel or kernel boot options, Docker still running with older settings, or a service or plugin that asked for one. `neo-restart-required` lists the reasons (exit 0 when a restart is due, `--json` for scripts); `neo activate` prints them and **Settings → Power** shows them next to the Restart button. In `switch` mode the scheduled updater restarts the server for them about a minute after the update when `rebootWhenRequired` is on (default), at most once per version and reasons.
+
 Developers building Neo itself: [AGENTS.md](../AGENTS.md).
