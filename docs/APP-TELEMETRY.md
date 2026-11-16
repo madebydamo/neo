@@ -29,11 +29,11 @@ One JSON object per line on stdout:
 
 ## Standard metrics
 
-Served on **`$NEO_METRICS_PORT` (9464)**, which the Nix module sets only while monitoring collects. The port stays on the service network (never proxied). `service` and `host` labels are added by the agent; do not add them.
+Served on **`$NEO_METRICS_PORT` (9464)**, which the Nix module sets only while monitoring collects. VPN-routed containers share gluetun's network namespace, so a routed app takes its own port (an Advanced `metricsPort` setting) and claims it in `vpn.ports` while collecting; the duplicate-port assertion then catches clashes. The port stays on the service network (never proxied). `service` and `host` labels are added by the agent; do not add them.
 
 | Metric | Labels | Meaning |
 |--------|--------|---------|
-| `neo_app_llm_requests_total` | `provider, model, feature, status` | AI calls; `status` = `ok\|error\|timeout\|rate_limited\|auth` (`auth` also for 402 out of credit) |
+| `neo_app_llm_requests_total` | `provider, model, feature, status` | AI calls; `status` = `ok\|error\|timeout\|rate_limited\|auth` (`auth` also for 402 out of credit). `provider` = the company whose API is called, short and lower-case: `anthropic`, `claude_code`, `openai`, `openrouter`, `gemini`, `mistral`, `xai`, `infomaniak`, `azure_openai`, `ollama`, … A call the user stops (or a shutdown) is not counted |
 | `neo_app_llm_tokens_total` | `provider, model, feature, kind` | `kind` = `input` (**uncached** input), `cache_read`, `cache_write`, `output` |
 | `neo_app_llm_cost_usd_total` | `provider, model, feature` | Cost as the provider reports it (OpenRouter `usage.cost`, Claude Code `total_cost_usd`) |
 | `neo_app_llm_request_duration_seconds` | `provider, model, feature` | Histogram |
@@ -60,7 +60,7 @@ Token rules the helpers implement: Anthropic `input_tokens` is already uncached;
 
 ## Browser-only apps
 
-Static sites and games have no server code: SWAG's access log already gives the `web` section (with referring sites). For in-app events, the page requests `GET /_e/<event>[/<detail>]` (`navigator.sendBeacon` or `fetch(url, {keepalive: true})`) and gets a 204. SWAG logs the request either way; the `beacon` section counts events by their first path segment.
+Static sites and games have no server code: SWAG's access log already gives the `web` section (with referring sites). For in-app events, the page requests `/_e/<event>[/<detail>]` (GET or the POST of `navigator.sendBeacon`) (`navigator.sendBeacon` or `fetch(url, {keepalive: true})`) and gets a 204. SWAG logs the request either way; the `beacon` section counts events by their first path segment.
 
 Answer the 204 **in the app** when it has its own nginx or server (proxied through the vhost's `location /`, so tinyauth applies), with `access_log off` there since SWAG already logs it:
 

@@ -575,7 +575,7 @@ Bind to `127.0.0.1`, not `0.0.0.0`, so the port is not exposed on the LAN.
 
 ### Static site
 
-Build the site as a derivation and serve it with the host nginx on loopback, the same way as above: `services.nginx.virtualHosts.<name>` listening on `127.0.0.1:<port>`, `lib.neo.mkDockerToLocalhostForward <port>`, `lib.neo.mkSystemdUnits ["nginx"]`, and `proxyPass = "http://host.docker.internal:<port>/"`. The host nginx is shared between static-site plugins, so pick a port nobody else uses. Neo keeps `nginx` out of per-service targets so stopping one site does not stop the others.
+Build the site as a derivation and serve it with the host nginx on loopback, the same way as above: `services.nginx.virtualHosts.<name>` listening on `127.0.0.1:<port>`, `lib.neo.mkDockerToLocalhostForward <port>`, `lib.neo.mkSystemdUnits ["nginx"]`, and `proxyPass = "http://host.docker.internal:<port>/"`. The host nginx is shared between static-site plugins, so pick a port nobody else uses. Neo keeps `nginx` out of per-service targets so stopping one site does not stop the others. Put `services.nginx.enable = true` (the shared part) in its own module listed in `neoPlugin.checkExclude` (see Prefixes), and use `try_files $uri $uri/ =404` so a missing asset is a 404, not `index.html`. Copies need different ports: make the port an option (Advanced) and warn when another vhost uses it.
 
 ### Image built by the plugin
 

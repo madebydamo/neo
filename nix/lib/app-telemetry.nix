@@ -40,8 +40,10 @@
     containers,
     units ? [],
     filter ? null,
+    # Dashboards pick servers with $host; alert rules see every server.
+    hostSel ? ", host=~\"$host\"",
   }:
-    ''{job="journal", unit=~"${unitRe containers units}"} ''
+    ''{job="journal", unit=~"${unitRe containers units}"${hostSel}} ''
     + (
       if filter != null
       then filter
@@ -90,7 +92,7 @@ in {
           h = 4;
           description = "Different addresses that opened the app in the chosen time range.";
           datasource = loki;
-          targets = [(lq ''count(sum by (ip) (count_over_time({job="swag", service="${service}"} [$__range])))'' // {queryType = "instant";})];
+          targets = [(lq ''count(sum by (ip) (count_over_time({job="swag", service="${service}", host=~"$host"} [$__range])))'' // {queryType = "instant";})];
           options.colorMode = "none";
         })
         (stat {
@@ -121,7 +123,7 @@ in {
           w = 12;
           h = 8;
           datasource = loki;
-          targets = [(lqLegend ''topk(15, sum by (path) (count_over_time({job="swag", service="${service}"} | status=~"2..|3.." != "/_e/" [$__range])))'' "{{path}}")];
+          targets = [(lqLegend ''topk(15, sum by (path) (count_over_time({job="swag", service="${service}", host=~"$host"} | status=~"2..|3.." != "/_e/" [$__range])))'' "{{path}}")];
         })
         (bargauge {
           title = "Referring sites";
@@ -129,14 +131,14 @@ in {
           h = 8;
           description = "Other sites whose links brought visitors here.";
           datasource = loki;
-          targets = [(lqLegend ''topk(15, sum by (ref) (count_over_time({job="swag", service="${service}"} | referer=~"https?://.+" | label_format ref=`{{ regexReplaceAll "^https?://([^/:]+).*" .referer "''${1}" }}` | label_format ext=`{{ if eq .ref .vhost }}0{{ else }}1{{ end }}` | ext="1" [$__range])))'' "{{ref}}")];
+          targets = [(lqLegend ''topk(15, sum by (ref) (count_over_time({job="swag", service="${service}", host=~"$host"} | referer=~"https?://.+" | label_format ref=`{{ regexReplaceAll "^https?://([^/:]+).*" .referer "''${1}" }}` | label_format ext=`{{ if eq .ref .vhost }}0{{ else }}1{{ end }}` | ext="1" [$__range])))'' "{{ref}}")];
         })
         (bargauge {
           title = "Missing pages (404)";
           w = 12;
           h = 8;
           datasource = loki;
-          targets = [(lqLegend ''topk(15, sum by (path) (count_over_time({job="swag", service="${service}"} | status="404" [$__range])))'' "{{path}}")];
+          targets = [(lqLegend ''topk(15, sum by (path) (count_over_time({job="swag", service="${service}", host=~"$host"} | status="404" [$__range])))'' "{{path}}")];
         })
       ];
 
@@ -153,14 +155,14 @@ in {
           h = 10;
           description = "Browser events in the chosen time range.";
           datasource = loki;
-          targets = [(lqLegend ''sum by (event) (count_over_time({job="swag", service="${service}"} | path=~"/_e/.+" | regexp `^/_e/(?P<event>[^/]+)` [$__range]))'' "{{event}}")];
+          targets = [(lqLegend ''sum by (event) (count_over_time({job="swag", service="${service}", host=~"$host"} | path=~"/_e/.+" | label_format event=`{{ regexReplaceAll "^/_e/([^/]+).*" .path "''${1}" }}` [$__range]))'' "{{event}}")];
         })
         (bars {
           title = "Events over time";
           w = 12;
           h = 10;
           datasource = loki;
-          targets = [(lqLegend ''sum by (event) (count_over_time({job="swag", service="${service}"} | path=~"/_e/.+" | regexp `^/_e/(?P<event>[^/]+)` [$__interval]))'' "{{event}}")];
+          targets = [(lqLegend ''sum by (event) (count_over_time({job="swag", service="${service}", host=~"$host"} | path=~"/_e/.+" | label_format event=`{{ regexReplaceAll "^/_e/([^/]+).*" .path "''${1}" }}` [$__interval]))'' "{{event}}")];
         })
       ];
 
@@ -446,6 +448,7 @@ in {
           datasource = "loki";
           expr = "sum by (host) (count_over_time(${errorLines {
             inherit containers units;
+            hostSel = "";
             filter = errorFilter;
           }} [15m]))";
           above = errorThreshold;

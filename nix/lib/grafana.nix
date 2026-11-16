@@ -107,8 +107,16 @@
       };
     };
 
+    # `options` (and `custom`) given by the caller are merged into the defaults,
+    # so `options.colorMode = "none"` keeps reduceOptions.
+    withDefaults = defaults: args:
+      defaults
+      // args
+      // lib.optionalAttrs (args ? options) {options = (defaults.options or {}) // args.options;}
+      // lib.optionalAttrs (args ? custom && defaults ? custom) {custom = defaults.custom // args.custom;};
+
     stat = args:
-      panel ({
+      panel (withDefaults {
           type = "stat";
           options = {
             reduceOptions = {
@@ -122,10 +130,10 @@
             justifyMode = "center";
           };
         }
-        // args);
+        args);
 
     timeseries = args:
-      panel ({
+      panel (withDefaults {
           type = "timeseries";
           options = {
             legend = {
@@ -146,7 +154,7 @@
             spanNulls = true;
           };
         }
-        // args);
+        args);
 
     bars = args:
       timeseries ({interval = "5m";}

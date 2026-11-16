@@ -134,11 +134,15 @@ export function llmCall(provider, model, feature) {
   const start = process.hrtime.bigint();
   const call = {
     provider, model, feature, usage: undefined, costUsd: undefined, status: "ok",
+    /** The user stopped it or the client left: end() records nothing. */
+    cancel() { call.status = null; },
     fail(err, httpStatus) {
+      if (err?.name === "AbortError" && !httpStatus) { call.status = null; return; }
       call.status = classifyError(err, httpStatus);
       log("error", "AI call failed", { event: "llm_error", provider, model: call.model, feature, status: call.status, err }, "llm");
     },
     end() {
+      if (call.status === null) return;
       const duration = Number(process.hrtime.bigint() - start) / 1e9;
       recordLlm(call.provider, call.model, call.feature, call.usage, { status: call.status, duration, costUsd: call.costUsd });
     },

@@ -24,6 +24,7 @@ Needs `prometheus_client`.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -61,6 +62,9 @@ DATA_UPDATED = Gauge("neo_app_data_updated_timestamp_seconds", "Last update of a
 BUILD_INFO = Gauge("neo_app_build_info", "App version.", ["version"])
 
 log = logging.getLogger("neo_telemetry")
+
+# A user pressing Stop, a client leaving or a shutdown: not a failure, not counted.
+_CANCELLED = (asyncio.CancelledError, GeneratorExit, KeyboardInterrupt, SystemExit)
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 
@@ -249,6 +253,9 @@ def llm_call(provider: str, model: str, feature: str):
     start = time.monotonic()
     try:
         yield call
+    except _CANCELLED:
+        call.status = None
+        raise
     except BaseException as exc:
         call.status = classify_error(exc)
         log.error(
@@ -258,15 +265,16 @@ def llm_call(provider: str, model: str, feature: str):
         )
         raise
     finally:
-        record_llm(
-            call.provider,
-            call.model,
-            call.feature,
-            call.usage,
-            status=call.status,
-            duration=time.monotonic() - start,
-            cost_usd=call.cost_usd,
-        )
+        if call.status is not None:
+            record_llm(
+                call.provider,
+                call.model,
+                call.feature,
+                call.usage,
+                status=call.status,
+                duration=time.monotonic() - start,
+                cost_usd=call.cost_usd,
+            )
 
 
 # ── Use, sign-ins, jobs, data ────────────────────────────────────────────────
@@ -318,16 +326,18 @@ def job(name: str):
     start = time.monotonic()
     try:
         yield
+    except _CANCELLED:
+        raise
     except BaseException:
         JOB_RUNS.labels(name, "failure").inc()
+        JOB_DURATION.labels(name).observe(time.monotonic() - start)
         log.error("job %s failed", name, exc_info=True, extra={"event": "job_failed", "job": name})
         raise
     else:
         JOB_RUNS.labels(name, "success").inc()
         JOB_LAST_SUCCESS.labels(name).set(time.time())
-        log.info("job %s done", name, extra={"event": "job_done", "job": name, "seconds": round(time.monotonic() - start, 3)})
-    finally:
         JOB_DURATION.labels(name).observe(time.monotonic() - start)
+        log.info("job %s done", name, extra={"event": "job_done", "job": name, "seconds": round(time.monotonic() - start, 3)})
 
 
 def data_updated(source: str, ts: float | None = None) -> None:
