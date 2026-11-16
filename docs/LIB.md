@@ -106,10 +106,10 @@ Each service runs on its own network, so containers of different services cannot
 | Name | Arguments | Returns |
 |------|-----------|---------|
 | `docker.serviceNetwork` | Service name (`plugin.name "<service>"` in plugins) | `"app-<service>"`: put every container of the service there |
-| `docker.mkLink` | `{ name, containers }` | Module fragment for `mkMerge`: network `link-<name>` joined by exactly `containers` (any service, core or plugin), after their own network. For endpoints only reachable inside Docker; prefer the other app's public URL |
-| `docker.mkHostAccess` | Container name | Module fragment: the container joins `neo-host` and reaches host services (bound to `127.0.0.1` with `mkDockerToLocalhostForward`, or all interfaces) as `host.docker.internal`. Only the `neo-host` bridge may connect to host ports |
+| `docker.mkLink` | `{ name, containers }` | Module fragment for `mkMerge`: network `link-<name>` joined by exactly `containers` (any service, core or plugin), after their own network. For endpoints only reachable inside Docker; prefer the other app's public URL. Works with the VPN on or off: for a VPN-routed member gluetun joins the link under the member's name |
+| `docker.mkHostAccess` | Container name | Module fragment: the container joins `neo-host` and reaches host services (bound to `127.0.0.1` with `mkDockerToLocalhostForward`, or all interfaces) as `host.docker.internal`. Only the `neo-host` bridge may connect to host ports. For a VPN-routed container gluetun joins `neo-host` instead (every routed container then reaches host services) |
 | `docker.sharedNetwork` | | `"internal"`: the shared network of plugins written before service networks; SWAG is on it, everything on it reaches everything else on it |
-| `docker.hostNetwork`, `hostSubnet`, `hostGateway` | | `"neo-host"`, `172.31.255.0/24`, `172.31.255.1` |
+| `docker.hostNetwork`, `hostSubnet`, `hostGateway`, `hostAlias` | | `"neo-host"`, `172.31.255.0/24`, `172.31.255.1`, the `--add-host` option for `host.docker.internal` |
 | `docker.containerNetworks`, `usedNetworks`, `containerService`, `networkName`, `isCreatedNetwork` | | Readers for checks and tooling; **internal** |
 | `config.neo.core.docker.networks.<name>` | `{ internal ? false, subnet ? null, gateway ? null, bridgeName ? null }` | Flags of a network (`internal` = no route to the internet); **internal** |
 
@@ -119,6 +119,8 @@ virtualisation.oci-containers.containers.${name} = {
   networks = [(lib.neo.docker.serviceNetwork name)];
 };
 ```
+
+**VPN.** A container with `vpn.enabled` runs in gluetun's network namespace (`networks = ["container:vpn"]`) and has no networks of its own. gluetun stands in for it, answering for its name on each network it would be on: its service network, the `vpn.networks` of its service (`internal` for old plugins), every link it is a member of, and `neo-host` with `mkHostAccess`. So names, links and SWAG work the same with the VPN on or off; declare networks and links as if there were no VPN. The price, by choice: all routed containers share one namespace and reach each other on `localhost`. `lib.neo.vpnRoutedContainers config` lists the routed containers. App metrics of a routed container are scraped through gluetun automatically.
 
 ### Directories and files
 
@@ -172,7 +174,7 @@ systemd.services.docker-myapp.preStart = lib.concatStringsSep "\n" [
 
 ### Metrics and dashboards: `lib.neo.grafana`
 
-An app declares what it exports and how to show it in `neo.monitoring.apps.<service>` (`nix/modules/core/monitoring.nix`); only entries whose service is enabled on the machine count (`enabled` defaults to `neo.services.<service>.enabled`). The monitoring agent on that machine scrapes the endpoints and sends the dashboards to the Monitoring server, which shows them read-only in the **Apps** folder: the server needs neither the app nor the plugin. Example: `nix/services/immich/monitoring.nix`.
+An app declares what it exports, how to show it and when to alert in `neo.monitoring.apps.<service>` (`nix/modules/core/monitoring.nix`); only entries whose service is enabled on the machine count (`enabled` defaults to `neo.services.<service>.enabled`). The monitoring agent on that machine scrapes the endpoints and sends the dashboards to the Monitoring server, which shows them read-only in the **Apps** folder: the server needs neither the app nor the plugin. Example: `nix/services/immich/monitoring.nix`.
 
 ```nix
 neo.monitoring.apps.${name} = {
@@ -211,6 +213,37 @@ Every scraped series gets `service`, `scrape` (the endpoint's name), `host` and 
 
 `lib.neo.monitoring`: `nameToLabels regex labels name` (relabel rules that turn parts of a metric name into labels, see Immich), `dropOtelScope` (drops `otel_scope_*` labels and `target_info`), `hidePathLocations paths` (the nginx lines `hidePaths` produces).
 
+| `alerts.<id>` field | Default | Meaning |
+|---|---|---|
+| `title` | | Alert name in Grafana and in the assistant's message ("GPS feed stale") |
+| `expr` | | Query evaluated every minute: PromQL, or a LogQL metric query with `datasource = "loki"`. Each series is one alert; keep `host` and the labels the summary uses. Filter with `alertSelector "<service>"` (no `$host` in rules) |
+| `datasource` | `"prometheus"` | `"prometheus"` or `"loki"` |
+| `above` / `below` | fire above 0 | Threshold on the last value; set one of them |
+| `for` | `"5m"` | How long the condition holds before it fires (`"0s"` at once) |
+| `severity` | `"warning"` | `info`, `warning`, `critical` |
+| `summary` | | Plain message for the owner; Go template with `{{ $labels.host }}`, `{{ $values.B.Value }}` |
+| `noData` | `"ok"` | `"alerting"` when silence is the problem (a feed that stopped), or `"nodata"` |
+| `labels` | `{}` | Extra labels; `service` and `severity` are set |
+
+App alert rules land read-only in the **Apps** folder, one rule group per app (uid `app-<service>-<id>`), and go through the same notification policy as Neo's own (the assistant, when Monitoring alerts are on). Like dashboards, the agent of the machine running the app sends them to the server, so the server needs neither app nor plugin.
+
+```nix
+neo.monitoring.apps.${name}.alerts.stale = {
+  title = "MyApp feed stale";
+  expr = ''max by (host) (time() - myapp_last_poll_timestamp_seconds{${lib.neo.grafana.alertSelector name}})'';
+  above = 300;
+  summary = "MyApp on {{ $labels.host }} got no data for {{ humanizeDuration $values.B.Value }}.";
+};
+neo.monitoring.apps.${name}.alerts.errors = {
+  title = "MyApp logs errors";
+  datasource = "loki";
+  expr = ''sum by (host) (count_over_time({job="journal", unit="docker-${name}.service"} |~ `(?i)\berror\b` [10m]))'';
+  above = 5;
+  for = "0s";
+  summary = "{{ printf \"%.0f\" $values.B.Value }} errors from MyApp on {{ $labels.host }} in 10 minutes.";
+};
+```
+
 | `dashboards.<id>` field | Default | Meaning |
 |---|---|---|
 | `title`, `description` | | |
@@ -232,6 +265,8 @@ Neo sets the uid (`app-<service>-<id>`), tags and the `host` variable. Filter ev
 | `dashboard` | `{ uid, title, panels, variables, time, refresh, links, tags, description }` | Dashboard model (Neo's own; apps use `neo.monitoring.apps`) |
 | `queryVar` | `{ name, label, query, datasource ? prom, multi ? true, includeAll ? true }` | Template variable |
 | `appSelector` | `service` | `service="<service>", host=~"$host"` |
+| `alertSelector` | `service` | `service="<service>"` (alert rules have no `$host`) |
+| `alertRule` | `{ uid, title, expr, summary, datasource, above, below, for, severity, noData, labels }` | One Grafana alert rule (provisioning format); apps use `neo.monitoring.apps.<service>.alerts` |
 | `thresholdsGreenRed` | `steps` | Thresholds starting green; `steps = [{ color; value; }]` |
 | `upDown` | | Value mapping 0 = Down, 1 = Up |
 | `prom`, `loki`, `pos x y w h`, `layout`, `hostVar` | | Datasource refs, a fixed gridPos, the layout pass, a server variable |

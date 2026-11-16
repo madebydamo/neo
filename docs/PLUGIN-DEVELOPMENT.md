@@ -219,6 +219,7 @@ Work through every item. Each one exists because it is easy to forget.
 
 - [ ] If the app has a Prometheus endpoint: `neo.monitoring.apps.${name}.metrics.<endpoint> = { container = name; port = …; }`, the exporter switched on with `lib.mkIf config.neo.monitoring.collecting`.
 - [ ] A dashboard in `neo.monitoring.apps.${name}.dashboards.<id>` built with `lib.neo.grafana`, every query filtered with `appSelector name` (or `host=~"$host"` for container numbers and logs).
+- [ ] Alert rules in `neo.monitoring.apps.${name}.alerts.<id>` for what the owner must act on (data stale, jobs failing, budget exceeded), filtered with `alertSelector name`, with a plain-words `summary`.
 
 **Verify** ([details](#verify-on-the-host))
 
@@ -380,6 +381,7 @@ Notes:
 Notes:
 
 - **Network.** Put every container of the service on `lib.neo.docker.serviceNetwork name` (`app-<name>`). Its containers reach each other by container name; SWAG joins the network of every proxied service; containers of other services (core or plugin) cannot reach them. Container names are still global Docker names: name sidecars after the service (`"${name}-db"`, `"${name}-redis"`). Neo creates every network a container names. To call another service inside Docker, both sides share a link (`lib.neo.docker.mkLink { name; containers = [ … ]; }`); otherwise use its public URL. Services of one plugin that talk to each other (an *arr stack) put those containers on one link. Host services (`host.docker.internal`) are reachable only with `lib.neo.docker.mkHostAccess <container>`; SWAG already has it. See [LIB.md](LIB.md#docker-networks-libneodocker).
+- **VPN.** Declare networks and links as if there were no VPN. A container routed through the VPN (`vpn.enabled`) runs in gluetun's network namespace; gluetun then joins its service network, its links and (with `mkHostAccess`) `neo-host` under its name, and its metrics are scraped through gluetun. List the service network in `mkVpnOptions { networks = [(lib.neo.docker.serviceNetwork name)]; }` too.
 - **The `internal` network.** Plugins written before service networks use `networks = ["internal"]`. That keeps working unchanged: SWAG is on it, gluetun joins it for VPN-routed plugin containers, and everything on it reaches everything else on it. Built-in services left it, so a plugin container on `internal` can no longer call a built-in container by name (use the public URL or a link). Move to `serviceNetwork` to isolate the plugin's services from each other and from other plugins.
 - **Ownership.** `mkEnsureDirs` creates missing directories owned by `neo.core.uid:gid` (the `homeserver` user). Pass `{ dirPath; user; group; mode; }` for images that run as a fixed uid (for example postgres `999`).
 - **Appdata.** Everything mutable lives under `${appdata}`. That is what **Clear appdata** removes and what snapshots and backups cover. Do not write to `/var/lib/<name>`.
@@ -514,7 +516,17 @@ With Monitoring on, every machine runs an agent that already collects the app's 
 }
 ```
 
-- The agent on the machine that runs the plugin scrapes `metrics.*` (labels `service`, `scrape`, `host`) and sends `dashboards.*` to the Monitoring server. That server shows them read-only in the **Apps** folder and replaces them when the plugin changes; it does not need the plugin itself.
+- Alerts: `alerts.<id> = { title; expr; above or below; for; severity; summary; }` (PromQL, or `datasource = "loki"` with a LogQL metric query; `noData = "alerting"` when silence is the problem). They land read-only in Grafana's Apps folder and go to the assistant like Neo's own alerts. Example:
+
+  ```nix
+  alerts.stale = {
+    title = "MyApp feed stale";
+    expr = ''max by (host) (time() - myapp_last_poll_timestamp_seconds{${lib.neo.grafana.alertSelector name}})'';
+    above = 300;
+    summary = "MyApp on {{ $labels.host }} got no data for {{ humanizeDuration $values.B.Value }}.";
+  };
+  ```
+- The agent on the machine that runs the plugin scrapes `metrics.*` (labels `service`, `scrape`, `host`) and sends `dashboards.*` and `alerts.*` to the Monitoring server. That server shows them read-only in the **Apps** folder and replaces them when the plugin changes; it does not need the plugin itself.
 - Names that carry a value (`myapp_jobs_upload_total`) become labels with `relabel` rules on the endpoint (`lib.neo.monitoring.nameToLabels`); see `LIB.md` → Metrics and dashboards.
 - An endpoint that needs a credential: `auth = "bearer"` or `"basic"` and give the app `config.neo.monitoring.apps.${name}.scrapeToken` (through `neo.core.secrets.containerEnv`, gated on `collecting`). The token is generated on the machine; there is no setting for it.
 - Metrics served on the app's public port: `neo.monitoring.apps.${name}.hidePaths = [ "/metrics" ];` makes SWAG answer 404 there.
