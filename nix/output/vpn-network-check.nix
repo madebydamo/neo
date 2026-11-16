@@ -82,11 +82,37 @@
                   container = "oldplug";
                   port = 9100;
                 };
-                alerts.stale = {
-                  title = "Feed stale";
-                  expr = ''time() - oldplug_last_poll_timestamp_seconds{service="oldplug"}'';
-                  above = 300;
-                  summary = "No data for {{ $values.B.Value }} s.";
+                alerts =
+                  {
+                    stale = {
+                      title = "Feed stale";
+                      expr = ''time() - oldplug_last_poll_timestamp_seconds{service="oldplug"}'';
+                      above = 300;
+                      summary = "No data for {{ $values.B.Value }} s.";
+                    };
+                  }
+                  // lib.neo.monitoring.appAlerts {
+                    service = "oldplug";
+                    label = "Old plugin";
+                    containers = ["oldplug"];
+                    llm = true;
+                    logins = true;
+                    jobs.sync = 3600;
+                    data.feed = 7200;
+                  };
+                dashboards.overview = {
+                  title = "Old plugin";
+                  panels = with lib.neo.grafana.app;
+                    web {service = "oldplug";}
+                    ++ beacon {service = "oldplug";}
+                    ++ logins {service = "oldplug";}
+                    ++ features {service = "oldplug";}
+                    ++ llm {service = "oldplug";}
+                    ++ jobs {service = "oldplug";}
+                    ++ errors {
+                      service = "oldplug";
+                      containers = ["oldplug"];
+                    };
                 };
               };
             }
@@ -130,7 +156,9 @@
     ++ lib.optional (!(lib.elem docker.hostAlias (cOff.oldplug.extraOptions or []))) "VPN off: oldplug lacks host.docker.internal"
     ++ map (m: "VPN off: ${m}") (failedAssertions off)
     # App alert rules.
-    ++ lib.optional ((group.folderUid or null) != "neo-apps" || lib.length (group.rules or []) != 1) "alert group oldplug not rendered: ${builtins.toJSON group}"
+    ++ lib.optional ((group.folderUid or null) != "neo-apps" || lib.length (group.rules or []) != 7) "alert group oldplug should have 7 rules (1 own + 6 standard): ${builtins.toJSON group}"
+    # Standard sections render to JSON (forces every panel and query string).
+    ++ lib.optional (builtins.stringLength (builtins.toJSON on.neo.monitoring.apps.oldplug.dashboards) < 1000) "standard dashboard sections did not render"
     ++ lib.optional (((lib.head (group.rules or [{}])).labels.service or null) != "oldplug") "alert rule lacks the service label";
 in {
   perSystem = {pkgs, ...}: {

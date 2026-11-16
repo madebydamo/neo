@@ -33,7 +33,7 @@ This repo is a **Neo plugin**: a Nix flake that adds services to a Neo homeserve
 - Secrets: `lib.neo.mkSecretOption`, passed only through `neo.core.secrets.containerEnv` / `.templates`. Never in `environment` or scripts.
 - Containers on `networks = [(lib.neo.docker.serviceNetwork name)]` (each service its own network; another service only through its public URL or `lib.neo.docker.mkLink`), no published web ports. Health/API paths called without a login go in `auth.publicPaths`.
 - Every unit in `mkContainerDefinitions { extraUnits; }` or `mkSystemdUnits`; post-start config with `lib.neo.mkSetupService`.
-- Metrics, dashboards and alerts go in `neo.monitoring.apps.${name}`; dashboard queries filter with `lib.neo.grafana.appSelector name`, alert rules with `alertSelector name`; exporters only on with `config.neo.monitoring.collecting`.
+- Metrics, dashboards and alerts go in `neo.monitoring.apps.${name}`; dashboard queries filter with `lib.neo.grafana.appSelector name`, alert rules with `alertSelector name`; exporters only on with `config.neo.monitoring.collecting`. Standard telemetry (`$NEO/docs/APP-TELEMETRY.md`): JSON logs with `level`, the `neo_app_*` metrics from the copied `$NEO/templates/plugin/telemetry/` helper, dashboards from `lib.neo.grafana.app.*`, alerts from `lib.neo.monitoring.appAlerts`.
 - Texts are for non-technical operators: `tagline`/`description` say what they get, technical facts go in `notes` or Nix comments.
 - Options are API: operators have them in `settings.toml`. Add, do not rename.
 

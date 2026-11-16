@@ -172,6 +172,23 @@ systemd.services.docker-myapp.preStart = lib.concatStringsSep "\n" [
 
 `references` and `scripts` map file names to contents, written as `references/<name>.md` and `scripts/<name>` next to the skill.
 
+### Standard app telemetry: `lib.neo.grafana.app`, `lib.neo.monitoring.appAlerts`
+
+Dashboard sections and alert rules over the standard `neo_app_*` metrics and JSON logs ([APP-TELEMETRY.md](APP-TELEMETRY.md); Python/Node helpers in `templates/plugin/telemetry/`).
+
+| Helper | Arguments | Result |
+|--------|-----------|--------|
+| `grafana.app.web` | `service` | Requests, visitors, 5xx, response time, top pages, 404s (SWAG, no app code) |
+| `grafana.app.beacon` | `service` | Browser events `GET /_e/<event>/…` from the access log |
+| `grafana.app.logins` | `service` | Sign-ins, failures, active users |
+| `grafana.app.features` | `service` | Feature use (`neo_app_feature_used_total`) |
+| `grafana.app.llm` | `service` | Uncached / cached / output tokens, cache hit rate, cost, failures, latency, tokens by feature |
+| `grafana.app.jobs` | `service` | Last success per job, runs by status |
+| `grafana.app.errors` | `service`, `containers`, `filter ? null` | Error log lines (JSON `level`, or `filter`), `neo_app_errors_total`, the lines |
+| `monitoring.appAlerts` | `service`, `label`, `containers ? []`, `errorFilter ? null`, `errorThreshold ? 10`, `llm ? false`, `logins ? false`, `jobs ? {}`, `data ? {}` | Attrset for `neo.monitoring.apps.<svc>.alerts`: `errors`, `llm-failing`, `llm-auth`, `login-failures`, `job-<name>`, `data-<source>` |
+
+Each section is a list of panels starting with a row: `panels = with lib.neo.grafana.app; features {service = name;} ++ llm {service = name;} ++ errors {service = name; containers = [name];};`
+
 ### Metrics and dashboards: `lib.neo.grafana`
 
 An app declares what it exports, how to show it and when to alert in `neo.monitoring.apps.<service>` (`nix/modules/core/monitoring.nix`); only entries whose service is enabled on the machine count (`enabled` defaults to `neo.services.<service>.enabled`). The monitoring agent on that machine scrapes the endpoints and sends the dashboards to the Monitoring server, which shows them read-only in the **Apps** folder: the server needs neither the app nor the plugin. Example: `nix/services/immich/monitoring.nix`.
