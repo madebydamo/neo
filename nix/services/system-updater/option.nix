@@ -79,8 +79,8 @@
                 };
               };
             }
-            // lib.neo.mkSystemdUnits ["neo-auto-update"]
-            // lib.neo.mkSystemdTimers ["neo-auto-update"]
+            // lib.neo.mkSystemdUnits ["neo-auto-update" "neo-auto-update-verify"]
+            // lib.neo.mkSystemdTimers ["neo-auto-update" "neo-auto-update-verify"]
             // lib.neo.mkAppdata (lib.neo.mkUpdaterPaths config.neo.core.volumes.appdata).systemHistoryDir
             // lib.neo.mkServiceMeta {
               category = "Core";

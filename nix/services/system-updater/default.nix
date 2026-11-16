@@ -14,6 +14,12 @@
     activationMode = cfg.activationMode;
     rebootAfterBoot = cfg.rebootAfterBoot;
     rebootWhenRequired = cfg.rebootWhenRequired;
+    # Check after a restart an update needed (restart-check.sh).
+    restartCheck = pkgs.writeShellScriptBin "neo-restart-check" ''
+      PATH=${lib.makeBinPath [pkgs.coreutils pkgs.gawk pkgs.jq pkgs.systemd]}:$PATH
+      export NEO_UPDATER_DIR=''${NEO_UPDATER_DIR:-${systemHistoryDir}}
+      exec ${pkgs.bash}/bin/bash ${./restart-check.sh} "$@"
+    '';
     path = [
       neo
       pkgs.git
@@ -223,9 +229,44 @@
             set -e
             finalize ok
             maybe_schedule_reboot
+            # Check the server once it runs again after the restart this run
+            # needs, whenever that happens (neo-auto-update-verify). With a
+            # scheduled restart, Hermes supervises the run then instead of now.
+            if [ "$failed" != true ] && [ "$reboot_pending" = true ]; then
+              ${restartCheck}/bin/neo-restart-check record "$run_id" "$restart_reasons" "$activation_mode" "$reboot_scheduled" \
+                || echo "WARNING: could not record the check after the restart" >&2
+            elif [ "$failed" != true ]; then
+              ${restartCheck}/bin/neo-restart-check forget || true
+            fi
             exit "$rc"
           '';
       };
+
+      # A few minutes after every boot: when the last update needed this
+      # restart, record whether the server came back on the new system
+      # (restart_check in the run's history; Hermes reads it).
+      systemd.services.neo-auto-update-verify = {
+        description = "Check the server after a restart an update needed";
+        restartIfChanged = false;
+        serviceConfig = {
+          Type = "oneshot";
+          User = "homeserver";
+          Group = "homeserver";
+          TimeoutStartSec = "20min";
+          ExecStart = "${restartCheck}/bin/neo-restart-check verify";
+        };
+      };
+
+      systemd.timers.neo-auto-update-verify = {
+        wantedBy = ["timers.target"];
+        timerConfig = {
+          OnBootSec = "2min";
+          AccuracySec = "30s";
+          Unit = "neo-auto-update-verify.service";
+        };
+      };
+
+      environment.systemPackages = [restartCheck];
 
       systemd.timers.neo-auto-update = {
         wantedBy = ["timers.target"];
