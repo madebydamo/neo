@@ -1,7 +1,7 @@
 # App metrics and dashboards: neo.monitoring.apps.<service>.
 #
-# Any service or plugin declares the Prometheus endpoints it exports and the
-# Grafana dashboards that show them, next to its own code:
+# Any service or plugin declares the Prometheus endpoints it exports, the
+# Grafana dashboards that show them and alert rules, next to its own code:
 #
 #   neo.monitoring.apps.immich = {
 #     metrics.api = { container = "immich-server"; port = 8081; };
@@ -13,8 +13,8 @@
 #
 # Only entries whose service is enabled on this machine count. The monitoring
 # agent here scrapes the endpoints (labels service, scrape, host) and sends
-# the dashboards to the Monitoring server, which shows them read-only in the
-# "Apps" folder. So a dashboard reaches the server even when only another
+# the dashboards and alert rules to the Monitoring server, which shows them
+# read-only in the "Apps" folder. So a dashboard reaches the server even when only another
 # machine has the service or plugin; it updates whenever that machine's
 # configuration changes. Design: docs/design/monitoring.md.
 {...}: {
@@ -175,6 +175,60 @@
         };
       };
 
+      alertType = types.submodule {
+        options = {
+          title = mkOption {
+            type = types.str;
+            description = "Alert name, shown in Grafana and in the assistant's message (e.g. \"GPS feed stale\").";
+          };
+          expr = mkOption {
+            type = types.str;
+            example = ''max by (host) (time() - myapp_last_poll_timestamp_seconds{service="myapp"})'';
+            description = "Query evaluated every minute (PromQL, or a LogQL metric query with datasource = \"loki\"). Each series it returns is one alert; keep `host` and the labels the summary names. Filter with lib.neo.grafana.alertSelector \"<service>\".";
+          };
+          datasource = mkOption {
+            type = types.enum ["prometheus" "loki"];
+            default = "prometheus";
+            description = "prometheus for metrics, loki for a metric query over logs (count_over_time, rate, …).";
+          };
+          above = mkOption {
+            type = types.nullOr types.number;
+            default = null;
+            description = "Fire when the value is above this. Default (neither above nor below): above 0.";
+          };
+          below = mkOption {
+            type = types.nullOr types.number;
+            default = null;
+            description = "Fire when the value is below this instead.";
+          };
+          for = mkOption {
+            type = types.str;
+            default = "5m";
+            description = "How long the condition must hold before the alert fires (\"0s\" at once).";
+          };
+          severity = mkOption {
+            type = types.enum ["info" "warning" "critical"];
+            default = "warning";
+            description = "Label severity: critical for outages, warning for degradation, info for notices.";
+          };
+          summary = mkOption {
+            type = types.str;
+            example = "No GPS position from {{ $labels.host }} for {{ printf \"%.0f\" $values.B.Value }} seconds.";
+            description = "Message for the owner, plain words: what is wrong and where. Go template: {{ $labels.<name> }}, {{ $values.B.Value }}.";
+          };
+          noData = mkOption {
+            type = types.enum ["ok" "alerting" "nodata"];
+            default = "ok";
+            description = "State when the query returns nothing: ok (default), alerting (silence is the problem, e.g. a feed that stopped) or nodata.";
+          };
+          labels = mkOption {
+            type = types.attrsOf types.str;
+            default = {};
+            description = "Extra labels on the alert (service and severity are set).";
+          };
+        };
+      };
+
       appType = types.submodule ({name, ...}: {
         options = {
           enabled = mkOption {
@@ -206,10 +260,18 @@
             default = {};
             description = "Grafana dashboards for the app, by id.";
           };
+          alerts = mkOption {
+            type = types.attrsOf alertType;
+            default = {};
+            description = "Grafana alert rules for the app, by id. They land read-only in the Apps folder, rule group <service>, and go to the assistant like Neo's own alerts.";
+          };
         };
       });
 
       active = filterAttrs (_: a: a.enabled) config.neo.monitoring.apps;
+
+      # Grafana folder of app dashboards and alert rules ("Apps").
+      appsFolder = "neo-apps";
 
       # Grafana uids are at most 40 characters.
       uidFor = service: id: let
@@ -302,16 +364,51 @@
           active));
           description = "Rendered Grafana dashboard models of enabled apps, by uid";
         };
+
+        # One Grafana rule group per app (folder Apps, uid neo-apps). The agent
+        # sends them with the dashboards; the server's grafana-app-alerts unit
+        # puts them into Grafana (monitoring/default.nix).
+        alertGroups = mkOption {
+          type = types.attrsOf types.attrs;
+          internal = true;
+          readOnly = true;
+          default = mapAttrs (service: app: {
+            title = service;
+            folderUid = appsFolder;
+            interval = 60;
+            rules = mapAttrsToList (id: a:
+              lib.neo.grafana.alertRule {
+                uid = uidFor service id;
+                inherit (a) title expr datasource above below for severity summary noData;
+                labels = a.labels // {inherit service;};
+              }
+              // {
+                folderUID = appsFolder;
+                ruleGroup = service;
+                orgID = 1;
+              })
+            app.alerts;
+          }) (filterAttrs (_: app: app.alerts != {}) active);
+          description = "Rendered Grafana alert rule groups of enabled apps, by service";
+        };
       };
 
       config.neo.core.secrets.generated.metrics = {};
 
-      config.assertions = concatLists (mapAttrsToList (service: app:
-        mapAttrsToList (scrape: m: {
-          assertion = (m.container != null) != (m.address != null) && (m.container == null || m.port != null);
-          message = "neo.monitoring.apps.${service}.metrics.${scrape}: set either container and port, or address.";
-        })
-        app.metrics)
-      active);
+      config.assertions =
+        concatLists (mapAttrsToList (service: app:
+          mapAttrsToList (scrape: m: {
+            assertion = (m.container != null) != (m.address != null) && (m.container == null || m.port != null);
+            message = "neo.monitoring.apps.${service}.metrics.${scrape}: set either container and port, or address.";
+          })
+          app.metrics)
+        active)
+        ++ concatLists (mapAttrsToList (service: app:
+          mapAttrsToList (id: a: {
+            assertion = a.above == null || a.below == null;
+            message = "neo.monitoring.apps.${service}.alerts.${id}: set above or below, not both.";
+          })
+          app.alerts)
+        active);
     };
 }

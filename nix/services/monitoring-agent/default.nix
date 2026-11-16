@@ -137,6 +137,9 @@
             cp ${pkgs.writeText "${uid}.json" (builtins.toJSON d)} $out/${uid}.json
           '')
           config.neo.monitoring.dashboards));
+      # App alert rules (neo.monitoring.alertGroups): one file per source,
+      # always sent (an empty one removes this source's rules on the server).
+      alertsFile = pkgs.writeText "neo-app-alerts.json" (builtins.toJSON config.neo.monitoring.alertGroups);
       tokenFile = config.neo.core.secrets.templates."monitoring-agent-token".path;
       publishOnce =
         if remote
@@ -154,6 +157,14 @@
             curl -sS -o /dev/null -X DELETE -H "Authorization: Bearer $token" ${base}/ingest/dashboards/${source}/"$old" || true
           done < "$state"
           ls ${dashboardDir} > "$state"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X PUT --data-binary @${alertsFile} -H "Authorization: Bearer $token" \
+            ${base}/ingest/alerts/${source}.json)
+          case "$code" in
+            2*) ;;
+            # A Monitoring server from before app alerts: dashboards still work.
+            404) echo "the Monitoring server does not take app alerts yet (update it)" >&2 ;;
+            *) echo "sending alert rules failed: HTTP $code" >&2; exit 1 ;;
+          esac
         ''
         else ''
           dest=${server.appdata}/apps/${source}
@@ -165,6 +176,9 @@
             [ -e "$f" ] || continue
             cmp -s "$f" "$dest/$(basename "$f")" || install -m 0644 -o ${toString config.neo.core.uid} -g ${toString config.neo.core.gid} "$f" "$dest/"
           done
+          alerts=${server.appdata}/alerts
+          install -d -o ${toString config.neo.core.uid} -g ${toString config.neo.core.gid} "$alerts"
+          cmp -s ${alertsFile} "$alerts/${source}.json" || install -m 0644 -o ${toString config.neo.core.uid} -g ${toString config.neo.core.gid} ${alertsFile} "$alerts/${source}.json"
         '';
 
       accessLogConf = ''
@@ -235,10 +249,10 @@
             mode = "0400";
           };
 
-          # Long-running: publishes now (a new dashboard set restarts it) and
+          # Long-running: publishes now (new dashboards or alerts restart it) and
           # every hour, so the server heals after a reset or a missed upload.
           systemd.services.monitoring-agent-publish = {
-            description = "Send this server's app dashboards to Monitoring";
+            description = "Send this server's app dashboards and alert rules to Monitoring";
             wantedBy = ["multi-user.target"];
             after = ["network-online.target"] ++ optional (!remote) "docker-grafana.service";
             wants = ["network-online.target"];
@@ -256,7 +270,7 @@
             in ''
               while true; do
                 if ${once}; then
-                  echo "published $(ls ${dashboardDir} | wc -l) dashboard(s) as ${source}"
+                  echo "published $(ls ${dashboardDir} | wc -l) dashboard(s) and ${toString (length (attrNames config.neo.monitoring.alertGroups))} alert group(s) as ${source}"
                   sleep 3600
                 else
                   echo "publishing failed, retrying in 5 minutes" >&2

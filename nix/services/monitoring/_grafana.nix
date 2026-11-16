@@ -570,82 +570,18 @@
   # Alert rules: query A (Prometheus, instant) → B (last value; summaries read
   # $values.B, raw queries are not in $values) → C (threshold on B). Each
   # query returns one series per thing that is wrong.
+  # The rule body is lib.neo.grafana.alertRule (also used by app alerts).
   rule = {
     folder ? "neo",
     group ? "neo",
-    uid,
-    title,
-    expr,
-    above ? 0,
-    for ? "5m",
-    summary,
-    severity ? "warning",
-  }: {
-    inherit uid title for;
-    condition = "C";
-    data = [
-      {
-        refId = "A";
-        relativeTimeRange = {
-          from = 600;
-          to = 0;
-        };
-        datasourceUid = "prometheus";
-        model = {
-          refId = "A";
-          inherit expr;
-          instant = true;
-          range = false;
-          intervalMs = 30000;
-          maxDataPoints = 43200;
-        };
-      }
-      {
-        refId = "B";
-        relativeTimeRange = {
-          from = 0;
-          to = 0;
-        };
-        datasourceUid = "__expr__";
-        model = {
-          refId = "B";
-          type = "reduce";
-          expression = "A";
-          reducer = "last";
-          settings.mode = "dropNN";
-        };
-      }
-      {
-        refId = "C";
-        relativeTimeRange = {
-          from = 0;
-          to = 0;
-        };
-        datasourceUid = "__expr__";
-        model = {
-          refId = "C";
-          type = "threshold";
-          expression = "B";
-          conditions = [
-            {
-              evaluator = {
-                type = "gt";
-                params = [above];
-              };
-            }
-          ];
-        };
-      }
-    ];
-    folderUID = folder;
-    ruleGroup = group;
-    orgID = 1;
-    noDataState = "OK";
-    execErrState = "Error";
-    labels.severity = severity;
-    annotations.summary = summary;
-    isPaused = false;
-  };
+    ...
+  } @ args:
+    lib.neo.grafana.alertRule (removeAttrs args ["folder" "group"])
+    // {
+      folderUID = folder;
+      ruleGroup = group;
+      orgID = 1;
+    };
 
   alertRules =
     [

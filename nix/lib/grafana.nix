@@ -435,6 +435,118 @@
     # A label selector for app dashboards: the service's series on the chosen servers.
     appSelector = service: ''service="${service}", host=~"$host"'';
 
+    # A selector for app alert rules: no $host variable there (rules see every
+    # server), so only the service.
+    alertSelector = service: ''service="${service}"'';
+
+    # One Grafana alert rule (provisioning format, without folder and group).
+    # Query A (instant; Prometheus or a Loki metric query) → B (last value;
+    # summaries read $values.B) → C (B above `above`, or below `below`). Each
+    # series A returns is one alert instance, so return one series per thing
+    # that is wrong and keep its labels (host, …) for the summary.
+    alertRule = {
+      uid,
+      title,
+      expr,
+      summary,
+      datasource ? "prometheus",
+      above ? null,
+      below ? null,
+      for ? "5m",
+      severity ? "warning",
+      noData ? "ok",
+      labels ? {},
+      range ? 600,
+    }: let
+      lt = below != null;
+      threshold =
+        if lt
+        then below
+        else if above == null
+        then 0
+        else above;
+    in {
+      inherit uid title for;
+      condition = "C";
+      data = [
+        {
+          refId = "A";
+          relativeTimeRange = {
+            from = range;
+            to = 0;
+          };
+          datasourceUid = datasource;
+          model =
+            {
+              refId = "A";
+              inherit expr;
+              intervalMs = 30000;
+              maxDataPoints = 43200;
+            }
+            // (
+              if datasource == "loki"
+              then {queryType = "instant";}
+              else {
+                instant = true;
+                range = false;
+              }
+            );
+        }
+        {
+          refId = "B";
+          relativeTimeRange = {
+            from = 0;
+            to = 0;
+          };
+          datasourceUid = "__expr__";
+          model = {
+            refId = "B";
+            type = "reduce";
+            expression = "A";
+            reducer = "last";
+            settings.mode = "dropNN";
+          };
+        }
+        {
+          refId = "C";
+          relativeTimeRange = {
+            from = 0;
+            to = 0;
+          };
+          datasourceUid = "__expr__";
+          model = {
+            refId = "C";
+            type = "threshold";
+            expression = "B";
+            conditions = [
+              {
+                evaluator = {
+                  type =
+                    if lt
+                    then "lt"
+                    else "gt";
+                  params = [threshold];
+                };
+              }
+            ];
+          };
+        }
+      ];
+      noDataState =
+        {
+          ok = "OK";
+          alerting = "Alerting";
+          nodata = "NoData";
+        }
+        .${
+          noData
+        };
+      execErrState = "Error";
+      labels = {inherit severity;} // labels;
+      annotations.summary = summary;
+      isPaused = false;
+    };
+
     dashboard = {
       uid,
       title,

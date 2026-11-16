@@ -23,7 +23,7 @@ This repo is a **Neo plugin**: a Nix flake that adds services to a Neo homeserve
 | `modules/services/<svc>/default.nix` | What runs (containers, units), inside `lib.mkIf cfg.enabled` |
 | `modules/services/<svc>/swag.nix` | HTTPS vhost via `lib.neo.mkSubdomainProxyConf` |
 | `modules/services/<svc>/skills.nix` | Skill for Neo's assistant via `lib.neo.mkServiceSkill` |
-| `modules/services/<svc>/monitoring.nix` | Metrics endpoints and a Grafana dashboard (`neo.monitoring.apps`, `lib.neo.grafana`) |
+| `modules/services/<svc>/monitoring.nix` | Metrics endpoints, a Grafana dashboard and alert rules (`neo.monitoring.apps`, `lib.neo.grafana`) |
 
 ## Rules
 
@@ -33,7 +33,7 @@ This repo is a **Neo plugin**: a Nix flake that adds services to a Neo homeserve
 - Secrets: `lib.neo.mkSecretOption`, passed only through `neo.core.secrets.containerEnv` / `.templates`. Never in `environment` or scripts.
 - Containers on `networks = [(lib.neo.docker.serviceNetwork name)]` (each service its own network; another service only through its public URL or `lib.neo.docker.mkLink`), no published web ports. Health/API paths called without a login go in `auth.publicPaths`.
 - Every unit in `mkContainerDefinitions { extraUnits; }` or `mkSystemdUnits`; post-start config with `lib.neo.mkSetupService`.
-- Metrics and dashboards go in `neo.monitoring.apps.${name}`; queries filter with `lib.neo.grafana.appSelector name`; exporters only on with `config.neo.monitoring.collecting`.
+- Metrics, dashboards and alerts go in `neo.monitoring.apps.${name}`; dashboard queries filter with `lib.neo.grafana.appSelector name`, alert rules with `alertSelector name`; exporters only on with `config.neo.monitoring.collecting`.
 - Texts are for non-technical operators: `tagline`/`description` say what they get, technical facts go in `notes` or Nix comments.
 - Options are API: operators have them in `settings.toml`. Add, do not rename.
 

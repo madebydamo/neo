@@ -65,6 +65,8 @@ Two kinds, never mixed:
 
 Datasources and the `Assistant` contact point are provided too. The notification policy and the home dashboard belong to the users: `grafana-seed` only sets them (policy → Assistant, home → Overview) while they still are Grafana's defaults.
 
+App alert rules (`neo.monitoring.apps.*.alerts`) are provided too, in folder **Apps**, but through Grafana's provisioning API instead of files (see below), with provenance `api`: equally read-only.
+
 Alert rules (folder Neo): app does not answer (5 min), server stopped reporting, disk over 90 %, systemd unit failed, many failed sign-ins (10 in 15 min), more than 20 % server errors, certificate expires in less than 10 days. ISO 27001: clock not synchronised, backup overdue (26 h), logs dropped, no logs from a server.
 
 ## App metrics and dashboards
@@ -75,6 +77,9 @@ Alert rules (folder Neo): app does not answer (5 min), server stopped reporting,
 - Credentials: `auth = "bearer" | "basic"` with `token` (default `scrapeToken`). Each app's `scrapeToken` is `sha256("neo-metrics:<service>:" + key)`, where the key is `neo.core.secrets.generated.metrics`: generated once per machine (`/var/lib/neo/secrets-generated/metrics`, copied into `raw/generated/` at every activation, so it is `@NEO_SECRET:generated/metrics@` with both backends). One token per app, so a token leaked from one container opens no other app's metrics. The scraper always runs on the app's machine, so the key never has to leave it. The token reaches Alloy as `NEO_SCRAPE_<SERVICE>_<SCRAPE>` in its rendered env file (`sys.env` in the config); an assertion keeps it out of `config.alloy`.
 - `hidePaths`: metrics on the public port (Gitea `/metrics`, …) get `location = <path> { return 404; }` in every server block of the app's SWAG conf, whether or not an agent runs.
 - `dashboards.<id>`: panels from `lib.neo.grafana` (or a JSON model). Neo sets uid `app-<service>-<id>`, tags and a `host` variable (`label_values({service="<service>"}, host)`).
+- `alerts.<id>`: alert rules (`title`, `expr` PromQL or LogQL, `above`/`below`, `for`, `severity`, `summary`, `noData`), rendered with `lib.neo.grafana.alertRule` into one rule group per app (`neo.monitoring.alertGroups`), uid `app-<service>-<id>`, labels `service` and `severity`. They reach the same notification policy as Neo's rules, so with `assistantAlerts` the assistant gets them.
+
+**App alert rules.** `monitoring-agent-publish` sends one JSON file per machine with all its apps' rule groups: copied to `appdata/monitoring/alerts/<source>.json` on the server, else PUT to `/ingest/alerts/<source>.json` (always, an empty `{}` clears that machine's rules; an older server answers 404 and only alerts are skipped). Grafana reads alert rule files only when it starts and keeps rules a file no longer has, so the server's `grafana-app-alerts` unit (long-running; runs on every change of `alerts/` via inotify and hourly) puts them in through the provisioning API: creates folder Apps (`neo-apps`) if needed, deletes rules with provenance `api` and an `app-` uid that no file has any more, and PUTs each app's rule group when it changed (hash in `/run`) or is missing. Rules people create in the Apps folder are left alone. When two machines send the same app, the newer file wins; app rules query every server anyway.
 
 **Definition and data may live on different machines.** The dashboard travels with the metrics: `monitoring-agent-publish` on the machine that runs the app sends its rendered dashboards to the server. On the server itself it copies them into `appdata/monitoring/apps/<source>/`; elsewhere it PUTs `https://<grafana>/ingest/dashboards/<source>/<uid>.json` with the ingest token, which SWAG stores there with WebDAV (`dav_methods PUT DELETE`, regex-restricted names, no reads). Dashboards that machine published before and no longer has are deleted. It runs on every change of the set and hourly, so a reset server fills up again. So the server needs neither the app nor the plugin. When several machines run the same app they send the same uid; Grafana shows one, and its `host` variable switches between them.
 
@@ -97,4 +102,4 @@ The Hermes listener binds all interfaces on port 8644, which is not opened in th
 
 ## Storage
 
-Everything lives under `appdata/monitoring/{grafana,prometheus,loki,apps}` and `appdata/monitoring-agent` (Alloy's WAL and positions), so snapshots, backup and Clear appdata cover it. Retention: `logRetentionDays` (Loki compactor) and `metricRetentionDays` (Prometheus TSDB).
+Everything lives under `appdata/monitoring/{grafana,prometheus,loki,apps,alerts}` and `appdata/monitoring-agent` (Alloy's WAL and positions), so snapshots, backup and Clear appdata cover it. Retention: `logRetentionDays` (Loki compactor) and `metricRetentionDays` (Prometheus TSDB).

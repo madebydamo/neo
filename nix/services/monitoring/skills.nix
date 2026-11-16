@@ -31,7 +31,9 @@
         - Two kinds of dashboards and alert rules:
           - Provided (read-only, Grafana refuses to save them; Neo replaces them on updates): folders Neo and ISO 27001
             from this server's configuration, and folder Apps with dashboards the monitoring agents send for the apps on
-            their machine (`neo.monitoring.apps.<service>.dashboards`). Neo's alert rules are provided too.
+            their machine (`neo.monitoring.apps.<service>.dashboards`). Neo's alert rules are provided too, and folder Apps
+            holds the apps' alert rules (`neo.monitoring.apps.<service>.alerts`, one rule group per app, label `service`;
+            put in by the unit `grafana-app-alerts`, which logs what it changed).
           - User: everything people or you create. Neo never touches these.
           To change a provided dashboard, save a copy under a new uid ("Save as", or the API below) and change that.
           Datasources (uids `prometheus`, `loki`) and the contact point `Assistant` are provided as well.

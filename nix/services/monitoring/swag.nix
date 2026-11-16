@@ -6,6 +6,7 @@
 #   /ingest/loki/api/v1/push        → loki:3100/loki/api/v1/push
 #   /ingest/prometheus/api/v1/write → prometheus:9090/api/v1/write
 #   /ingest/dashboards/<source>/<uid>.json (PUT, DELETE) → apps/<source>/ (Grafana "Apps")
+#   /ingest/alerts/<source>.json (PUT, DELETE) → alerts/ (grafana-app-alerts puts them into Grafana)
 #
 # The check is an `if … return` in the rewrite phase of each exact location;
 # no tinyauth include there, so nothing else runs before it. The path rewrite
@@ -42,15 +43,17 @@
   in {
     config.neo.core.secrets.templates = lib.mkIf (cfg.enabled && tokenSet) check.templates;
 
-    # SWAG writes the uploaded app dashboards (as PUID, like appdata).
-    # SWAG writes the uploaded app dashboards (as PUID, like appdata). Guard on
-    # both: a definition under containers.swag would create the container even
-    # with SWAG off.
+    # SWAG writes the uploaded app dashboards and alert rules (as PUID, like
+    # appdata). Guard on both: a definition under containers.swag would create
+    # the container even with SWAG off.
     config.systemd.services = lib.mkIf (cfg.enabled && config.neo.services.swag.enabled) {
-      docker-swag.preStart = lib.mkAfter (lib.neo.mkEnsureDirs config [cfg.appdata "${cfg.appdata}/apps"]);
+      docker-swag.preStart = lib.mkAfter (lib.neo.mkEnsureDirs config [cfg.appdata "${cfg.appdata}/apps" "${cfg.appdata}/alerts"]);
     };
     config.virtualisation.oci-containers.containers = lib.mkIf (cfg.enabled && config.neo.services.swag.enabled) {
-      swag.volumes = ["${cfg.appdata}/apps:/neo-app-dashboards"];
+      swag.volumes = [
+        "${cfg.appdata}/apps:/neo-app-dashboards"
+        "${cfg.appdata}/alerts:/neo-app-alerts"
+      ];
     };
 
     config.neo.services.monitoring.proxyConf = lib.mkDefault (lib.neo.mkSwagServer {
@@ -70,6 +73,17 @@
           alias /neo-app-dashboards/$neo_src/$neo_dash;
           dav_methods PUT DELETE;
           create_full_put_path on;
+          dav_access user:rw group:r all:r;
+        }
+        # App alert rules from other machines' agents: one JSON file per source.
+        location ~ "^/ingest/alerts/(?<neo_alert_src>[a-z0-9][a-z0-9-]{0,62})\.json$" {
+          ${guard}
+          limit_except PUT DELETE {
+            deny all;
+          }
+          client_max_body_size 4m;
+          alias /neo-app-alerts/$neo_alert_src.json;
+          dav_methods PUT DELETE;
           dav_access user:rw group:r all:r;
         }
         location /ingest/ {
