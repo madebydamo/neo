@@ -444,13 +444,13 @@ in {
         errors = {
           title = "${label}: errors in the log";
           datasource = "loki";
-          expr = "sum(count_over_time(${errorLines {
+          expr = "sum by (host) (count_over_time(${errorLines {
             inherit containers units;
             filter = errorFilter;
           }} [15m]))";
           above = errorThreshold;
           for = "0s";
-          summary = "${label} logged {{ printf \"%.0f\" $values.B.Value }} errors in the last 15 minutes.";
+          summary = "${label} on {{ $labels.host }} logged {{ printf \"%.0f\" $values.B.Value }} errors in the last 15 minutes.";
         };
       }
       // lib.optionalAttrs llm {
