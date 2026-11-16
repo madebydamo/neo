@@ -127,6 +127,6 @@ in {
 
 Sections (`lib.neo.grafana.app.*`, each a list of panels starting with a row): `web`, `beacon`, `logins`, `features`, `llm`, `jobs`, `errors {containers; filter?}`. Only add the sections whose metrics the app exports; an empty panel is noise.
 
-`appAlerts` (`service`, `label`, `containers`, `errorFilter`, `errorThreshold` = 10 error lines in 15 min or null, `llm`, `logins`, `jobs`, `data`) returns an attrset for `alerts`. Severity `critical` for things that stop the app from working for users (AI provider failing, key rejected), `warning` otherwise. Every summary says what is wrong in plain words.
+`appAlerts` (`service`, `label`, `containers`, `units` (host units such as a timer's service; also for the `errors` section), `errorFilter`, `errorThreshold` = 10 error lines in 15 min or null, `llm`, `logins`, `jobs`, `data`) returns an attrset for `alerts`. Severity `critical` for things that stop the app from working for users (AI provider failing, key rejected), `warning` otherwise. Every summary says what is wrong in plain words.
 
 A Python app's image needs `prometheus_client` (Node: `prom-client`) in its dependencies; an image the plugin builds with Nix adds it there.

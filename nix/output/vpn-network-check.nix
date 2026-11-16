@@ -95,6 +95,7 @@
                     service = "oldplug";
                     label = "Old plugin";
                     containers = ["oldplug"];
+                    units = ["oldplug-sync"];
                     llm = true;
                     logins = true;
                     jobs.sync = 3600;
@@ -159,6 +160,7 @@
     ++ lib.optional ((group.folderUid or null) != "neo-apps" || lib.length (group.rules or []) != 7) "alert group oldplug should have 7 rules (1 own + 6 standard): ${builtins.toJSON group}"
     # Standard sections render to JSON (forces every panel and query string).
     ++ lib.optional (builtins.stringLength (builtins.toJSON on.neo.monitoring.apps.oldplug.dashboards) < 1000) "standard dashboard sections did not render"
+    ++ lib.optional (!(lib.hasInfix "docker-oldplug[.]service|oldplug-sync[.]service" (builtins.toJSON group))) "errors alert should cover containers and host units"
     ++ lib.optional (((lib.head (group.rules or [{}])).labels.service or null) != "oldplug") "alert rule lacks the service label";
 in {
   perSystem = {pkgs, ...}: {

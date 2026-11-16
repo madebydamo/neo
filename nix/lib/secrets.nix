@@ -137,7 +137,9 @@
             group = toString config.neo.core.gid;
             mode = "0440";
             copies = ["${config.neo.core.volumes.appdata}/swag/nginx/${file}"];
-            restartUnits = ["docker-swag.service"];
+            # Only with SWAG on: the plugin-instances check (SWAG off) would
+            # count docker-swag as a unit every copy shares.
+            restartUnits = lib.optional (config.neo.services.swag.enabled or false) "docker-swag.service";
           };
           include = "include /config/nginx/${file};";
         };

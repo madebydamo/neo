@@ -184,8 +184,8 @@ Dashboard sections and alert rules over the standard `neo_app_*` metrics and JSO
 | `grafana.app.features` | `service` | Feature use (`neo_app_feature_used_total`) |
 | `grafana.app.llm` | `service` | Uncached / cached / output tokens, cache hit rate, cost, failures, latency, tokens by feature |
 | `grafana.app.jobs` | `service` | Last success per job, runs by status |
-| `grafana.app.errors` | `service`, `containers`, `filter ? null` | Error log lines (JSON `level`, or `filter`), `neo_app_errors_total`, the lines |
-| `monitoring.appAlerts` | `service`, `label`, `containers ? []`, `errorFilter ? null`, `errorThreshold ? 10`, `llm ? false`, `logins ? false`, `jobs ? {}`, `data ? {}` | Attrset for `neo.monitoring.apps.<svc>.alerts`: `errors`, `llm-failing`, `llm-auth`, `login-failures`, `job-<name>`, `data-<source>` |
+| `grafana.app.errors` | `service`, `containers`, `units ? []` (host units, e.g. a timer's service), `filter ? null`, `metrics ? true` | Error log lines (JSON `level`, or `filter`), `neo_app_errors_total`, the lines |
+| `monitoring.appAlerts` | `service`, `label`, `containers ? []`, `units ? []`, `errorFilter ? null`, `errorThreshold ? 10`, `llm ? false`, `logins ? false`, `jobs ? {}`, `data ? {}` | Attrset for `neo.monitoring.apps.<svc>.alerts`: `errors`, `llm-failing`, `llm-auth`, `login-failures`, `job-<name>`, `data-<source>` |
 
 Each section is a list of panels starting with a row: `panels = with lib.neo.grafana.app; features {service = name;} ++ llm {service = name;} ++ errors {service = name; containers = [name];};`
 

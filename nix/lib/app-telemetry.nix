@@ -25,13 +25,23 @@
   g = (import ./grafana.nix {inherit lib;}).libExtensions.grafana.neo.grafana;
   inherit (g) pq lq lqLegend row stat timeseries bars bargauge logs table appSelector alertSelector loki thresholdsGreenRed;
 
-  unitRe = containers: "docker-(${lib.concatStringsSep "|" containers}).service";
-  # Log lines of the app's containers whose JSON `level` is error or worse.
+  # Journal units of the app: its containers plus host units (timers' services, …).
+  unitRe = containers: units:
+    lib.concatStringsSep "|" (map (c: "docker-${c}[.]service") containers
+      ++ map (u:
+        builtins.replaceStrings ["."] ["[.]"] (
+          if lib.hasInfix "." u
+          then u
+          else "${u}.service"
+        ))
+      units);
+  # Log lines of the app's containers and units whose JSON `level` is error or worse.
   errorLines = {
     containers,
+    units ? [],
     filter ? null,
   }:
-    ''{job="journal", unit=~"${unitRe containers}"} ''
+    ''{job="journal", unit=~"${unitRe containers units}"} ''
     + (
       if filter != null
       then filter
@@ -368,6 +378,8 @@ in {
       errors = {
         service,
         containers,
+        # Host units of the app (a timer's service, …), names with or without .service.
+        units ? [],
         title ? "Errors",
         # LogQL pipeline that keeps error lines, for apps that do not log JSON
         # with `level` (third-party images), e.g. ''|~ "(?i)\\b(error|exception)\\b"''.
@@ -376,7 +388,7 @@ in {
         metrics ? true,
       }: let
         sel = appSelector service;
-        lines = errorLines {inherit containers filter;};
+        lines = errorLines {inherit containers units filter;};
       in
         [
           (row title null)
@@ -415,6 +427,7 @@ in {
       # Shown in titles: "<label>: AI provider failing".
       label,
       containers ? [],
+      units ? [],
       errorFilter ? null,
       # Error log lines in 15 minutes before `errors` fires; null = no rule.
       errorThreshold ? 10,
@@ -427,12 +440,12 @@ in {
     }: let
       s = alertSelector service;
     in
-      lib.optionalAttrs (errorThreshold != null && containers != []) {
+      lib.optionalAttrs (errorThreshold != null && (containers != [] || units != [])) {
         errors = {
           title = "${label}: errors in the log";
           datasource = "loki";
           expr = "sum(count_over_time(${errorLines {
-            inherit containers;
+            inherit containers units;
             filter = errorFilter;
           }} [15m]))";
           above = errorThreshold;
