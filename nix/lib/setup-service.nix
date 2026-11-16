@@ -73,8 +73,20 @@ in {
         dockerUnits = cs: map (c: "docker-${c}.service") cs;
         looped = retryInterval != null;
         interval = toString retryInterval;
+        # The container unit counts as started before `docker run` created the
+        # container: a setup that restarts it then (config changed) races the
+        # first run and leaves a stray container. Wait until each one runs.
+        waitRunning =
+          lib.concatMapStrings (c: ''
+            if [ "$(${pkgs.docker}/bin/docker inspect -f '{{.State.Running}}' ${lib.escapeShellArg c} 2>/dev/null)" != true ]; then
+              echo "${name}: container ${c} is not running yet" >&2
+              exit 1
+            fi
+          '')
+          containers;
         attempt = pkgs.writeShellScript "${name}-attempt" ''
           set -e
+          ${waitRunning}
           ${script}
         '';
         giveUp = lib.optionalString (maxAttempts != null) ''
@@ -105,7 +117,7 @@ in {
         script =
           if looped
           then runner
-          else script;
+          else waitRunning + script;
         unitConfig = {${marker} = "yes";} // unitConfig;
         serviceConfig =
           {
