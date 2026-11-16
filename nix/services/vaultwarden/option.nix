@@ -27,6 +27,25 @@
                 ui = lib.neo.ui.mkUi {label = "Admin page password";};
                 helper = lib.neo.helpers.randomToken;
               };
+              # OIDC login through tinyauth's OIDC server (tinyauth.oidcClients.vaultwarden).
+              sso = mkOption {
+                type = types.bool;
+                default = false;
+                description = "Sign in to Vaultwarden with the shared login page (tinyauth), using the same account as your other apps. You still unlock your vault with your master password.";
+                rank = 20;
+                ui = lib.neo.ui.mkUi {label = "Sign in with the login page";};
+              };
+              # SSO_ONLY: hides email + master password login.
+              ssoOnly = mkOption {
+                type = types.bool;
+                default = false;
+                description = "Allow signing in only through the login page, not with email and master password. Existing accounts are linked by their email address on their first sign-in.";
+                rank = 21;
+                ui = lib.neo.ui.mkUi {
+                  label = "Login page only";
+                  visibleWhen = "sso";
+                };
+              };
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "vaultwarden";
@@ -55,6 +74,7 @@
               '';
               notes = ''
                 Bitwarden-compatible server written in Rust. Supports organizations, collections, policies, two-factor login (including hardware keys and WebAuthn), emergency access, Send and an admin page.
+                Sign in with the login page: the Bitwarden apps and the web vault show "Use single sign-on" after you enter your email. Everyone still sets a master password on the first sign-in, because only it unlocks the vault.
               '';
               replaces = ["1Password" "LastPass" "iCloud Keychain"];
               privacy = ["passwords"];

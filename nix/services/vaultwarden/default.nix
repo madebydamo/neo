@@ -12,16 +12,40 @@
         if (cfg.customDomains or []) != []
         then "https://${builtins.head cfg.customDomains}"
         else lib.neo.publicUrl config cfg;
+
+      tinyauth = config.neo.services.tinyauth;
+      sso = cfg.sso;
+      client = tinyauth.oidcClients.vaultwarden;
     in {
       config = mkIf cfg.enabled {
+        assertions = [
+          {
+            assertion = !sso || tinyauth.enabled;
+            message = "neo.services.vaultwarden.sso: signing in with the login page needs tinyauth (services.tinyauth.enabled).";
+          }
+          {
+            assertion = !sso || publicUrl != null;
+            message = "neo.services.vaultwarden.sso: needs a public address (services.swag.domain).";
+          }
+        ];
+
+        # tinyauth's OIDC server knows Vaultwarden as client "vaultwarden".
+        neo.services.tinyauth.oidcClients = mkIf sso {
+          vaultwarden = {
+            name = "Vaultwarden";
+            redirectUris = ["${publicUrl}/identity/connect/oidc-signin"];
+          };
+        };
+
         systemd.services.docker-vaultwarden.preStart = lib.neo.mkEnsureDirs config [
           cfg.appdata
         ];
 
         # The admin token reaches the container through an env file rendered at activation.
-        neo.core.secrets.containerEnv.vaultwarden = mkIf (cfg.adminToken != null) {
-          ADMIN_TOKEN = cfg.adminToken;
-        };
+        neo.core.secrets.containerEnv.vaultwarden = mkMerge [
+          (mkIf (cfg.adminToken != null) {ADMIN_TOKEN = cfg.adminToken;})
+          (mkIf sso {SSO_CLIENT_SECRET = client.clientSecret;})
+        ];
 
         virtualisation.oci-containers.containers.vaultwarden = {
           image = cfg.containers.vaultwarden;
@@ -32,6 +56,13 @@
             }
             // optionalAttrs (publicUrl != null) {
               DOMAIN = publicUrl;
+            }
+            // optionalAttrs sso {
+              SSO_ENABLED = "true";
+              SSO_ONLY = boolToString cfg.ssoOnly;
+              SSO_AUTHORITY = tinyauth.oidcIssuer;
+              SSO_CLIENT_ID = client.clientId;
+              # Default scopes (email profile); tinyauth issues refresh tokens without offline_access.
             };
           volumes = [
             "${cfg.appdata}:/data"

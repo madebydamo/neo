@@ -185,6 +185,23 @@
 
       unknownServiceRefs =
         filter (n: !(elem n knownServiceNames)) referencedServiceNames;
+
+      # OIDC server: clients other services registered (oidcClients). The env
+      # segment drops hyphens like appAclEnvVars (`_` nests config keys).
+      oidcClients = cfg.oidcClients;
+      oidcEnabled = oidcClients != {};
+      oidcPrefix = id: "TINYAUTH_OIDC_CLIENTS_${toUpper (replaceStrings ["-"] [""] id)}";
+      oidcEnv = foldlAttrs (acc: id: c:
+        acc
+        // {
+          "${oidcPrefix id}_CLIENTID" = c.clientId;
+          "${oidcPrefix id}_NAME" = c.name;
+          "${oidcPrefix id}_TRUSTEDREDIRECTURIS" = concatStringsSep "," c.redirectUris;
+        }) {}
+      oidcClients;
+      oidcSecretEnv =
+        mapAttrs' (id: c: nameValuePair "${oidcPrefix id}_CLIENTSECRET" c.clientSecret) oidcClients;
+      badOidcIds = filter (id: builtins.match "[a-z0-9-]+" id == null) (attrNames oidcClients);
     in {
       config = mkIf cfg.enabled {
         assertions = [
@@ -222,6 +239,14 @@
             '';
           }
           {
+            assertion = badOidcIds == [];
+            message = "neo.services.tinyauth.oidcClients: client IDs must be lowercase letters, digits and hyphens: ${concatStringsSep ", " badOidcIds}";
+          }
+          {
+            assertion = !oidcEnabled || cfg.oidcIssuer != null;
+            message = "neo.services.tinyauth: signing in to other apps through tinyauth (${concatStringsSep ", " (attrNames oidcClients)}) needs services.swag.domain.";
+          }
+          {
             assertion = unknownServiceRefs == [];
             message = ''
               neo.services.tinyauth.access: unknown service name(s) in allow/block: ${concatStringsSep ", " unknownServiceRefs}.
@@ -234,7 +259,9 @@
           cfg.appdata
         ];
 
-        neo.core.secrets.containerEnv.tinyauth = mkIf (oauthSecretEnv != {}) oauthSecretEnv;
+        neo.core.secrets.containerEnv.tinyauth = mkIf (oauthSecretEnv != {} || oidcEnabled) (oauthSecretEnv // oidcSecretEnv);
+        # Key the OIDC client secrets are derived from (option.nix, oidcClients).
+        neo.core.secrets.generated.tinyauth-oidc = mkIf oidcEnabled {};
 
         virtualisation.oci-containers.containers.tinyauth = {
           image = cfg.containers.tinyauth;
@@ -252,6 +279,7 @@
               TINYAUTH_UI_BACKGROUNDIMAGE = "https://lipsum.app/random/1920x1080";
             }
             // oauthEnv
+            // oidcEnv
             // appAclEnvVars;
           volumes = [
             "${cfg.appdata}:/data"

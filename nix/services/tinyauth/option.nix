@@ -322,6 +322,50 @@
                 internal = true;
                 description = "Port on which tinyauth listens";
               };
+              # Apps that sign in through tinyauth's OIDC server (e.g. Vaultwarden SSO).
+              # A service registers itself here inside its own mkIf; the client ID is
+              # the attribute name and the secret is derived from a key generated on
+              # this machine, so nobody has to set one.
+              oidcClients = mkOption {
+                type = types.attrsOf (types.submodule ({name, ...}: {
+                  options = {
+                    name = mkOption {
+                      type = types.str;
+                      default = name;
+                      description = "Name of the app on tinyauth's consent page.";
+                    };
+                    redirectUris = mkOption {
+                      type = types.listOf types.str;
+                      description = "Callback URLs tinyauth may send the login back to.";
+                    };
+                    clientId = mkOption {
+                      type = types.str;
+                      readOnly = true;
+                      default = name;
+                      description = "OIDC client ID (the attribute name).";
+                    };
+                    clientSecret = mkOption {
+                      type = types.str;
+                      readOnly = true;
+                      default = lib.neo.secrets.sha256 "tinyauth-oidc:${name}:${lib.neo.secrets.mkPlaceholder "generated/tinyauth-oidc"}";
+                      defaultText = "a 64-hex secret derived from this machine's generated tinyauth OIDC key";
+                      description = "OIDC client secret. Give it to the app through containerEnv or a secrets template, never environment or the store.";
+                    };
+                  };
+                }));
+                default = {};
+                internal = true;
+                description = "OIDC clients that use tinyauth as their login server, by client ID (letters, digits and hyphens).";
+              };
+              oidcIssuer = mkOption {
+                type = types.nullOr types.str;
+                readOnly = true;
+                internal = true;
+                # tinyauth's issuer is scheme://host of its app URL, no trailing slash.
+                default = lib.neo.publicUrl config config.neo.services.tinyauth;
+                defaultText = "https://<tinyauth subdomain>.<domain>";
+                description = "OIDC issuer (discovery base URL) of tinyauth; null without a domain.";
+              };
             }
             // lib.neo.mkReverseProxyOptions {
               subdomain = "tinyauth";
