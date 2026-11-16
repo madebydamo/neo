@@ -56,10 +56,10 @@
     }
   '';
   # Optional metric relabeling per endpoint (neo.monitoring.apps.*.metrics.*.relabel).
-  fwd = t:
-    if (t.relabel or []) == []
-    then "prometheus.remote_write.neo.receiver"
-    else "prometheus.relabel.${appComponent t}.receiver";
+  # Every app endpoint goes through its relabel component: the standard
+  # neo_app_job_* metrics carry a `job` label, which Prometheus renames to
+  # exported_job (the scrape job owns `job`); it is moved back first.
+  fwd = t: "prometheus.relabel.${appComponent t}.receiver";
   relabelRule = r: let
     labelOnly = r.action == "labeldrop" || r.action == "labelkeep";
   in ''
@@ -71,13 +71,22 @@
       ${optionalString (r.action == "replace") "replacement = ${str r.replacement}"}
     }
   '';
-  relabelBlock = t:
-    optionalString ((t.relabel or []) != []) ''
-      prometheus.relabel ${str (appComponent t)} {
-        ${concatMapStrings relabelRule t.relabel}
-        forward_to = [prometheus.remote_write.neo.receiver]
+  relabelBlock = t: ''
+    prometheus.relabel ${str (appComponent t)} {
+      rule {
+        source_labels = ["exported_job"]
+        regex         = "(.+)"
+        target_label  = "job"
+        replacement   = "$1"
       }
-    '';
+      rule {
+        regex  = "exported_job"
+        action = "labeldrop"
+      }
+      ${concatMapStrings relabelRule (t.relabel or [])}
+      forward_to = [prometheus.remote_write.neo.receiver]
+    }
+  '';
   # Credentials, headers and query parameters of prometheus.scrape.
   scrapeExtra = t:
     optionalString (t.auth == "bearer") ''
