@@ -43,7 +43,7 @@ Machine access (the seed unit, Hermes) runs `docker exec grafana curl -H 'Remote
 | journald (minus dockerd's `CONTAINER_NAME` copies: oci-containers already logs each container on `docker-<c>.service`) | `job=journal`, `unit`, `level` | |
 | tinyauth audit stream (`TINYAUTH_LOG_JSON`, `…_AUDIT_ENABLED` while the agent runs) | `event`, `result`, `provider`; `username`, `ip`, `reason` as structured metadata | `neo_auth_events_total` |
 | sshd `Accepted …` / `Failed …` / `Invalid user …` | same, `provider=ssh` | same |
-| SWAG `log/nginx/neo-access.log` (JSON, `conf.d/neo-access-log.conf` written while the agent runs) | `job=swag`, `service` (host → Neo service, else `other`), `status_class`; method, path, status, ip, vhost as structured metadata | `neo_http_requests_total`, `neo_http_request_duration_seconds` |
+| SWAG `log/nginx/neo-access.log` (JSON, `conf.d/neo-access-log.conf` written while the agent runs) | `job=swag`, `service` (host → Neo service, else `other`), `status_class`; method, path, status, ip, vhost as structured metadata | `neo_http_requests_total`, `neo_http_request_duration_seconds` (without WebSockets: a 101 logs how long the connection stayed open) |
 | node exporter (+ systemd, + textfile) | | `node_*`, `node_systemd_unit_state`, `neo_service_unit{service,name,kind}` |
 | cAdvisor | | `container_*` (label `name`), filtered to CPU, memory, network |
 | blackbox | | `probe_*{app,target}` |

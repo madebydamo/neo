@@ -371,13 +371,20 @@ in ''
           action      = "inc"
           max_idle_duration = "24h"
         }
-        metric.histogram {
-          name        = "http_request_duration_seconds"
-          prefix      = "neo_"
-          description = "Time SWAG took to answer."
-          source      = "rt"
-          buckets     = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
-          max_idle_duration = "24h"
+      }
+      // A WebSocket (101) logs how long it stayed open, not how long the
+      // answer took, so it stays out of the answer times.
+      stage.match {
+        selector = `{job="swag", status_class!="1xx"}`
+        stage.metrics {
+          metric.histogram {
+            name        = "http_request_duration_seconds"
+            prefix      = "neo_"
+            description = "Time SWAG took to answer (WebSockets excluded)."
+            source      = "rt"
+            buckets     = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+            max_idle_duration = "24h"
+          }
         }
       }
       forward_to = [loki.write.neo.receiver]
