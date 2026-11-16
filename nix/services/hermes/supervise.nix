@@ -81,6 +81,33 @@
       Never dump secrets. Keep the notification short and operational.
     '';
 
+    restartChecked = "${config.neo.services.system-updater.appdata}/restart-checked.json";
+    restartPrompt = ''
+      You are supervising a Neo homeserver after a restart that a system update needed. Load skill /neo-update-supervisor and follow it exactly.
+
+      Run: ${restartChecked} (the history JSON of the update run that needed the restart; its log is the
+      file named in `log`, next to it in ${config.neo.services.system-updater.appdata}). The run itself was not
+      supervised before the restart when `reboot_scheduled=true`: classify it too (exit code, warnings in its log).
+      The update ran in the previous boot (`journalctl -b -1`), this boot is `journalctl -b`.
+
+      `restart_check` was recorded a few minutes after this boot, once it had settled:
+      - `booted_expected=false`: the server did not come back on the system the update installed
+        (`expected_system` vs `booted_system`), e.g. it booted an older version from the boot menu. Broken.
+      - `reasons_left`: restart reasons still open (`reasons_before` were the ones before the restart). A restart
+        that did not clear them is a warning; `system` or `kernel` left over is broken.
+      - `failed_units`: units failed in this boot. Look at `journalctl -b -u <unit>`; broken unless clearly harmless.
+      - `system_state` other than running/degraded: the boot had not finished after 15 minutes. Broken.
+      - `ok=true` and a clean run log: clean, no message.
+      Classify the outcome as broken, warning, or clean.
+      - clean: do not send any message
+      - warning or broken: notify via `hermes send --to all`, one line saying the server restarted for the update
+        (with the reasons) and what is wrong
+      - do NOT roll back the NixOS generation; only report what failed so the operator can fix it
+
+      Never dump secrets. Keep the notification short and operational.
+    '';
+    restartPromptFile = pkgs.writeText "neo-hermes-supervise-restart-prompt.txt" restartPrompt;
+
     systemPromptFile = pkgs.writeText "neo-hermes-supervise-system-prompt.txt" (promptFor "system");
     dockerPromptFile = pkgs.writeText "neo-hermes-supervise-docker-prompt.txt" (promptFor "docker");
 
@@ -88,6 +115,11 @@
       set -euo pipefail
       kind=''${1:-}
       case "$kind" in
+        restart)
+          marker=${restartChecked}
+          unit=neo-auto-update-verify.service
+          prompt_file=${restartPromptFile}
+          ;;
         system)
           marker=${systemManifest}
           unit=neo-auto-update.service
@@ -99,10 +131,24 @@
           prompt_file=${dockerPromptFile}
           ;;
         *)
-          echo "usage: neo-hermes-supervise system|docker" >&2
+          echo "usage: neo-hermes-supervise system|docker|restart" >&2
           exit 2
           ;;
       esac
+
+      # restart: once per update run, after the boot that restart-check verified.
+      if [ "$kind" = restart ]; then
+        if [ ! -f "$marker" ]; then
+          echo "no restart check at $marker: skip Hermes"
+          exit 0
+        fi
+        key=$(${pkgs.jq}/bin/jq -r '"\(.run_id) \(.restart_check.boot_id // "")"' "$marker")
+        done_file="$HOME/.neo-supervise-restart-done"
+        if [ "$(cat "$done_file" 2>/dev/null || true)" = "$key" ]; then
+          echo "restart check $key already supervised: skip Hermes"
+          exit 0
+        fi
+      fi
 
       changed=false
       failed=false
@@ -123,7 +169,15 @@
         echo "$unit is failed"
       fi
 
-      if [ "$changed" != true ] && [ "$failed" != true ] && [ "$in_progress" != true ] && [ "$unit_failed" != true ]; then
+      # The updater restarts the server in a minute: supervise the run after
+      # the restart (neo-hermes-supervise-after-restart), when it can be judged.
+      if [ "$kind" = system ] && [ "$failed" != true ] && [ "$in_progress" != true ] \
+        && [ "$(${pkgs.jq}/bin/jq -r '.reboot_scheduled // false' "$marker" 2>/dev/null)" = true ]; then
+        echo "restart scheduled: Hermes checks this run after the restart"
+        exit 0
+      fi
+
+      if [ "$kind" != restart ] && [ "$changed" != true ] && [ "$failed" != true ] && [ "$in_progress" != true ] && [ "$unit_failed" != true ]; then
         echo "noop: skip Hermes"
         exit 0
       fi
@@ -146,6 +200,9 @@
       echo "Launching Hermes supervisor for $kind"
       ${hermesPkg}/bin/hermes --yolo chat -Q --source tool --max-turns 40 \
         -s neo-update-supervisor --query-file "$prompt_file"
+      if [ "$kind" = restart ]; then
+        echo "$key" >"$done_file"
+      fi
     '';
 
     # Restart covers transient gateway/model failures after switch (and ExecStart
@@ -189,6 +246,17 @@
         serviceConfig = superviseServiceConfig "${superviseScript}/bin/neo-hermes-supervise system";
       };
 
+      # After the boot an update restarted into (neo-auto-update-verify).
+      systemd.services.neo-hermes-supervise-after-restart = {
+        description = "Hermes supervision after a restart an update needed";
+        after = ["network-online.target" "neo-auto-update-verify.service" "hermes-agent.service"];
+        wants = ["network-online.target" "hermes-agent.service"];
+        path = [pkgs.jq pkgs.systemd pkgs.sudo hermesPkg];
+        environment = superviseEnv;
+        unitConfig = superviseUnitConfig;
+        serviceConfig = superviseServiceConfig "${superviseScript}/bin/neo-hermes-supervise restart";
+      };
+
       systemd.services.neo-hermes-supervise-docker-update = {
         description = "Hermes supervision of neo-docker-updater";
         after = ["network-online.target" "neo-docker-updater.service" "hermes-agent.service"];
@@ -203,6 +271,11 @@
       systemd.services.neo-auto-update = lib.mkIf (config.neo.services.system-updater.enabled or false) {
         onSuccess = lib.mkAfter ["neo-hermes-supervise-system-update.service"];
         onFailure = lib.mkAfter ["neo-hermes-supervise-system-update.service"];
+      };
+
+      systemd.services.neo-auto-update-verify = lib.mkIf (config.neo.services.system-updater.enabled or false) {
+        onSuccess = lib.mkAfter ["neo-hermes-supervise-after-restart.service"];
+        onFailure = lib.mkAfter ["neo-hermes-supervise-after-restart.service"];
       };
 
       systemd.services.neo-docker-updater = lib.mkIf (config.neo.services.docker-updater.enabled or false) {

@@ -175,6 +175,9 @@
           ## System updates
           Read `neo-auto-update` logs and `systemctl --failed`. Switch failure or units that did not come up → **broken** notify, no `nixos-rebuild --rollback`. Operator wants the diagnosis, not an automatic generation bounce.
 
+          ## After a restart
+          When a system run needs a restart, it is supervised in the boot after it (`neo-hermes-supervise restart`; when the updater scheduled the restart, the run is not supervised before it). The run's JSON has `restart_check`: `booted_expected=false` (not on the installed system) or `system`/`kernel` in `reasons_left` → **broken**; other `reasons_left` → **warning**; `failed_units` → look at `journalctl -b -u <unit>`. The update itself ran in the previous boot (`journalctl -b -1`).
+
           ## Pitfalls
           - `neo-docker-updater` used to ignore restart failures; trust unit state and container logs, not the updater exit code alone
           - First-time pulls have `old_id=none` — cannot roll back; notify only
