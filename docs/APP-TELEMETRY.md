@@ -60,14 +60,27 @@ Token rules the helpers implement: Anthropic `input_tokens` is already uncached;
 
 ## Browser-only apps
 
-Static sites and games have no server code: SWAG's access log already gives the `web` section. For in-app events, the page requests `GET /_e/<event>[/<detail>]` (`navigator.sendBeacon` or `fetch(url, {keepalive: true})`) and the vhost answers 204:
+Static sites and games have no server code: SWAG's access log already gives the `web` section (with referring sites). For in-app events, the page requests `GET /_e/<event>[/<detail>]` (`navigator.sendBeacon` or `fetch(url, {keepalive: true})`) and gets a 204. SWAG logs the request either way; the `beacon` section counts events by their first path segment.
 
-```nix
-# swag.nix, inside the server block (before `location /`)
-location ^~ /_e/ { return 204; }
+Answer the 204 **in the app** when it has its own nginx or server (proxied through the vhost's `location /`, so tinyauth applies), with `access_log off` there since SWAG already logs it:
+
+```nginx
+location ^~ /_e/ { access_log off; add_header Cache-Control "no-store"; return 204; }
 ```
 
-The `beacon` section counts events by their first path segment. Event names are fixed constants; details may be small numbers or ids (`/_e/solve/42s`), never personal data. Behind tinyauth the beacon stays behind it.
+Only when SWAG serves the files itself, answer in the vhost, and keep the login in front: a bare `return` runs before tinyauth's check and would make the path public, so the 204 comes from `try_files`:
+
+```nix
+# swag.nix, inside the server block
+location ^~ /_e/ {
+  ${lib.neo.authBlock config cfg}
+  try_files /dev/null =204;
+}
+```
+
+Event names are fixed constants; details may be small numbers or ids (`/_e/solve/42s`), never personal data. Cap events per page view (e.g. 200) and send nothing for automated browsers (`navigator.webdriver`).
+
+Apps without a metrics endpoint pass `metrics = false` to the `errors` section (no `neo_app_errors_total` panel).
 
 ## Nix
 

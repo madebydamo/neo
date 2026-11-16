@@ -114,6 +114,14 @@ in {
           targets = [(lqLegend ''topk(15, sum by (path) (count_over_time({job="swag", service="${service}"} | status=~"2..|3.." != "/_e/" [$__range])))'' "{{path}}")];
         })
         (bargauge {
+          title = "Referring sites";
+          w = 12;
+          h = 8;
+          description = "Other sites whose links brought visitors here.";
+          datasource = loki;
+          targets = [(lqLegend ''topk(15, sum by (ref) (count_over_time({job="swag", service="${service}"} | referer=~"https?://.+" | label_format ref=`{{ regexReplaceAll "^https?://([^/:]+).*" .referer "''${1}" }}` | label_format ext=`{{ if eq .ref .vhost }}0{{ else }}1{{ end }}` | ext="1" [$__range])))'' "{{ref}}")];
+        })
+        (bargauge {
           title = "Missing pages (404)";
           w = 12;
           h = 8;
@@ -364,31 +372,39 @@ in {
         # LogQL pipeline that keeps error lines, for apps that do not log JSON
         # with `level` (third-party images), e.g. ''|~ "(?i)\\b(error|exception)\\b"''.
         filter ? null,
+        # false for apps without a metrics endpoint (no neo_app_errors_total).
+        metrics ? true,
       }: let
         sel = appSelector service;
         lines = errorLines {inherit containers filter;};
-      in [
-        (row title null)
-        (bars {
-          title = "Error log lines";
-          w = 12;
-          h = 8;
-          datasource = loki;
-          targets = [(lqLegend ''sum by (unit) (count_over_time(${lines} [$__interval]))'' "{{unit}}")];
-        })
-        (bars {
+      in
+        [
+          (row title null)
+          (bars {
+            title = "Error log lines";
+            w =
+              if metrics
+              then 12
+              else 24;
+            h = 8;
+            datasource = loki;
+            targets = [(lqLegend ''sum by (unit) (count_over_time(${lines} [$__interval]))'' "{{unit}}")];
+          })
+        ]
+        ++ lib.optional metrics (bars {
           title = "Errors by component";
           w = 12;
           h = 8;
           targets = [(pq "sum by (component, kind) (increase(neo_app_errors_total{${sel}}[$__interval]))" "{{component}} {{kind}}")];
         })
-        (logs {
-          title = "Error lines";
-          w = 24;
-          h = 12;
-          targets = [(lq lines)];
-        })
-      ];
+        ++ [
+          (logs {
+            title = "Error lines";
+            w = 24;
+            h = 12;
+            targets = [(lq lines)];
+          })
+        ];
     };
 
     # Alert rules for the standard metrics; merge into

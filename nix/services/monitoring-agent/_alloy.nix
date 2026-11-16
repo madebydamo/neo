@@ -330,7 +330,7 @@ in ''
 
     loki.process "swag" {
       stage.json {
-        expressions = { time = "", vhost = "host", method = "", path = "uri", status = "", ip = "remote_addr", rt = "request_time" }
+        expressions = { time = "", vhost = "host", method = "", path = "uri", status = "", ip = "remote_addr", rt = "request_time", referer = "" }
       }
       stage.timestamp {
         source = "time"
@@ -351,7 +351,7 @@ in ''
         values = ["filename"]
       }
       stage.structured_metadata {
-        values = { vhost = "", method = "", path = "", status = "", ip = "" }
+        values = { vhost = "", method = "", path = "", status = "", ip = "", referer = "" }
       }
       stage.metrics {
         metric.counter {
