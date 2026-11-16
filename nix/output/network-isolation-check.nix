@@ -61,6 +61,14 @@
   bridgeEntries = c: lib.filter (n: docker.isCreatedNetwork (docker.networkName n)) (map docker.networkName (c.networks or []));
   usesHost = c: lib.any (n: n == "host" || lib.hasPrefix "container:" n) (c.networks or []);
 
+  # gluetun (vpn) stands in for VPN-routed link members.
+  routed = neoLib.neo.vpnRoutedContainers cfg;
+  expectedOn = declared:
+    lib.unique (map (c:
+      if lib.elem c routed
+      then "vpn"
+      else c)
+    declared);
   members = net: lib.attrNames (lib.filterAttrs (_: c: lib.elem net (docker.containerNetworks c)) containers);
   networks = docker.usedNetworks containers;
 
@@ -89,7 +97,7 @@
       then []
       else if lib.hasPrefix "link-" net
       then
-        lib.optional (!(links ? ${linkName}) || lib.sort lib.lessThan m != lib.sort lib.lessThan links.${linkName})
+        lib.optional (!(links ? ${linkName}) || lib.sort lib.lessThan m != lib.sort lib.lessThan (expectedOn links.${linkName}))
         "network ${net}: members ${lib.concatStringsSep " " m} are not the declared link"
       else let
         services = lib.unique (map (c: owner.${c} or "?") (lib.filter (c: !(lib.elem c hubs)) m));

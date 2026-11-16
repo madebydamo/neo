@@ -31,12 +31,14 @@
       # Module fragment: `container` may reach services on the host as
       # host.docker.internal. Only for containers that must; everything on
       # neo-host can also reach the other members. Merge with lib.mkMerge.
+      # docker-network.nix joins it to neo-host; a VPN-routed container has
+      # no networks of its own, so gluetun joins instead (vpn/default.nix).
       mkHostAccess = container: {
-        virtualisation.oci-containers.containers.${container} = {
-          networks = lib.mkAfter [hostNetwork];
-          extraOptions = ["--add-host=host.docker.internal:${hostGateway}"];
-        };
+        neo.core.docker.hostAccess = [container];
       };
+
+      # The `--add-host` option of a container on neo-host.
+      hostAlias = "--add-host=host.docker.internal:${hostGateway}";
 
       # Name of one `networks` entry: "app-x" or "name=app-x,alias=y" → "app-x".
       networkName = entry: let
@@ -74,6 +76,9 @@
       # (container names, core or plugin). For an endpoint only reachable
       # inside Docker (e.g. Collabora's WOPI for Nextcloud); prefer the
       # public URL when the app supports it. Merge with lib.mkMerge.
+      # A VPN-routed member lives in gluetun's network namespace: gluetun
+      # joins the link with the member's name as alias (vpn/default.nix), so
+      # the link keeps working whether the VPN is on or off.
       mkLink = {
         name,
         containers,

@@ -46,6 +46,10 @@
 
     ipv4Networks = lib.filterAttrs (n: _: n != ipv6Net) cfg.networks;
 
+    # VPN-routed containers have no networks of their own (container:vpn):
+    # gluetun joins their links and neo-host for them (vpn/default.nix).
+    routed = lib.neo.vpnRoutedContainers config;
+
     script = pkgs.writeShellScript "neo-docker-network" ''
       set -euo pipefail
       docker=${dockerBin}
@@ -206,6 +210,12 @@
           internal = true;
           description = "Links between services (lib.neo.docker.mkLink): link name → containers on link-<name>.";
         };
+        hostAccess = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+          internal = true;
+          description = "Containers that reach host services through neo-host (lib.neo.docker.mkHostAccess).";
+        };
       };
       dockerNetworks = lib.mkOption {
         type = lib.types.listOf (lib.types.strMatching "[a-z][a-z0-9-]*");
@@ -216,6 +226,11 @@
     };
 
     config = {
+      virtualisation.oci-containers.containers = lib.genAttrs (lib.filter (c: !(lib.elem c routed)) (lib.unique cfg.hostAccess)) (_: {
+        networks = lib.mkAfter [docker.hostNetwork];
+        extraOptions = [docker.hostAlias];
+      });
+
       neo.core.docker.networks = lib.mkMerge [
         (lib.genAttrs
           ([docker.sharedNetwork ipv6Net] ++ config.neo.core.dockerNetworks ++ docker.usedNetworks containers)
@@ -249,10 +264,20 @@
         }
       ];
 
+      # A routed member counts when gluetun (container vpn) joins the link for it.
       assertions = lib.flatten (lib.mapAttrsToList (link: members:
-        map (c: {
-          assertion = containers ? ${c} && lib.elem (docker.linkNetwork link) (docker.containerNetworks containers.${c});
-          message = "Docker link ${link}: container ${c} does not exist, or does not join ${docker.linkNetwork link} (a VPN-routed container shares gluetun's network and cannot join a link).";
+        map (c: let
+          joins = n: containers ? ${n} && lib.elem (docker.linkNetwork link) (docker.containerNetworks containers.${n});
+        in {
+          assertion =
+            containers
+            ? ${c}
+            && (
+              if lib.elem c routed
+              then joins "vpn"
+              else joins c
+            );
+          message = "Docker link ${link}: container ${c} does not exist, or does not join ${docker.linkNetwork link}.";
         })
         members)
       cfg.links);

@@ -80,6 +80,11 @@ in {
             && (value.vpn.enabled or false)
         )
         config.neo.services;
+      # Containers that actually run in gluetun's network namespace: the
+      # vpn.containers of services with vpn.enabled, while the VPN app is on.
+      vpnRoutedContainers = config:
+        lib.optionals (config.neo.services.vpn.enabled or false) (lib.unique (lib.concatMap (s: s.vpn.containers)
+            (lib.attrValues (lib.filterAttrs (_: v: (v.enabled or false) && (v.vpn.enabled or false)) config.neo.services))));
       getDockerNetworkServices = config:
         lib.filterAttrs (
           name: value:

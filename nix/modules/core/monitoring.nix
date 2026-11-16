@@ -342,9 +342,27 @@
                 if nets == []
                 then lib.neo.docker.sharedNetwork
                 else head nets;
+            # A VPN-routed container lives in gluetun's namespace: scrape the
+            # vpn container on the service's network, where gluetun answers
+            # for it (vpn/default.nix).
+            routed = lib.neo.vpnRoutedContainers config;
+            viaVpn = service: m:
+              if m.container != null && elem m.container routed
+              then
+                m
+                // {
+                  container = "vpn";
+                  network =
+                    if m.network != null
+                    then m.network
+                    else lib.neo.docker.serviceNetwork service;
+                }
+              else m;
           in
             concatLists (mapAttrsToList (service: app:
-              mapAttrsToList (scrape: m:
+              mapAttrsToList (scrape: m0: let
+                m = viaVpn service m0;
+              in
                 m
                 // {
                   inherit service scrape;

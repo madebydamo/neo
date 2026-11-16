@@ -36,16 +36,38 @@
       };
 
       routedContainerNames = flatten (map (service: service.vpn.containers) (attrValues services));
-      routedNetworks = lists.unique (flatten (mapAttrsToList (name: value: value.vpn.networks) services));
-      # Routed containers live in gluetun's namespace, so gluetun answers for
-      # their names. Per network: `--network-alias` would apply to the first
-      # network only, and each name must resolve only on its own service's
-      # networks (app-firefox must not resolve searxng).
-      aliasesOn = net:
-        unique (flatten (mapAttrsToList (
-            _: svc: optionals (elem net svc.vpn.networks) svc.vpn.containers
-          )
-          services));
+      inherit (lib.neo) docker;
+      dockerCfg = config.neo.core.docker;
+
+      # Routed containers live in gluetun's namespace, so gluetun stands in
+      # for them on every network they would be on, answering for their names:
+      #   - the networks their service lists in vpn.networks, and the
+      #     service's own network (SWAG reaches the app there);
+      #   - every link (mkLink) a routed container is a member of, so the
+      #     other members reach it by name and it reaches them;
+      #   - neo-host when a routed container has mkHostAccess.
+      # Aliases per network: `--network-alias` would apply to the first
+      # network only, and each name must resolve only on its own networks
+      # (app-firefox must not resolve searxng). So a link or another
+      # service's network sees just the names that belong there.
+      memberships =
+        flatten (mapAttrsToList (sname: svc:
+          map (net: {
+            inherit net;
+            aliases = svc.vpn.containers;
+          }) (svc.vpn.networks ++ optional (svc.vpn.containers != []) (docker.serviceNetwork sname)))
+        services)
+        ++ flatten (mapAttrsToList (link: members: let
+          routedMembers = filter (c: elem c routedContainerNames) members;
+        in
+          optional (routedMembers != []) {
+            net = docker.linkNetwork link;
+            aliases = routedMembers;
+          })
+        dockerCfg.links);
+      hostAccess = any (c: elem c routedContainerNames) dockerCfg.hostAccess;
+      routedNetworks = unique (map (m: m.net) memberships);
+      aliasesOn = net: unique (concatMap (m: optionals (m.net == net) m.aliases) memberships);
       gluetunNetworks =
         map (
           net: let
@@ -55,7 +77,8 @@
             then net
             else concatStringsSep "," (["name=${net}"] ++ map (a: "alias=${a}") aliases)
         )
-        routedNetworks;
+        routedNetworks
+        ++ optional hostAccess docker.hostNetwork;
       patchedContainers = listToAttrs (map (name: nameValuePair name patch) routedContainerNames);
 
       # Each VPN-routed container joins gluetun's network namespace, so listen ports must be unique.
@@ -124,6 +147,7 @@
                   FIREWALL_VPN_INPUT_PORTS = cfg.firewallVpnInputPorts;
                 };
               networks = gluetunNetworks;
+              extraOptions = optional hostAccess docker.hostAlias;
             };
           }
           // patchedContainers;

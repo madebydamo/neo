@@ -119,8 +119,8 @@ it adds no restarts. Restarting an app does not touch SWAG.
 
 The link network goes after each container's own network (`mkAfter`): tools
 that read the first network (monitoring, `docker inspect`) keep the service
-network. An assertion fails when a link container does not exist or cannot join
-(a VPN-routed container shares gluetun's namespace).
+network. An assertion fails when a link container does not exist or does not join
+(for a VPN-routed container: when gluetun does not join for it).
 
 ### Host services
 
@@ -143,9 +143,25 @@ those; they never hit the host's input chain).
   networks keeps them. Adding it on top listed the network twice, which
   Docker 29 refuses (`network … is specified multiple times`); that also broke
   non-routed high_sea services.
+- gluetun stands in for routed containers everywhere they would be, so
+  nothing changes for the other side when the VPN is switched on or off: it
+  joins the service network of every routed service (also when the service
+  forgot it in `vpn.networks`), the `vpn.networks` (`internal` for old
+  plugins), every **link** with a routed member (alias = only the routed
+  members of that link), and **`neo-host`** when a routed container has
+  `mkHostAccess` (plus `host.docker.internal`; Docker refuses `--add-host` on a
+  `container:` network, so `mkHostAccess` only records the wish in
+  `neo.core.docker.hostAccess` and docker-network.nix / the VPN module apply it).
+- Monitoring scrapes a routed container's metrics through gluetun on its
+  service network (`neo.monitoring.scrapeTargets`), no per-app special case.
 - Known limit, by choice: routed containers share gluetun's network namespace,
   so they reach each other on localhost, and gluetun sits on all their
-  networks (including `internal` for routed plugin containers).
+  networks, links and (with host access) `neo-host`: whatever one routed
+  container may reach, all of them can. Still far less than one shared
+  network for everything.
+- Flake check `vpn-networks`: a routed plugin container on `internal` with a
+  link to a built-in container, host access and metrics, evaluated with the VPN
+  on and off.
 
 ### Monitoring
 
@@ -182,8 +198,9 @@ VPN aliases on `app-searxng` and `internal`; Immich metrics scraped on
 
 - `internal = true` (no internet) for databases and caches: a second network
   `app-<service>-data` with the app and its sidecars only.
-- Move high_sea and fortilegends to `serviceNetwork` (+ one link for the
-  high_sea services that talk to each other) in their own repos.
+- Move high_sea and fortilegends to `serviceNetwork` (+ links for the
+  high_sea services that talk to each other; they work with the VPN on or
+  off) in their own repos.
 - Host-network containers (Alloy, beszel-agent, iSponsorBlockTV) are outside
   this scheme.
 - Show a service's network and links in the web UI's Advanced section.
