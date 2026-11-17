@@ -3,10 +3,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use toml_edit::{Array, DocumentMut, Item, Table};
 
-use crate::utils::{is_local_flake_ref, sort_document_alphabetically};
+use crate::utils::{is_local_flake_ref, settings};
 
 pub fn migrate(config_path: &str, source_settings: &Path, dry_run: bool) -> Result<()> {
-    let live = PathBuf::from(config_path).join(crate::utils::settings::FILE);
+    let live = PathBuf::from(config_path).join(settings::FILE);
     let target = if live.exists() {
         live
     } else if source_settings.exists() {
@@ -24,19 +24,16 @@ pub fn migrate(config_path: &str, source_settings: &Path, dry_run: bool) -> Resu
         }
         let mut doc = DocumentMut::new();
         apply_migrations(&mut doc);
-        sort_document_alphabetically(&mut doc);
-        fs::write(&target, doc.to_string()).context("write initial settings with migrations")?;
+        settings::save(&target, &mut doc).context("write initial settings with migrations")?;
         println!("Initialized migrations marker in {}", target.display());
         return Ok(());
     }
-    let content = fs::read_to_string(&target).context("read settings.toml for migration")?;
-    let mut doc: DocumentMut = content.parse().context("parse settings.toml")?;
+    let mut doc = settings::load(&target)?;
     check_migrations_table(&doc)?;
     let changed = apply_migrations(&mut doc);
     if changed {
         // Same ordering as web saves so update→migrate does not unsort the file.
-        sort_document_alphabetically(&mut doc);
-        fs::write(&target, doc.to_string()).context("write migrated settings.toml")?;
+        settings::save(&target, &mut doc).context("write migrated settings.toml")?;
         println!("Migrations applied to {}", target.display());
     } else {
         println!(

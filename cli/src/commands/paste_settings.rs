@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use toml_edit::DocumentMut;
 
-use crate::utils::sort_document_alphabetically;
+use crate::utils::settings;
 
 pub fn paste_settings(
     config_path: &str,
@@ -18,18 +18,16 @@ pub fn paste_settings(
         );
         return Ok(());
     }
-    let target = PathBuf::from(config_path).join(crate::utils::settings::FILE);
+    let target = PathBuf::from(config_path).join(settings::FILE);
     fs::create_dir_all(config_path)?;
 
     // Parse + sort so paste/init/restore match web-save ordering (stable diffs).
     let mut doc: DocumentMut = if settings_source.exists() {
-        let raw = fs::read_to_string(settings_source).context("read source settings.toml")?;
-        raw.parse().context("parse source settings.toml")?
+        settings::load(settings_source).context("source settings")?
     } else {
         config.clone()
     };
-    sort_document_alphabetically(&mut doc);
-    fs::write(&target, doc.to_string()).context("write settings")?;
+    settings::save(&target, &mut doc).context("write settings")?;
 
     println!(
         "Pasted settings from {:?} to {}",

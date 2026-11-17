@@ -7,6 +7,21 @@ use toml_edit::{DocumentMut, Item, Table};
 /// The settings file in a config repo.
 pub const FILE: &str = "settings.toml";
 
+/// Read and parse a settings.toml.
+pub fn load(path: &Path) -> Result<DocumentMut> {
+    let text = std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+    text.parse()
+        .with_context(|| format!("parse {}", path.display()))
+}
+
+/// Write a settings.toml the one way every writer does: keys sorted (stable
+/// diffs, the order web saves use) and replaced atomically (the web UI and
+/// evaluations read it concurrently).
+pub fn save(path: &Path, doc: &mut DocumentMut) -> Result<()> {
+    super::toml_sort::sort_document_alphabetically(doc);
+    super::fsutil::write_atomic(path, doc.to_string().as_bytes(), None)
+}
+
 /// Load baked default settings (if any) and overlay the user file at `path`.
 pub fn load_or_default_settings(path: &Path) -> Result<DocumentMut> {
     let default_str = baked_default_settings()?;
@@ -119,6 +134,36 @@ mod tests {
         assert_eq!(bool_at(&doc, &["a", "b", "t"]), Some(true));
         assert_eq!(str_at(&doc, &["a", "b", "t"]), None);
         assert!(item_at(&doc, &["a", "nope", "s"]).is_none());
+    }
+
+    #[test]
+    fn save_sorts_and_load_reads_back() {
+        let dir = crate::utils::fsutil::TempDir::new("neo-settings-test").unwrap();
+        let path = dir.join(FILE);
+        let mut doc: DocumentMut = "[z]\nb = 1\na = 2\n[a]\nx = 1\n".parse().unwrap();
+        save(&path, &mut doc).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            text.find("[a]").unwrap() < text.find("[z]").unwrap(),
+            "{text}"
+        );
+        assert!(
+            text.find("a = 2").unwrap() < text.find("b = 1").unwrap(),
+            "{text}"
+        );
+        let back = load(&path).unwrap();
+        assert_eq!(back["z"]["b"].as_integer(), Some(1));
+    }
+
+    #[test]
+    fn load_names_the_file_on_errors() {
+        let dir = crate::utils::fsutil::TempDir::new("neo-settings-test").unwrap();
+        let path = dir.join(FILE);
+        let err = format!("{:#}", load(&path).unwrap_err());
+        assert!(err.contains("read ") && err.contains(FILE), "{err}");
+        std::fs::write(&path, "not = = toml").unwrap();
+        let err = format!("{:#}", load(&path).unwrap_err());
+        assert!(err.contains("parse "), "{err}");
     }
 
     #[test]

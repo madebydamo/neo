@@ -15,7 +15,7 @@ use super::{
 use crate::utils::command::{confirm, is_root};
 use crate::utils::execute_command;
 use crate::utils::profile::DEFAULT_SERVER_CONFIG_PATH;
-use crate::utils::settings::{disko_enabled, str_at, FILE as SETTINGS_FILE};
+use crate::utils::settings::{self, disko_enabled, str_at, FILE as SETTINGS_FILE};
 
 pub const WORK_DIR: &str = "/root/neo-restore";
 
@@ -170,10 +170,7 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     let _ = fs::remove_dir_all(&staging);
     stage_repo(&repo_url, &staging)?;
     let settings_path = staging.join(SETTINGS_FILE);
-    let mut doc: DocumentMut = fs::read_to_string(&settings_path)
-        .context("the repository has no settings.toml")?
-        .parse()
-        .context("parse settings.toml")?;
+    let mut doc = settings::load(&settings_path).context("the repository's settings.toml")?;
 
     let disko_on = disko_enabled(&doc);
     // With Disko the target is always made fresh (a rerun after a failure

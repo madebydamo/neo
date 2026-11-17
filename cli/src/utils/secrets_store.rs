@@ -13,13 +13,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use toml_edit::{value, DocumentMut};
 
+use super::command::git_cmd;
 use super::command::{
     check_output, env_or, output_checked, output_with_stdin, root_command, sudo_bin,
 };
 use super::fsutil::{write_atomic, write_private, TempDir};
 use super::secrets::{self, Backend, Node, Tree};
 use super::settings::{authorized_keys, ensure_table, recorded_host_key};
-use super::{git_cmd, sort_document_alphabetically};
 
 pub const IDENTITY_FILE: &str = "identity.sops.yaml";
 pub const SOPS_CONFIG: &str = ".sops.yaml";
@@ -223,14 +223,11 @@ impl Store {
     }
 
     fn load_doc(&self) -> Result<DocumentMut> {
-        let p = self.settings_path();
-        let s = fs::read_to_string(&p).with_context(|| format!("read {}", p.display()))?;
-        s.parse().context("parse settings.toml")
+        super::settings::load(&self.settings_path())
     }
 
     fn save_doc(&self, doc: &mut DocumentMut) -> Result<()> {
-        sort_document_alphabetically(doc);
-        fs::write(self.settings_path(), doc.to_string()).context("write settings.toml")
+        super::settings::save(&self.settings_path(), doc)
     }
 
     /// Stage these files: existing ones added, missing ones removed from the index.
