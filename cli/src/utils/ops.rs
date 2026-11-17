@@ -8,6 +8,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use serde::Serialize;
 
 use super::command::get_timestamp;
 
@@ -26,7 +27,8 @@ pub fn log_path(id: &str) -> PathBuf {
 }
 
 /// `status` of an op's JSON state (the web UI reads the same strings).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum OpStatus {
     InProgress,
     Success,
@@ -43,7 +45,65 @@ impl OpStatus {
     }
 }
 
-/// Single writer for op JSON state used by both [`OperationLog`] and the web store.
+/// One op's JSON state file, as the web UI polls it.
+#[derive(Debug, Serialize)]
+pub struct OpState<'a> {
+    pub id: &'a str,
+    pub status: OpStatus,
+    pub phase: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<&'a str>,
+    /// More fields (mode, generation number); they may override the ones above.
+    #[serde(skip)]
+    pub extra: Option<serde_json::Value>,
+}
+
+impl<'a> OpState<'a> {
+    pub fn new(id: &'a str, status: OpStatus, phase: &'a str) -> Self {
+        OpState {
+            id,
+            status,
+            phase,
+            error: None,
+            branch: None,
+            started_at: None,
+            extra: None,
+        }
+    }
+
+    /// The JSON object written to the state file (`log_path` included).
+    pub fn to_json(&self) -> serde_json::Value {
+        let mut s = serde_json::to_value(self).unwrap_or_else(|_| serde_json::json!({}));
+        if let Some(obj) = s.as_object_mut() {
+            obj.insert(
+                "log_path".into(),
+                log_path(self.id).to_string_lossy().into(),
+            );
+            if let Some(serde_json::Value::Object(map)) = &self.extra {
+                obj.extend(map.clone());
+            }
+        }
+        s
+    }
+
+    /// Replace the op's state file. The web UI polls it: it is replaced in
+    /// one step, never truncated; a failed write is reported, not fatal.
+    pub fn write(&self) {
+        let _ = fs::create_dir_all(operations_dir());
+        let written = serde_json::to_vec_pretty(&self.to_json())
+            .map_err(anyhow::Error::from)
+            .and_then(|body| super::fsutil::write_atomic(&state_path(self.id), &body, None));
+        if let Err(e) = written {
+            eprintln!("neo: could not record state of {}: {e:#}", self.id);
+        }
+    }
+}
+
+/// [`OpState::write`] with positional fields (kept for the web UI's op store).
 pub fn write_op_state(
     id: &str,
     status: OpStatus,
@@ -53,36 +113,16 @@ pub fn write_op_state(
     started_at: Option<&str>,
     extra: Option<serde_json::Value>,
 ) {
-    let _ = fs::create_dir_all(operations_dir());
-    let mut s = serde_json::json!({
-        "id": id,
-        "status": status.as_str(),
-        "phase": phase,
-        "log_path": log_path(id).to_string_lossy(),
-    });
-    if let Some(ts) = started_at {
-        s["started_at"] = serde_json::json!(ts);
+    OpState {
+        id,
+        status,
+        phase,
+        error: err,
+        branch,
+        started_at,
+        extra,
     }
-    if let Some(e) = err {
-        s["error"] = serde_json::json!(e);
-    }
-    if let Some(b) = branch {
-        s["branch"] = serde_json::json!(b);
-    }
-    if let Some(serde_json::Value::Object(map)) = extra {
-        if let Some(obj) = s.as_object_mut() {
-            for (k, v) in map {
-                obj.insert(k, v);
-            }
-        }
-    }
-    // The web UI polls this file: replace it in one step, never truncate it.
-    let written = serde_json::to_vec_pretty(&s)
-        .map_err(anyhow::Error::from)
-        .and_then(|body| super::fsutil::write_atomic(&state_path(id), &body, None));
-    if let Err(e) = written {
-        eprintln!("neo: could not record state of {id}: {e:#}");
-    }
+    .write();
 }
 
 pub fn append_log(path: &Path, line: &str) {
@@ -183,15 +223,14 @@ impl OperationLog {
             }
             (base, more) => more.or(base),
         };
-        write_op_state(
-            &self.id,
-            status,
-            phase,
-            err,
+        OpState {
+            error: err,
             branch,
-            Some(&self.suffix),
+            started_at: Some(&self.suffix),
             extra,
-        );
+            ..OpState::new(&self.id, status, phase)
+        }
+        .write();
     }
 
     /// Write an "in_progress" marker for the given phase (before running the step body).
@@ -236,4 +275,59 @@ pub fn resolve_suffix(provided: Option<&str>, env_var: &str) -> String {
     provided
         .map(|s| s.to_string())
         .unwrap_or_else(|| std::env::var(env_var).unwrap_or_else(|_| get_timestamp()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn op_state_json_has_the_fields_the_web_reads() {
+        let state = OpState {
+            branch: Some("activation_x"),
+            started_at: Some("20260101-000000"),
+            extra: Some(serde_json::json!({ "generation": 7, "phase": "override" })),
+            ..OpState::new("activation_x", OpStatus::InProgress, "build")
+        };
+        let v = state.to_json();
+        assert_eq!(v["id"], "activation_x");
+        assert_eq!(v["status"], "in_progress");
+        assert_eq!(v["branch"], "activation_x");
+        assert_eq!(v["started_at"], "20260101-000000");
+        assert_eq!(v["generation"], 7);
+        // Extra fields win, like the old merge into the JSON object.
+        assert_eq!(v["phase"], "override");
+        assert!(v["log_path"]
+            .as_str()
+            .unwrap()
+            .ends_with("activation_x.log"));
+        assert!(v.get("error").is_none());
+        for (s, txt) in [
+            (OpStatus::InProgress, "in_progress"),
+            (OpStatus::Success, "success"),
+            (OpStatus::Failed, "failed"),
+        ] {
+            assert_eq!(serde_json::to_value(s).unwrap(), txt);
+            assert_eq!(s.as_str(), txt);
+        }
+    }
+
+    #[test]
+    fn op_ids_round_trip_to_their_kind() {
+        for kind in OperationKind::ALL {
+            let id = format!("{}_{}", kind.prefix(), "20260101-000000");
+            assert_eq!(OperationKind::from_id(&id), Some(kind));
+        }
+        assert_eq!(OperationKind::from_id("bogus_1"), None);
+        assert_eq!(OperationKind::from_id("activation"), None);
+    }
+
+    #[test]
+    fn suffix_prefers_argument_then_env_then_timestamp() {
+        assert_eq!(resolve_suffix(Some("given"), "PATH"), "given");
+        let path = std::env::var("PATH").unwrap();
+        assert_eq!(resolve_suffix(None, "PATH"), path);
+        let ts = resolve_suffix(None, "NEO_OPS_TEST_UNSET_VARIABLE");
+        assert_eq!(ts.len(), 15, "{ts}");
+    }
 }
