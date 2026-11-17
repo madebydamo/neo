@@ -1,6 +1,6 @@
 /* Changes preview (pending changes / version compare) — delegated handlers.
  *
- * Markup is rendered server-side (cli/src/commands/web/diff/render.rs) and swapped into
+ * Markup is rendered server-side (cli/src/commands/web/diff/render/) and swapped into
  * #changes-body by htmx or innerHTML, so everything here is delegated on `document`
  * and keyed on data-diff-* attributes:
  *   data-diff-jump="<file id>"   tree entry → open + scroll to that file's diff
