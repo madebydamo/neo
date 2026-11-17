@@ -1,6 +1,6 @@
 // Shared test host for colocated widget scripts.
 // Widgets register on globalThis.NeoWidgets; this runs them in the real
-// option_form.js, without Alpine or a browser.
+// option_form.js (with option_form_core.js), without Alpine or a browser.
 'use strict';
 
 const fs = require('fs');
@@ -96,6 +96,8 @@ function installGlobals(opts) {
 
 function loadOptionForm() {
   if (typeof globalThis.optionForm === 'function') return;
+  // option_form.js delegates to NeoOptionFormCore (loaded first in the page too).
+  globalThis.NeoOptionFormCore = require('../../../../static/option_form_core.js');
   vm.runInThisContext(fs.readFileSync(optionFormPath, 'utf8'), { filename: 'option_form.js' });
 }
 

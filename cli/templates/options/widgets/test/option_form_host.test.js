@@ -30,6 +30,7 @@ function loadWidgets() {
 
 function loadOptionForm() {
   loadWidgets();
+  globalThis.NeoOptionFormCore = require('../../../../static/option_form_core.js');
   const src = fs.readFileSync(optionFormPath, 'utf8');
   vm.runInThisContext(src, { filename: 'option_form.js' });
 }
@@ -54,7 +55,7 @@ test('option_form.js no longer defines widget methods', () => {
   assert.equal(src.includes('NeoWidgets.mixins()'), true);
 });
 
-test('configuration.html.hbs loads registry then each widget then option_form.js', () => {
+test('configuration.html.hbs loads registry then each widget then option_form_core.js and option_form.js', () => {
   const html = fs.readFileSync(configurationPath, 'utf8');
   const scripts = [
     '/static/widgets/registry.js',
@@ -63,6 +64,7 @@ test('configuration.html.hbs loads registry then each widget then option_form.js
     '/static/widgets/primary_item_list.js',
     '/static/widgets/provider_auth.js',
     '/static/widgets/proxy_route_list.js',
+    '/static/option_form_core.js',
     '/static/option_form.js',
   ];
   let last = -1;

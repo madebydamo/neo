@@ -4,21 +4,14 @@
 // and declarative ui.widget handlers (see nix/lib/ui.nix).
 // Widget implementations live next to their Handlebars templates under
 // templates/options/widgets/ and register on NeoWidgets.
+// The logic without form state (type defaults, value normalization, keysFrom,
+// visibleWhen, choices, pruning) is NeoOptionFormCore (option_form_core.js,
+// loaded before this file); the methods below keep their names because widgets
+// call them on `this`.
 
 function neoWidget(name) {
   if (typeof NeoWidgets === 'undefined' || !name) return null;
   return NeoWidgets.get(name) || null;
-}
-
-/** ui.visibleWhen "opt", "opt=value" or "opt=a,b" → [opt, value | undefined]. */
-function splitVisibleWhen(rule) {
-  if (!rule) return [null, undefined];
-  const at = rule.indexOf('=');
-  return at < 0 ? [rule, undefined] : [rule.slice(0, at), rule.slice(at + 1)];
-}
-
-function visibleFor(value, want) {
-  return want === undefined ? !!value : want.split(',').includes(String(value));
 }
 
 function optionForm() {
@@ -52,118 +45,23 @@ function optionForm() {
     openSections: {},
 
     cloneValue(v) {
-      if (v === null || v === undefined) return v;
-      if (typeof structuredClone === 'function') {
-        try { return structuredClone(v); } catch (_) { /* fall through */ }
-      }
-      try { return JSON.parse(JSON.stringify(v)); } catch (_) {
-        if (Array.isArray(v)) return v.map((x) => this.cloneValue(x));
-        if (v && typeof v === 'object') {
-          const out = {};
-          Object.keys(v).forEach((k) => { out[k] = this.cloneValue(v[k]); });
-          return out;
-        }
-        return v;
-      }
+      return NeoOptionFormCore.cloneValue(v);
     },
 
     unwrapType(type) {
-      if (!type) return type;
-      if (type.kind === 'nullOr' && type.elem) return type.elem;
-      return type;
+      return NeoOptionFormCore.unwrapType(type);
     },
 
     defaultForType(type) {
-      const t = this.unwrapType(type);
-      if (!t || !t.kind) return null;
-      switch (t.kind) {
-        case 'bool':
-          return false;
-        case 'int':
-        case 'port':
-          return (t.min != null) ? t.min : 0;
-        case 'float':
-          return 0;
-        case 'str':
-        case 'path':
-        case 'strMatching':
-        case 'separatedString':
-          return '';
-        case 'enum':
-          return (t.values && t.values.length) ? t.values[0] : '';
-        case 'listOf':
-          return [];
-        case 'attrsOf':
-          return {};
-        case 'submodule': {
-          const obj = {};
-          (t.fields || []).forEach((f) => {
-            if (f.default !== undefined && f.default !== null) {
-              obj[f.name] = this.cloneValue(f.default);
-            } else if (f.type && f.type.kind === 'nullOr') {
-              // Stays null, so the save leaves it out of settings.toml.
-              obj[f.name] = null;
-            } else {
-              obj[f.name] = this.defaultForType(f.type);
-            }
-          });
-          return obj;
-        }
-        default:
-          return null;
-      }
+      return NeoOptionFormCore.defaultForType(type);
     },
 
     mergeSubmoduleValue(val, elemType) {
-      const base = this.defaultForType(elemType) || {};
-      const v = (val && typeof val === 'object' && !Array.isArray(val))
-        ? this.cloneValue(val)
-        : {};
-      Object.keys(base).forEach((k) => {
-        if (v[k] === undefined) v[k] = base[k];
-      });
-      return v;
+      return NeoOptionFormCore.mergeSubmoduleValue(val, elemType);
     },
 
     normalizeValue(opt, raw) {
-      const type = opt.type || {};
-      const kind = type.kind;
-      let v = raw;
-      if (v === undefined) v = null;
-
-      if (kind === 'listOf') {
-        if (!Array.isArray(v)) v = Array.isArray(opt.default) ? this.cloneValue(opt.default) : [];
-        if (type.elem && type.elem.kind === 'submodule') {
-          v = v.map((item) => this.mergeSubmoduleValue(item, type.elem));
-        } else {
-          v = this.cloneValue(v);
-        }
-        return v;
-      }
-
-      if (kind === 'attrsOf') {
-        if (!v || typeof v !== 'object' || Array.isArray(v)) {
-          v = (opt.default && typeof opt.default === 'object' && !Array.isArray(opt.default))
-            ? this.cloneValue(opt.default)
-            : {};
-        } else {
-          v = this.cloneValue(v);
-        }
-        if (type.elem && type.elem.kind === 'submodule') {
-          const out = {};
-          Object.keys(v).forEach((k) => {
-            out[k] = this.mergeSubmoduleValue(v[k], type.elem);
-          });
-          return out;
-        }
-        return v;
-      }
-
-      if (kind === 'submodule') {
-        return this.mergeSubmoduleValue(v, type);
-      }
-
-      return this.cloneValue(v);
+      return NeoOptionFormCore.normalizeValue(opt, raw);
     },
 
     // ── Schema / ui helpers ──────────────────────────────────────────
@@ -179,27 +77,11 @@ function optionForm() {
     // ── keysFrom (generic) ───────────────────────────────────────────
 
     extractKeyFromItem(item, extract) {
-      const s = String(item ?? '');
-      if (extract === 'beforeColon') {
-        const i = s.indexOf(':');
-        return i >= 0 ? s.slice(0, i) : s;
-      }
-      return s;
+      return NeoOptionFormCore.extractKeyFromItem(item, extract);
     },
 
     deriveKeysFrom(keysFrom) {
-      if (!keysFrom || !keysFrom.option) return [];
-      const src = this.values[keysFrom.option];
-      const extract = keysFrom.extract || 'identity';
-      if (Array.isArray(src)) {
-        return src
-          .map((item) => this.extractKeyFromItem(item, extract))
-          .filter((n) => n.length > 0);
-      }
-      if (src && typeof src === 'object' && !Array.isArray(src)) {
-        return Object.keys(src);
-      }
-      return [];
+      return NeoOptionFormCore.deriveKeys(keysFrom, keysFrom && this.values[keysFrom.option]);
     },
 
     /**
@@ -209,21 +91,11 @@ function optionForm() {
       const opt = this.optionsByName[optionName];
       const kf = opt?.ui?.keysFrom;
       if (!kf) return;
-      const names = this.deriveKeysFrom(kf);
-      const prev = (this.values[optionName] && typeof this.values[optionName] === 'object'
-        && !Array.isArray(this.values[optionName]))
-        ? this.values[optionName]
-        : {};
-      const elem = this.unwrapType(opt.type?.elem);
-      const next = {};
-      names.forEach((n) => {
-        if (Object.prototype.hasOwnProperty.call(prev, n)) {
-          next[n] = prev[n];
-        } else {
-          next[n] = this.defaultForType(elem || { kind: 'submodule' });
-        }
-      });
-      this.values[optionName] = next;
+      this.values[optionName] = NeoOptionFormCore.syncKeys(
+        this.deriveKeysFrom(kf),
+        this.values[optionName],
+        this.unwrapType(opt.type?.elem)
+      );
 
       const w = neoWidget(opt.ui?.widget);
       if (w && typeof w.onKeysFromSync === 'function') {
@@ -305,43 +177,18 @@ function optionForm() {
       return out;
     },
 
-    /**
-     * Live / save-time check for types.strMatching (and nullOr of it).
-     * Nix builtins.match is whole-string; JS mirrors that with ^(?:…)$.
-     * Unusable JS patterns skip client checks (activate still enforces).
-     */
+    /** strMatching (and nullOr of it) check: '' or the message. */
     patternErrorForType(type, value) {
-      if (!type) return '';
-      let t = type;
-      let v = value;
-      if (t.kind === 'nullOr') {
-        if (v === null || v === undefined || v === '') return '';
-        t = t.elem || {};
-      }
-      if (t.kind !== 'strMatching') return '';
-      const pat = t.pattern;
-      if (!pat) return '';
-      const s = v == null ? '' : String(v);
-      try {
-        const re = new RegExp('^(?:' + pat + ')$');
-        if (!re.test(s)) return 'Must match /' + pat + '/';
-      } catch (_) {
-        return '';
-      }
-      return '';
+      return NeoOptionFormCore.patternErrorForType(type, value);
     },
 
     /** separatedString value shown one entry per line. */
     sepLines(name) {
-      const v = this.values[name];
-      const s = v == null ? '' : String(v);
-      const sep = this.optionsByName[name]?.type?.separator ?? '\n';
-      return (sep === '\n' || sep === '') ? s : s.split(sep).join('\n');
+      return NeoOptionFormCore.sepToLines(this.values[name], this.optionsByName[name]?.type?.separator);
     },
 
     setSepLines(name, text) {
-      const sep = this.optionsByName[name]?.type?.separator ?? '\n';
-      this.values[name] = (sep === '\n' || sep === '') ? text : text.split('\n').join(sep);
+      this.values[name] = NeoOptionFormCore.linesToSep(text, this.optionsByName[name]?.type?.separator);
     },
 
     patternError(name) {
@@ -431,32 +278,20 @@ function optionForm() {
      * bool is false, "opt=value" hides unless it equals value ("opt=a,b": one of them).
      */
     isFieldVisible(name) {
-      const [dep, want] = splitVisibleWhen(this.optionsByName[name]?.visibleWhen);
-      if (!dep || !(dep in (this.values || {}))) return true;
-      return visibleFor(this.values[dep], want);
+      return NeoOptionFormCore.fieldVisible(this.optionsByName[name]?.visibleWhen, this.values);
     },
 
     /** Same rule for a field of one attrsOf submodule entry (sibling = last path segment). */
     isEntryFieldVisible(name, key, rule) {
-      const [dep, want] = splitVisibleWhen(rule);
-      if (!dep) return true;
-      const entry = (this.values || {})[name]?.[key];
-      const sib = dep.split('.').pop();
-      if (!entry || !(sib in entry)) return true;
-      return visibleFor(entry[sib], want);
+      return NeoOptionFormCore.entryFieldVisible(rule, (this.values || {})[name]?.[key]);
     },
 
     choiceAt(name, idx) {
-      const t = this.optionsByName[name]?.type || {};
-      const list = t.choices || (t.elem && t.elem.choices) || [];
-      return list[idx];
+      return NeoOptionFormCore.choicesOf(this.optionsByName[name]?.type)[idx];
     },
 
     choiceLabel(name, value) {
-      const t = this.optionsByName[name]?.type || {};
-      const list = t.choices || (t.elem && t.elem.choices) || [];
-      const hit = list.find((c) => c.value === value || String(c.value) === String(value));
-      return hit ? hit.label : String(value);
+      return NeoOptionFormCore.choiceLabel(this.optionsByName[name]?.type, value);
     },
 
     isChoiceSelected(name, idx) {
@@ -484,29 +319,11 @@ function optionForm() {
     summaryChip(name) {
       const opt = this.optionsByName[name];
       if (!opt) return { text: '', cls: 'hidden' };
-      const label = opt.label || name;
-      const v = this.values[name];
-      const on = 'badge-soft badge-primary';
-      const off = 'badge-ghost text-base-content/60';
-      if (typeof v === 'boolean') {
-        return { text: (v ? '✓ ' : '✕ ') + label, cls: v ? on : off };
-      }
-      if (Array.isArray(v)) {
-        if (!v.length) return { text: label + ': none', cls: off };
-        const shown = v.slice(0, 3).map((x) => this.choiceLabel(name, x)).join(', ');
-        return { text: label + ': ' + shown + (v.length > 3 ? ' +' + (v.length - 3) : ''), cls: on };
-      }
-      if (v === null || v === undefined || v === '') return { text: label + ': not set', cls: off };
-      if (typeof v === 'object') return { text: label + ': ' + Object.keys(v).length, cls: on };
-      return { text: label + ': ' + this.choiceLabel(name, v), cls: on };
+      return NeoOptionFormCore.summaryChip(opt.label || name, this.values[name], (x) => this.choiceLabel(name, x));
     },
 
     toggleListChoice(optionName, choice, checked) {
-      const list = Array.isArray(this.values[optionName]) ? [...this.values[optionName]] : [];
-      const i = list.indexOf(choice);
-      if (checked && i < 0) list.push(choice);
-      if (!checked && i >= 0) list.splice(i, 1);
-      this.values[optionName] = list;
+      this.values[optionName] = NeoOptionFormCore.toggleInList(this.values[optionName], choice, checked);
     },
 
     toggleNestedListChoice(parentName, key, field, choice, checked) {
@@ -514,11 +331,7 @@ function optionForm() {
         ? this.ensureList(parentName)
         : this.ensureAttrs(parentName);
       const entry = Object.assign({}, container[key] || {});
-      const list = Array.isArray(entry[field]) ? [...entry[field]] : [];
-      const i = list.indexOf(choice);
-      if (checked && i < 0) list.push(choice);
-      if (!checked && i >= 0) list.splice(i, 1);
-      entry[field] = list;
+      entry[field] = NeoOptionFormCore.toggleInList(entry[field], choice, checked);
       container[key] = entry;
       this.touch(parentName);
     },
@@ -670,7 +483,7 @@ function optionForm() {
     },
 
     deepEqual(a, b) {
-      try { return JSON.stringify(a) === JSON.stringify(b); } catch (_) { return false; }
+      return NeoOptionFormCore.deepEqual(a, b);
     },
 
     isAtDefault(name) {
@@ -684,32 +497,9 @@ function optionForm() {
       return this.deepEqual(vals[name], defs[name]);
     },
 
-    /**
-     * attrsOf of submodules with `entryDefaults` (each entry's own field defaults, from Nix):
-     * drop every field that still equals its entry's default. A value a module computes per entry
-     * (say an app's schedule) then stays out of settings.toml, and later changes to it still apply.
-     * Entries are kept (possibly empty), so an entry the operator added is never lost.
-     */
+    /** attrsOf with `entryDefaults`: fields still at their entry's default left out (see core). */
     pruneEntryDefaults(name, value) {
-      const ed = this.optionsByName?.[name]?.entryDefaults;
-      if (!ed || !value || typeof value !== 'object' || Array.isArray(value)) return value;
-      const out = {};
-      Object.keys(value).forEach((k) => {
-        const entry = value[k];
-        const defs = ed[k];
-        if (!defs || !entry || typeof entry !== 'object' || Array.isArray(entry)) {
-          out[k] = entry;
-          return;
-        }
-        const kept = {};
-        Object.keys(entry).forEach((f) => {
-          if (!Object.prototype.hasOwnProperty.call(defs, f) || !this.deepEqual(entry[f], defs[f])) {
-            kept[f] = entry[f];
-          }
-        });
-        out[k] = kept;
-      });
-      return out;
+      return NeoOptionFormCore.pruneEntryDefaults(this.optionsByName?.[name]?.entryDefaults, value);
     },
 
     isAtOriginal(name) {
@@ -903,7 +693,7 @@ function optionForm() {
       const invalid = this.widgetValidationErrors().concat(this.scalarValidationErrors());
       if (invalid.length) {
         this.saveFlash = 'err';
-        this.saveError = invalid[0] + (invalid.length > 1 ? ` (+${invalid.length - 1} more)` : '');
+        this.saveError = NeoOptionFormCore.invalidSummary(invalid);
         window.neoToast(('Fix before saving — ' + this.saveError).slice(0, 240), 'error');
         return;
       }
