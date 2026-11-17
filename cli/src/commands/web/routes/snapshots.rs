@@ -8,12 +8,13 @@ use rocket::{get, post, FromForm, State};
 use crate::commands::web::locks::{try_lock, Blocked};
 use crate::commands::web::power::{hold_until_down, power_lock};
 use crate::commands::web::types::AppConfig;
-use crate::commands::web::units::{begin_clear_appdata, pane_lock_spec, trusted_appdata};
+use crate::commands::web::units::{
+    begin_clear_appdata, pane_lock_spec, trusted_appdata, ServiceJob,
+};
 use crate::commands::web::util::{escape_html, status_err, status_ok, status_pulling, ServiceName};
 use crate::commands::web::zfs::service as service_zfs;
 use crate::commands::web::zfs::service::{
     locate_appdata, manual_snapshot_name, render_service_snapshots, run_restore, snapshot_out_oob,
-    RestoreJob,
 };
 use crate::commands::web::zfs::{create_snapshot, data, snapshot_name_ok, SnapAction};
 use crate::utils::locks::{LockGuard, LockMode, LockSpec, OpInfo, Scope};
@@ -101,19 +102,13 @@ pub async fn service_snapshot_restore(
     )?;
     begin_clear_appdata(config, service);
 
-    let job = RestoreJob {
-        service: service.to_string(),
-        appdata: appdata.clone(),
-        snap: snap.to_string(),
-        units: pane.units.iter().map(|u| u.name.clone()).collect(),
-        group_unit: pane.group_unit.clone(),
-    };
+    let job = ServiceJob::new(service, appdata.clone(), &pane);
     let card = render_service_snapshots(service, &appdata, true, true).await;
     let (inner, title) = status_pulling("starting restore…");
     let out = snapshot_out_oob(service, &inner, &title);
     let html = config.broadcast_all(&[&card, &out]);
 
-    tokio::spawn(run_restore(job, lock, Arc::clone(config)));
+    tokio::spawn(run_restore(job, snap.to_string(), lock, Arc::clone(config)));
     Ok(html)
 }
 

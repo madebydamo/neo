@@ -17,7 +17,7 @@ use std::time::Duration;
 use super::super::locks::{lock_attr, LockMode, Scope};
 use super::super::types::AppConfig;
 use super::super::units::{
-    broadcast_unit_update, end_clear_appdata, quiesce, schedule_unit_refresh_burst,
+    broadcast_unit_update, end_clear_appdata, quiesce, schedule_unit_refresh_burst, ServiceJob,
 };
 use super::super::util::{
     escape_attr, escape_html, proc, rsync_bin, status_err, status_ok, status_pulling,
@@ -258,18 +258,15 @@ async fn rsync_restore(src: &Path, dst: &str) -> Result<(), String> {
     }
 }
 
-pub struct RestoreJob {
-    pub service: String,
-    pub appdata: String,
-    pub snap: String,
-    pub units: Vec<String>,
-    pub group_unit: Option<String>,
-}
-
 /// Background restore. The caller holds the service's in-flight slot
 /// (shared with clear-appdata) and its operation lock; this releases both.
-pub async fn run_restore(job: RestoreJob, mut lock: LockGuard, config: Arc<AppConfig>) {
-    let result = restore_inner(&job, &mut lock, &config).await;
+pub async fn run_restore(
+    job: ServiceJob,
+    snap: String,
+    mut lock: LockGuard,
+    config: Arc<AppConfig>,
+) {
+    let result = restore_inner(&job, &snap, &mut lock, &config).await;
     // Guards are gone on every path of restore_inner; drop them again to be sure.
     lock.release_unit_guards();
     drop(lock);
@@ -290,7 +287,8 @@ pub async fn run_restore(job: RestoreJob, mut lock: LockGuard, config: Arc<AppCo
 }
 
 async fn restore_inner(
-    job: &RestoreJob,
+    job: &ServiceJob,
+    snap: &str,
     lock: &mut LockGuard,
     config: &Arc<AppConfig>,
 ) -> Result<String, String> {
@@ -304,18 +302,18 @@ async fn restore_inner(
         return Err("appdata is a whole dataset; refusing".to_string());
     }
     let snaps = list_snapshots(&loc.mount.dataset, false).await?;
-    if !snaps.iter().any(|s| s.name == job.snap) {
-        return Err(format!("snapshot {} not found", job.snap));
+    if !snaps.iter().any(|s| s.name == snap) {
+        return Err(format!("snapshot {} not found", snap));
     }
-    if snapshot_has_path(&loc.mount, &job.snap, &loc.rel) == Some(false) {
+    if snapshot_has_path(&loc.mount, snap, &loc.rel) == Some(false) {
         return Err(format!(
             "{} did not exist yet in {} (use Clear appdata instead)",
-            job.appdata, job.snap
+            job.appdata, snap
         ));
     }
     let src = Path::new(&loc.mount.mountpoint)
         .join(".zfs/snapshot")
-        .join(&job.snap)
+        .join(snap)
         .join(&loc.rel);
 
     push("taking pre-restore snapshot…");
@@ -332,7 +330,7 @@ async fn restore_inner(
     )
     .await?;
 
-    push(&format!("restoring files from {}…", job.snap));
+    push(&format!("restoring files from {}…", snap));
     if let Err(e) = rsync_restore(&src, &job.appdata).await {
         quiesced.restart(lock, config).await;
         return Err(format!(
@@ -345,8 +343,5 @@ async fn restore_inner(
     }
     quiesced.restart(lock, config).await;
 
-    Ok(format!(
-        "restored {} (undo: pre-restore snapshot)",
-        job.snap
-    ))
+    Ok(format!("restored {} (undo: pre-restore snapshot)", snap))
 }

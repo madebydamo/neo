@@ -7,7 +7,7 @@ mod status;
 
 pub use clear_appdata::{
     begin_clear_appdata, clear_appdata_btn_oob, clear_appdata_out_oob, end_clear_appdata,
-    pane_lock_spec, run_clear_appdata, trusted_appdata, ClearJob,
+    pane_lock_spec, run_clear_appdata, trusted_appdata, ServiceJob,
 };
 pub use control::{
     begin_pull, broadcast_unit_update, extract_unit_state_from_oob, is_pull_in_flight,

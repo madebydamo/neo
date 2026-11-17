@@ -173,16 +173,29 @@ async fn finish_clear_appdata(
     }
 }
 
-pub struct ClearJob {
+/// A background job on one service's appdata (clear, snapshot restore): the
+/// trusted path and the units it takes down, from the evaluated pane.
+pub struct ServiceJob {
     pub service: String,
     pub appdata: String,
     pub units: Vec<String>,
     pub group_unit: Option<String>,
 }
 
+impl ServiceJob {
+    pub fn new(service: &str, appdata: String, pane: &OptionPaneContext) -> Self {
+        ServiceJob {
+            service: service.to_string(),
+            appdata,
+            units: pane.units.iter().map(|u| u.name.clone()).collect(),
+            group_unit: pane.group_unit.clone(),
+        }
+    }
+}
+
 /// Background: take the service down like a snapshot restore, rm -rf appdata, then
 /// start only what was running before the clear. Holds and releases `lock`.
-pub async fn run_clear_appdata(job: ClearJob, mut lock: LockGuard, config: Arc<AppConfig>) {
+pub async fn run_clear_appdata(job: ServiceJob, mut lock: LockGuard, config: Arc<AppConfig>) {
     let result = clear_inner(&job, &mut lock, &config).await;
     drop(lock);
     let (inner, title) = match result {
@@ -201,7 +214,7 @@ pub async fn run_clear_appdata(job: ClearJob, mut lock: LockGuard, config: Arc<A
 }
 
 async fn clear_inner(
-    job: &ClearJob,
+    job: &ServiceJob,
     lock: &mut LockGuard,
     config: &Arc<AppConfig>,
 ) -> Result<(), String> {

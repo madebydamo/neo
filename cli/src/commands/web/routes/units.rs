@@ -12,7 +12,7 @@ use crate::commands::web::units::{
     begin_clear_appdata, begin_pull, clear_appdata_btn_oob, clear_appdata_out_oob, map_services,
     normalize_container_unit, pane_lock_spec, perform_unit_action, run_clear_appdata,
     run_container_pull, schedule_unit_refresh_burst, trusted_appdata, unit_controls_oob_fragment,
-    unit_name_valid, update_out_oob, ClearJob, ServiceStatusRequest, ServiceStatusResponse,
+    unit_name_valid, update_out_oob, ServiceJob, ServiceStatusRequest, ServiceStatusResponse,
     UnitAction,
 };
 use crate::commands::web::util::{escape_html, proc, status_err, status_pulling, ServiceName};
@@ -135,12 +135,7 @@ pub async fn clear_appdata(
     let btn = clear_appdata_btn_oob(service, &appdata, true);
     let html = config.broadcast_all(&[&out, &btn]);
 
-    let job = ClearJob {
-        service: service.to_string(),
-        appdata,
-        units: pane.units.iter().map(|u| u.name.clone()).collect(),
-        group_unit: pane.group_unit.clone(),
-    };
+    let job = ServiceJob::new(service, appdata, &pane);
     tokio::spawn(run_clear_appdata(job, lock, Arc::clone(config)));
 
     Ok(html)
