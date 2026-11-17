@@ -14,18 +14,8 @@
     webSocket = lib.neo.swagUpstream {
       app = server;
       port = 80;
-      proxyConf = false;
-      extra = ''
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 1d;
-        proxy_send_timeout 1d;
-      '';
+      webSocket = true;
+      timeout = "1d";
     };
   in {
     config.neo.services.netbird-server.proxyConf = lib.mkDefault (lib.neo.mkSwagServer {

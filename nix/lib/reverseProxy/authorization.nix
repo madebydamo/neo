@@ -74,20 +74,40 @@
       # starts while the container is down.
       # `extra` goes before proxy_pass. proxyConf = false skips proxy.conf, for a
       # location that sets its own headers (nginx appends, it does not override).
+      # webSocket = true (implies proxyConf = false): the WebSocket upgrade and
+      # forwarded headers proxy.conf would set, written out once, so `timeout`
+      # can set proxy_read/send_timeout (proxy.conf's 240 s cannot be set twice).
       swagUpstream = {
         app,
         port,
         proto ? "http",
-        proxyConf ? true,
+        webSocket ? false,
+        proxyConf ? !webSocket,
+        timeout ? null,
         extra ? "",
       }:
-        lib.optionalString proxyConf "include /config/nginx/proxy.conf;\n"
-        + "include /config/nginx/resolver.conf;\n"
-        + "set $upstream_app ${app};\n"
-        + "set $upstream_port ${toString port};\n"
-        + "set $upstream_proto ${proto};\n"
-        + extra
-        + "proxy_pass $upstream_proto://$upstream_app:$upstream_port;\n";
+        assert lib.assertMsg (!(webSocket && proxyConf)) "swagUpstream ${app}: webSocket = true needs proxyConf = false (proxy.conf already sets Upgrade/Connection)";
+        assert lib.assertMsg (timeout == null || !proxyConf) "swagUpstream ${app}: timeout needs proxyConf = false (proxy.conf already sets the proxy timeouts)";
+          lib.optionalString proxyConf "include /config/nginx/proxy.conf;\n"
+          + "include /config/nginx/resolver.conf;\n"
+          + "set $upstream_app ${app};\n"
+          + "set $upstream_port ${toString port};\n"
+          + "set $upstream_proto ${proto};\n"
+          + lib.optionalString webSocket webSocketHeaders
+          + lib.optionalString (timeout != null) "proxy_read_timeout ${timeout};\nproxy_send_timeout ${timeout};\n"
+          + extra
+          + "proxy_pass $upstream_proto://$upstream_app:$upstream_port;\n";
+
+      # What proxy.conf sets for a WebSocket, for locations without it (swagUpstream webSocket).
+      webSocketHeaders = ''
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      '';
 
       # The server block every vhost shares: TLS, HTTP/2, geo rules, body limit.
       # `extra` holds more server-level directives and `body` the locations.
