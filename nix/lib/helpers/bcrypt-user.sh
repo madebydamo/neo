@@ -41,6 +41,8 @@ else
   exit 127
 fi
 
+# A literal "$2": bcrypt hashes start with $2a$/$2b$/$2y$.
+# shellcheck disable=SC2016
 if [[ "$hash_line" != *:'$2'* ]]; then
   echo "helper did not produce bcrypt" >&2
   exit 1
