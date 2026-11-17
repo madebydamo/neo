@@ -13,15 +13,12 @@
       appdata = cfg.appdata;
       # Public origin for absolute links (emails, embedded outpost, OIDC issuer hints).
       publicUrl =
-        if (cfg.customDomains or []) != []
+        if cfg.customDomains != []
         then "https://${builtins.head cfg.customDomains}"
         else lib.neo.publicUrl config cfg;
       dbUser = "authentik";
       dbName = "authentik";
-      dbPassword =
-        if lib.neo.isSet cfg.dbPassword
-        then cfg.dbPassword
-        else "";
+      dbPassword = cfg.dbPassword;
       # Image default user is authentik (1000). Use the neo uid/gid so appdata ownership matches.
       runAs = "--user=${toString config.neo.core.uid}:${toString config.neo.core.gid}";
       # Shared by server and worker. Bootstrap values are only read on an empty database.
@@ -49,7 +46,7 @@
       # Secret part of commonEnv: rendered env file per container (neo.core.secrets).
       commonSecretEnv =
         {
-          AUTHENTIK_SECRET_KEY = cfg.secretKey or "";
+          AUTHENTIK_SECRET_KEY = cfg.secretKey;
           AUTHENTIK_POSTGRESQL__PASSWORD = dbPassword;
         }
         // optionalAttrs (cfg.email.host != "") {

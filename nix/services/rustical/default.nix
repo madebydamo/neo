@@ -26,9 +26,7 @@
       ssoEnabled =
         cfg.auth.enabled
         && (tinyauthCfg.enabled or false)
-        && (cfg.ssoPassword or null)
-        != null
-        && cfg.ssoPassword != ""
+        && lib.neo.isSet cfg.ssoPassword
         && principalIds != [];
       passwordFile = config.neo.core.secrets.templates."rustical-sso-password".path;
     in {

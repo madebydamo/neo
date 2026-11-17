@@ -25,7 +25,7 @@
       tinyauth = config.neo.services.tinyauth;
       domain = swag.domain or null;
       remote = cfg.serverUrl != null && cfg.serverUrl != "";
-      base = removeSuffix "/" (cfg.serverUrl or "");
+      base = removeSuffix "/" (lib.defaultTo "" cfg.serverUrl);
       tokenSet = cfg.token != null && cfg.token != "";
       hostName =
         if cfg.name != null && cfg.name != ""

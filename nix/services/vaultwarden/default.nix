@@ -9,7 +9,7 @@
       cfg = config.neo.services.vaultwarden;
       # Public origin: WebAuthn/FIDO2, attachments and email links all derive from DOMAIN.
       publicUrl =
-        if (cfg.customDomains or []) != []
+        if cfg.customDomains != []
         then "https://${builtins.head cfg.customDomains}"
         else lib.neo.publicUrl config cfg;
 

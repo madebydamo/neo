@@ -17,7 +17,7 @@
 
       # Per-user ACL entries that match a configured user (safe if user deleted but access key remains).
       activeAccess =
-        filterAttrs (username: _: elem username knownUsernames) (cfg.access or {});
+        filterAttrs (username: _: elem username knownUsernames) cfg.access;
 
       # Service names that exist under neo.services (enabled or not) — for typo checks.
       knownServiceNames = attrNames config.neo.services;

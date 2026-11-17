@@ -25,9 +25,7 @@
     ssoEnabled =
       cfg.auth.enabled
       && (tinyauthCfg.enabled or false)
-      && (cfg.ssoPassword or null)
-      != null
-      && cfg.ssoPassword != "";
+      && lib.neo.isSet cfg.ssoPassword;
     corsOrigin =
       if calinoCfg.enabled or false
       then lib.neo.publicUrl config calinoCfg
@@ -36,7 +34,7 @@
     authLoc = lib.neo.authLocations config cfg;
     # The login body carries the password: a rendered snippet (secrets).
     loginBody = lib.neo.secrets.swagSnippet config "rustical-sso-body" ''
-      proxy_set_body "username=$user&password=${cfg.ssoPassword or ""}";
+      proxy_set_body "username=$user&password=${cfg.ssoPassword}";
     '';
     proxyCore = lib.neo.swagUpstream {
       app = "rustical";

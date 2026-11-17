@@ -18,16 +18,16 @@
       cfg = config.neo.services.docmost;
       appdata = cfg.appdata;
       domain = config.neo.services.swag.domain;
-      dbPassword = cfg.dbPassword or "";
+      dbPassword = cfg.dbPassword;
       tinyauthCfg = config.neo.services.tinyauth;
       ssoActive = cfg.sso && cfg.auth.enabled && tinyauthCfg.enabled;
       mcpActive = ssoActive && cfg.mcp;
       # Derived from appSecret: no extra secret to manage. Must match swag.nix.
       # Hashed at activation when appSecret is encrypted (lib.neo.secrets.sha256).
-      ssoKey = lib.neo.secrets.sha256 "${cfg.appSecret or ""}:docmost-sso";
-      swagKey = lib.neo.secrets.sha256 "${cfg.appSecret or ""}:docmost-sso-swag";
+      ssoKey = lib.neo.secrets.sha256 "${cfg.appSecret}:docmost-sso";
+      swagKey = lib.neo.secrets.sha256 "${cfg.appSecret}:docmost-sso-swag";
       # Signs MCP OAuth clients, codes and tokens; a new appSecret revokes them all.
-      mcpKey = lib.neo.secrets.sha256 "${cfg.appSecret or ""}:docmost-mcp";
+      mcpKey = lib.neo.secrets.sha256 "${cfg.appSecret}:docmost-mcp";
       ssoKeyFile = config.neo.core.secrets.templates."docmost-sso-key".path;
       # Never a real mailbox, so no tinyauth user can map onto it.
       serviceEmail = "docmost-sso@neo.invalid";
@@ -162,7 +162,7 @@
           neo.core.secrets.containerEnv =
             {
               docmost = {
-                APP_SECRET = cfg.appSecret or "";
+                APP_SECRET = cfg.appSecret;
                 DATABASE_URL = "postgresql://docmost:${dbPassword}@docmost-db:5432/docmost";
               };
             }

@@ -23,7 +23,7 @@
     ssoActive = cfg.sso && cfg.auth.enabled && tinyauthCfg.enabled;
     mcpActive = ssoActive && cfg.mcp;
     # Must match default.nix.
-    swagKey = lib.neo.secrets.sha256 "${cfg.appSecret or ""}:docmost-sso-swag";
+    swagKey = lib.neo.secrets.sha256 "${cfg.appSecret}:docmost-sso-swag";
     # The key header is derived from appSecret: a rendered snippet (secrets).
     keyHeader = lib.neo.secrets.swagSnippet config "docmost-sso-key" ''
       proxy_set_header X-Neo-SSO-Key "${swagKey}";

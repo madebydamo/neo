@@ -18,7 +18,7 @@
           image = cfg.containers."activepieces-db";
           inherit appdata;
           db = "activepieces";
-          password = cfg.dbPassword or "";
+          password = cfg.dbPassword;
         })
         (lib.neo.mkRedisSidecar config {
           network = lib.neo.docker.serviceNetwork "activepieces";
@@ -44,9 +44,9 @@
           # Secrets reach the containers through env files rendered at activation.
           neo.core.secrets.containerEnv = {
             activepieces = {
-              AP_ENCRYPTION_KEY = cfg.encryptionKey or "";
-              AP_JWT_SECRET = cfg.jwtSecret or "";
-              AP_POSTGRES_PASSWORD = cfg.dbPassword or "";
+              AP_ENCRYPTION_KEY = cfg.encryptionKey;
+              AP_JWT_SECRET = cfg.jwtSecret;
+              AP_POSTGRES_PASSWORD = cfg.dbPassword;
             };
           };
 

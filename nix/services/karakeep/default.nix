@@ -23,12 +23,11 @@
 
         # Secrets reach the containers through env files rendered at activation.
         neo.core.secrets.containerEnv = {
-          karakeep-meilisearch.MEILI_MASTER_KEY = cfg.meiliMasterKey or "";
+          karakeep-meilisearch.MEILI_MASTER_KEY = cfg.meiliMasterKey;
           karakeep =
             {
-              # Strings coerced for env typing; assertions require non-empty when enabled.
-              NEXTAUTH_SECRET = cfg.nextauthSecret or "";
-              MEILI_MASTER_KEY = cfg.meiliMasterKey or "";
+              NEXTAUTH_SECRET = cfg.nextauthSecret;
+              MEILI_MASTER_KEY = cfg.meiliMasterKey;
             }
             // optionalAttrs (lib.neo.isSet cfg.openaiApiKey) {
               OPENAI_API_KEY = cfg.openaiApiKey;

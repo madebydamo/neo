@@ -11,7 +11,7 @@
       rootUrl =
         if cfg.rootUrl != null && cfg.rootUrl != ""
         then cfg.rootUrl
-        else if (cfg.customDomains or []) != []
+        else if cfg.customDomains != []
         then "https://${builtins.head cfg.customDomains}"
         else lib.defaultTo "http://localhost:${toString cfg.port}" (lib.neo.publicUrl config cfg);
       rootHost = let

@@ -18,10 +18,7 @@
     ...
   }: let
     cfg = config.neo.services.dufs;
-    webdavAuth =
-      (cfg.password or null)
-      != null
-      && cfg.password != "";
+    webdavAuth = lib.neo.isSet cfg.password;
     auth = lib.neo.authBlock config cfg;
     authLoc = lib.neo.authLocations config cfg;
     proxyCore = lib.neo.swagUpstream {

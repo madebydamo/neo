@@ -33,7 +33,7 @@
       hermesSecretPath = "/etc/grafana/neo/hermes-webhook.secret";
       # Hermes delivers to Telegram when a bot is set up, else only logs.
       deliver =
-        if (hermes.telegramBotToken or null) != null && hermes.telegramAllowedUserId != []
+        if lib.neo.isSet hermes.telegramBotToken && hermes.telegramAllowedUserId != []
         then "telegram"
         else "log";
 
