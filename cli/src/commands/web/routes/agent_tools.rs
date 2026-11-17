@@ -164,7 +164,7 @@ fn entry_fields(t: &OptionType) -> Option<Vec<Value>> {
                 json!({
                     "field": f.name,
                     "label": f.label,
-                    "type": f.typeLabel,
+                    "type": f.type_label,
                     "secret": f.secret,
                     "generate": can_generate(f.secret, f.helper.as_ref()),
                 })
@@ -178,7 +178,7 @@ pub(crate) fn describe(prefix: &str, o: &OptionSchema) -> Value {
         "path": format!("{prefix}.{}", o.name),
         "label": o.label,
         "description": o.description,
-        "type": o.typeLabel,
+        "type": o.type_label,
         "default": redacted_default(o),
         "current": redacted_current(o),
         "secret": o.secret,

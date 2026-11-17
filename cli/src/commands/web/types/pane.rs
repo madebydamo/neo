@@ -19,11 +19,14 @@ pub struct ServiceMeta {
     #[serde(default)]
     pub privacy: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub projectUrl: Option<String>,
+    #[serde(rename = "projectUrl")]
+    pub project_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub githubUrl: Option<String>,
+    #[serde(rename = "githubUrl")]
+    pub github_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub releaseUrl: Option<String>,
+    #[serde(rename = "releaseUrl")]
+    pub release_url: Option<String>,
     #[serde(default)]
     pub screenshots: Vec<ServiceScreenshot>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -96,10 +96,8 @@ fn rsync(args: &[String]) -> Result<Plan, String> {
     for a in &args[2..] {
         let ok = if a.starts_with("--") {
             ALLOWED.contains(&a.as_str()) || ALLOWED_PREFIX.iter().any(|p| a.starts_with(p))
-        } else if a.starts_with('-') {
-            a[1..]
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '.')
+        } else if let Some(flags) = a.strip_prefix('-') {
+            flags.chars().all(|c| c.is_ascii_alphanumeric() || c == '.')
         } else {
             a == "." || inside_home(a)
         };
@@ -290,7 +288,7 @@ mod tests {
     fn zfs_stays_in_its_datasets() {
         let d = format!("{P}/neo");
         for ok in [
-            format!("zfs list -H -o name zroot"),
+            "zfs list -H -o name zroot".to_string(),
             format!("zfs list -H -t snapshot -o name -S createtxg -d 1 {d}"),
             format!("zfs recv -u -F -o canmount=noauto -o com.sun:auto-snapshot=false {d}"),
             format!("zfs create -p -o canmount=off {P}"),

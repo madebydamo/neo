@@ -189,15 +189,15 @@ pub async fn run_clear_appdata(job: ClearJob, mut lock: LockGuard, config: Arc<A
         Ok(()) => status_ok("appdata cleared"),
         Err(e) => status_err(&e),
     };
-    let frag = clear_appdata_out_oob(&job.service, &inner, &title);
-    config.broadcast(frag);
-    let btn = clear_appdata_btn_oob(&job.service, &job.appdata, false);
-    config.broadcast(btn);
-    end_clear_appdata(&config, &job.service);
-    for u in &job.units {
-        broadcast_unit_update(u, &config).await;
-        schedule_unit_refresh_burst(u.clone(), Arc::clone(&config));
-    }
+    finish_clear_appdata(
+        &job.service,
+        &job.appdata,
+        &job.units,
+        &config,
+        inner,
+        title,
+    )
+    .await;
 }
 
 async fn clear_inner(

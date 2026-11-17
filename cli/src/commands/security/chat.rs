@@ -328,7 +328,7 @@ mod tests {
         for tok in &t {
             assert_eq!(
                 agent_refs::parse_refs(&format!("about @{tok}?")),
-                [tok.clone()]
+                std::slice::from_ref(tok)
             );
         }
     }

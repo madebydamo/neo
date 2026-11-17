@@ -208,7 +208,8 @@ pub struct OptionSchema {
     pub name: String,
     #[serde(rename = "type")]
     pub r#type: OptionType,
-    pub typeLabel: String,
+    #[serde(rename = "typeLabel")]
+    pub type_label: String,
     #[serde(default)]
     pub default: serde_json::Value,
     #[serde(default)]
@@ -222,9 +223,11 @@ pub struct OptionSchema {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub current: Option<serde_json::Value>,
     #[serde(default)]
-    pub defaultDisplay: String,
+    #[serde(rename = "defaultDisplay")]
+    pub default_display: String,
     #[serde(default)]
-    pub currentDisplay: String,
+    #[serde(rename = "currentDisplay")]
+    pub current_display: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rank: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

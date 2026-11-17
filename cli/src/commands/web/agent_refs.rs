@@ -272,7 +272,7 @@ pub fn option_context(root: &str, o: &OptionSchema) -> Value {
         "path": settings_path,
         "label": o.label,
         "description": o.description,
-        "type": o.typeLabel,
+        "type": o.type_label,
         "default": compact(&redact::redacted_default(o)),
         "current": redacted_current(o),
         "secret": o.secret,

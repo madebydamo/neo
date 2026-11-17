@@ -76,7 +76,7 @@ fn reveal_secrets(config: &AppConfig, pane: &mut OptionPaneContext) {
     for o in pane.options.iter_mut() {
         if let Some(current) = o.current.as_mut() {
             fill_placeholders(current, &tree);
-            o.currentDisplay = value_to_display(current);
+            o.current_display = value_to_display(current);
         }
     }
     if let Ok(json) = serde_json::to_string(&pane.options) {

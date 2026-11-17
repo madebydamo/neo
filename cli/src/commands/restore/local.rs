@@ -391,7 +391,7 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         }
         // The last attempt's pool (not a backup pool on an attached disk).
         let _ = Command::new("zpool").args(["export", &pool]).status();
-        execute_command(Command::new(format!("{script}")).arg("--yes-wipe-all-disks"))?;
+        execute_command(Command::new(&script).arg("--yes-wipe-all-disks"))?;
         cap_arc();
     }
 

@@ -98,7 +98,7 @@ pub fn pane(pane: &mut OptionPaneContext, old: &Value, new: &Value) -> bool {
     for o in pane.options.iter_mut() {
         let path = option_path(&prefix, pane.is_core, &o.name);
         if let Some(cur) = patched_current(o, get(old, &path), get(new, &path)) {
-            o.currentDisplay = value_to_display(&cur);
+            o.current_display = value_to_display(&cur);
             o.current = Some(cur);
             changed = true;
         }
@@ -109,7 +109,7 @@ pub fn pane(pane: &mut OptionPaneContext, old: &Value, new: &Value) -> bool {
     for o in pane.sections.iter_mut().flat_map(|s| s.options.iter_mut()) {
         if let Some(src) = pane.options.iter().find(|p| p.name == o.name) {
             o.current = src.current.clone();
-            o.currentDisplay = src.currentDisplay.clone();
+            o.current_display = src.current_display.clone();
         }
     }
     if let Ok(json) = serde_json::to_string(&pane.options) {
@@ -179,7 +179,7 @@ mod tests {
         let new = json!({"services": {"immich": {"subdomain": "pics", "port": 81}}});
         assert!(pane(&mut p, &old, &new));
         assert_eq!(p.options[0].current, Some(json!("pics")));
-        assert_eq!(p.options[0].currentDisplay, "pics");
+        assert_eq!(p.options[0].current_display, "pics");
         // auth.enabled left settings.toml: back to its default.
         assert_eq!(p.options[1].current, Some(json!(true)));
         assert_eq!(p.options[2].current, Some(json!(81)));

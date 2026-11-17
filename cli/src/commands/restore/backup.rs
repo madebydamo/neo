@@ -814,11 +814,7 @@ pub fn check(access: &Access, source: &Source, data_from: Option<&Path>) -> Resu
                     ],
                 )
                 .unwrap_or_default();
-            Ok(format!(
-                "{}@{snap} ({})",
-                source.dataset,
-                used.trim().to_string()
-            ))
+            Ok(format!("{}@{snap} ({})", source.dataset, used.trim()))
         }
     }
 }

@@ -753,13 +753,12 @@ mod tests {
             .all(|u| u.active == "unknown"));
     }
 
+    type FetchFuture = std::pin::Pin<Box<dyn Future<Output = HashMap<String, UnitStatus>> + Send>>;
+
     fn fake_fetch(
         calls: Arc<AtomicUsize>,
         seen: Arc<std::sync::Mutex<Vec<Vec<String>>>>,
-    ) -> impl FnOnce(
-        Vec<String>,
-    )
-        -> std::pin::Pin<Box<dyn Future<Output = HashMap<String, UnitStatus>> + Send>> {
+    ) -> impl FnOnce(Vec<String>) -> FetchFuture {
         move |units: Vec<String>| {
             calls.fetch_add(1, Ordering::SeqCst);
             seen.lock().unwrap().push(units.clone());

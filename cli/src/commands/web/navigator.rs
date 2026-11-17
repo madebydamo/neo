@@ -76,7 +76,7 @@ mod tests {
         assert_eq!(s.domain.as_deref(), Some("example.org"));
         assert_eq!(s.initials, "JE");
         assert_eq!(s.icon.as_deref(), Some("https://x/i.svg"));
-        assert!(!s.iframeCompatible);
+        assert!(!s.iframe_compatible);
         assert_eq!(s.units, vec!["docker-jellyfin"]);
     }
 
