@@ -30,6 +30,7 @@ mod redact;
 mod resources;
 mod routes;
 mod settings;
+mod ssh;
 mod trigger;
 mod types;
 mod units;
