@@ -3,6 +3,7 @@ mod alerts;
 mod escape;
 mod htmx;
 mod inflight;
+mod json_error;
 mod oob_status;
 mod paths;
 pub mod proc;
@@ -13,6 +14,7 @@ pub use alerts::{alert_html, changes_actions_row, err_div, err_span, AlertKind};
 pub use escape::{escape_attr, escape_html, escape_nix_string};
 pub use htmx::Htmx;
 pub use inflight::InFlightSet;
+pub use json_error::JsonError;
 pub use oob_status::{status_err, status_ok, status_pulling, status_slot_oob};
 pub use paths::{
     appdata_dir, docker_bin, neo_bin, nix_bin, read_token_file, rsync_bin, state_dir, static_dir,

@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::commands::web::helper_exec::{parse_helper_value, run_helper_script};
 use crate::commands::web::panes::load_options;
 use crate::commands::web::types::{AppConfig, OptionHelper, OptionSchema};
+use crate::commands::web::util::JsonError;
 
 /// Where to apply a helper result in nested option forms.
 /// `key` is client-only (attrsOf map entry); serde ignores unknown client fields.
@@ -39,20 +40,6 @@ pub struct HelperRunResponse {
     pub value: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub apply: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
-
-fn err_resp(status: Status, msg: impl Into<String>) -> (Status, Json<HelperRunResponse>) {
-    (
-        status,
-        Json(HelperRunResponse {
-            ok: false,
-            value: None,
-            apply: None,
-            error: Some(msg.into()),
-        }),
-    )
 }
 
 fn find_helper<'a>(
@@ -200,40 +187,55 @@ fn value_ok_for_kind(
 pub async fn run_helper(
     config: &State<Arc<AppConfig>>,
     body: Json<HelperRunRequest>,
-) -> (Status, Json<HelperRunResponse>) {
+) -> Result<Json<HelperRunResponse>, JsonError> {
     let req = body.into_inner();
     if req.service.is_empty() || req.option.is_empty() {
-        return err_resp(Status::BadRequest, "service and option are required");
+        return Err(JsonError::new(
+            Status::BadRequest,
+            "service and option are required",
+        ));
     }
 
     let options = match load_options(config, req.is_core, &req.service).await {
         Ok(o) => o,
-        Err(e) => return err_resp(Status::ServiceUnavailable, e),
+        Err(e) => return Err(JsonError::new(Status::ServiceUnavailable, e)),
     };
 
     let helper = match find_helper(&options, &req.option, &req.target) {
         Some(h) => h.clone(),
-        None => return err_resp(Status::NotFound, "no helper on this option"),
+        None => return Err(JsonError::new(Status::NotFound, "no helper on this option")),
     };
 
     if helper.kind != "button" && helper.kind != "form" {
-        return err_resp(Status::InternalServerError, "invalid helper kind");
+        return Err(JsonError::new(
+            Status::InternalServerError,
+            "invalid helper kind",
+        ));
     }
     if helper.apply != "set" && helper.apply != "append" {
-        return err_resp(Status::InternalServerError, "invalid helper apply mode");
+        return Err(JsonError::new(
+            Status::InternalServerError,
+            "invalid helper apply mode",
+        ));
     }
     if helper.script.is_empty() {
-        return err_resp(Status::InternalServerError, "helper has no script");
+        return Err(JsonError::new(
+            Status::InternalServerError,
+            "helper has no script",
+        ));
     }
 
     if let Err(e) = validate_inputs(&helper, &req.inputs) {
-        return err_resp(Status::UnprocessableEntity, e);
+        return Err(JsonError::new(Status::UnprocessableEntity, e));
     }
 
     let script_path = Path::new(&helper.script);
     // Security invariant: executable path only from server-side schema.
     if !script_path.is_absolute() {
-        return err_resp(Status::InternalServerError, "invalid helper script path");
+        return Err(JsonError::new(
+            Status::InternalServerError,
+            "invalid helper script path",
+        ));
     }
 
     let stdin = serde_json::Value::Object(req.inputs.clone()).to_string();
@@ -251,13 +253,16 @@ pub async fn run_helper(
                 "web: helper {} failed to start (id={}): {e:#}",
                 helper.id, helper.id
             );
-            return err_resp(Status::InternalServerError, "Helper failed to start");
+            return Err(JsonError::new(
+                Status::InternalServerError,
+                "Helper failed to start",
+            ));
         }
     };
 
     if result.timed_out {
         eprintln!("web: helper {} timed out", helper.id);
-        return err_resp(Status::GatewayTimeout, "Helper timed out");
+        return Err(JsonError::new(Status::GatewayTimeout, "Helper timed out"));
     }
 
     if result.exit_code != 0 {
@@ -273,20 +278,20 @@ pub async fn run_helper(
                     .collect::<String>()
                     .replace('\n', " ")
             );
-            return err_resp(
+            return Err(JsonError::new(
                 Status::UnprocessableEntity,
                 "Helper tool not found on server PATH (need htpasswd/mkpasswd and jq; set NEO_HELPER_PATH or activate neo-web)",
-            );
+            ));
         }
         if passwordish {
             eprintln!(
                 "web: helper {} exited {} (password helper; stderr suppressed)",
                 helper.id, result.exit_code
             );
-            return err_resp(
+            return Err(JsonError::new(
                 Status::UnprocessableEntity,
                 format!("Helper failed (exit {})", result.exit_code),
-            );
+            ));
         }
         let snippet: String = result.stderr.chars().take(512).collect();
         eprintln!(
@@ -300,17 +305,17 @@ pub async fn run_helper(
         } else {
             snippet.trim().to_string()
         };
-        return err_resp(Status::UnprocessableEntity, msg);
+        return Err(JsonError::new(Status::UnprocessableEntity, msg));
     }
 
     let value = match parse_helper_value(&result.stdout) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("web: helper {} bad output: {e:#}", helper.id);
-            return err_resp(
+            return Err(JsonError::new(
                 Status::InternalServerError,
                 "Helper produced invalid output",
-            );
+            ));
         }
     };
 
@@ -321,16 +326,12 @@ pub async fn run_helper(
         .map(|t| t.index.is_some() && t.field.is_none())
         .unwrap_or(false);
     if let Err(e) = value_ok_for_kind(&kind, &helper.apply, &value, element_set) {
-        return err_resp(Status::UnprocessableEntity, e);
+        return Err(JsonError::new(Status::UnprocessableEntity, e));
     }
 
-    (
-        Status::Ok,
-        Json(HelperRunResponse {
-            ok: true,
-            value: Some(value),
-            apply: Some(helper.apply),
-            error: None,
-        }),
-    )
+    Ok(Json(HelperRunResponse {
+        ok: true,
+        value: Some(value),
+        apply: Some(helper.apply),
+    }))
 }

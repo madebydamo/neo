@@ -15,6 +15,7 @@ use crate::commands::web::panes::load_options;
 use crate::commands::web::types::{AppConfig, OptionSchema, OptionUiOauth};
 use crate::commands::web::util::{
     oauth_env_key_ok, oauth_session_ok, option_name_ok, provider_id_ok, run_as_ok, service_name_ok,
+    JsonError,
 };
 
 #[derive(Deserialize)]
@@ -37,12 +38,6 @@ pub struct OauthRunResponse {
     pub ok: bool,
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
-}
-
-fn err_resp(status: Status, msg: impl Into<String>) -> (Status, Json<OauthRunResponse>) {
-    let mut extra = serde_json::Map::new();
-    extra.insert("error".into(), serde_json::Value::String(msg.into()));
-    (status, Json(OauthRunResponse { ok: false, extra }))
 }
 
 fn action_ok(action: &str) -> bool {
@@ -86,47 +81,64 @@ fn sanitized_env(env: &Option<BTreeMap<String, String>>) -> Result<Vec<(String, 
 pub async fn run_oauth(
     config: &State<Arc<AppConfig>>,
     body: Json<OauthRunRequest>,
-) -> (Status, Json<OauthRunResponse>) {
+) -> Result<(Status, Json<OauthRunResponse>), JsonError> {
     let req = body.into_inner();
     if !service_name_ok(&req.service) || !option_name_ok(&req.option) {
-        return err_resp(Status::BadRequest, "invalid service or option");
+        return Err(JsonError::new(
+            Status::BadRequest,
+            "invalid service or option",
+        ));
     }
     if !action_ok(&req.action) {
-        return err_resp(Status::BadRequest, "invalid action");
+        return Err(JsonError::new(Status::BadRequest, "invalid action"));
     }
     let provider = req.provider.as_deref().unwrap_or("").trim();
     if matches!(req.action.as_str(), "status" | "login" | "refresh") && !provider_id_ok(provider) {
-        return err_resp(Status::BadRequest, "invalid provider");
+        return Err(JsonError::new(Status::BadRequest, "invalid provider"));
     }
     let session = req.session.as_deref().unwrap_or("").trim();
     if matches!(req.action.as_str(), "poll" | "submit") && !oauth_session_ok(session) {
-        return err_resp(Status::BadRequest, "invalid session");
+        return Err(JsonError::new(Status::BadRequest, "invalid session"));
     }
 
     let options = match load_options(config, req.is_core, &req.service).await {
         Ok(o) => o,
-        Err(e) => return err_resp(Status::ServiceUnavailable, e),
+        Err(e) => return Err(JsonError::new(Status::ServiceUnavailable, e)),
     };
     let oauth = match find_oauth(&options, &req.option) {
         Some(o) => o.clone(),
-        None => return err_resp(Status::NotFound, "no oauth helper on this option"),
+        None => {
+            return Err(JsonError::new(
+                Status::NotFound,
+                "no oauth helper on this option",
+            ))
+        }
     };
     if oauth.script.is_empty() {
-        return err_resp(Status::InternalServerError, "oauth helper has no script");
+        return Err(JsonError::new(
+            Status::InternalServerError,
+            "oauth helper has no script",
+        ));
     }
     let script_path = Path::new(&oauth.script);
     if !script_path.is_absolute() {
-        return err_resp(Status::InternalServerError, "invalid oauth script path");
+        return Err(JsonError::new(
+            Status::InternalServerError,
+            "invalid oauth script path",
+        ));
     }
     let run_as = oauth.run_as.as_deref();
     if let Some(user) = run_as {
         if !run_as_ok(user) {
-            return err_resp(Status::InternalServerError, "invalid oauth runAs");
+            return Err(JsonError::new(
+                Status::InternalServerError,
+                "invalid oauth runAs",
+            ));
         }
     }
     let env_pairs = match sanitized_env(&oauth.env) {
         Ok(v) => v,
-        Err(e) => return err_resp(Status::InternalServerError, e),
+        Err(e) => return Err(JsonError::new(Status::InternalServerError, e)),
     };
     let env_refs: Vec<(&str, &str)> = env_pairs
         .iter()
@@ -152,7 +164,7 @@ pub async fn run_oauth(
     }
     if let Some(code) = req.code.as_deref() {
         if code.len() > 4096 {
-            return err_resp(Status::BadRequest, "code too long");
+            return Err(JsonError::new(Status::BadRequest, "code too long"));
         }
         stdin_map.insert("code".into(), serde_json::Value::String(code.to_string()));
     }
@@ -170,11 +182,17 @@ pub async fn run_oauth(
         Ok(r) => r,
         Err(e) => {
             eprintln!("web: oauth helper failed to start: {e:#}");
-            return err_resp(Status::InternalServerError, "OAuth helper failed to start");
+            return Err(JsonError::new(
+                Status::InternalServerError,
+                "OAuth helper failed to start",
+            ));
         }
     };
     if result.timed_out {
-        return err_resp(Status::GatewayTimeout, "OAuth helper timed out");
+        return Err(JsonError::new(
+            Status::GatewayTimeout,
+            "OAuth helper timed out",
+        ));
     }
 
     let trimmed = result.stdout.trim();
@@ -187,7 +205,7 @@ pub async fn run_oauth(
             } else {
                 snippet.trim().to_string()
             };
-            return err_resp(Status::UnprocessableEntity, msg);
+            return Err(JsonError::new(Status::UnprocessableEntity, msg));
         }
     };
     let mut extra = match parsed {
@@ -218,5 +236,5 @@ pub async fn run_oauth(
     } else {
         Status::UnprocessableEntity
     };
-    (status, Json(OauthRunResponse { ok, extra }))
+    Ok((status, Json(OauthRunResponse { ok, extra })))
 }
