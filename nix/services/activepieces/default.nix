@@ -9,7 +9,6 @@
     with lib; let
       cfg = config.neo.services.activepieces;
       appdata = cfg.appdata;
-      inherit (lib.neo.secrets) isPlaceholder;
     in {
       config = mkIf cfg.enabled (mkMerge [
         (lib.neo.mkPostgresSidecar config {
@@ -27,15 +26,16 @@
           inherit appdata;
         })
         {
-          assertions =
-            lib.neo.requireSecrets "activepieces" cfg ["jwtSecret" "dbPassword"]
-            ++ [
-              {
-                # An encrypted value is only checked for presence (its text is a placeholder).
-                assertion = lib.neo.isSet cfg.encryptionKey && (isPlaceholder cfg.encryptionKey || builtins.match "[A-Za-z0-9]{32}" cfg.encryptionKey != null);
-                message = "neo.services.activepieces: encryptionKey must be exactly 32 alphanumeric characters (openssl rand -hex 16).";
-              }
-            ];
+          assertions = lib.neo.requireSecrets "activepieces" cfg [
+            "jwtSecret"
+            "dbPassword"
+            {
+              name = "encryptionKey";
+              pattern = "[A-Za-z0-9]{32}";
+              requirement = "be exactly 32 alphanumeric characters";
+              hint = "openssl rand -hex 16";
+            }
+          ];
 
           systemd.services.docker-activepieces.preStart = lib.neo.mkEnsureDirs config [
             "${appdata}/cache"

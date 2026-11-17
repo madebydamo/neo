@@ -29,13 +29,21 @@
       isSet = v: v != null && v != "";
 
       # Assertions for the secrets a service cannot start without. Each entry is
-      # an option name, or { name; minLength ? null; hint ? "use the Generate helper"; }.
-      #   assertions = lib.neo.requireSecrets "myapp" cfg [ "dbPassword" { name = "secretKey"; minLength = 50; } ];
+      # an option name, or { name; minLength ? null; forbid ? []; pattern ? null;
+      # requirement ? null; hint ? "use the Generate helper"; }.
+      # `forbid`: values that do not count as set (an example default such as
+      # "change-me"). `pattern`: regex a plain value must match (builtins.match);
+      # give `requirement` with it, the text after "must" ("be 32 letters or digits").
+      # An encrypted value (placeholder) only has to be present.
+      #   assertions = lib.neo.requireSecrets "myapp" cfg [ "dbPassword" { name = "secretKey"; minLength = 50; forbid = ["CHANGE_ME"]; } ];
       requireSecrets = service: cfg:
         map (spec: let
           entry =
             {
               minLength = null;
+              forbid = [];
+              pattern = null;
+              requirement = null;
               hint = "use the Generate helper";
             }
             // (
@@ -44,12 +52,21 @@
               else spec
             );
           value = cfg.${entry.name};
+          plain = isSet value && !secrets.isPlaceholder value;
+          requirement =
+            if entry.requirement != null
+            then entry.requirement
+            else if entry.minLength != null
+            then "be at least ${toString entry.minLength} characters"
+            else "be set";
         in {
-          assertion = isSet value && (entry.minLength == null || secrets.isLongEnough entry.minLength value);
-          message = "neo.services.${service}: ${entry.name} must ${
-            if entry.minLength == null
-            then "be set"
-            else "be at least ${toString entry.minLength} characters"
+          assertion =
+            isSet value
+            && (entry.minLength == null || secrets.isLongEnough entry.minLength value)
+            && !(lib.elem value entry.forbid)
+            && (entry.pattern == null || !plain || builtins.match entry.pattern value != null);
+          message = "neo.services.${service}: ${entry.name} must ${requirement}${
+            lib.optionalString (entry.forbid != []) " and not be ${lib.concatMapStringsSep " or " builtins.toJSON entry.forbid}"
           } when enabled (${entry.hint}).";
         });
 

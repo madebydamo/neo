@@ -27,10 +27,10 @@
         })
         {
           # paperless-ngx 3.0+ raises ImproperlyConfigured without a real secret key.
-          assertions = [
+          assertions = lib.neo.requireSecrets "paperless" cfg [
             {
-              assertion = lib.neo.isSet cfg.secretKey && cfg.secretKey != "change-me";
-              message = "neo.services.paperless: secretKey must be set to a unique value when enabled (use the Generate helper; not the default \"change-me\").";
+              name = "secretKey";
+              forbid = ["change-me"];
             }
           ];
 

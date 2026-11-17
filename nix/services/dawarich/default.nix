@@ -93,16 +93,18 @@
         })
         {
           assertions =
-            lib.neo.requireSecrets "dawarich" cfg ["dbPassword"]
+            lib.neo.requireSecrets "dawarich" cfg [
+              "dbPassword"
+              {
+                name = "secretKeyBase";
+                minLength = 32;
+                forbid = ["CHANGE_ME"];
+              }
+            ]
             ++ [
               {
                 assertion = publicHost != "";
                 message = "neo.services.dawarich: subdomain and services.swag.domain must be set when enabled.";
-              }
-              {
-                # An encrypted value is only checked for presence (its text is a placeholder).
-                assertion = lib.neo.isSet cfg.secretKeyBase && (cfg.secretKeyBase != "CHANGE_ME" && lib.neo.secrets.isLongEnough 32 cfg.secretKeyBase);
-                message = "neo.services.dawarich: secretKeyBase must be at least 32 characters when enabled (use the Generate helper; not CHANGE_ME).";
               }
               {
                 assertion = cfg.containers.dawarich == cfg.containers."dawarich-sidekiq";

@@ -104,21 +104,33 @@
         duplicatePorts;
     in {
       config = mkIf cfg.enabled {
-        assertions = [
-          {
-            assertion = cfg.wireguardPrivateKey != null && cfg.wireguardPresharedKey != null && cfg.wireguardAddresses != null;
-            message = "You must configure your wireguard tunnel with a private key, preshared key and an address";
-          }
-          {
-            assertion = duplicatePorts == [];
-            message = ''
-              neo.services.vpn: overlapping container ports among VPN-routed services.
-              Containers with vpn.enabled share the gluetun network namespace, so only one process can bind each port.
-              Resolve by rebinding a service port (and its vpn.ports list) so claims are unique:
-              ${portConflictMessage}
-            '';
-          }
-        ];
+        assertions =
+          lib.neo.requireSecrets "vpn" cfg [
+            {
+              name = "wireguardPrivateKey";
+              hint = "the PrivateKey line of your provider's WireGuard config";
+            }
+            {
+              name = "wireguardAddresses";
+              hint = "the Address line of your provider's WireGuard config";
+            }
+          ]
+          ++ [
+            {
+              # Empty is allowed: some providers have no preshared key.
+              assertion = cfg.wireguardPresharedKey != null;
+              message = "neo.services.vpn: wireguardPresharedKey must be set when enabled (the PresharedKey line of your provider's WireGuard config; empty when it has none).";
+            }
+            {
+              assertion = duplicatePorts == [];
+              message = ''
+                neo.services.vpn: overlapping container ports among VPN-routed services.
+                Containers with vpn.enabled share the gluetun network namespace, so only one process can bind each port.
+                Resolve by rebinding a service port (and its vpn.ports list) so claims are unique:
+                ${portConflictMessage}
+              '';
+            }
+          ];
 
         # WireGuard keys reach gluetun through an env file rendered at activation.
         neo.core.secrets.containerEnv.vpn = {
