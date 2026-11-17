@@ -1,6 +1,4 @@
 //! JSON state files under neo-web's state directory (proposals, version notes).
-use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -17,16 +15,7 @@ pub fn write_atomic(path: &Path, body: &str, mode: u32) -> Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
     }
-    let tmp = path.with_extension("json.tmp");
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(mode)
-        .open(&tmp)
-        .and_then(|mut f| f.write_all(body.as_bytes()))
-        .with_context(|| format!("write {}", tmp.display()))?;
-    std::fs::rename(&tmp, path).with_context(|| format!("replace {}", path.display()))
+    crate::utils::fsutil::write_atomic(path, body.as_bytes(), Some(mode))
 }
 
 #[cfg(test)]

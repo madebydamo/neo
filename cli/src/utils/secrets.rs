@@ -416,21 +416,7 @@ pub fn read_plain(path: &Path) -> Result<Tree> {
 
 /// Write secrets.yaml atomically, owner-only.
 pub fn write_plain(path: &Path, tree: &Tree) -> Result<()> {
-    use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
-    let tmp = path.with_extension("yaml.tmp");
-    {
-        let mut f = fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&tmp)
-            .with_context(|| format!("write {}", tmp.display()))?;
-        f.write_all(emit(tree).as_bytes())?;
-        f.sync_all()?;
-    }
-    fs::rename(&tmp, path).with_context(|| format!("replace {}", path.display()))
+    super::fsutil::write_atomic(path, emit(tree).as_bytes(), Some(0o600))
 }
 
 // -------------------------------------------------------- TOML ↔ secrets --

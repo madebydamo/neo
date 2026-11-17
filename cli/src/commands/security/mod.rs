@@ -328,10 +328,7 @@ fn load_verdicts(dir: &Path) -> Result<Verdicts> {
 
 /// Write via a temp file and rename, so the page never reads half a report.
 fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<()> {
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, serde_json::to_vec_pretty(value)?)
-        .with_context(|| format!("write {}", tmp.display()))?;
-    std::fs::rename(&tmp, path).with_context(|| format!("rename to {}", path.display()))
+    crate::utils::fsutil::write_atomic(path, &serde_json::to_vec_pretty(value)?, None)
 }
 
 fn save(dir: &Path, report: &Report, verdicts: &Verdicts) -> Result<()> {

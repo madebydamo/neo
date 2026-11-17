@@ -16,7 +16,7 @@ use toml_edit::{value, DocumentMut};
 use super::command::{
     check_output, env_or, output_checked, output_with_stdin, root_command, sudo_bin,
 };
-use super::fsutil::{write_private, TempDir};
+use super::fsutil::{write_atomic, write_private, TempDir};
 use super::secrets::{self, Backend, Node, Tree};
 use super::settings::{authorized_keys, ensure_table, recorded_host_key};
 use super::{git_cmd, sort_document_alphabetically};
@@ -252,9 +252,7 @@ impl Store {
     }
 
     fn write_atomic(&self, name: &str, content: &str) -> Result<()> {
-        let tmp = self.path(&format!(".{name}.tmp"));
-        fs::write(&tmp, content).with_context(|| format!("write {}", tmp.display()))?;
-        fs::rename(&tmp, self.path(name)).with_context(|| format!("replace {name}"))
+        write_atomic(&self.path(name), content.as_bytes(), None)
     }
 
     /// Whether the config's Nix files read the secrets files (the deploy

@@ -76,10 +76,13 @@ pub fn write_op_state(
             }
         }
     }
-    let _ = fs::write(
-        state_path(id),
-        serde_json::to_string_pretty(&s).unwrap_or_else(|_| "{}".to_string()),
-    );
+    // The web UI polls this file: replace it in one step, never truncate it.
+    let written = serde_json::to_vec_pretty(&s)
+        .map_err(anyhow::Error::from)
+        .and_then(|body| super::fsutil::write_atomic(&state_path(id), &body, None));
+    if let Err(e) = written {
+        eprintln!("neo: could not record state of {id}: {e:#}");
+    }
 }
 
 pub fn append_log(path: &Path, line: &str) {
