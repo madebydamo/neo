@@ -35,6 +35,26 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
+    /// A config for tests around `settings_path`, without evaluations.
+    #[cfg(test)]
+    pub fn for_tests(settings_path: PathBuf) -> Self {
+        let dir = settings_path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_default();
+        Self {
+            eval: EvalPool::for_tests(&dir),
+            settings_path,
+            eval_busy: Default::default(),
+            eval_pending: Default::default(),
+            unit_updates: tokio::sync::broadcast::channel(1).0,
+            pulls_in_flight: Default::default(),
+            clear_appdata_in_flight: Default::default(),
+            unit_status: Default::default(),
+            resources: Default::default(),
+        }
+    }
+
     /// The config repo: the folder of settings.toml.
     pub fn config_dir(&self) -> PathBuf {
         self.settings_path

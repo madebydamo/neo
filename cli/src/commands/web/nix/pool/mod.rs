@@ -190,6 +190,32 @@ impl EvalPool {
         }))
     }
 
+    /// A pool that never evaluates (tests of code that takes an AppConfig but
+    /// reads no evaluation): no repl, extract files or GC roots.
+    #[cfg(test)]
+    pub fn for_tests(config_dir: &Path) -> Arc<Self> {
+        let base_dir = std::env::temp_dir().join("neo-web-eval-tests");
+        Arc::new(Self {
+            spec: Arc::new(ReplSpec {
+                nix_cmd: "nix".into(),
+                config_dir: config_dir.display().to_string(),
+                neo_flake_path: None,
+                extract_dir: base_dir.join("extract"),
+                roots_dir: base_dir.join("gcroots"),
+            }),
+            icons: Arc::new(IconSet::nix_store()),
+            config_dir: config_dir.to_path_buf(),
+            base_dir,
+            procs: Vec::new(),
+            state: Mutex::new(State::new(Arc::new(Snapshot::default()))),
+            epoch: watch::channel(0).0,
+            wake: Notify::new(),
+            blocking: Arc::new(AtomicBool::new(false)),
+            pending: Arc::new(AtomicBool::new(false)),
+            push: broadcast::channel(1).0,
+        })
+    }
+
     pub fn icons(&self) -> Arc<IconSet> {
         self.icons.clone()
     }

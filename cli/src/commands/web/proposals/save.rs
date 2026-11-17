@@ -197,3 +197,190 @@ pub(super) async fn copied_value(
     }
     Ok(value)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::check::fingerprint;
+    use super::super::types::AskInput;
+    use super::*;
+    use crate::utils::fsutil::TempDir;
+    use serde_json::json;
+
+    fn p(s: &str) -> Vec<String> {
+        s.split('.').map(str::to_string).collect()
+    }
+
+    /// A config repo with this settings.toml (and secrets.yaml when given).
+    fn repo(settings: &str, secrets_yaml: Option<&str>) -> (TempDir, AppConfig) {
+        let dir = TempDir::new("neo-proposals-save-test").unwrap();
+        std::fs::write(dir.join("settings.toml"), settings).unwrap();
+        if let Some(y) = secrets_yaml {
+            std::fs::write(dir.join(secrets::PLAIN_FILE), y).unwrap();
+        }
+        let config = AppConfig::for_tests(dir.join("settings.toml"));
+        (dir, config)
+    }
+
+    fn proposal(config: &AppConfig, planned: Vec<Planned>, asks: Vec<AskInput>) -> Proposal {
+        Proposal {
+            id: "0123456789abcdef".into(),
+            summary: "s".into(),
+            views: vec![],
+            asks,
+            fingerprint: fingerprint(config, &planned),
+            planned,
+            status: Status::Pending,
+            message: String::new(),
+            created: 0,
+        }
+    }
+
+    fn ask(name: &str) -> AskInput {
+        AskInput {
+            name: name.into(),
+            label: "Password".into(),
+            used_for: vec![],
+        }
+    }
+
+    fn copy(from: &str, key: &str, to: &str, remove_source: bool) -> Planned {
+        Planned::Copy {
+            from: SourceRef {
+                path: from.into(),
+                key: Some(key.into()),
+                field: None,
+            },
+            from_path: p(&format!("{from}.{key}")),
+            to: p(to),
+            remove_source,
+            secret: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn asked_secrets_must_be_entered() {
+        let (_dir, config) = repo("", None);
+        let planned = vec![Planned::Ask {
+            path: p("services.x.password"),
+            input: "ask_g".into(),
+        }];
+        let pr = proposal(&config, planned, vec![ask("ask_g")]);
+        let blank = HashMap::from([("ask_g".to_string(), "  ".to_string())]);
+        for asked in [HashMap::new(), blank] {
+            let (status, msg) = ops_for_save(&config, &pr, &asked).await.unwrap_err();
+            assert_eq!(status, Status::Pending);
+            assert!(msg.contains("Enter Password"), "{msg}");
+        }
+    }
+
+    #[tokio::test]
+    async fn settings_changed_since_proposing_are_stale() {
+        let (dir, config) = repo("[services.x]\nport = 1\n", None);
+        let planned = vec![Planned::Patch(PatchOp::Set {
+            path: p("services.x.port"),
+            value: json!(2),
+        })];
+        let pr = proposal(&config, planned, vec![]);
+        assert!(ops_for_save(&config, &pr, &HashMap::new()).await.is_ok());
+        std::fs::write(dir.join("settings.toml"), "[services.x]\nport = 3\n").unwrap();
+        let (status, _) = ops_for_save(&config, &pr, &HashMap::new())
+            .await
+            .unwrap_err();
+        assert_eq!(status, Status::Stale);
+    }
+
+    #[tokio::test]
+    async fn patches_asks_and_moves_become_ops_in_order() {
+        let (_dir, config) = repo("[services.y.accounts.a]\nusername = \"u\"\n", None);
+        let planned = vec![
+            Planned::Patch(PatchOp::Set {
+                path: p("services.x.port"),
+                value: json!(2),
+            }),
+            Planned::Ask {
+                path: p("services.x.password"),
+                input: "ask_g".into(),
+            },
+            copy("services.y.accounts", "a", "services.x.accounts.a", true),
+        ];
+        let pr = proposal(&config, planned, vec![ask("ask_g")]);
+        let asked = HashMap::from([("ask_g".to_string(), "pw".to_string())]);
+        let ops = ops_for_save(&config, &pr, &asked).await.unwrap();
+        assert_eq!(
+            ops,
+            vec![
+                PatchOp::Set {
+                    path: p("services.x.port"),
+                    value: json!(2)
+                },
+                PatchOp::Set {
+                    path: p("services.x.password"),
+                    value: json!("pw")
+                },
+                PatchOp::Set {
+                    path: p("services.x.accounts.a"),
+                    value: json!({"username": "u"})
+                },
+                PatchOp::Unset {
+                    path: p("services.y.accounts.a"),
+                    secret: false
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn copies_carry_secrets_and_clear_the_ones_the_source_lacks() {
+        let (_dir, config) = repo(
+            "[services.y.accounts.a]\nusername = \"u\"\n",
+            Some("services:\n  y:\n    accounts:\n      a:\n        password: \"pw\"\n  x:\n    accounts:\n      a:\n        totpSecret: \"old\"\n"),
+        );
+        let pr = proposal(
+            &config,
+            vec![copy(
+                "services.y.accounts",
+                "a",
+                "services.x.accounts.a",
+                false,
+            )],
+            vec![],
+        );
+        let ops = ops_for_save(&config, &pr, &HashMap::new()).await.unwrap();
+        assert_eq!(
+            ops,
+            vec![
+                PatchOp::Set {
+                    path: p("services.x.accounts.a"),
+                    value: json!({"username": "u", "password": "pw"})
+                },
+                PatchOp::Unset {
+                    path: p("services.x.accounts.a.totpSecret"),
+                    secret: true
+                },
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn copied_value_never_carries_a_placeholder() {
+        let (_dir, config) = repo(
+            &format!(
+                "[services.y.accounts.a]\npassword = \"{}x\"\n",
+                secrets::PLACEHOLDER_PREFIX
+            ),
+            None,
+        );
+        let Planned::Copy {
+            from, from_path, ..
+        } = copy("services.y.accounts", "a", "services.x.accounts.a", false)
+        else {
+            unreachable!()
+        };
+        let saved = read_saved(&config, &[&from_path]).unwrap();
+        let (status, msg) = copied_value(&config, &saved, &from, &from_path)
+            .await
+            .unwrap_err();
+        assert_eq!(status, Status::Failed);
+        assert!(msg.contains("services.y.accounts.a"), "{msg}");
+    }
+}
