@@ -3,8 +3,10 @@ use std::fs;
 use std::path::Path;
 use toml_edit::DocumentMut;
 
+use crate::utils::command::{git_cmd, has_staged_changes};
+use crate::utils::profile::{neo_cli_get, resolve_template};
 use crate::utils::settings::str_at;
-use crate::utils::{git_cmd, has_staged_changes, neo_cli_get, resolve_template, template};
+use crate::utils::template;
 
 pub fn init(
     config_path: &str,

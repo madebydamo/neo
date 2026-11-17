@@ -2,9 +2,8 @@ use anyhow::Result;
 use toml_edit::DocumentMut;
 
 use crate::utils::command::TOPLEVEL_ATTR;
-use crate::utils::{
-    disko_enabled, get_timestamp, git_cmd, has_staged_changes, run_nix, run_write_flake,
-};
+use crate::utils::command::{get_timestamp, git_cmd, has_staged_changes, run_nix, run_write_flake};
+use crate::utils::settings::disko_enabled;
 
 pub fn build(config_path: &str, config: &DocumentMut, dry_run: bool, nix_cmd: &str) -> Result<()> {
     let vm = format!(

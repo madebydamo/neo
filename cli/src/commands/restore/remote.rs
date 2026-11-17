@@ -15,8 +15,8 @@ use std::time::{Duration, Instant};
 use super::backup::{self, Access, Source};
 use super::local::{commit_uncommitted, default_origin, remote_url, stage_repo, WORK_DIR};
 use super::{DataSource, RestoreArgs, DEFAULT_TARGET};
+use crate::utils::command::execute_command;
 use crate::utils::command::{confirm, nix_command, shell_quote, shell_words, stdout_checked};
-use crate::utils::execute_command;
 use crate::utils::fsutil::TempDir;
 
 const UNIT: &str = "neo-restore";

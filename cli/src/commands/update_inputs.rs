@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::utils::run_write_flake;
+use crate::utils::command::run_write_flake;
 
 pub fn update_inputs(config_path: &str, dry_run: bool, nix_cmd: &str) -> Result<()> {
     if dry_run {

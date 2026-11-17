@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use toml_edit::DocumentMut;
 
-use crate::utils::execute_command;
+use crate::utils::command::execute_command;
 use crate::utils::fsutil::write_private;
 use crate::utils::secrets::{self, Node, Tree};
 use crate::utils::secrets_store::{decrypt_with_key, IDENTITY_FILE};

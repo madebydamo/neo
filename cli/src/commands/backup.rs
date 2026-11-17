@@ -8,8 +8,8 @@ use toml_edit::DocumentMut;
 use crate::commands::restore::backup::{self, Access, Format, Source};
 use crate::commands::restore::local::{commit_uncommitted, remote_url};
 use crate::commands::restore::remote::default_key;
+use crate::utils::command::execute_command;
 use crate::utils::command::root_command;
-use crate::utils::execute_command;
 use crate::utils::fsutil::TempDir;
 
 const ROTATE_UNIT: &str = "backup-rotate-key.service";

@@ -4,8 +4,8 @@ use anyhow::Result;
 use std::process::Command;
 
 use crate::utils::bins;
+use crate::utils::command::execute_command;
 use crate::utils::command::stdout_checked;
-use crate::utils::execute_command;
 
 pub fn docker_update(container: &str, sudo_cmd: &str) -> Result<()> {
     let cname = container.strip_prefix("docker-").unwrap_or(container);

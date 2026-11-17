@@ -19,8 +19,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use super::command::{git_cmd, run_nix};
 use super::fsutil::TempDir;
-use super::{git_cmd, run_nix};
 
 /// Verbatim copy of the files the last template provided (git-ignored).
 pub const PRISTINE_DIR: &str = ".neo-template";

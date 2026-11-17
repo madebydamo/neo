@@ -9,10 +9,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use toml_edit::DocumentMut;
 
+use crate::utils::command::execute_command;
 use crate::utils::command::{
     output_checked, output_with_stdin, shell_join, shell_words, stdout_checked,
 };
-use crate::utils::execute_command;
 use crate::utils::fsutil::write_private;
 use crate::utils::profile::{DEFAULT_CONFIG_REL, DEFAULT_VOLUMES_ROOT};
 use crate::utils::settings::{bool_at, item_at, str_at, FILE as SETTINGS_FILE};

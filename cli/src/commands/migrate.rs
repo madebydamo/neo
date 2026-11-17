@@ -3,7 +3,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use toml_edit::{Array, DocumentMut, Item, Table};
 
-use crate::utils::{is_local_flake_ref, settings};
+use crate::utils::profile::is_local_flake_ref;
+use crate::utils::settings;
 
 pub fn migrate(config_path: &str, source_settings: &Path, dry_run: bool) -> Result<()> {
     let live = PathBuf::from(config_path).join(settings::FILE);

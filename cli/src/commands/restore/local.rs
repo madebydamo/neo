@@ -12,8 +12,8 @@ use super::backup::{self, Access, Format, Source};
 use super::{
     access_tokens, int_setting, mount_zfs, restore_identity, under, DataSource, RestoreArgs,
 };
+use crate::utils::command::execute_command;
 use crate::utils::command::{confirm, is_root, stdout_checked};
-use crate::utils::execute_command;
 use crate::utils::profile::{resolve_config_path, PROFILE_SERVER};
 use crate::utils::settings::{self, disko_enabled, str_at, FILE as SETTINGS_FILE};
 

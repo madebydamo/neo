@@ -4,8 +4,9 @@ use std::path::Path;
 use std::process::Command;
 use toml_edit::DocumentMut;
 
+use crate::utils::command::format_command;
 use crate::utils::command::output_checked;
-use crate::utils::{disko_enabled, format_command};
+use crate::utils::settings::disko_enabled;
 
 pub fn generate_hardware(config_path: &str, config: &DocumentMut, dry_run: bool) -> Result<()> {
     let disko_enabled = disko_enabled(config);

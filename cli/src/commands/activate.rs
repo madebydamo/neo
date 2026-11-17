@@ -1,13 +1,14 @@
 use anyhow::Result;
 use std::process::{Command, Stdio};
 
+use crate::utils::command::{
+    format_command, get_current_branch, git_cmd, has_staged_changes, run_nix, run_write_flake,
+};
 use crate::utils::command::{status_code, TOPLEVEL_ATTR};
+use crate::utils::generation::record_generation_in_commit;
 use crate::utils::generation::GenerationMode;
 use crate::utils::ops::OpStatus;
-use crate::utils::{
-    format_command, get_current_branch, git_cmd, has_staged_changes, record_generation_in_commit,
-    resolve_suffix, run_nix, run_write_flake, OperationKind, OperationLog,
-};
+use crate::utils::ops::{resolve_suffix, OperationKind, OperationLog};
 
 pub fn activate(
     config_path: &str,

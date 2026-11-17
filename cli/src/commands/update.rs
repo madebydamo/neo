@@ -1,11 +1,11 @@
 use anyhow::Result;
 use toml_edit::DocumentMut;
 
+use crate::utils::command::{run_nix, run_write_flake};
 use crate::utils::ops::OpStatus;
-use crate::utils::{
-    resolve_suffix, resolve_template, run_nix, run_write_flake, template, OperationKind,
-    OperationLog,
-};
+use crate::utils::ops::{resolve_suffix, OperationKind, OperationLog};
+use crate::utils::profile::resolve_template;
+use crate::utils::template;
 
 pub fn update(
     config_path: &str,

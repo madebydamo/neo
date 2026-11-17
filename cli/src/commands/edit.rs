@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::process::Command;
 
-use crate::utils::execute_command;
+use crate::utils::command::execute_command;
 
 pub fn edit(config_path: &str, dry_run: bool) -> Result<()> {
     let settings_file = format!("{config_path}/{}", crate::utils::settings::FILE);

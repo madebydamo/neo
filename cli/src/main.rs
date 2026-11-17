@@ -23,12 +23,12 @@ use crate::commands::{
     update_inputs::update_inputs,
     web::web,
 };
+use crate::utils::command::execute_command;
 use crate::utils::generation::GenerationMode;
 use crate::utils::locks::{LockError, LockGuard, LockManager, LockSpec, OpInfo};
-use crate::utils::{
-    execute_command, load_or_default_settings, resolve_config_path, resolve_profile,
-    set_profile_str, OperationKind, OperationLog,
-};
+use crate::utils::ops::{OperationKind, OperationLog};
+use crate::utils::profile::{resolve_config_path, resolve_profile, set_profile_str};
+use crate::utils::settings::load_or_default_settings;
 
 #[derive(Parser)]
 #[command(name = "neo", version, about = "Neo Homeserver CLI", long_about = None)]
