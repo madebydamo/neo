@@ -1,6 +1,7 @@
 //! Unit control, container pull, and clear-appdata background jobs.
 mod clear_appdata;
 mod control;
+mod logs;
 mod pull;
 mod quiesce;
 mod status;
@@ -15,6 +16,7 @@ pub use control::{
     unit_controls_oob_fragment, unit_controls_oob_fragment_with_state, unit_name_valid,
     unit_state_key, update_out_oob, UnitAction,
 };
+pub use logs::JournalFollow;
 pub use pull::run_container_pull;
 pub use quiesce::quiesce;
 pub use status::{

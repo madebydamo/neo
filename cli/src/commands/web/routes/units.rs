@@ -4,7 +4,6 @@ use rocket::response::content::RawHtml;
 use rocket::response::stream::{Event, EventStream};
 use rocket::serde::json::Json;
 use rocket::{get, post, State};
-use tokio::io::{AsyncBufReadExt, BufReader as AsyncBufReader};
 
 use crate::commands::web::locks::{try_lock, Blocked};
 use crate::commands::web::types::AppConfig;
@@ -12,10 +11,10 @@ use crate::commands::web::units::{
     begin_clear_appdata, begin_pull, clear_appdata_btn_oob, clear_appdata_out_oob, map_services,
     normalize_container_unit, pane_lock_spec, perform_unit_action, run_clear_appdata,
     run_container_pull, schedule_unit_refresh_burst, trusted_appdata, unit_controls_oob_fragment,
-    unit_name_valid, update_out_oob, ServiceJob, ServiceStatusRequest, ServiceStatusResponse,
-    UnitAction,
+    unit_name_valid, update_out_oob, JournalFollow, ServiceJob, ServiceStatusRequest,
+    ServiceStatusResponse, UnitAction,
 };
-use crate::commands::web::util::{escape_html, proc, status_err, status_pulling, ServiceName};
+use crate::commands::web::util::{escape_html, status_err, status_pulling, ServiceName};
 use crate::utils::locks::{LockSpec, OpInfo};
 
 /// Shared post-action path: kick systemctl, push OOB once, then burst-refresh while it settles.
@@ -150,52 +149,18 @@ pub async fn sse_logs(unit: &str) -> EventStream![] {
         if !unit_name_valid(&unit) {
             yield Event::data("invalid unit name for logs");
         } else {
-            let spawn_res = proc::sudo()
-                .args([
-                    "journalctl",
-                    "-u",
-                    &unit,
-                    "-n",
-                    "100",
-                    "-f",
-                    "--no-pager",
-                    "-o",
-                    "short-iso",
-                ])
-                .kill_on_drop(true)
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
-                .spawn();
-            let child_opt = match spawn_res {
-                Ok(c) => Some(c),
-                Err(e) => {
-                    yield Event::data(format!("spawn error: {}", e));
-                    None
-                }
-            };
-            if let Some(mut child) = child_opt {
-                match child.stdout.take() {
-                    Some(stdout) => {
-                        let mut lines = AsyncBufReader::new(stdout).lines();
-
-                        loop {
-                            match lines.next_line().await {
-                                Ok(Some(line)) => {
-                                    yield Event::data(escape_html(&line));
-                                }
-                                Ok(None) => break,
-                                Err(e) => {
-                                    yield Event::data(format!("[read err] {}", e));
-                                    break;
-                                }
-                            }
+            match JournalFollow::start(&unit) {
+                Err(e) => yield Event::data(e),
+                Ok(mut journal) => loop {
+                    match journal.next_line().await {
+                        Ok(Some(line)) => yield Event::data(escape_html(&line)),
+                        Ok(None) => break,
+                        Err(e) => {
+                            yield Event::data(format!("[read err] {}", e));
+                            break;
                         }
                     }
-                    None => {
-                        yield Event::data("spawn error: missing piped stdout");
-                    }
-                }
-                // child auto-killed by kill_on_drop on drop
+                },
             }
         }
     }
