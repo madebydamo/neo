@@ -127,7 +127,7 @@ pub async fn quiesce(
     // systemd refuses to start these until the guards are released.
     let guarded: Vec<String> = units.iter().cloned().chain(group.clone()).collect();
     lock.guard_units(&guarded)
-        .map_err(|e| format!("cannot protect units meanwhile: {e}"))?;
+        .map_err(|e| format!("cannot protect units meanwhile: {e:#}"))?;
 
     // The target first, so it does not pull units back in. A failed stop is not
     // fatal here: waiting below reports units that stay up.
