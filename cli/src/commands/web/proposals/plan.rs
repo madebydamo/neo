@@ -1,5 +1,27 @@
 //! Turning the requested changes into what the card shows and what Save will do.
-use super::*;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+
+use serde_json::Value;
+
+use super::check::{
+    ask_input, display, fingerprint, key_diff, locate, refused, resolve, saved_value, secret_keys,
+    strip_null, type_check, without_nulls, Target,
+};
+use super::store::{new_id, put};
+use super::types::{
+    AskInput, ChangeOp, ChangeRequest, ChangeView, Planned, Proposal, ProposalRequest, SourceRef,
+    Status,
+};
+use crate::commands::web::panes::load_options;
+use crate::commands::web::redact::{
+    dropped_secrets, has_secret, is_set, redact_value, secret_in, secret_leak,
+};
+use crate::commands::web::settings::edit::PatchOp;
+use crate::commands::web::settings::save::load_settings_doc;
+use crate::commands::web::types::{AppConfig, OptionSchema};
+use crate::utils::command::now_secs;
+use crate::utils::secrets::Tree;
 
 /// The setting a copy or move reads, as found when proposing.
 #[derive(Debug)]

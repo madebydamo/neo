@@ -1,6 +1,18 @@
 //! The proposal store: in memory, mirrored to a state file so cards survive the
 //! neo-web restart of Save & apply. Holds no secret values.
-use super::*;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::{LazyLock, Mutex};
+
+use super::types::{Proposal, Status};
+use crate::commands::web::util::{state_dir, state_file};
+use crate::utils::command::now_secs;
+
+/// Proposals expire after a day (seconds).
+pub(super) const TTL: u64 = 24 * 3600;
+
+/// File in the neo-web state directory.
+pub(super) const FILE: &str = "proposals.json";
 
 pub(super) fn live(p: &Proposal) -> bool {
     now_secs().saturating_sub(p.created) < TTL

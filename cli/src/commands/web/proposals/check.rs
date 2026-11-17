@@ -1,6 +1,34 @@
 //! Reading settings for a proposal: resolving a path to an option, type checks and
 //! the values a card shows.
-use super::*;
+
+use serde_json::Value;
+
+use super::types::Planned;
+use crate::commands::web::redact::{Field, SET, UNSET};
+use crate::commands::web::settings::save::load_settings_doc;
+use crate::commands::web::settings::toml_item_to_json;
+use crate::commands::web::types::{AppConfig, OptionHelper, OptionSchema, OptionType};
+use crate::commands::web::util::service_name_ok;
+use crate::utils::secrets::{self, Backend, Node, Tree};
+
+/// Top-level settings sections (besides services / core) with their own pane.
+const TOP_SECTIONS: &[&str] = &["neo-cli", "disko"];
+
+/// Settings the assistant may not change: they could lock the user out or
+/// rewrite the machine. The user changes them in the UI.
+const REFUSED: &[&str] = &[
+    "core.plugins",
+    "core.secrets",
+    "core.ssh.authorizedKeys",
+    "core.hashedLinuxPassword",
+    "core.uid",
+    "core.gid",
+    "disko",
+    "neo-cli",
+    "services.neo",
+    "services.tinyauth.enabled",
+    "services.tinyauth.users",
+];
 
 /// `(is_core, pane name, option name inside the pane, settings path prefix)`.
 pub(super) fn locate(path: &str) -> Result<(bool, String, String, Vec<String>), String> {
@@ -138,7 +166,7 @@ pub(super) fn field_names(fields: &[OptionSchema]) -> String {
 
 /// A (redacted) value as plain text for the card.
 pub(super) fn display(v: &Value) -> String {
-    pub(super) fn inner(v: &Value) -> String {
+    fn inner(v: &Value) -> String {
         match v {
             Value::Null => "not set".into(),
             Value::String(s) if s == SET => "set".into(),
@@ -320,7 +348,7 @@ pub(super) fn ask_input(group: Option<&str>, index: usize) -> String {
 
 /// Entries a whole-map write adds, changes and removes (keys sorted).
 pub(super) fn key_diff(current: &Value, new: &Value) -> (Vec<String>, Vec<String>, Vec<String>) {
-    pub(super) fn differs(cur: &Value, new: &Value) -> bool {
+    fn differs(cur: &Value, new: &Value) -> bool {
         match (cur, new) {
             (Value::Object(c), Value::Object(n)) => n
                 .iter()
@@ -384,7 +412,7 @@ pub(super) fn saved_value(
     tree: &Tree,
     path: &[String],
 ) -> Option<Value> {
-    pub(super) fn overlay(base: Option<Value>, node: Option<&Node>) -> Option<Value> {
+    fn overlay(base: Option<Value>, node: Option<&Node>) -> Option<Value> {
         match node {
             None => base,
             Some(Node::Leaf(s)) => Some(Value::String(s.clone())),
@@ -415,12 +443,7 @@ pub(super) fn saved_value(
 /// Secret paths stored at or below `path` that `value` (now written there)
 /// no longer has: they leave the secrets file.
 pub(super) fn stale_secrets(keys: &Tree, path: &[String], value: &Value) -> Vec<Vec<String>> {
-    pub(super) fn walk(
-        node: &Node,
-        at: &mut Vec<String>,
-        value: Option<&Value>,
-        out: &mut Vec<Vec<String>>,
-    ) {
+    fn walk(node: &Node, at: &mut Vec<String>, value: Option<&Value>, out: &mut Vec<Vec<String>>) {
         match node {
             Node::Leaf(_) if value.is_none() => out.push(at.clone()),
             Node::Leaf(_) => {}

@@ -1,6 +1,22 @@
 //! Save: turn a proposal's plan into patch operations, reading what copies and
 //! moves need at that moment.
-use super::*;
+use std::collections::HashMap;
+use std::path::Path;
+
+use serde_json::Value;
+
+use super::check::{
+    fingerprint, locate, resolve, saved_value, secret_keys, stale_secrets, without_nulls,
+};
+use super::types::{Planned, Proposal, SourceRef, Status};
+use crate::commands::web::helper_exec::{parse_helper_value, run_helper_script};
+use crate::commands::web::panes::{has_placeholder, load_options};
+use crate::commands::web::redact::is_set;
+use crate::commands::web::settings::edit::PatchOp;
+use crate::commands::web::settings::save::load_settings_doc;
+use crate::commands::web::types::AppConfig;
+use crate::utils::secrets::{self, Backend, Tree};
+use crate::utils::secrets_store;
 
 /// Patch ops for saving `p` now with the values the user entered on the card
 /// (`asked`, by input name): refuses when an asked secret is empty (the card
