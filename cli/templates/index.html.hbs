@@ -13,7 +13,7 @@
       <!-- Mobile backdrop (closes drawer when tapped) -->
       <div id="sidebar-backdrop"
            class="fixed inset-0 z-40 bg-black/40 hidden md:hidden"
-           onclick="closeSidebar()"
+           data-neo-nav="close-sidebar"
            aria-hidden="true"></div>
 
       <!-- Slim icon sidebar: always visible on md+, off-canvas drawer on mobile -->
@@ -48,7 +48,7 @@
           <button type="button"
                   id="sidebar-toggle"
                   class="btn btn-ghost btn-sm btn-square md:hidden"
-                  onclick="toggleSidebar()"
+                  data-neo-nav="toggle-sidebar"
                   aria-label="Toggle services menu"
                   aria-controls="sidebar"
                   aria-expanded="false"
@@ -67,13 +67,13 @@
             </div>
           </div>
           <div class="flex items-center gap-0.5 flex-shrink-0">
-            <button onclick="reloadFrame()" class="btn btn-ghost btn-sm btn-square" title="Soft reload current app" aria-label="Reload">
+            <button type="button" data-neo-nav="reload" class="btn btn-ghost btn-sm btn-square" title="Soft reload current app" aria-label="Reload">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 11-2.2-5.3M19.5 4.5v4h-4"/></svg>
             </button>
-            <button onclick="hardResetCurrent()" class="btn btn-ghost btn-sm btn-square" title="Hard reset this app (unload from memory + fresh load)" aria-label="Hard reset">
+            <button type="button" data-neo-nav="hard-reset" class="btn btn-ghost btn-sm btn-square" title="Hard reset this app (unload from memory + fresh load)" aria-label="Hard reset">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M12 3v6M6.3 6.3a8 8 0 1011.4 0"/></svg>
             </button>
-            <button onclick="openInNewTab()" class="btn btn-ghost btn-sm btn-square" title="Open in new tab" aria-label="Open in new tab">
+            <button type="button" data-neo-nav="open-tab" class="btn btn-ghost btn-sm btn-square" title="Open in new tab" aria-label="Open in new tab">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M13.5 4.5h6v6M19.5 4.5L11 13M17 14v4.5a1.5 1.5 0 01-1.5 1.5h-10A1.5 1.5 0 014 18.5v-10A1.5 1.5 0 015.5 7H10"/></svg>
             </button>
           </div>
@@ -112,8 +112,8 @@
               </div>
               <div class="text-[11px] text-base-content/50 mt-4 font-mono break-all rounded-field bg-base-200 px-2.5 py-1.5" id="blocked-url"></div>
               <div class="mt-4 flex flex-wrap gap-2">
-                <button onclick="openBlockedInNewTab()" class="btn btn-primary btn-sm flex-1">Open in new tab ↗</button>
-                <button onclick="copyBlockedUrl()" class="btn btn-ghost btn-sm">Copy URL</button>
+                <button type="button" data-neo-nav="open-blocked" class="btn btn-primary btn-sm flex-1">Open in new tab ↗</button>
+                <button type="button" data-neo-nav="copy-blocked" class="btn btn-ghost btn-sm">Copy URL</button>
               </div>
             </div>
           </div>
