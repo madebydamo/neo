@@ -2,6 +2,7 @@
 //!
 //! Keep `crate::commands` for subcommand entry points only.
 
+pub mod backup;
 pub mod bins;
 pub mod command;
 pub mod fsutil;

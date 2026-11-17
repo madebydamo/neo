@@ -14,16 +14,13 @@ use anyhow::{bail, Context, Result};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use toml_edit::DocumentMut;
 
-use crate::utils::command::execute_command;
 use crate::utils::fsutil::write_private;
 use crate::utils::secrets::{self, Node, Tree};
 use crate::utils::secrets_store::{decrypt_with_key, IDENTITY_FILE};
 use crate::utils::settings::{item_at, recorded_host_key};
 
-pub mod backup;
 pub(crate) mod local;
 pub(crate) mod remote;
 
@@ -131,15 +128,6 @@ pub(crate) fn leaf<'a>(tree: &'a Tree, path: &[&str]) -> Option<&'a Node> {
         Node::Map(m) => leaf(m, rest),
         Node::Leaf(_) => None,
     }
-}
-
-/// Mount a ZFS dataset below the target, whatever its own mountpoint says.
-pub(crate) fn mount_zfs(dataset: &str, path: &Path) -> Result<()> {
-    execute_command(
-        Command::new("mount")
-            .args(["-t", "zfs", "-o", "zfsutil", dataset])
-            .arg(path),
-    )
 }
 
 /// Inside `target` (absolute path joined below it).

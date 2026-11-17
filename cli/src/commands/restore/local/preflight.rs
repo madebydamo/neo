@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use toml_edit::DocumentMut;
 
-use super::super::backup::{self, Access, Format, Source};
 use super::super::{DataSource, RestoreArgs};
 use super::{Dirs, FromBackup, Staged, Unlocked};
+use crate::utils::backup::{self, Access, Format, Source};
 use crate::utils::command::stdout_checked;
 use crate::utils::profile::{resolve_config_path, PROFILE_SERVER};
 use crate::utils::settings::str_at;

@@ -4,19 +4,11 @@
 use anyhow::{bail, Result};
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
+use crate::utils::backup::config_repo::{commit_uncommitted, git, remote_url};
 use crate::utils::command::{execute_command, stdout_checked};
 use crate::utils::settings::FILE as SETTINGS_FILE;
-
-pub(super) fn git(repo: &Path) -> Command {
-    let mut c = Command::new("git");
-    c.arg("-C")
-        .arg(repo)
-        .args(["-c", "safe.directory=*", "-c", "user.name=neo restore"])
-        .args(["-c", "user.email=neo@localhost"]);
-    c
-}
 
 /// A git repository with its own history here: a checkout (`.git` is a folder,
 /// or a file in a linked worktree) or a bare repo. Not a folder that merely
@@ -84,46 +76,6 @@ pub(crate) fn default_origin(repo: &str) -> String {
         return String::new();
     }
     url
-}
-
-/// Commit what a config repo had not committed yet (settings saved in the web
-/// UI before the last backup), so the clone carries it. Without `.git` (a copy
-/// of the files only) this starts the history.
-pub(crate) fn commit_uncommitted(repo: &Path) -> Result<()> {
-    let fresh = !repo.join(".git").exists();
-    if fresh {
-        execute_command(git(repo).args(["init", "-q"]))?;
-    }
-    let status = stdout_checked(git(repo).args(["status", "--porcelain"]), "git status")?;
-    if status.trim().is_empty() {
-        return Ok(());
-    }
-    if !fresh {
-        println!("  committing changes the backup's repo had not committed yet");
-    }
-    execute_command(git(repo).args(["add", "-A"]))?;
-    execute_command(git(repo).args([
-        "commit",
-        "-q",
-        "-m",
-        if fresh {
-            "restore: copy of the config repo without git history"
-        } else {
-            "restore: uncommitted changes from the backup"
-        },
-    ]))
-}
-
-/// `origin` of a repo, "" without one.
-pub(crate) fn remote_url(repo: &Path) -> String {
-    git(repo)
-        .args(["remote", "get-url", "origin"])
-        .stderr(Stdio::null())
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_default()
 }
 
 #[cfg(test)]

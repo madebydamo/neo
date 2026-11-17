@@ -306,7 +306,7 @@ or wrappers tied to `/nix/store`.
   `restore` and `extract_config` work with tools from `bin/`.
 - **Build on request, not in every system closure**, to avoid adding about 100 MB to every machine. First build may need
   compiling. Show progress with the op monitor.
-- Add a `neo recover` subcommand rather than a long shell script, reusing `restore/backup.rs`.
+- Add a `neo recover` subcommand rather than a long shell script, reusing `cli/src/utils/backup/`.
 
 ### Rules
 

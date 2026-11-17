@@ -13,7 +13,7 @@
       root = config.neo.core.volumes.root;
 
       # Enabled destinations by (priority, name), the order neo restore tries
-      # them in (restore/backup.rs); the backup runs in it too.
+      # them in (cli/src/utils/backup); the backup runs in it too.
       destinations = sortOn (d: d.priority) (
         mapAttrsToList (name: d: d // {inherit name;}) (filterAttrs (_: d: d.enabled) cfg.destinations)
       );

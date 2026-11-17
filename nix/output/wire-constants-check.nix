@@ -11,12 +11,12 @@
       "neo-backup-" = [
         ../services/backup/backup.sh
         ../../cli/src/bin/neo-store-gate.rs
-        ../../cli/src/commands/restore/backup.rs
+        ../../cli/src/utils/backup/restore.rs
       ];
       # Encrypted backup's data key: written by backup.sh, read by restore.
       "neo-backup.age" = [
         ../services/backup/backup.sh
-        ../../cli/src/commands/restore/backup.rs
+        ../../cli/src/utils/backup/encrypted.rs
       ];
       # Placeholder of an encrypted secret: from Nix, masked and resolved in Rust.
       "@NEO_SECRET:" = [

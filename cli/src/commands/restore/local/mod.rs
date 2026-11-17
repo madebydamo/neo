@@ -8,8 +8,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use toml_edit::DocumentMut;
 
-use super::backup::{self, Access, Source};
-use super::{access_tokens, int_setting, mount_zfs, restore_identity, under, RestoreArgs};
+use super::{access_tokens, int_setting, restore_identity, under, RestoreArgs};
+use crate::utils::backup::config_repo::{commit_uncommitted, git, remote_url};
+use crate::utils::backup::{self, default_key, mount_zfs, Access, RestoreInto, Source};
 use crate::utils::command::execute_command;
 use crate::utils::command::{confirm, is_root, stdout_checked};
 use crate::utils::settings::{self, disko_enabled, FILE as SETTINGS_FILE};
@@ -18,8 +19,7 @@ mod preflight;
 mod repo;
 
 use preflight::{preflight, Plan};
-use repo::git;
-pub(crate) use repo::{commit_uncommitted, default_origin, remote_url, stage_repo};
+pub(crate) use repo::{default_origin, stage_repo};
 
 pub const WORK_DIR: &str = "/root/neo-restore";
 
@@ -117,7 +117,7 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         work,
     };
     // Opens neo-backup.age (age reads ~/.ssh/id_ed25519 only when told to).
-    let admin_key = args.key.clone().or_else(super::remote::default_key);
+    let admin_key = args.key.clone().or_else(default_key);
 
     let from_backup = open_from_backup(args, &dirs, admin_key.as_ref())?;
     let (repo_url, origin) = repo_and_origin(args, from_backup.as_ref())?;
@@ -319,15 +319,14 @@ fn restore_data(args: &RestoreArgs, plan: &Plan) -> Result<()> {
             println!("→ trying the next backup: {}", s.describe());
             reset_data_root(&data_root, plan.disko_on.then_some(dataset.as_str()))?;
         }
-        match backup::restore_into(
-            &plan.access,
-            s,
-            args.data_from.as_deref(),
-            &data_root,
-            rel,
-            &dataset,
-            &plan.root,
-        ) {
+        let into = RestoreInto {
+            data_from: args.data_from.as_deref(),
+            target_root: &data_root,
+            config_rel: rel,
+            local_dataset: &dataset,
+            root: &plan.root,
+        };
+        match backup::restore_into(&plan.access, s, &into) {
             Ok(()) => return Ok(()),
             Err(e) => {
                 println!("✗ restoring from {} failed: {e:#}", s.describe());

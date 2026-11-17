@@ -5,9 +5,8 @@ use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 use toml_edit::DocumentMut;
 
-use crate::commands::restore::backup::{self, Access, Format, Source};
-use crate::commands::restore::local::{commit_uncommitted, remote_url};
-use crate::commands::restore::remote::default_key;
+use crate::utils::backup::config_repo::{commit_uncommitted, remote_url};
+use crate::utils::backup::{self, default_key, Access, Format, Source};
 use crate::utils::command::execute_command;
 use crate::utils::command::root_command;
 use crate::utils::fsutil::TempDir;

@@ -12,9 +12,10 @@ use std::process::{Command, Stdio};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use super::backup::{self, Access, Source};
-use super::local::{commit_uncommitted, default_origin, remote_url, stage_repo, WORK_DIR};
+use super::local::{default_origin, stage_repo, WORK_DIR};
 use super::{DataSource, RestoreArgs, DEFAULT_TARGET};
+use crate::utils::backup::config_repo::{commit_uncommitted, remote_url};
+use crate::utils::backup::{self, default_key, Access, Source};
 use crate::utils::command::execute_command;
 use crate::utils::command::{confirm, nix_command, shell_quote, shell_words, stdout_checked};
 use crate::utils::fsutil::TempDir;
@@ -404,11 +405,6 @@ pub(crate) fn pinned_neo(repo: &Path) -> String {
         (Some("github"), Some(o), Some(r), Some(rev)) => format!("github:{o}/{r}/{rev}"),
         _ => "github:madebydamo/neo".into(),
     }
-}
-
-pub(crate) fn default_key() -> Option<PathBuf> {
-    let k = PathBuf::from(env::var("HOME").ok()?).join(".ssh/id_ed25519");
-    k.exists().then_some(k)
 }
 
 pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {

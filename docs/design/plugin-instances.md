@@ -234,7 +234,7 @@ Rust (`plugins.rs`, `settings/edit.rs`): `plugins_from_doc` returns `Vec<PluginE
 | File | Change |
 |------|--------|
 | `cli/src/commands/web/diff/flake_lock.rs` | Input `plugin-<id>` → label `<id>`. Drop the index parsing. |
-| `cli/src/commands/restore/local.rs` (`missing_local_plugins`) | Read the url of each table. |
+| `cli/src/commands/restore/local/preflight.rs` (`missing_local_plugins`) | Read the url of each table. |
 | `cli/src/commands/web/proposals.rs` | `core.plugins` stays refused for the assistant. Check the new path shape (`core.plugins.<id>.url`). |
 | `cli/src/commands/web/util/validate.rs` | Validate id, prefix and the uniqueness rules. |
 | `nix/output/templates-check.nix` | Cover the attrs form, the list fallback and an instance-aware plugin with two prefixes. |
