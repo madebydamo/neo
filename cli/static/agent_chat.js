@@ -907,7 +907,7 @@
     clearLog();
     var loading = spinnerNote('Connecting to the assistant…');
     loadRefs().catch(function () {});
-    return post('/agent/open', { context: state.context, fresh: true })
+    return post('/agent/open', { context: state.context })
       .then(jsonOrThrow)
       .then(function (j) {
         if (seq !== state.seq) return;

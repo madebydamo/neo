@@ -119,14 +119,12 @@ async fn labels_by_session(host: &dyn ChatHost) -> HashMap<String, (String, Opti
         .collect()
 }
 
+/// Every open without `session_id` is a new chat (an old client's `fresh`
+/// flag is ignored like any unknown field).
 #[derive(Deserialize)]
 pub struct OpenReq {
     #[serde(default)]
     context: String,
-    /// Kept for old clients: every open without `session_id` is a new chat.
-    #[serde(default)]
-    #[allow(dead_code)]
-    fresh: bool,
     /// Reopen this past chat instead of starting a new one.
     #[serde(default)]
     session_id: Option<String>,
