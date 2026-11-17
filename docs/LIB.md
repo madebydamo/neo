@@ -318,7 +318,7 @@ Neo sets the uid (`app-<service>-<id>`), tags and the `host` variable. Filter ev
 | `visibleWhen` | `"enabled"` hides the field while that sibling bool is false (or that sibling string is empty); `"type=entra"` hides it unless the sibling equals the value; `"format=files,encrypted"` unless it equals one of them. Works inside attrsOf entries too |
 | `choices` | On a `listOf str`: a list (`["a" "b"]`) for a checkbox grid, or a provider name. Provider today: `"authApps"` (enabled services with tinyauth auth) |
 | `keysFrom` | From `ui.mkKeysFrom` |
-| `widget` | `exclusiveListPair`, `pluginList`, `primaryItemList`, `providerAuth`, `proxyRouteList` (see [AGENTS.md](../AGENTS.md#uiwidget-composite-editors)) |
+| `widget` | `exclusiveListPair`, `pluginList`, `primaryItemList`, `providerAuth`, `proxyRouteList` (see [web-ui-options.md](design/web-ui-options.md#uiwidget-composite-editors)) |
 | `emptyHint`, `entryLabel`, `choiceEmptyHint`, `modes`, `save`, `catalog`, `oauth` | Widget-specific inputs |
 
 Rank bands for the top level of `neo.services.<name>` (siblings only; inside a submodule start again at 0, 10, 20, …):
@@ -332,7 +332,7 @@ Rank bands for the top level of `neo.services.<name>` (siblings only; inside a s
 | 200 | `skill` |
 | 300 | `containers` |
 
-Do not add per-service code to the web UI. If the generic form is not enough, a new widget goes into Neo itself (see AGENTS.md).
+Do not add per-service code to the web UI. If the generic form is not enough, a new widget goes into Neo itself (see [web-ui-options.md](design/web-ui-options.md#adding-a-new-special-ui-checklist)).
 
 ### Fill-assist helpers
 

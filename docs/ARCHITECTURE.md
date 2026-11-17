@@ -153,4 +153,4 @@ Service options can declare **`rank`**, **`helper`**, and **`ui`** (see `nix/lib
 - **`ui.keysFrom`** → attrsOf keys locked to another option
 - **`ui.widget`** → composite editor (e.g. `exclusiveListPair` for allow/block mode cards)
 
-Special UIs should be declared on the option, not branched by service name in the form. Full checklist: [AGENTS.md](../AGENTS.md#web-ui-option-metadata-rank--helper--ui).
+Special UIs should be declared on the option, not branched by service name in the form. Full checklist: [web-ui-options.md](design/web-ui-options.md#adding-a-new-special-ui-checklist).

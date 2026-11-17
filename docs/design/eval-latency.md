@@ -5,6 +5,33 @@ implementation differs from this plan. Scope: `cli/src/commands/web/nix/repl/`, 
 `settings/save.rs`, the WS push channel, the pages that render eval results, and
 one template change (`templates/homeserver/modules/settings.nix`).
 
+## Rules for pages (as built)
+
+- Every eval-backed page reads the evaluation pool
+  (`cli/src/commands/web/nix/pool/`), never a repl directly:
+  `config.eval.services()` / `.pane()` / `.guides()` / … are cached per
+  *generation* (one evaluation of the config repo).
+- A settings write calls `refresh_after_settings_change` (→ `note_change`).
+  Pages keep being served from the last generation with the saved values laid
+  over (`nix/overlay.rs`). The next generation is evaluated in the background (a
+  second repl, `neo.services.neo.backgroundEval`; in place when
+  `modules/settings.nix` reads `neoSettingsDir`), replays the cached queries and
+  swaps in.
+- `#neo-eval-sync` is pushed over `/ws/status`, and `static/eval_sync.js`
+  re-fetches fragments whose keys changed.
+- A new eval-backed fragment root needs `data-neo-eval-keys` (query ids, e.g.
+  `pane:service:<name> guides`), `-gen`, `-provisional` and `-url` (from the
+  context's `eval` mark). A new query needs a `QueryKey`
+  (`nix/pool/query.rs`).
+- Changes to modules, `flake.lock` or `core.plugins` are structural: lists of
+  services wait for them.
+- Each repl start, generation and slow query is logged with its reason and time
+  (`web: …`).
+
+The sections below are the original plan; §11 lists where the code differs
+(e.g. §7's JSON message is the `#neo-eval-sync` fragment, and
+`data-neo-eval-key` became `data-neo-eval-keys` plus `-provisional` and `-url`).
+
 ## 1. The problem today
 
 Every eval-backed page (`/configuration` grid, option panes, guides, privacy map,

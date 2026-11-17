@@ -142,8 +142,8 @@ keeping metadata in Nix lets eval validate it.
 ```nix
 # nix/guides/adblock-at-home/default.nix   (auto-imported like services)
 {...}: {
-  flake.modules.nixos.guide-adblock-at-home = {lib, ...}: {
-    neo.guides.adblock-at-home = lib.neo.mkGuide {
+  flake.modules.nixos.guide-adblock-at-home = {
+    neo.guides.adblock-at-home = {
       title = "Block ads for the whole home";
       summary = "Every phone, TV and laptop at home without ads, without installing anything on them.";
       icon = ./icon.svg;                # optional, like mkServiceMeta.icon
@@ -153,6 +153,7 @@ keeping metadata in Nix lets eval validate it.
       difficulty = "easy";              # easy | medium | advanced
       minutes = 15;
       tags = [ "network" "privacy" "family" ];
+      rank = 10;                        # sort order on the guides page
       body = ./guide.md;
     };
   };
@@ -160,12 +161,13 @@ keeping metadata in Nix lets eval validate it.
 ```
 
 Guides live in `nix/guides/<id>/` (core) or anywhere in a plugin. `neo.guides`
-is an `attrsOf` submodule, so plugins add guides the same way they add services.
+is an `attrsOf` submodule (options in `nix/modules/core/guides.nix`), so plugins
+add guides the same way they add services.
 
 ### Markdown and links
 
-CommonMark + tables, rendered by `pulldown-cmark` in the CLI (new dependency) and
-sanitised. Images next to the `.md` are copied to the store and served like
+GitHub-style Markdown (CommonMark + tables), rendered by `pulldown-cmark` in the
+CLI (`cli/src/commands/web/guides.rs`). Raw HTML is shown as text. Images next to the `.md` are copied to the store and served like
 service icons.
 
 Cross-links use a small URI scheme, so the author never writes a UI route:
@@ -232,9 +234,14 @@ Checks can carry a machine-readable command for Hermes:
 > ```
 ````
 
-The UI shows the check as text; Hermes runs the command.
+The UI shows the check as text; Hermes runs the command. The `neo-check` block
+itself is shown only when Hermes is on.
 
 *Do it with AI* opens the agent chat (§3a) with the guide skill loaded.
+
+**Show guides** (`neo.services.neo.guides`, default on) hides the Guides tab,
+the privacy map, the guides on service pages and the guide skills (the extracts
+read `guidesEnabled` from `extract_lib.nix`).
 
 ---
 
@@ -521,6 +528,8 @@ from the Services and Guides tabs.
 
 Services opt in with `mkServiceMeta { privacy = [ "calendar" "contacts" ]; }`;
 unknown ids are a build warning (not an error, so plugins never break a build).
+Guides tag themselves with `privacy = [ … ]`. A category counts as "at home"
+once a tagged service is enabled.
 
 ---
 

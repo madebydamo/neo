@@ -13,11 +13,11 @@ Work in a checkout of `github:madebydamo/neo` (`git clone https://github.com/mad
 
 | File | When |
 |------|------|
-| `AGENTS.md` | Always, first. Repo map, `just` recipes, how to add a service, web UI metadata, locks, secrets, smoke test, don'ts |
+| `AGENTS.md` | Always, first. Repo map, `just` recipes, how to add a service, secrets, networks, the rules per area with links to their design docs, smoke test, don'ts |
 | `docs/PHILOSOPHY.md` | Always, once. Why the rules exist; decide unclear cases by it |
 | `docs/ARCHITECTURE.md` | Traffic, login and update model in plain words |
 | `docs/PLUGIN-DEVELOPMENT.md`, `docs/LIB.md` | Anything touching `lib.neo` or the plugin interface (plugins are its public API) |
-| `docs/design/<topic>.md` | Before changing that area: `secrets`, `backup-restore`, `plugin-instances`, `descriptions-and-guides` |
+| `docs/design/<topic>.md` | Before changing that area: `secrets`, `backup-restore`, `plugin-instances`, `descriptions-and-guides`, `assistant-chat`, `web-ui-options`, `eval-latency`, `operation-locks`, `restart-required`, `network-isolation`, `monitoring` |
 | `nix/services/<similar>/` | Before writing a service: copy the shape of the closest existing one |
 
 ## 2. Route the task
@@ -26,18 +26,18 @@ Work in a checkout of `github:madebydamo/neo` (`git clone https://github.com/mad
 |------|----------|-----------|
 | New or changed built-in service | `AGENTS.md` → Add a service; `nix/services/<similar>/` | Texts per AGENTS.md option/service text rules; `skills.nix`; enable in `settings.toml`; VM smoke test |
 | `lib.neo` helper | `nix/lib/<file>.nix` | Update `docs/LIB.md` (it claims to be complete); keep existing call sites and plugins working |
-| Web UI page / option form | `cli/src/commands/web/`, `cli/templates/` | No service or option names in UI code: metadata on the option (`ui`, `rank`, `helper`); `nav_progress.js` for loading, `LockSpec` + `data-neo-lock` for mutations |
-| New composite editor | `AGENTS.md` → Adding a new special UI | Widget partial + JS + `*.test.js`, `just test-widgets`, document it in AGENTS.md |
+| Web UI page / option form | `cli/src/commands/web/`, `cli/templates/` | No service or option names in UI code: metadata on the option (`ui`, `rank`, `helper`); `nav_progress.js` for loading, `LockSpec` + `data-neo-lock` for mutations (`docs/design/operation-locks.md`), eval pool for evaluations (`docs/design/eval-latency.md`) |
+| New composite editor | `docs/design/web-ui-options.md` → Adding a new special UI | Widget partial + JS + `*.test.js`, `just test-widgets`, document it in `web-ui-options.md` and `docs/LIB.md` |
 | Settings write path | `settings::edit::apply_edit` | One write path for form, proposals and CLI; never a second one |
 | Secrets | `docs/design/secrets.md`, `nix/modules/core/secrets.nix` | Never a secret in `environment`, `/etc`, scripts or eval-time hashes (`secret-leak` check) |
 | Docker networks, container reachability | `docs/design/network-isolation.md`, `nix/lib/docker.nix`, `nix/modules/core/docker-network.nix` | Each service on `lib.neo.docker.serviceNetwork`; cross-service only via `mkLink` or the public URL; host services only from `neo-host` (`mkHostAccess`); keep `internal` for plugins; VPN-routed containers: gluetun stands in on their networks, links and `neo-host` (`vpn/default.nix`); `docker-network-isolation` and `vpn-networks` checks |
-| Changes that need a server restart | `nix/modules/core/restart.nix`, `nix/services/system-updater/default.nix` | `neo-restart-required` detects kernel / boot options / stale dockerd itself; anything else raises its component's `neo.core.restart.triggers.<id>.level` inside `mkIf cfg.enabled` (never a global counter); updater restarts once per system and reasons and checks the next boot (`neo-restart-check`, `restart_check` in the run history, Hermes supervises after the restart); checks `restart-required`, `restart-check` |
+| Changes that need a server restart | `docs/design/restart-required.md`, `nix/modules/core/restart.nix`, `nix/services/system-updater/default.nix` | `neo-restart-required` detects kernel / boot options / stale dockerd itself; anything else raises its component's `neo.core.restart.triggers.<id>.level` inside `mkIf cfg.enabled` (never a global counter); updater restarts once per system and reasons and checks the next boot (`neo-restart-check`, `restart_check` in the run history, Hermes supervises after the restart); checks `restart-required`, `restart-check` |
 | Backup / restore | `docs/design/backup-restore.md`, `nix/services/backup`, `nix/services/backup-store`, `cli/src/commands/restore/`, `cli/src/utils/backup/`, `cli/src/bin/neo-store-gate.rs` | Change the backup and restore sides together; a new remote command needs a gate rule; update `docs/RESTORE.md` |
 | Disko / boot loader | `nix/modules/disko/`, `core/base.nix` | `just test-disko-boot` (`just launch` never tests the boot loader); boot scripts must never fail a switch |
 | Plugin interface | `nix/lib/plugin.nix`, `nix/output/plugin-flake-module.nix`, `templates/plugin` | The id/label rules exist in three places plus widget JS; keep them equal. Update `docs/PLUGIN-DEVELOPMENT.md` and the `neo-plugin` skill |
-| Guide | `nix/guides/<id>/`, `AGENTS.md` → Guides | One outcome, real settings links, non-technical reader |
+| Guide | `nix/guides/<id>/`, `AGENTS.md` → Guides, `docs/design/descriptions-and-guides.md` §3 | One outcome, real settings links, non-technical reader |
 | Monitoring, app metrics, dashboards | `docs/design/monitoring.md`, `nix/services/monitoring{,-agent}`, `nix/modules/core/monitoring.nix`, `nix/lib/grafana.nix` | Labels and metric names are shared by the agent (`_alloy.nix`) and the dashboards: change both. App dashboards and alert rules via `neo.monitoring.apps` (`dashboards`, `alerts`), never by hand in Grafana; one `monitoring.nix` per app (exporter on via `collecting`, `scrapeToken` for credentials, `hidePaths` for public metrics paths). Our label is `scrape`, not `endpoint`. Provided dashboards stay read-only |
-| Assistant (Hermes) | `nix/services/hermes/`, `AGENTS.md` → Assistant chat | Proposals write nothing until the user saves; secrets never pass through the agent |
+| Assistant (Hermes) | `nix/services/hermes/`, `docs/design/assistant-chat.md` | Proposals write nothing until the user saves; secrets never pass through the agent |
 
 ## 3. Loop
 
