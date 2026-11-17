@@ -47,6 +47,20 @@
         )
     );
 
+  # Tests and clippy also read fixtures next to the sources
+  # (plugin_id_vectors.json via include_str!, templates/*.hbs from tests).
+  cargoTestSrc =
+    slice "neo-cli-cargo-test" cliRoot (
+      rel: rel == "src" || lib.hasPrefix "src/" rel || rel == "templates" || lib.hasPrefix "templates/" rel
+    ) (
+      rel: base:
+        rel
+        == "Cargo.toml"
+        || rel == "Cargo.lock"
+        || lib.hasPrefix "src/" rel
+        || (lib.hasPrefix "templates/" rel && lib.hasSuffix ".hbs" base)
+    );
+
   templateDir =
     slice "neo-cli-templates" (cliRoot + "/templates") (
       rel: baseNameOf rel != "test"
@@ -60,7 +74,7 @@
     _rel: base: base != "neo-ui.css" && !lib.hasSuffix ".test.js" base
   );
 
-  neoUnwrapped = pkgs: let
+  crate = pkgs: rec {
     craneLib = inputs.crane.mkLib pkgs;
     common = {
       pname = "neo-unwrapped";
@@ -74,6 +88,17 @@
       doCheck = false;
     };
     deps = craneLib.buildDepsOnly common;
+    # Tests and clippy share the dependency build; only Cargo.lock matters to it.
+    checkArgs =
+      common
+      // {
+        src = cargoTestSrc;
+        cargoArtifacts = deps;
+      };
+  };
+
+  neoUnwrapped = pkgs: let
+    inherit (crate pkgs) craneLib common deps;
   in
     craneLib.buildPackage (
       common
@@ -154,6 +179,16 @@ in {
     ...
   }: {
     packages.neo = packageWrapper pkgs cfgPackage config.packages.neo-web-css;
+    # `nix flake check` (and so `just check`) runs the Rust tests and clippy.
+    checks = let
+      inherit (crate pkgs) craneLib checkArgs;
+    in {
+      cli-tests = craneLib.cargoTest (checkArgs // {doCheck = true;});
+      cli-clippy = craneLib.cargoClippy (checkArgs
+        // {
+          cargoClippyExtraArgs = "--all-targets -- -D warnings";
+        });
+    };
   };
   flake.modules.nixos.cli = {
     lib,
