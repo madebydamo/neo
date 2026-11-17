@@ -135,7 +135,7 @@
               '';
               notes = ''
                 WireGuard-based mesh VPN with NAT traversal and identity-based access rules. Supports exit nodes, advertised routes, MagicDNS and SSH gated by tailnet policy.
-                With splitDns your domain resolves to this server on Tailscale devices (set Pi-hole's localIP as well).
+                With App names over Tailscale your domain resolves to this server on Tailscale devices (set Pi-hole's Home network address as well).
               '';
               projectUrl = "https://tailscale.com/";
               githubUrl = "https://github.com/tailscale/tailscale";

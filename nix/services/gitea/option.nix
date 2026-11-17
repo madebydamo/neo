@@ -116,7 +116,7 @@
               '';
               notes = ''
                 Runs the official image with SQLite under appdata, so no separate database is needed.
-                Point rootUrl / customDomains at your public hostname when it is published through streamproxy.
+                Point Web address or Custom domains at your public hostname when it is published through streamproxy.
                 Registration is off by default; create users from the admin account after first boot.
               '';
               replaces = ["GitHub" "GitLab"];

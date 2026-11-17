@@ -287,8 +287,8 @@
                 Set your domain and email here first.
               '';
               notes = ''
-                SWAG (nginx with Certbot) terminates TLS and proxies to the apps on the internal Docker network. Certificates come from Let's Encrypt or ZeroSSL for the domain, all subdomains and the proxyPass domains.
-                Loads the swag-dashboard and swag-dbip mods (GoAccess analytics and GeoIP). Country and IP allow/deny lists live under geo (empty = unrestricted; IP rules win over country rules); fail2ban jails and never-ban IPs under autoBan (no jails = fail2ban off).
+                SWAG (nginx with Certbot) terminates TLS and proxies to the apps on the internal Docker network. Certificates come from Let's Encrypt or ZeroSSL for the domain, all subdomains and the Extra domain routes.
+                Loads the swag-dashboard and swag-dbip mods (GoAccess analytics and GeoIP). Country and IP allow/deny lists live under Geo & IP filter (empty = unrestricted; IP rules win over country rules); fail2ban jails and never-ban IPs under Auto ban (no jails = fail2ban off).
                 CrowdSec (off by default) runs the CrowdSec engine next to SWAG on its nginx logs and adds the swag-crowdsec bouncer mod, which answers banned visitors with 403. Private addresses are never banned; the bouncer key is generated and registered automatically. Community blocklist sends attacking IPs, scenario and time to the CrowdSec Central API and pulls its blocklist. Runs alongside Auto ban. Unban: `docker exec crowdsec cscli decisions delete --ip <ip>`.
                 Images: lscr.io/linuxserver/swag:latest, crowdsecurity/crowdsec:latest.
               '';

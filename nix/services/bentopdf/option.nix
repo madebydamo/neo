@@ -58,7 +58,7 @@
               '';
               notes = ''
                 Neo serves the self-hosted "simple" build behind tinyauth. Office conversion runs LibreOffice compiled to WebAssembly in the browser.
-                Individual tools can be hidden without rebuilding (disabledTools).
+                Individual tools can be hidden without rebuilding (Hidden tools).
               '';
               replaces = ["Adobe Acrobat" "iLovePDF" "Smallpdf"];
               privacy = ["documents"];

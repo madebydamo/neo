@@ -95,7 +95,7 @@
               '';
               notes = ''
                 A systemd timer runs neo update and activate, with optional nix garbage collection.
-                activationMode=boot builds and sets the next boot default without a live switch (safer on boxes where an unattended switch freezes networking); rebootAfterBoot (default on) then restarts the host so the new version runs.
+                Activation mode "On next restart" builds and sets the next boot default without a live switch (safer on boxes where an unattended switch freezes networking); Restart after update (default on) then restarts the host so the new version runs.
                 The config repo is created by neo-bootstrap, which stays enabled when this timer is off. CLI path and neo input settings live under neo-cli.
               '';
             }

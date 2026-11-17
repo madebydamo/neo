@@ -70,7 +70,7 @@
               '';
               notes = ''
                 CalDAV and CardDAV server storing everything in one SQLite database. Supports WebDAV Push, a Nextcloud-compatible login flow and Apple configuration profiles.
-                The web frontend is behind tinyauth; when ssoPassword is set, you are signed into RustiCal as the tinyauth user, so there is no second login.
+                The web frontend is behind tinyauth; when the Single sign-on secret is set, you are signed into RustiCal as the tinyauth user, so there is no second login.
                 CalDAV/CardDAV, well-known discovery and /ping skip tinyauth so calendar apps can use RustiCal app tokens. PROPFIND, OPTIONS and REPORT on the site root also skip it and redirect to well-known CalDAV, so DAVx5 works with the base URL.
               '';
               replaces = ["Google Calendar" "iCloud Calendar" "Google Contacts"];

@@ -407,7 +407,7 @@
               '';
               notes = ''
                 Forward-auth for SWAG: username and password (bcrypt, optional TOTP), OAuth (GitHub, Google, generic, Entra) and LDAP. Configured through environment variables, no database.
-                Services list the paths that skip the login (health checks, phone app APIs) in auth.publicPaths.
+                Each app lists the paths that skip the login (health checks, phone app APIs) under Public paths.
               '';
               projectUrl = "https://tinyauth.app/";
               githubUrl = "https://github.com/tinyauthapp/tinyauth";

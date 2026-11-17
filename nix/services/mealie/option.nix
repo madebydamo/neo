@@ -58,7 +58,7 @@
               notes = ''
                 Runs the official image with SQLite under appdata. The web UI stays behind tinyauth; /api/ skips it so API tokens and phone apps use Mealie's own login.
                 The image tag is pinned. Read the release notes before upgrading.
-                The first boot creates changeme@example.com with password MyPassword. Change that password. Public signup stays off unless allowSignup is enabled.
+                The first boot creates changeme@example.com with password MyPassword. Change that password. Public signup stays off unless Allow public sign-up is on.
               '';
               replaces = ["Paprika"];
               privacy = ["recipes"];

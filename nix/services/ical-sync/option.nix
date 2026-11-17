@@ -118,7 +118,7 @@
               '';
               notes = ''
                 Uses vdirsyncer to mirror .ics/webcal feeds into a CalDAV calendar (RustiCal on this host by default). Missing calendars are created.
-                Log in with your RustiCal user and an app token from the RustiCal UI, not the tinyauth password and not ssoPassword.
+                Log in with your RustiCal user and an app token from the RustiCal UI, not the tinyauth password and not RustiCal's Single sign-on secret.
                 The feed wins: events removed upstream are deleted in your calendar too.
               '';
               privacy = ["calendar"];
