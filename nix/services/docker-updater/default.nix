@@ -8,7 +8,7 @@
 # tag the previous image so Hermes can roll back a broken pull.
 #
 # The run holds the system lock shared, so it never overlaps an activation.
-# Each restart holds the unit's neo operation lock (cli/src/utils/locks.rs,
+# Each restart holds the unit's neo operation lock (cli/src/utils/locks/,
 # /run/neo/locks/unit_<unit>.lock): it waits for a UI start/stop/pull and skips a
 # unit whose service is being restored or cleared (its units stay stopped; the
 # pulled image is used when the restore starts it again).
@@ -236,7 +236,7 @@
           description = "Pull updated Docker images for neo services and restart containers";
           serviceConfig = {
             Type = "oneshot";
-            # System scope shared for the whole run (cli/src/utils/locks.rs): an
+            # System scope shared for the whole run (cli/src/utils/locks/): an
             # activation (system exclusive) waits for it and it waits for one, so
             # an update never restarts apps while a switch stops and starts them.
             ExecStart = "${pkgs.util-linux}/bin/flock -s -w 3600 /run/neo/locks/system.lock ${updateScript}";

@@ -1,4 +1,4 @@
-# Runtime state for neo operation locks (cli/src/utils/locks.rs).
+# Runtime state for neo operation locks (cli/src/utils/locks/).
 #
 #   /run/neo/locks/<scope>.lock   flock(2) per scope (system, service_<name>, unit_<unit>)
 #   /run/neo/locks/<id>.holder    who holds what (for "Blocked: … in progress" messages)

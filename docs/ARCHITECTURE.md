@@ -140,7 +140,7 @@ Neo wraps that so you get the benefits without writing a custom NixOS module set
 
 The Neo repository uses flake-parts and auto-imported modules under `nix/` (Dendritic style). Services split into options, implementation, reverse-proxy snippets (`swag.nix`) and Hermes skills (`skills.nix`). Apps run as OCI containers on an internal Docker network; each service gets a `neo-<service>.target`. Plugins are separate flakes that export a NixOS module Neo imports when you add them in the UI.
 
-Operation locks are `flock`s under `/run/neo/locks` (`cli/src/utils/locks.rs`). Restores also block unit starts with guard files under `/run/neo/guard`.
+Operation locks are `flock`s under `/run/neo/locks` (`cli/src/utils/locks/`). Restores also block unit starts with guard files under `/run/neo/guard`.
 
 See [AGENTS.md](../AGENTS.md) and [CLI.md](CLI.md) for contributor tooling. Power users who prefer a terminal over the web UI can use the optional CLI; it is **not** required for normal operation.
 
