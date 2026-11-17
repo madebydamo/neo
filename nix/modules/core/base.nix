@@ -94,7 +94,7 @@
 
     # Which system ran when (boot, switch, test; not `boot`-only switches), so
     # ZFS data snapshots map to the generation that was actually running
-    # (cli/src/utils/generation.rs). On the root fs: a data restore keeps it.
+    # (cli/src/utils/generation/timeline.rs). On the root fs: a data restore keeps it.
     system.activationScripts.neo-system-history = ''
       mkdir -p /var/lib/neo
       log=/var/lib/neo/system-activations
