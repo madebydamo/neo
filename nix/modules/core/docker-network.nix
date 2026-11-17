@@ -51,128 +51,25 @@
     # gluetun joins their links and neo-host for them (vpn/default.nix).
     routed = lib.neo.vpnRoutedContainers config;
 
-    script = pkgs.writeShellScript "neo-docker-network" ''
-      set -euo pipefail
-      docker=${dockerBin}
-      exists() { "$docker" network inspect "$1" >/dev/null 2>&1; }
+    # Fixed subnets first, before the pool hands their range to another network.
+    networkLines = map (name: let
+      net = ipv4Networks.${name};
+      field = v: toString (lib.defaultTo "" v);
+    in "${name}|${lib.boolToString net.internal}|${field net.subnet}|${field net.gateway}|${field net.bridgeName}")
+    (lib.sort (a: b: (ipv4Networks.${a}.subnet != null) && (ipv4Networks.${b}.subnet == null)) (lib.attrNames ipv4Networks));
 
-      # A free /24 of 172.16.0.0/12 (the range Neo reserves for Docker) that
-      # overlaps no Docker network and no host route. Docker only reads its
-      # address pool when the daemon starts. A switch restarts Docker when
-      # daemon.json changes, but dockerd can come back from the old unit and
-      # keep its old pools (about 31 networks) until the next restart
-      # (nix/modules/core/restart.nix), so Neo picks the subnet itself.
-      ip2int() { local IFS=.; read -r a b c d <<<"$1"; echo $(( (a << 24) | (b << 16) | (c << 8) | d )); }
-      used_ranges() {
-        {
-          "$docker" network inspect -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}' $("$docker" network ls -q)
-          ${pkgs.iproute2}/bin/ip -4 route show table all | ${pkgs.gawk}/bin/awk '$1 ~ /^[0-9.]+(\/[0-9]+)?$/ {print $1}'
-        } | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(/[0-9]+)?$' | while read -r cidr; do
-          local net=''${cidr%/*} len=32
-          [ "$net" != "$cidr" ] && len=''${cidr#*/}
-          local start size
-          start=$(ip2int "$net")
-          size=$(( 1 << (32 - len) ))
-          start=$(( start & ~(size - 1) ))
-          echo "$start $(( start + size - 1 ))"
-        done
-      }
-      free_subnet() {
-        local used base=$(ip2int 172.16.0.0) i lo hi s e clash
-        used=$(used_ranges)
-        for (( i = 0; i < 4096; i++ )); do
-          lo=$(( base + i * 256 )); hi=$(( lo + 255 )); clash=0
-          while read -r s e; do
-            [ -n "$s" ] || continue
-            if (( lo <= e && s <= hi )); then clash=1; break; fi
-          done <<<"$used"
-          if [ "$clash" = 0 ]; then
-            echo "$(( lo >> 24 & 255 )).$(( lo >> 16 & 255 )).$(( lo >> 8 & 255 )).0/24"
-            return 0
-          fi
-        done
-        return 1
-      }
-      in_use() { [ "$("$docker" network inspect -f '{{len .Containers}}' "$1")" != 0 ]; }
-
-      # ensure NAME INTERNAL(true|false) SUBNET GATEWAY BRIDGE (last three may be "")
-      ensure() {
-        local name=$1 internal=$2 subnet=$3 gateway=$4 bridge=$5 want current
-        local cur_internal cur_subnet cur_bridge
-        want="$internal|$subnet|$bridge"
-        if exists "$name"; then
-          # Not created by Neo (internal, a plugin's own network): never touch it.
-          if [ "$("$docker" network inspect -f '{{index .Labels "neo.managed"}}' "$name")" != 1 ]; then
-            return 0
-          fi
-          IFS='|' read -r cur_internal cur_subnet cur_bridge < <(
-            "$docker" network inspect -f '{{.Internal}}|{{range .IPAM.Config}}{{.Subnet}}{{end}}|{{index .Options "com.docker.network.bridge.name"}}' "$name"
-          )
-          # An empty subnet / bridge name means "any".
-          [ -z "$subnet" ] && cur_subnet=
-          [ -z "$bridge" ] && cur_bridge=
-          current="$cur_internal|$cur_subnet|$cur_bridge"
-          [ "$current" = "$want" ] && return 0
-          if in_use "$name"; then
-            echo "network $name: is $current, should be $want; recreated once its containers stop" >&2
-            return 0
-          fi
-          "$docker" network rm "$name" >/dev/null
-        fi
-        local args=(--label neo.managed=1)
-        [ "$internal" = true ] && args+=(--internal)
-        if [ -z "$subnet" ]; then
-          subnet=$(free_subnet) || { echo "network $name: no free /24 left in 172.16.0.0/12" >&2; failed=1; return 0; }
-        fi
-        args+=(--subnet "$subnet")
-        [ -n "$gateway" ] && args+=(--gateway "$gateway")
-        [ -n "$bridge" ] && args+=(-o "com.docker.network.bridge.name=$bridge")
-        if "$docker" network create "''${args[@]}" "$name" >/dev/null; then
-          echo "network $name: created"
-        else
-          echo "network $name: could not be created ($want)" >&2
-          failed=1
-        fi
-      }
-      failed=0
-
-      # Fixed subnets first, before the pool hands their range to another network.
-      ${lib.concatStrings (map (name: let
-          net = ipv4Networks.${name};
-          arg = v: lib.escapeShellArg (toString (lib.defaultTo "" v));
-        in ''
-          ensure ${lib.escapeShellArg name} ${lib.boolToString net.internal} ${arg net.subnet} ${arg net.gateway} ${arg net.bridgeName}
-        '')
-        (lib.sort (a: b: (ipv4Networks.${a}.subnet != null) && (ipv4Networks.${b}.subnet == null)) (lib.attrNames ipv4Networks)))}
-
-      if ! exists ${ipv6Net}; then
-        if ! "$docker" network create --label neo.managed=1 --ipv6 --ipv4=false ${ipv6Net} >/dev/null; then
-          # No IPv6 on this host. SWAG still joins the network, which then does nothing.
-          echo "IPv6 network not available, SWAG gets IPv4 only" >&2
-          "$docker" network create --label neo.managed=1 ${ipv6Net} >/dev/null
-        fi
-      fi
-
-      # Remove networks no one declares any more, once empty.
-      declared=" ${lib.concatStringsSep " " (lib.attrNames cfg.networks)} "
-      {
-        "$docker" network ls --filter label=neo.managed=1 --format '{{.Name}}'
-        ${lib.concatMapStrings (n: ''
-          if exists ${n}; then echo ${n}; fi
-        '')
-        legacyNetworks}
-      } | sort -u | while read -r name; do
-        [ -n "$name" ] || continue
-        [ "$name" = ${docker.sharedNetwork} ] && continue
-        case "$declared" in *" $name "*) continue ;; esac
-        if in_use "$name"; then
-          echo "network $name: no longer declared, kept while containers use it" >&2
-        elif "$docker" network rm "$name" >/dev/null 2>&1; then
-          echo "network $name: removed"
-        fi
-      done
-      exit "$failed"
-    '';
+    script = lib.getExe (pkgs.writeShellApplication {
+      name = "neo-docker-network";
+      runtimeInputs = [config.virtualisation.docker.package pkgs.coreutils pkgs.gawk pkgs.gnugrep pkgs.iproute2];
+      runtimeEnv = {
+        NEO_NETWORKS = lib.concatStringsSep "\n" networkLines;
+        NEO_IPV6_NETWORK = ipv6Net;
+        NEO_SHARED_NETWORK = docker.sharedNetwork;
+        NEO_DECLARED = lib.concatStringsSep " " (lib.attrNames cfg.networks);
+        NEO_LEGACY = lib.concatStringsSep "\n" legacyNetworks;
+      };
+      text = builtins.readFile ./docker-network.sh;
+    });
   in {
     options.neo.core = {
       docker = {
