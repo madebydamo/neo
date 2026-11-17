@@ -13,7 +13,7 @@ use crate::utils::secrets_store::Store;
 #[derive(Clone)]
 pub struct AppConfig {
     pub settings_path: PathBuf,
-    /// Evaluations of the config repo and their cached results (nix/pool.rs).
+    /// Evaluations of the config repo and their cached results (nix/pool/).
     pub eval: Arc<EvalPool>,
     /// Pages wait for an evaluation (none yet, or a structural change): navbar spinner.
     pub eval_busy: Arc<AtomicBool>,

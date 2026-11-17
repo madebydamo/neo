@@ -123,7 +123,7 @@ pub struct ConfigurationPageContext {
     pub theme: String,
     #[serde(flatten)]
     pub eval_error: EvalErrorUi,
-    /// `#neo-eval-sync` + `#neo-eval-error` (nix/pool.rs `status_html`).
+    /// `#neo-eval-sync` + `#neo-eval-error` (nix/pool/status.rs `status_html`).
     pub eval_status_html: String,
     /// Partial URL loaded into `#config-content` on first paint (HTMX GET).
     /// Unused when `initial_content_html` is already set (deep-linked option/core pane).

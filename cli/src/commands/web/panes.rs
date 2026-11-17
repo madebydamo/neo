@@ -1,4 +1,4 @@
-//! Option panes from the evaluation pool (nix/pool.rs caches them per evaluation).
+//! Option panes from the evaluation pool (nix/pool/ caches them per evaluation).
 
 use super::nix::value_to_display;
 use super::types::{AppConfig, OptionPaneContext, OptionSchema};

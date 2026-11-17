@@ -61,7 +61,7 @@ pub fn web(settings_path: PathBuf, nix_cmd: &str, config_path: &str) -> Result<(
         let busy = Arc::new(AtomicBool::new(true));
         let pending = Arc::new(AtomicBool::new(true));
         let (unit_tx, _unit_rx) = broadcast::channel::<String>(128);
-        // Evaluations run in the background from here on (nix/pool.rs): the
+        // Evaluations run in the background from here on (nix/pool/): the
         // server starts at once and pages wait only for the first evaluation.
         let eval = nix::EvalPool::new(
             nix_cmd,
