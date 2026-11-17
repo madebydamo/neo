@@ -15,7 +15,7 @@
       webdavAuth = lib.neo.isSet cfg.password;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-dufs.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.dufs = [
           appdata
           dataDir
         ];

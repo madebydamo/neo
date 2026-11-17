@@ -11,7 +11,7 @@
       appdata = cfg.appdata;
     in {
       config = mkIf cfg.enabled {
-        systemd.services."docker-stirling-pdf".preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.stirling-pdf = [
           appdata
           "${appdata}/tessdata"
           "${appdata}/configs"

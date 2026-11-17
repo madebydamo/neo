@@ -55,7 +55,7 @@ The template contains:
 | `modules/inputs.nix` | Flake inputs (`nixpkgs`, `neo`, plus yours) as `flake-file.inputs` |
 | `modules/nixos.nix` | Sets `systems` and the formatter. `neo.flakeModules.plugin` exports every `neoPlugin.modules.*` |
 | `modules/services/example/option.nix` | Options: `enabled`, reverse proxy, containers, appdata, metadata, Hermes skill |
-| `modules/services/example/default.nix` | Implementation: `mkEnsureDirs` for appdata, an OCI container on its own network (`lib.neo.docker.serviceNetwork`), `PUID`/`PGID` from `neo.core.uid`/`gid`, `TZ` from `neo.core.timeZone` |
+| `modules/services/example/default.nix` | Implementation: appdata directories (`neo.core.containerDirs`), an OCI container on its own network (`lib.neo.docker.serviceNetwork`), `PUID`/`PGID` from `neo.core.uid`/`gid`, `TZ` from `neo.core.timeZone` |
 | `modules/services/example/swag.nix` | Reverse proxy vhost via `lib.neo.mkSubdomainProxyConf` |
 | `modules/services/example/skills.nix` | Hermes skill via `lib.neo.mkServiceSkill` |
 | `modules/services/example/icon.svg` | Service icon, referenced as `icon = ./icon.svg` |
@@ -191,7 +191,7 @@ Work through every item. Each one exists because it is easy to forget.
 **`default.nix`** ([details](#defaultnix))
 
 - [ ] Everything inside `config = lib.mkIf cfg.enabled { … }`.
-- [ ] Appdata directories created with `lib.neo.mkEnsureDirs config [ … ]` in the container's `preStart` (or tmpfiles for native units).
+- [ ] Appdata directories created with `neo.core.containerDirs.${name} = [ … ];` (or tmpfiles for native units).
 - [ ] Containers: `image = cfg.containers.<c>`, `networks = [(lib.neo.docker.serviceNetwork name)]` (sidecars too).
 - [ ] `environment = lib.neo.linuxserverEnv config // { … }` (`PUID`, `PGID`, `TZ`) if the image supports them; never a literal time zone.
 - [ ] All state under `${config.neo.core.volumes.appdata}/<name>`. Media and documents from `config.neo.core.volumes.media` / `.documents`.
@@ -338,7 +338,7 @@ Notes:
         }
       ];
 
-      systemd.services."docker-${name}".preStart = lib.neo.mkEnsureDirs config [
+      neo.core.containerDirs.${name} = [
         appdata
         "${appdata}/data"
       ];
@@ -383,7 +383,7 @@ Notes:
 - **Network.** Put every container of the service on `lib.neo.docker.serviceNetwork name` (`app-<name>`). Its containers reach each other by container name; SWAG joins the network of every proxied service; containers of other services (core or plugin) cannot reach them. Container names are still global Docker names: name sidecars after the service (`"${name}-db"`, `"${name}-redis"`). Neo creates every network a container names. To call another service inside Docker, both sides share a link (`lib.neo.docker.mkLink { name; containers = [ … ]; }`); otherwise use its public URL. Services of one plugin that talk to each other (an *arr stack) put those containers on one link. Host services (`host.docker.internal`) are reachable only with `lib.neo.docker.mkHostAccess <container>`; SWAG already has it. See [LIB.md](LIB.md#docker-networks-libneodocker).
 - **VPN.** Declare networks and links as if there were no VPN. A container routed through the VPN (`vpn.enabled`) runs in gluetun's network namespace; gluetun then joins its service network, its links and (with `mkHostAccess`) `neo-host` under its name, and its metrics are scraped through gluetun. List the service network in `mkVpnOptions { networks = [(lib.neo.docker.serviceNetwork name)]; }` too.
 - **The `internal` network.** Plugins written before service networks use `networks = ["internal"]`. That keeps working unchanged: SWAG is on it, gluetun joins it for VPN-routed plugin containers, and everything on it reaches everything else on it. Built-in services left it, so a plugin container on `internal` can no longer call a built-in container by name (use the public URL or a link). Move to `serviceNetwork` to isolate the plugin's services from each other and from other plugins.
-- **Ownership.** `mkEnsureDirs` creates missing directories owned by `neo.core.uid:gid` (the `homeserver` user). Pass `{ dirPath; user; group; mode; }` for images that run as a fixed uid (for example postgres `999`).
+- **Ownership.** `neo.core.containerDirs` (like `mkEnsureDirs`) creates missing directories owned by `neo.core.uid:gid` (the `homeserver` user). Pass `{ dirPath; user; group; mode; }` for images that run as a fixed uid (for example postgres `999`).
 - **Appdata.** Everything mutable lives under `${appdata}`. That is what **Clear appdata** removes and what snapshots and backups cover. Do not write to `/var/lib/<name>`.
 - **Ports.** Do not publish web UI ports (`ports = [ … ]`): that bypasses SWAG, tinyauth, ingress and the NixOS firewall (Docker publishes ports through its own iptables rules). Publish only protocol ports clients need directly, like Syncthing's `22000`.
 - **Setup units.** `mkSetupService` retries the script until it exits 0, stays "active (exited)" after success, and runs again when the container restarts. Use `blocking = true` only when another unit must wait for it.

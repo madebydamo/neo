@@ -92,11 +92,11 @@
               }
             ];
 
-          systemd.services.docker-authentik.preStart = lib.neo.mkEnsureDirs config [
+          neo.core.containerDirs.authentik = [
             "${appdata}/data"
             "${appdata}/templates"
           ];
-          systemd.services.docker-authentik-worker.preStart = lib.neo.mkEnsureDirs config [
+          neo.core.containerDirs.authentik-worker = [
             "${appdata}/data"
             "${appdata}/templates"
             "${appdata}/certs"

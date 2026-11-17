@@ -10,7 +10,7 @@
       cfg = config.neo.services.beszel-agent;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-beszel-agent.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.beszel-agent = [
           cfg.appdata
         ];
         virtualisation.oci-containers.containers.beszel-agent = {

@@ -127,21 +127,21 @@ virtualisation.oci-containers.containers.${name} = {
 
 | Function | Arguments | Returns |
 |----------|-----------|---------|
-| `mkEnsureDirs` | `config: dirs:`; each entry is a path string or `{ dirPath, mode ? "0755", user ? uid, group ? gid }` | Shell snippet that creates each missing directory with that owner and mode. Use in `preStart` or `system.activationScripts` |
+| `neo.core.containerDirs.<container>` | option: list of entries as for `mkEnsureDirs` | The container's host directories, created when missing at the start of `docker-<container>`, before the rest of its `preStart`. Lists from several modules add up; the Postgres/Redis sidecars add their data directory here |
+| `mkEnsureDirs` | `config: dirs:`; each entry is a path string or `{ dirPath, mode ? "0755", user ? uid, group ? gid }` | Shell snippet that creates each missing directory with that owner and mode. For `system.activationScripts` or a host unit; containers use `containerDirs` |
 | `mkActivationScriptForDir` | `config: { dirPath, mode ? "0755", user ? toString config.neo.core.uid, group ? toString config.neo.core.gid }` | Shell snippet for one directory (only acts if it does not exist) |
 | `mkActivationScriptForFile` | `config: { filePath, content, mode ? "0644", user ? uid, group ? gid }` | Shell snippet that creates the parent dir and **overwrites** the file with `content` on every run |
 
 ```nix
-systemd.services.docker-myapp.preStart = lib.concatStringsSep "\n" [
-  (lib.neo.mkEnsureDirs config [
-    "${appdata}/config"
-    {dirPath = "${appdata}/db"; user = "999"; group = "999";}
-  ])
-  (lib.neo.mkActivationScriptForFile config {
-    filePath = "${appdata}/config/settings.json";
-    content = builtins.toJSON {port = cfg.port;};
-  })
+neo.core.containerDirs.myapp = [
+  "${appdata}/config"
+  {dirPath = "${appdata}/db"; user = "999"; group = "999";}
 ];
+# Runs after the directories exist.
+systemd.services.docker-myapp.preStart = lib.neo.mkActivationScriptForFile config {
+  filePath = "${appdata}/config/settings.json";
+  content = builtins.toJSON {port = cfg.port;};
+};
 ```
 
 ### Reverse proxy (SWAG, tinyauth)

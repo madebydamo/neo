@@ -14,10 +14,10 @@
       config = mkIf cfg.enabled {
         assertions = lib.neo.requireSecrets "karakeep" cfg ["nextauthSecret" "meiliMasterKey"];
 
-        systemd.services.docker-karakeep.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.karakeep = [
           "${appdata}/data"
         ];
-        systemd.services.docker-karakeep-meilisearch.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.karakeep-meilisearch = [
           "${appdata}/meilisearch"
         ];
 

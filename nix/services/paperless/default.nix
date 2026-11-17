@@ -34,7 +34,7 @@
             }
           ];
 
-          systemd.services.docker-paperless.preStart = lib.neo.mkEnsureDirs config [
+          neo.core.containerDirs.paperless = [
             "${appdata}/data"
             "${appdata}/media"
             "${appdata}/export"

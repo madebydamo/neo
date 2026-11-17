@@ -10,7 +10,7 @@
       cfg = config.neo.services.syncthing;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-syncthing.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.syncthing = [
           cfg.appdata
         ];
 

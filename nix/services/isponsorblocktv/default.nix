@@ -22,7 +22,7 @@
       config = mkIf cfg.enabled (mkMerge [
         (lib.neo.mkDockerToLocalhostForward setupPort)
         {
-          systemd.services.docker-isponsorblocktv.preStart = lib.neo.mkEnsureDirs config [
+          neo.core.containerDirs.isponsorblocktv = [
             dataDir
           ];
 

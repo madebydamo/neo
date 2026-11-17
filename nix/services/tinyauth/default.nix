@@ -255,7 +255,7 @@
           }
         ];
 
-        systemd.services.docker-tinyauth.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.tinyauth = [
           cfg.appdata
         ];
 

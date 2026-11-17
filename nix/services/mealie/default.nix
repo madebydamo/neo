@@ -21,7 +21,7 @@
         ];
 
         # entry.sh chowns /app (including this mount) to PUID:PGID on start.
-        systemd.services.docker-mealie.preStart = lib.neo.mkEnsureDirs config [appdata];
+        neo.core.containerDirs.mealie = [appdata];
 
         virtualisation.oci-containers.containers.mealie = {
           image = cfg.containers.mealie;

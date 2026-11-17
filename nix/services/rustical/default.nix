@@ -31,7 +31,7 @@
       passwordFile = config.neo.core.secrets.templates."rustical-sso-password".path;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-rustical.preStart = lib.neo.mkEnsureDirs config [appdata];
+        neo.core.containerDirs.rustical = [appdata];
 
         virtualisation.oci-containers.containers.rustical = {
           image = cfg.containers.rustical;

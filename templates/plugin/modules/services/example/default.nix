@@ -24,10 +24,10 @@
       '';
     in {
       config = mkIf cfg.enabled {
-        # Runs before every container start: create appdata (owned by the neo uid/gid)
-        # and write files rendered from options.
+        # Created before every container start, owned by the neo uid/gid.
+        neo.core.containerDirs.${name} = [appdata "${appdata}/www"];
+        # Runs next: write files rendered from options.
         systemd.services."docker-${name}".preStart = concatStringsSep "\n" [
-          (lib.neo.mkEnsureDirs config [appdata "${appdata}/www"])
           (lib.neo.mkActivationScriptForFile config {
             filePath = "${appdata}/www/index.html";
             content = page;

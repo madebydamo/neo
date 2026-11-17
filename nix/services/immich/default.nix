@@ -35,10 +35,10 @@
           };
         })
         {
-          systemd.services.docker-immich-server.preStart = lib.neo.mkEnsureDirs config [
+          neo.core.containerDirs.immich-server = [
             "${cfg.appdata}/server"
           ];
-          systemd.services.docker-immich-machine-learning.preStart = lib.neo.mkEnsureDirs config [
+          neo.core.containerDirs.immich-machine-learning = [
             "${cfg.appdata}/cache"
           ];
 

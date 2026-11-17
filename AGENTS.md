@@ -32,7 +32,7 @@ NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) + Rust *
 ## Add a service
 
 1. `option.nix` — `enabled`, `// lib.neo.mkReverseProxyOptions`, `mkContainerDefinitions`, `mkAppdata`, `mkServiceMeta`, `mkSkillOptions`
-2. `default.nix` — `mkIf`, activation dirs, `oci-containers` on `networks = [(lib.neo.docker.serviceNetwork "<name>")]` (sidecars: `network =` the same)
+2. `default.nix` — `mkIf`, appdata dirs (`neo.core.containerDirs.<container>`), `oci-containers` on `networks = [(lib.neo.docker.serviceNetwork "<name>")]` (sidecars: `network =` the same)
 3. `swag.nix` if public; `skills.nix` for Hermes (`mkServiceSkill`); `monitoring.nix` for metrics and a Grafana dashboard (`neo.monitoring.apps.<name>`, `lib.neo.grafana`, see below)
 4. Enable in **`settings.toml`**: `[services.<name>] enabled = true`
 5. `git add` → **`just launch`** → smoke test below → `just format && just check`

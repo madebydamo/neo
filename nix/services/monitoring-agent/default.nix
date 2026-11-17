@@ -209,7 +209,7 @@
             }
           ];
 
-          systemd.services.docker-alloy.preStart = lib.neo.mkEnsureDirs config [cfg.appdata];
+          neo.core.containerDirs.alloy = [cfg.appdata];
 
           virtualisation.oci-containers.containers.alloy = {
             image = cfg.containers.alloy;

@@ -45,7 +45,7 @@
         optional cfg.ssh.enable "127.0.0.1:${toString cfg.ssh.listenPort}:22";
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-gitea.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.gitea = [
           "${appdata}/data"
         ];
 

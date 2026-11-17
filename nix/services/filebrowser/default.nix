@@ -17,18 +17,16 @@
       };
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-filebrowser.preStart = lib.concatStringsSep "\n" [
-          (lib.neo.mkEnsureDirs config [
-            cfg.appdata
-            "${cfg.appdata}/database"
-            "${cfg.appdata}/config"
-          ])
-          (lib.neo.mkActivationScriptForFile config {
-            filePath = "${cfg.appdata}/config/settings.json";
-            content = settingsJson;
-            mode = "0644";
-          })
+        neo.core.containerDirs.filebrowser = [
+          cfg.appdata
+          "${cfg.appdata}/database"
+          "${cfg.appdata}/config"
         ];
+        systemd.services.docker-filebrowser.preStart = lib.neo.mkActivationScriptForFile config {
+          filePath = "${cfg.appdata}/config/settings.json";
+          content = settingsJson;
+          mode = "0644";
+        };
 
         virtualisation.oci-containers.containers.filebrowser = {
           environment = {

@@ -11,7 +11,7 @@
       appdata = cfg.appdata;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-changedetection.preStart = lib.neo.mkEnsureDirs config [appdata];
+        neo.core.containerDirs.changedetection = [appdata];
 
         virtualisation.oci-containers.containers = {
           changedetection = {

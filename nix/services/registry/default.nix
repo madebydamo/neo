@@ -28,7 +28,7 @@
           neo.services.registry: no users are set and ingress includes "web", so anyone on the internet can push and pull images. Add a user or remove "web" from ingress.
         '';
 
-        systemd.services.docker-registry.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.registry = [
           appdata
           dataDir
         ];

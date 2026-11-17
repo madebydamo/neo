@@ -2,7 +2,6 @@
 # containers.* uses rank 300 so the group sits after skill (200) in the service form.
 {lib, ...}: let
   neoUi = (import ./ui.nix {inherit lib;}).libExtensions.ui.neo.ui;
-  inherit ((import ./activation/dir.nix {inherit lib;}).libExtensions.activate-dir.neo) mkEnsureDirs;
 in {
   libExtensions.containers = {
     neo = rec {
@@ -43,7 +42,7 @@ in {
         extraOptions ? [],
         network ? "internal",
       }: {
-        systemd.services."docker-${name}".preStart = mkEnsureDirs config ["${appdata}/${dataDir}"];
+        neo.core.containerDirs.${name} = ["${appdata}/${dataDir}"];
         neo.core.secrets.containerEnv = lib.optionalAttrs (password != null) {
           ${name}.POSTGRES_PASSWORD = password;
         };
@@ -75,8 +74,8 @@ in {
         health ? null,
         network ? "internal",
       }: {
-        systemd.services = lib.optionalAttrs (appdata != null) {
-          "docker-${name}".preStart = mkEnsureDirs config ["${appdata}/${dataDir}"];
+        neo.core.containerDirs = lib.optionalAttrs (appdata != null) {
+          ${name} = ["${appdata}/${dataDir}"];
         };
         virtualisation.oci-containers.containers.${name} = {
           inherit image cmd;

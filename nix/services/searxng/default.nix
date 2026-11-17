@@ -10,11 +10,11 @@
       appdata = cfg.appdata;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-searxng-redis.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.searxng-redis = [
           appdata
           "${appdata}/redis"
         ];
-        systemd.services.docker-searxng.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.searxng = [
           appdata
           "${appdata}/searxng"
           "${appdata}/cache"

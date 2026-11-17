@@ -375,9 +375,9 @@
           }
         ];
 
-        systemd.services.docker-grafana.preStart = lib.neo.mkEnsureDirs config [cfg.appdata grafanaDir appsDir alertsDir];
-        systemd.services.docker-prometheus.preStart = lib.neo.mkEnsureDirs config [cfg.appdata prometheusDir];
-        systemd.services.docker-loki.preStart = lib.neo.mkEnsureDirs config [cfg.appdata lokiDir];
+        neo.core.containerDirs.grafana = [cfg.appdata grafanaDir appsDir alertsDir];
+        neo.core.containerDirs.prometheus = [cfg.appdata prometheusDir];
+        neo.core.containerDirs.loki = [cfg.appdata lokiDir];
 
         virtualisation.oci-containers.containers = {
           grafana = {

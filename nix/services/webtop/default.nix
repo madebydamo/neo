@@ -10,7 +10,7 @@
       appdata = cfg.appdata;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-webtop.preStart = lib.neo.mkEnsureDirs config [appdata];
+        neo.core.containerDirs.webtop = [appdata];
 
         virtualisation.oci-containers.containers.webtop = {
           image = cfg.containers.webtop;

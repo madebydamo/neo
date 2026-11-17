@@ -30,7 +30,7 @@
           }
         ];
 
-        systemd.services.docker-pihole.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.pihole = [
           piholeData
         ];
 

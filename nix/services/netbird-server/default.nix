@@ -203,7 +203,7 @@
         # container itself there. It reaches its own address like any device
         # (a VPS reaches its public address; at home it needs hairpin NAT).
 
-        systemd.services.docker-netbird-server.preStart = lib.neo.mkEnsureDirs config [appdata "${appdata}/data"];
+        neo.core.containerDirs.netbird-server = [appdata "${appdata}/data"];
         systemd.tmpfiles.rules = ["d ${appdata}/bootstrap 0700 root root -"];
 
         virtualisation.oci-containers.containers = {

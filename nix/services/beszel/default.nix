@@ -9,7 +9,7 @@
       cfg = config.neo.services.beszel;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-beszel.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.beszel = [
           cfg.appdata
         ];
 

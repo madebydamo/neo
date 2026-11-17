@@ -12,14 +12,14 @@
       nextcloudUrl = lib.neo.publicHost config cfg;
     in {
       config = mkIf cfg.enabled {
-        systemd.services.docker-nextcloud-db.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.nextcloud-db = [
           {
             dirPath = "${appdata}/db";
             user = "999";
             group = "999";
           }
         ];
-        systemd.services.docker-nextcloud.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.nextcloud = [
           {
             dirPath = "${appdata}/html";
             user = "33";

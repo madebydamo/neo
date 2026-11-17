@@ -37,7 +37,7 @@
           };
         };
 
-        systemd.services.docker-vaultwarden.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.vaultwarden = [
           cfg.appdata
         ];
 

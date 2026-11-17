@@ -17,7 +17,7 @@
           // optionalAttrs (cfg.apiKey != null) {IMMICH_API_KEY = cfg.apiKey;}
         );
 
-        systemd.services.docker-immich-drop.preStart = lib.neo.mkEnsureDirs config [
+        neo.core.containerDirs.immich-drop = [
           cfg.appdata
         ];
 

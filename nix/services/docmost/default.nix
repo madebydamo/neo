@@ -89,7 +89,7 @@
             })
             cfg.syncGroups;
 
-          systemd.services.docker-docmost.preStart = lib.neo.mkEnsureDirs config [
+          neo.core.containerDirs.docmost = [
             "${appdata}/storage"
           ];
 

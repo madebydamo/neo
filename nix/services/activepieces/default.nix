@@ -37,7 +37,7 @@
             }
           ];
 
-          systemd.services.docker-activepieces.preStart = lib.neo.mkEnsureDirs config [
+          neo.core.containerDirs.activepieces = [
             "${appdata}/cache"
           ];
 

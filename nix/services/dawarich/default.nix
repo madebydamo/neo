@@ -112,7 +112,7 @@
               }
             ];
 
-          systemd.services.docker-dawarich.preStart = lib.neo.mkEnsureDirs config [
+          neo.core.containerDirs.dawarich = [
             "${appdata}/public"
             "${appdata}/storage"
             "${appdata}/watched"
