@@ -52,23 +52,14 @@ pub fn migrate(config_path: &str, source_settings: &Path, dry_run: bool) -> Resu
 fn apply_migrations(doc: &mut DocumentMut) -> bool {
     let mut applied = get_applied(doc);
     let orig = applied.len();
-    // Path renames first, then migrations that need more than renames.
-    let steps = MIGRATIONS
-        .iter()
-        .map(|m| (m.id, Step::Renames(m.renames)))
-        .chain(
-            CUSTOM_MIGRATIONS
-                .iter()
-                .map(|&(id, f)| (id, Step::Custom(f))),
-        );
-    for (id, step) in steps {
+    for &(id, ref step) in MIGRATIONS {
         if applied.iter().any(|a| a == id) {
             continue;
         }
         println!("Applying migration: {id}");
         match step {
             Step::Renames(renames) => {
-                for &(from, to) in renames {
+                for &(from, to) in *renames {
                     move_dotted(doc, from, to);
                 }
             }
@@ -90,36 +81,88 @@ enum Step {
     Custom(MigrationFn),
 }
 
-const CUSTOM_MIGRATIONS: &[(&str, MigrationFn)] = &[
-    ("003-split-neo-service", migrate_003_split_neo_service),
+/// Every migration, in the order it runs (sorted by id). Applied ids are kept
+/// in `[migrations] applied`, so reordering never re-runs one that ran.
+const MIGRATIONS: &[(&str, Step)] = &[
+    (
+        "001-rename-legacy-neo-nixos-cli-and-core-keys",
+        Step::Renames(&[
+            ("cli", "neo-cli"),
+            ("volumes", "core.volumes"),
+            ("ssh", "core.ssh"),
+            ("timeZone", "core.timeZone"),
+            ("uid", "core.uid"),
+            ("gid", "core.gid"),
+            ("device.hostname", "core.hostname"),
+            ("users.hashedPassword", "core.hashedLinuxPassword"),
+            ("device", ""),
+            ("users", ""),
+        ]),
+    ),
+    (
+        "002-backup-ssh-connection-keys",
+        Step::Renames(&[
+            ("services.backup.remoteServer", "services.backup.host"),
+            ("services.backup.remoteUser", "services.backup.user"),
+            (
+                "services.backup.sshExtraOptions",
+                "services.backup.extraOptions",
+            ),
+        ]),
+    ),
+    (
+        "003-split-neo-service",
+        Step::Custom(migrate_003_split_neo_service),
+    ),
     (
         "004-neo-cli-local-server-profiles",
-        migrate_004_neo_cli_profiles,
+        Step::Custom(migrate_004_neo_cli_profiles),
     ),
-    ("006-hermes-unified-llm", migrate_006_hermes_unified_llm),
+    // OpenClaw is unmaintained and removed from Neo. Drop the whole table so
+    // secrets (gatewayToken, telegramBotToken, *ApiKey, etc.) leave settings.toml.
+    (
+        "005-remove-openclaw",
+        Step::Renames(&[("services.openclaw", "")]),
+    ),
+    (
+        "006-hermes-unified-llm",
+        Step::Custom(migrate_006_hermes_unified_llm),
+    ),
     (
         "007-neo-cli-profile-inputs",
-        migrate_007_neo_cli_profile_inputs,
+        Step::Custom(migrate_007_neo_cli_profile_inputs),
     ),
-    ("008-core-git-identity", migrate_008_core_git_identity),
+    (
+        "008-core-git-identity",
+        Step::Custom(migrate_008_core_git_identity),
+    ),
     (
         "009-system-updater-gc-older-than",
-        migrate_009_system_updater_gc_older_than,
+        Step::Custom(migrate_009_system_updater_gc_older_than),
     ),
     (
         "010-tinyauth-oauth-providers",
-        migrate_010_tinyauth_oauth_providers,
+        Step::Custom(migrate_010_tinyauth_oauth_providers),
     ),
     // After 003/004, which may carry the key over from retired tables.
     (
         "011-drop-bootstrap-method",
-        migrate_011_drop_bootstrap_method,
+        Step::Custom(migrate_011_drop_bootstrap_method),
     ),
-    ("012-neo-two-themes", migrate_012_neo_two_themes),
-    ("013-backup-keeps-ssh-key", migrate_013_backup_keeps_ssh_key),
-    ("014-plugin-tables", migrate_014_plugin_tables),
+    (
+        "012-neo-two-themes",
+        Step::Custom(migrate_012_neo_two_themes),
+    ),
+    (
+        "013-backup-keeps-ssh-key",
+        Step::Custom(migrate_013_backup_keeps_ssh_key),
+    ),
+    ("014-plugin-tables", Step::Custom(migrate_014_plugin_tables)),
     // After 013, which pins sshKey at the top of services.backup.
-    ("015-backup-destinations", migrate_015_backup_destinations),
+    (
+        "015-backup-destinations",
+        Step::Custom(migrate_015_backup_destinations),
+    ),
 ];
 
 /// Delete retired [neo-service] and [nixos] tables.
@@ -600,46 +643,6 @@ fn set_applied(doc: &mut DocumentMut, applied: &[String]) {
 /// `(from, to)` dotted settings path; empty `to` deletes `from`.
 type KeyRename = (&'static str, &'static str);
 
-struct Migration {
-    id: &'static str,
-    renames: &'static [KeyRename],
-}
-
-const MIGRATIONS: &[Migration] = &[
-    Migration {
-        id: "001-rename-legacy-neo-nixos-cli-and-core-keys",
-        renames: &[
-            ("cli", "neo-cli"),
-            ("volumes", "core.volumes"),
-            ("ssh", "core.ssh"),
-            ("timeZone", "core.timeZone"),
-            ("uid", "core.uid"),
-            ("gid", "core.gid"),
-            ("device.hostname", "core.hostname"),
-            ("users.hashedPassword", "core.hashedLinuxPassword"),
-            ("device", ""),
-            ("users", ""),
-        ],
-    },
-    Migration {
-        id: "002-backup-ssh-connection-keys",
-        renames: &[
-            ("services.backup.remoteServer", "services.backup.host"),
-            ("services.backup.remoteUser", "services.backup.user"),
-            (
-                "services.backup.sshExtraOptions",
-                "services.backup.extraOptions",
-            ),
-        ],
-    },
-    // OpenClaw is unmaintained and removed from Neo. Drop the whole table so
-    // secrets (gatewayToken, telegramBotToken, *ApiKey, etc.) leave settings.toml.
-    Migration {
-        id: "005-remove-openclaw",
-        renames: &[("services.openclaw", "")],
-    },
-];
-
 fn remove_dotted(doc: &mut DocumentMut, path: &str) -> Option<Item> {
     let parts: Vec<&str> = path.split('.').filter(|p| !p.is_empty()).collect();
     let (leaf, dirs) = parts.split_last()?;
@@ -693,6 +696,42 @@ fn move_dotted(doc: &mut DocumentMut, from: &str, to: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn registry_is_sorted_by_unique_id() {
+        let ids: Vec<&str> = MIGRATIONS.iter().map(|(id, _)| *id).collect();
+        let mut sorted = ids.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(
+            ids, sorted,
+            "MIGRATIONS must be sorted by id, without duplicates"
+        );
+    }
+
+    #[test]
+    fn migrations_run_in_id_order() {
+        let mut doc = DocumentMut::new();
+        assert!(apply_migrations(&mut doc));
+        let expected: Vec<&str> = MIGRATIONS.iter().map(|(id, _)| *id).collect();
+        assert_eq!(get_applied(&doc), expected);
+    }
+
+    #[test]
+    fn already_applied_ids_never_run_again() {
+        // A config migrated under the old order (renames first) records 005
+        // before 003; nothing may run again.
+        let mut doc = DocumentMut::new();
+        let mut old_order: Vec<String> = MIGRATIONS.iter().map(|(id, _)| id.to_string()).collect();
+        let five = old_order.remove(4);
+        old_order.insert(2, five);
+        set_applied(&mut doc, &old_order);
+        doc["services"] = toml_edit::table();
+        doc["services"]["openclaw"] = toml_edit::table();
+        assert!(!apply_migrations(&mut doc));
+        assert!(doc["services"].get("openclaw").is_some());
+        assert_eq!(get_applied(&doc), old_order);
+    }
 
     #[test]
     fn malformed_migrations_key_is_an_error() {
