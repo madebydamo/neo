@@ -58,7 +58,6 @@
     in {
       config = mkIf cfg.enabled (mkMerge [
         (lib.neo.mkPostgresSidecar config {
-          network = lib.neo.docker.serviceNetwork "docmost";
           name = "docmost-db";
           image = cfg.containers."docmost-db";
           inherit appdata;
@@ -68,7 +67,6 @@
           dataPath = "/var/lib/postgresql";
         })
         (lib.neo.mkRedisSidecar config {
-          network = lib.neo.docker.serviceNetwork "docmost";
           name = "docmost-redis";
           image = cfg.containers."docmost-redis";
           inherit appdata;

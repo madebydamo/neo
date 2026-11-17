@@ -102,8 +102,9 @@ and `mkDefault`), so any `networks` a module sets win: plugin containers on
 `internal`, links and host access (those containers name their service
 network too), VPN routing. Only a plugin container without any network
 (Docker's default bridge before) moves to its service network.
-`mkPostgresSidecar` and `mkRedisSidecar` take `network` (default `internal`, so
-plugin callers are unchanged).
+`mkPostgresSidecar` and `mkRedisSidecar` take `network`; without it (since
+2026-11; before, the default was `internal`) the sidecar is on its service
+network like any other container of the service.
 
 Rejected: rewriting `internal` to the owning service's network automatically.
 It breaks high_sea, whose separate services talk to each other. Rejected: one

@@ -89,14 +89,16 @@ The build fails if a placeholder would end up in a container or unit `environmen
 | Function | Arguments | Returns |
 |----------|-----------|---------|
 | `toOciBindMounts` | List of `{ localPath, containerPath }` | List of `"host:container"` strings |
-| `mkPostgresSidecar` | `config`, `{ name, image, appdata, db, user ? db, password ? null, dataPath ? "/var/lib/postgresql/data", dataDir ? "pgdata", environment ? {}, health ? null, extraOptions ? [], network ? "internal" }` | Module fragment for `mkMerge`: the Postgres container on `network` (pass `docker.serviceNetwork <service>`), its data directory, `POSTGRES_PASSWORD` through the secrets |
-| `mkRedisSidecar` | `config`, `{ name, image, appdata ? null, dataDir ? "redisdata", cmd ? [], health ? null, network ? "internal" }` | Module fragment for `mkMerge`: the Redis container on `network`; without `appdata` it keeps nothing on disk |
+| `mkPostgresSidecar` | `config`, `{ name, image, appdata, db, user ? db, password ? null, dataPath ? "/var/lib/postgresql/data", dataDir ? "pgdata", environment ? {}, health ? null, extraOptions ? [], network ? null }` | Module fragment for `mkMerge`: the Postgres container on its service network (list `name` in `mkContainerDefinitions`) or on `network`, its data directory (`containerDirs`), `POSTGRES_PASSWORD` through the secrets |
+| `mkRedisSidecar` | `config`, `{ name, image, appdata ? null, dataDir ? "redisdata", cmd ? [], health ? null, network ? null }` | Module fragment for `mkMerge`: the Redis container on its service network or `network`; without `appdata` it keeps nothing on disk |
 | `dockerHealthOptions` | `{ cmd, interval, timeout, retries, startPeriod ? null }` | `--health-*` flags for `extraOptions` |
 | `linuxserverEnv` | `config` | `{ PUID; PGID; TZ; }` from `neo.core.uid`, `gid` and `timeZone`; merge into a container's `environment` with `//` |
 | `mkSetupService` | `{ pkgs, name, description, script, containers ? [], attachTo ? containers, after ? [], wants ? [], requires ? [], bindsTo ? [], partOf ? [], before ? [], wantedBy ? [], path ? [], environment ? {}, retryInterval ? 60, maxAttempts ? null, blocking ? false, serviceConfig ? {}, unitConfig ? {} }` | A `systemd.services.<name>` value. `After`/`Requires` on `docker-<c>` for each of `containers`; `docker-<c>` of `attachTo` wants it. `script` is one attempt under `bash -e`, retried every `retryInterval` s until exit 0 (`null` = one attempt, then `Restart=on-failure`); `maxAttempts` gives up. `RemainAfterExit` always; `Type=simple`, or `oneshot` with `blocking = true` |
 | `isSetupService` | A `systemd.services` value | bool; **internal** |
 | `getAllContainers` | `config` | List of `{ service, container, image, unit }` for enabled services whose `docker-<c>` is in `systemdUnits`; **internal** (docker updater) |
 | `planServiceTargets` | `{ services, exclude ? [ "dnsmasq" "neo-web" "neo-bootstrap" "swag-patcher" "nginx" ] }` | `neo-<service>.target` plan; **internal** |
+
+**Changed 2026-11 (plugins):** `mkPostgresSidecar` / `mkRedisSidecar` used to put the sidecar on the shared `internal` network when `network` was not given. Now it joins its service's network, like every other container of the service. A plugin whose app container is still on `internal` and that relied on that default passes `network = "internal";` (or moves the app to its service network, the better fix).
 
 List every setup unit in the service's `systemdUnits` (`extraUnits` or `mkSystemdUnits`). An assertion fails evaluation for setup units that are not listed in an enabled service's `systemdUnits`, so define them inside `mkIf cfg.enabled`.
 

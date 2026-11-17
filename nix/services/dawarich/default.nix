@@ -50,7 +50,6 @@
     in {
       config = mkIf cfg.enabled (mkMerge [
         (lib.neo.mkPostgresSidecar config {
-          network = lib.neo.docker.serviceNetwork "dawarich";
           name = "dawarich-db";
           image = cfg.containers."dawarich-db";
           inherit appdata;
@@ -67,7 +66,6 @@
           };
         })
         (lib.neo.mkRedisSidecar config {
-          network = lib.neo.docker.serviceNetwork "dawarich";
           name = "dawarich-redis";
           image = cfg.containers."dawarich-redis";
           inherit appdata;

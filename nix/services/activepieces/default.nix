@@ -12,7 +12,6 @@
     in {
       config = mkIf cfg.enabled (mkMerge [
         (lib.neo.mkPostgresSidecar config {
-          network = lib.neo.docker.serviceNetwork "activepieces";
           name = "activepieces-db";
           image = cfg.containers."activepieces-db";
           inherit appdata;
@@ -20,7 +19,6 @@
           password = cfg.dbPassword;
         })
         (lib.neo.mkRedisSidecar config {
-          network = lib.neo.docker.serviceNetwork "activepieces";
           name = "activepieces-redis";
           image = cfg.containers."activepieces-redis";
           inherit appdata;

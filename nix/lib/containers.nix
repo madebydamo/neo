@@ -26,8 +26,11 @@ in {
       # The image and dataPath are tied to the data on disk: never change them
       # for an existing install without a dump and restore.
       # `health` takes the dockerHealthOptions arguments; cmd defaults to pg_isready.
-      # `network`: the service's network (lib.neo.docker.serviceNetwork); the
-      # shared `internal` by default for older callers.
+      # `network`: null (default) leaves `networks` to the service network
+      # default (docker-network.nix), which needs the sidecar's docker-<name>
+      # unit in the service's systemdUnits (list it in mkContainerDefinitions).
+      # A network name puts it there instead (`"internal"` was the default
+      # before 2026-11).
       mkPostgresSidecar = config: {
         name,
         image,
@@ -40,7 +43,7 @@ in {
         environment ? {},
         health ? null,
         extraOptions ? [],
-        network ? "internal",
+        network ? null,
       }: {
         neo.core.containerDirs.${name} = ["${appdata}/${dataDir}"];
         neo.core.secrets.containerEnv = lib.optionalAttrs (password != null) {
@@ -58,7 +61,7 @@ in {
           extraOptions =
             extraOptions
             ++ lib.optionals (health != null) (dockerHealthOptions ({cmd = "pg_isready -U ${user} -d ${db}";} // health));
-          networks = [network];
+          networks = lib.mkIf (network != null) [network];
         };
       };
 
@@ -72,7 +75,7 @@ in {
         dataDir ? "redisdata",
         cmd ? [],
         health ? null,
-        network ? "internal",
+        network ? null,
       }: {
         neo.core.containerDirs = lib.optionalAttrs (appdata != null) {
           ${name} = ["${appdata}/${dataDir}"];
@@ -81,7 +84,7 @@ in {
           inherit image cmd;
           volumes = lib.optional (appdata != null) "${appdata}/${dataDir}:/data";
           extraOptions = lib.optionals (health != null) (dockerHealthOptions ({cmd = "redis-cli ping";} // health));
-          networks = [network];
+          networks = lib.mkIf (network != null) [network];
         };
       };
 

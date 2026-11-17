@@ -58,7 +58,6 @@
     in {
       config = mkIf cfg.enabled (mkMerge [
         (lib.neo.mkPostgresSidecar config {
-          network = lib.neo.docker.serviceNetwork "authentik";
           name = "authentik-db";
           image = cfg.containers."authentik-db";
           inherit appdata;
