@@ -57,7 +57,7 @@ pub fn gen_id(n: u64) -> String {
 ///
 /// Before the first activation record exists, every new generation is assumed
 /// to have been switched to when it was built (linear history, like
-/// [`crate::utils::GenerationTimeline::at`]).
+/// [`crate::utils::generation::GenerationTimeline::at`]).
 pub fn system_lineage(gens: &[GenIn], events: &[(i64, Option<u64>)]) -> Vec<SysNode> {
     #[derive(Clone, Copy)]
     enum Ev {

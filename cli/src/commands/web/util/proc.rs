@@ -4,7 +4,7 @@ use std::process::Output;
 
 use tokio::process::Command;
 
-use crate::utils::command::sudo_bin;
+use crate::utils::bins;
 
 /// Run blocking work (git, sops, a sync systemd call) off Rocket's async workers,
 /// which would otherwise stall unrelated requests and sockets.
@@ -29,7 +29,7 @@ where
 
 /// `sudo -n`: neo-web has no terminal, so a missing sudo rule fails at once.
 pub fn sudo() -> Command {
-    let mut c = Command::new(sudo_bin());
+    let mut c = Command::new(bins::sudo());
     c.arg("-n");
     c
 }

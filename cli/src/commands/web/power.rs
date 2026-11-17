@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use super::locks::{try_lock, Blocked};
 use super::util::{escape_html, proc, sudo_cmd};
+use crate::utils::generation::{switch_system_generation, GenerationMode};
 use crate::utils::locks::{LockGuard, LockSpec, OpInfo};
-use crate::utils::{switch_system_generation, GenerationMode};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PowerAction {

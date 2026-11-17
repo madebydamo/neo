@@ -1,10 +1,12 @@
 //! Start activation / update / generation-switch oneshots and return their monitor.
 use rocket::response::content::RawHtml;
 
+use crate::utils::command::get_timestamp;
 use crate::utils::command::{output_checked, sudo_command};
+use crate::utils::generation::GenerationMode;
 use crate::utils::locks::{LockSpec, OpInfo};
 use crate::utils::ops::OpStatus;
-use crate::utils::{get_timestamp, GenerationMode, OperationKind, OperationLog};
+use crate::utils::ops::{OperationKind, OperationLog};
 
 /// Seconds the spawned `neo` waits for the system lock (covers the probe → spawn gap
 /// and a just-finishing op); a real conflict is refused by [`probe`] before spawning.

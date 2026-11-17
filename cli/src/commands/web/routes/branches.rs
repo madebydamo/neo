@@ -22,8 +22,9 @@ use crate::commands::web::util::{
 };
 use crate::commands::web::version_tree;
 use crate::commands::web::version_tree::notes::NoteTarget;
+use crate::utils::command::git_cmd;
+use crate::utils::generation::GenerationMode;
 use crate::utils::locks::{LockSpec, OpInfo};
-use crate::utils::{git_cmd, GenerationMode};
 
 /// Versioning tab partial (`/configuration/versioning`); data loads client-side.
 pub fn branches_template() -> Template {

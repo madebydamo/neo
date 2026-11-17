@@ -21,10 +21,9 @@ use view::{build_tree, CommitIn, GenIn, TreeInput};
 
 use super::git::{activation_tips, git_stdout, is_worktree_dirty};
 use crate::utils::command::mtime_secs;
-use crate::utils::generation::{generation_links, ACTIVATION_LOG};
-use crate::utils::{
-    current_generation_number, parse_generation_from_message, running_generation_number,
-    system_profile_available, GenerationTimeline,
+use crate::utils::generation::{
+    current_generation_number, generation_links, parse_generation_from_message,
+    running_generation_number, system_profile_available, GenerationTimeline, ACTIVATION_LOG,
 };
 
 /// Rows per page ("Show older" adds another page).

@@ -7,7 +7,7 @@ use super::ops::kind::id_timestamp;
 use super::ops::store::{gc_old_ops, running_ops};
 use super::types::AppConfig;
 use super::util::{escape_html, op_id_ok, proc};
-use crate::utils::OperationKind;
+use crate::utils::ops::OperationKind;
 
 /// Running op shown in the action bar (first match wins), with its button label and class.
 const SHOWN_OPS: [(OperationKind, &str, &str); 3] = [

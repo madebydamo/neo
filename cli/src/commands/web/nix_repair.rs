@@ -12,9 +12,10 @@ use crate::commands::web::ops::store::{
 };
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::{nix_bin, proc};
+use crate::utils::command::get_timestamp;
 use crate::utils::locks::{LockSpec, OpInfo};
 use crate::utils::ops::OpStatus;
-use crate::utils::{get_timestamp, OperationKind, OPERATIONS_DIR};
+use crate::utils::ops::{OperationKind, OPERATIONS_DIR};
 
 /// Start a background store verify+repair. Returns the operation id.
 /// Single-flight: if one is already running, returns that id instead of starting another.

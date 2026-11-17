@@ -18,7 +18,9 @@ use super::{
     list_filesystems, list_snapshots, now_epoch, now_ts, set_property, snapshot_action,
     snapshot_name_ok, snapshot_ref, SnapAction, Snapshot,
 };
-use crate::utils::{current_generation_number, running_generation_number, GenerationTimeline};
+use crate::utils::generation::{
+    current_generation_number, running_generation_number, GenerationTimeline,
+};
 
 const PROP_RESTORE: &str = "neo:restore";
 const PROP_RESULT: &str = "neo:restore-result";
