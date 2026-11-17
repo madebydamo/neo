@@ -1,5 +1,5 @@
 # Every setting's path and label, for the chat drawer's `@` references
-# (routes/agent.rs → /agent/refs). Cheap on purpose: no types, defaults or
+# (web/chat/refs.rs → /agent/refs). Cheap on purpose: no types, defaults or
 # current values (those come from extract_service_options.nix per service when
 # a reference is sent). Paths match the option pane's flattened names:
 #   { services = { nextcloud = [ { path = "subdomain"; label = null; secret = false; group = "access"; } … ]; };

@@ -1,4 +1,4 @@
-//! neo web's half of the chat drawer (the routes are in `web/chat.rs`):
+//! neo web's half of the chat drawer (the shared routes are in `web/chat/mod.rs`):
 //! contexts `general`, `service:<name>`, `guide:<id>`, instructions with the
 //! service's settings or the guide skill, `@` references to apps, settings,
 //! guides and privacy categories.
@@ -7,12 +7,12 @@ use std::sync::Arc;
 
 use serde_json::json;
 
-use super::agent_tools::describe;
-use super::guides::load_guides;
-use crate::commands::web::agent_refs::{self, RefItem};
-use crate::commands::web::chat::{BoxFut, ChatHost};
+use super::refs::{self, RefItem};
+use super::{BoxFut, ChatHost};
 use crate::commands::web::guides::{render, RenderCtx};
 use crate::commands::web::panes::load_options;
+use crate::commands::web::routes::agent_tools::describe;
+use crate::commands::web::routes::guides::load_guides;
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::service_name_ok;
 
@@ -43,7 +43,7 @@ fn parse_context(ctx: &str) -> Option<(&str, &str)> {
 /// (`service:pihole`): apps and guides from the `@` candidates.
 async fn context_labels(config: &AppConfig) -> HashMap<String, (String, Option<String>)> {
     let mut out = HashMap::new();
-    if let Ok(items) = agent_refs::cached_candidates(config).await {
+    if let Ok(items) = refs::cached_candidates(config).await {
         for it in items.iter() {
             let ctx = match it.kind {
                 "service" => format!("service:{}", it.token),
@@ -134,11 +134,11 @@ impl ChatHost for NeoHost {
     }
 
     fn refs(&self) -> BoxFut<'_, Result<Arc<Vec<RefItem>>, String>> {
-        Box::pin(agent_refs::cached_candidates(&self.0))
+        Box::pin(refs::cached_candidates(&self.0))
     }
 
     fn ref_block<'a>(&'a self, message: &'a str) -> BoxFut<'a, Option<String>> {
-        Box::pin(agent_refs::context_for(&self.0, message))
+        Box::pin(refs::context_for(&self.0, message))
     }
 
     fn render<'a>(&'a self, text: &'a str) -> BoxFut<'a, String> {

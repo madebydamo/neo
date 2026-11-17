@@ -16,12 +16,12 @@ use std::time::{Duration, Instant, SystemTime};
 use serde::Serialize;
 use serde_json::{json, Value};
 
-use super::guides::{option_url, Guide};
-use super::nix::{OptionIndex, OptionIndexEntry};
-use super::redact;
-use super::routes::privacy::PrivacyCategory;
-use super::types::{AppConfig, OptionSchema, Service};
-use super::util::service_name_ok;
+use crate::commands::web::guides::{option_url, Guide};
+use crate::commands::web::nix::{OptionIndex, OptionIndexEntry};
+use crate::commands::web::redact;
+use crate::commands::web::routes::privacy::PrivacyCategory;
+use crate::commands::web::types::{AppConfig, OptionSchema, Service};
+use crate::commands::web::util::service_name_ok;
 
 /// Start of the context block appended to a sent message.
 pub const BLOCK_START: &str = "\n\n<neo-references>";
@@ -346,7 +346,7 @@ pub fn block(items: &[Value]) -> Option<String> {
 
 /// Resolve the message's references (unknown ones are skipped).
 pub async fn context_for(config: &AppConfig, message: &str) -> Option<String> {
-    use super::panes::load_options;
+    use crate::commands::web::panes::load_options;
     let tokens = parse_refs(message);
     if tokens.is_empty() {
         return None;
@@ -361,7 +361,7 @@ pub async fn context_for(config: &AppConfig, message: &str) -> Option<String> {
         vec![]
     };
     let guides = if need_guides {
-        super::routes::guides::load_guides(config)
+        crate::commands::web::routes::guides::load_guides(config)
             .await
             .map(|x| x.guides)
             .unwrap_or_default()
@@ -453,7 +453,8 @@ pub async fn cached_candidates(config: &AppConfig) -> Result<Arc<Vec<RefItem>>, 
         .option_index()
         .await
         .map_err(|e| format!("{e:#}"))?;
-    let (guides, guides_on) = match super::routes::guides::load_guides(config).await {
+    let (guides, guides_on) = match crate::commands::web::routes::guides::load_guides(config).await
+    {
         Ok(x) => (x.guides, x.enabled),
         Err(_) => (vec![], false),
     };

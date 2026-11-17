@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use super::config::data_dir;
 use super::load_report;
 use super::model::{Group, Origin, Report, Status};
-use crate::commands::web::agent_refs::{self, RefItem};
+use crate::commands::web::chat::refs::{self, RefItem};
 use crate::commands::web::chat::{BoxFut, ChatHost};
 use crate::commands::web::guides::{render, RenderCtx};
 
@@ -77,7 +77,7 @@ fn finding_context(g: &Group) -> Value {
     })
 }
 
-/// Token characters the chat's `@` parser accepts (`agent_refs::parse_refs`).
+/// Token characters the chat's `@` parser accepts (`refs::parse_refs`).
 fn token_part(s: &str) -> String {
     let t: String = s
         .chars()
@@ -244,7 +244,7 @@ impl ChatHost for SecurityHost {
 
     fn ref_block<'a>(&'a self, message: &'a str) -> BoxFut<'a, Option<String>> {
         Box::pin(async move {
-            let wanted = agent_refs::parse_refs(message);
+            let wanted = refs::parse_refs(message);
             if wanted.is_empty() {
                 return None;
             }
@@ -255,7 +255,7 @@ impl ChatHost for SecurityHost {
                 .filter_map(|w| toks.iter().find(|(t, _)| t == w))
                 .map(|(_, g)| finding_context(g))
                 .collect();
-            agent_refs::block(&items)
+            refs::block(&items)
         })
     }
 
@@ -327,7 +327,7 @@ mod tests {
         );
         for tok in &t {
             assert_eq!(
-                agent_refs::parse_refs(&format!("about @{tok}?")),
+                refs::parse_refs(&format!("about @{tok}?")),
                 std::slice::from_ref(tok)
             );
         }

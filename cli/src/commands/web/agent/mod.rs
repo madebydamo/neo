@@ -91,7 +91,7 @@ const TITLE_CHARS: usize = 60;
 /// block dropped, cut at a word near 60 characters, with the context label in
 /// front ("Pi-hole: why are ads still shown?").
 pub fn chat_title(prefix: Option<&str>, message: &str) -> String {
-    let text = super::agent_refs::strip_block(message);
+    let text = super::chat::refs::strip_block(message);
     let mut out = String::new();
     for w in text.split_whitespace() {
         let len = out.chars().count() + usize::from(!out.is_empty()) + w.chars().count();
@@ -177,7 +177,7 @@ mod tests {
         assert_eq!(chat_title(Some(""), ""), "New chat");
         let block = format!(
             "is @pihole on?{}\n{{}}\n</neo-references>",
-            super::super::agent_refs::BLOCK_START
+            crate::commands::web::chat::refs::BLOCK_START
         );
         assert_eq!(chat_title(None, &block), "is @pihole on?");
     }

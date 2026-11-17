@@ -68,7 +68,7 @@ pub fn history(raw: &[Value]) -> Vec<Value> {
         let text = content_text(&m["content"]);
         match m["role"].as_str() {
             Some("user") => {
-                let t = crate::commands::web::agent_refs::strip_block(&text).trim();
+                let t = crate::commands::web::chat::refs::strip_block(&text).trim();
                 if !t.is_empty() {
                     out.push(serde_json::json!({"role": "user", "content": t}));
                 }
@@ -212,7 +212,7 @@ mod tests {
     fn history_keeps_text_and_tool_calls() {
         use serde_json::json;
         let raw = vec![
-            json!({"role": "user", "content": format!("is @pihole on?{}\n{{}}\n</neo-references>", crate::commands::web::agent_refs::BLOCK_START)}),
+            json!({"role": "user", "content": format!("is @pihole on?{}\n{{}}\n</neo-references>", crate::commands::web::chat::refs::BLOCK_START)}),
             json!({"role": "assistant", "content": "Let me check.", "tool_calls": [
                 {"id": "c1", "type": "function", "function": {"name": "mcp_neo_neo_settings_get", "arguments": "{\"paths\":[\"services.pihole.enabled\"]}"}}
             ]}),

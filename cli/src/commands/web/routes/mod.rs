@@ -1,7 +1,6 @@
 mod actions;
 mod activation;
-mod agent;
-mod agent_tools;
+pub(crate) mod agent_tools;
 mod branches;
 mod changes;
 pub(crate) mod guides;
@@ -25,11 +24,6 @@ mod units;
 mod ws;
 
 use rocket::routes;
-
-/// neo web's chat drawer host (the shared routes: `web::chat::routes`).
-pub fn chat_host(config: std::sync::Arc<super::types::AppConfig>) -> super::chat::Host {
-    std::sync::Arc::new(agent::NeoHost(config))
-}
 
 pub fn routes() -> Vec<rocket::Route> {
     routes![
