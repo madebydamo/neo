@@ -5,6 +5,7 @@
   flake.modules.nixos.vikunja = {
     config,
     lib,
+    pkgs,
     ...
   }:
     with lib; let
@@ -47,6 +48,9 @@
             ProtectHome = true;
             PrivateTmp = true;
             NoNewPrivileges = true;
+            # As root, before the sandbox needs appdata: Clear appdata removes it
+            # (tmpfiles only creates it at boot and switch).
+            ExecStartPre = ["+${pkgs.coreutils}/bin/install -d -m 0755 -o homeserver -g homeserver ${appdata}"];
             ReadWritePaths = [appdata];
           };
         }
