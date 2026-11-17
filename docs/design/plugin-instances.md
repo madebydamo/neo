@@ -57,7 +57,7 @@ options.neo.core.plugins = mkOption {
 
 ### Migration
 
-`neo migrate` (`cli/src/commands/migrate.rs`) and the settings loader turn the old list form into tables:
+`neo migrate` (`cli/src/commands/migrate/`) and the settings loader turn the old list form into tables:
 
 ```toml
 plugins = ["github:madebydamo/highsea.neo", "git+file:/home/me/portrait"]
