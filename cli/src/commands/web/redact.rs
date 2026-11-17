@@ -458,4 +458,92 @@ pub mod tests {
         // Leaving tinyauth out entirely is a removal, not counted here.
         assert!(dropped_secrets(&o.r#type, false, &cur, &json!({"tmr": {}})).is_empty());
     }
+
+    fn ty(v: Value) -> OptionType {
+        serde_json::from_value(v).unwrap()
+    }
+
+    /// `listOf` of the `accounts` entry submodule.
+    fn account_list() -> OptionType {
+        OptionType {
+            kind: "listOf".into(),
+            elem: accounts().r#type.elem,
+            ..ty(json!({"kind": "listOf"}))
+        }
+    }
+
+    #[test]
+    fn secrets_in_lists_of_submodules() {
+        let list = account_list();
+        let v = json!([{"username": "a"}, {"username": "b", "password": "pw"}]);
+        // Positions in lists count from 1, like the card shows them.
+        assert_eq!(secret_in(&list, false, &v).as_deref(), Some("2.password"));
+        assert_eq!(
+            secret_in(&list, false, &json!([{"username": "a", "password": null}])),
+            None
+        );
+        assert_eq!(secret_leak(&list, false, &list, false, &v), None);
+        let mut plain = list.clone();
+        if let Some(e) = plain.elem.as_deref_mut() {
+            for f in e.fields.as_mut().unwrap() {
+                f.secret = false;
+            }
+        }
+        assert_eq!(
+            secret_leak(&list, false, &plain, false, &v).as_deref(),
+            Some("2.password")
+        );
+        // A list into a plain text setting: any secret inside leaks.
+        assert_eq!(
+            secret_leak(&list, false, &ty(json!({"kind": "str"})), false, &v).as_deref(),
+            Some("2.password")
+        );
+        assert!(has_secret(&list, false));
+    }
+
+    #[test]
+    fn top_level_nullable_secret() {
+        let t = ty(json!({"kind": "nullOr", "elem": {"kind": "str"}}));
+        assert_eq!(secret_in(&t, true, &json!("pw")).as_deref(), Some(""));
+        assert_eq!(secret_in(&t, true, &Value::Null), None);
+        assert_eq!(secret_in(&t, false, &json!("pw")), None);
+        assert_eq!(
+            secret_leak(&t, true, &t, false, &json!("pw")).as_deref(),
+            Some("")
+        );
+        // Unset moves nothing; a secret target takes anything.
+        assert_eq!(secret_leak(&t, true, &t, false, &Value::Null), None);
+        assert_eq!(secret_leak(&t, true, &t, true, &json!("pw")), None);
+        // An encrypted placeholder in a plain nullable setting is a secret too.
+        assert_eq!(
+            secret_leak(&t, false, &t, false, &json!("@NEO_SECRET:a/b@")).as_deref(),
+            Some("")
+        );
+    }
+
+    #[test]
+    fn secret_lists_of_scalars() {
+        let tokens = ty(json!({"kind": "listOf", "elem": {"kind": "str"}}));
+        assert_eq!(
+            secret_in(&tokens, true, &json!(["t1"])).as_deref(),
+            Some("")
+        );
+        assert_eq!(
+            secret_leak(&tokens, true, &tokens, false, &json!(["t1"])).as_deref(),
+            Some("")
+        );
+        assert_eq!(secret_leak(&tokens, true, &tokens, false, &json!([])), None);
+        // A placeholder inside a plain list is found at its position.
+        assert_eq!(
+            secret_leak(
+                &tokens,
+                false,
+                &tokens,
+                false,
+                &json!(["ok", "@NEO_SECRET:a/b@"])
+            )
+            .as_deref(),
+            Some("2")
+        );
+    }
 }
