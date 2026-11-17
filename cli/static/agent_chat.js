@@ -12,6 +12,7 @@
 
   var core = root.NeoAgentCore;
   var h = root.NeoUtil.h;
+  var readJson = root.NeoUtil.readJson;
   var SPINNER = '<span class="loading loading-spinner loading-xs" aria-hidden="true"></span>';
   var relativeTime = core.relativeTime;
   var countdownText = core.countdownText;
@@ -459,7 +460,7 @@
     fetch('/agent/run/' + encodeURIComponent(run), { credentials: 'same-origin' })
       .then(function (r) {
         if (r.status === 400 || r.status === 404) return { status: 'gone', done: true, approvals: [], approvals_known: true };
-        return r.ok ? r.json() : null;
+        return readJson(r);
       })
       .then(function (j) {
         if (!j || run !== state.run) return;

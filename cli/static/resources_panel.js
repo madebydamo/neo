@@ -12,13 +12,13 @@
 // alone, paused entirely while document.hidden or once the element leaves
 // the DOM (mirrors service_status.js / versioning.js's poll patterns).
 (function (root, factory) {
-  var api = factory();
+  var api = factory((root && root.NeoUtil) || require('./neo_util.js'));
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) {
     root.NeoResources = api;
     root.resourcesPanel = api.panel;
   }
-})(typeof window !== 'undefined' ? window : null, function () {
+})(typeof window !== 'undefined' ? window : null, function (NeoUtil) {
   'use strict';
 
   var UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
@@ -151,7 +151,7 @@
           credentials: 'same-origin',
         })
           .then(function (r) {
-            return r.ok ? r.json() : Promise.reject(new Error('http ' + r.status));
+            return NeoUtil.readJson(r);
           })
           .then(function (data) {
             self.snap = data;

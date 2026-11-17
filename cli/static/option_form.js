@@ -563,7 +563,7 @@ function optionForm() {
             inputs: inputs || {}
           })
         });
-        const body = await res.json().catch(() => ({}));
+        const body = await window.NeoUtil.readJson(res, 'Helper failed');
         if (!body.ok) {
           window.neoToast(body.error || 'Helper failed', 'error');
           return;
@@ -575,7 +575,7 @@ function optionForm() {
           body.value
         );
       } catch (e) {
-        window.neoToast('Helper error: ' + e, 'error');
+        window.neoToast((e && e.message) || 'Helper error: ' + e, 'error');
       } finally {
         this.helperBusy = false;
       }
