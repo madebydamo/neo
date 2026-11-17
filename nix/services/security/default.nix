@@ -225,6 +225,9 @@
             User = "homeserver";
             Group = "homeserver";
             ExecStart = "${neoPkg}/bin/neo security serve";
+            # As root, before the sandbox needs appdata: Clear appdata removes it
+            # (tmpfiles only creates it at boot and switch).
+            ExecStartPre = ["+${pkgs.coreutils}/bin/install -d -m 0755 -o homeserver -g homeserver ${appdata}"];
             Restart = "always";
             RestartSec = 5;
             ProtectSystem = "strict";
