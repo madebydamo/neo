@@ -1,4 +1,4 @@
-{{!-- <head> metadata shared by every full page. Param: title. --}}
+{{!-- <head> metadata shared by every full page. Params: title, no_manifest (a server without /site.webmanifest). --}}
 <meta charset="utf-8">
 <title>{{title}}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
@@ -21,7 +21,7 @@
     yields a login 302 HTML page and standalone install never activates.
   - manifest + icons are also on auth.publicPaths so uncredentialed fetches still work.
 --}}
-<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials">
+{{#unless no_manifest}}<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials">{{/unless}}
 <link rel="icon" href="/static/favicon/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">

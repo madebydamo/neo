@@ -2,16 +2,13 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <title>neo security</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="color-scheme" content="dark light">
-    <link rel="icon" href="/static/favicon/favicon.ico" sizes="any">
+    {{!-- No manifest: this server has no /site.webmanifest. --}}
+    {{> partials/head_meta title="neo security" no_manifest=true}}
     <link rel="stylesheet" href="/static/neo-ui.css" />
     <script src="https://unpkg.com/alpinejs@3.17.5/dist/cdn.min.js" defer></script>
+    <script src="/static/neo_util.js"></script>
     {{#if assistant}}
       {{!-- neo web's chat drawer; routes from web::chat with this page's host (security/chat.rs). --}}
-      <script src="/static/neo_util.js"></script>
       <script src="/static/agent_chat_core.js"></script>
       <script src="/static/agent_chat_refs.js"></script>
       <script src="/static/agent_chat.js"></script>
@@ -37,17 +34,17 @@
           <span class="text-xl sm:text-2xl font-bold tracking-tight">neo</span>
           <span class="text-base sm:text-lg font-medium text-base-content/60 truncate">security</span>
         </div>
-        {{!-- Check state: painted by the script at the end (polls /status). --}}
+        {{!-- Check state: painted by static/security_report.js (polls /status). --}}
         <div id="scan-state" class="flex-none flex items-center gap-2 pr-1 sm:pr-2 text-xs sm:text-sm text-base-content/60"
              data-scanning="{{#if scanning}}true{{/if}}{{#if running}}true{{/if}}" data-finished="{{finished_at}}">
           <span data-when="busy" class="hidden items-center gap-2">
             <span class="loading loading-ring loading-sm text-info"></span>
             <span>Check running…</span>
           </span>
-          <button type="button" data-when="done" class="hidden btn btn-sm btn-primary" onclick="location.reload()">New results · Reload</button>
+          <button type="button" data-when="done" class="hidden btn btn-sm btn-primary" data-security-reload>New results · Reload</button>
           <span data-when="idle" class="hidden items-center gap-2">
             {{#unless empty}}<span class="hidden md:inline">Last check <time data-ts="{{finished_at}}">–</time></span>{{/unless}}
-            <button type="button" class="btn btn-sm btn-ghost gap-1.5 px-2" onclick="requestCheck(this)" title="Check the system and all images now">
+            <button type="button" class="btn btn-sm btn-ghost gap-1.5 px-2" data-security-check title="Check the system and all images now">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 0112.9-5.2L19.5 9M19.5 4.5V9H15M19.5 12a7.5 7.5 0 01-12.9 5.2L4.5 15M4.5 19.5V15H9"/></svg>
               <span class="hidden sm:inline">Check now</span>
             </button>
@@ -198,18 +195,18 @@
                   {{/if}}
                   {{#if accepted}}
                     <button type="button" class="btn btn-sm btn-ghost" :disabled="busy"
-                            @click="busy = true; decideFinding('{{id}}', 'reset').catch(e => { err = e.message; busy = false })"
+                            @click="busy = true; NeoSecurityReport.decide('{{id}}', 'reset').catch(e => { err = e.message; busy = false })"
                             title="Undo: the AI reviews it again">Undo “not relevant”</button>
                   {{else}}
                     <button type="button" class="btn btn-sm" x-show="!accepting"
                             @click="accepting = true; $nextTick(() => $refs.reason.focus())">Not relevant here</button>
                     {{#if reviewable}}
                       <button type="button" class="btn btn-sm btn-ghost" x-show="!accepting" :disabled="busy"
-                              @click="busy = true; decideFinding('{{id}}', 'reset').catch(e => { err = e.message; busy = false })"
+                              @click="busy = true; NeoSecurityReport.decide('{{id}}', 'reset').catch(e => { err = e.message; busy = false })"
                               title="Have the AI look at it again">Review again</button>
                     {{/if}}
                     <form class="flex flex-wrap items-center gap-2 w-full" x-show="accepting" x-cloak
-                          @submit.prevent="busy = true; decideFinding('{{id}}', 'accept', reason).catch(e => { err = e.message; busy = false })">
+                          @submit.prevent="busy = true; NeoSecurityReport.decide('{{id}}', 'accept', reason).catch(e => { err = e.message; busy = false })">
                       <input x-ref="reason" x-model="reason" maxlength="500" class="input input-sm flex-1 min-w-48"
                              placeholder="Why? Optional, e.g. we do not use that feature" aria-label="Reason">
                       <button type="submit" class="btn btn-sm btn-primary" :disabled="busy">Mark as not relevant</button>
@@ -236,74 +233,6 @@
       {{/if}}
     </div>
     {{#if assistant}}{{> partials/agent_drawer placeholder="Ask about the findings… Type @ to mention one, e.g. @CVE-2026-1234." refs_label="Findings"}}{{/if}}
-    <script>
-      // `@` chips and links point at #f-<id>: open that finding.
-      function openFinding() {
-        const d = location.hash.startsWith('#f-') && document.getElementById(location.hash.slice(1));
-        if (!d || d.tagName !== 'DETAILS') return;
-        // Filtered out (e.g. a harmless finding under Open): show everything.
-        if (d.offsetParent === null) document.getElementById('show-all')?.click();
-        d.open = true;
-        requestAnimationFrame(() => d.scrollIntoView({ block: 'start' }));
-      }
-      window.addEventListener('hashchange', openFinding);
-
-      // Check now + live state. A finished check offers a reload instead of
-      // reloading itself, so an open chat is not cut off.
-      const stateEl = document.getElementById('scan-state');
-      function paintState(mode) {
-        for (const el of stateEl.querySelectorAll('[data-when]')) {
-          const on = el.dataset.when === mode;
-          el.classList.toggle('hidden', !on);
-          el.classList.toggle('inline-flex', on && el.tagName === 'SPAN');
-        }
-      }
-      let polling = null;
-      function poll() {
-        if (polling) return;
-        paintState('busy');
-        polling = setInterval(async () => {
-          try {
-            const st = await (await fetch('/status', { credentials: 'same-origin' })).json();
-            if (!st.running && !st.requested) {
-              clearInterval(polling);
-              polling = null;
-              paintState(String(st.finished_at) !== stateEl.dataset.finished ? 'done' : 'idle');
-            }
-          } catch (_) { /* keep polling */ }
-        }, 10000);
-      }
-      // Accept / undo / review again, then reload on this finding.
-      async function decideFinding(id, action, reason) {
-        const r = await fetch('/findings/' + id + '/' + action, { method: 'POST', credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(action === 'accept' ? { reason: reason || '' } : {}) });
-        if (!r.ok) throw new Error((await r.text()) || r.statusText);
-        location.hash = 'f-' + id;
-        location.reload();
-      }
-      async function requestCheck(btn) {
-        btn.disabled = true;
-        try {
-          const r = await fetch('/scan', { method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' }, body: '{}' });
-          if (!r.ok) throw new Error(await r.text());
-          poll();
-        } catch (e) {
-          btn.disabled = false;
-          btn.title = 'Could not start a check: ' + e.message;
-          btn.classList.add('text-error');
-        }
-      }
-      if (stateEl.dataset.scanning) poll(); else paintState('idle');
-      openFinding();
-      for (const t of document.querySelectorAll('time[data-ts]')) {
-        const s = Number(t.dataset.ts);
-        if (!s) continue;
-        const d = new Date(s * 1000);
-        t.dateTime = d.toISOString();
-        t.textContent = d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-        t.title = d.toString();
-      }
-    </script>
+    <script src="/static/security_report.js"></script>
   </body>
 </html>
