@@ -7,6 +7,10 @@ pub(super) fn live(p: &Proposal) -> bool {
 }
 
 pub(super) fn store_path() -> Option<PathBuf> {
+    // Tests use the in-memory store only, never the developer's state file.
+    if cfg!(test) {
+        return None;
+    }
     state_dir().map(|d| d.join(FILE))
 }
 
@@ -18,8 +22,23 @@ pub(super) fn load_store() -> HashMap<String, Proposal> {
         .unwrap_or_default();
     list.into_iter()
         .filter(live)
-        .map(|p| (p.id.clone(), p))
+        .map(|mut p| {
+            interrupted(&mut p);
+            (p.id.clone(), p)
+        })
         .collect()
+}
+
+/// A proposal still `Saving` in the state file was cut off by a neo-web
+/// restart mid-save: whether its write landed is unknown. It becomes `Failed`
+/// (actionable again, so it never sticks) with a hint to check first, because
+/// a retry runs the save again (e.g. generates a new secret).
+pub(super) fn interrupted(p: &mut Proposal) {
+    if p.status == Status::Saving {
+        p.status = Status::Failed;
+        p.message =
+            "Saving was interrupted by a restart. Check the settings before trying again.".into();
+    }
 }
 
 pub(super) fn write_store(store: &HashMap<String, Proposal>) -> anyhow::Result<()> {
@@ -66,6 +85,21 @@ pub(super) fn put(p: Proposal) {
         store.insert(p.id.clone(), p);
         persist(&store);
     }
+}
+
+/// Take an actionable proposal for saving: checks and marks it `Saving` in one
+/// critical section, so of two concurrent clicks only one gets it (the other
+/// gets `None` and shows the card as it is). The caller sets the final status
+/// with [`set_status`], also on failure (back to an actionable one).
+pub fn claim(id: &str) -> Option<Proposal> {
+    let mut store = STORE.lock().ok()?;
+    store.retain(|_, p| live(p));
+    let p = store.get_mut(id).filter(|p| p.status.is_actionable())?;
+    let before = p.clone();
+    p.status = Status::Saving;
+    p.message = "Saving…".into();
+    persist(&store);
+    Some(before)
 }
 
 pub fn set_status(id: &str, status: Status, message: &str) -> Option<Proposal> {

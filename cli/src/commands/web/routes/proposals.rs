@@ -80,6 +80,8 @@ struct CardContext {
     asks: Vec<AskInput>,
     status: Status,
     pending: bool,
+    /// Another request is saving it: the card re-fetches itself.
+    saving: bool,
     done: bool,
     message: String,
     /// Other saved-but-not-applied changes (Apply activates them too).
@@ -104,6 +106,7 @@ async fn card_ctx(config: &AppConfig, p: Option<Proposal>) -> CardContext {
             Some(p) => CardContext {
                 found: true,
                 pending: p.status.is_actionable(),
+                saving: p.status == Status::Saving,
                 done: matches!(p.status, Status::Saved | Status::Applied | Status::Rejected),
                 id: p.id,
                 summary: p.summary,
@@ -121,6 +124,7 @@ async fn card_ctx(config: &AppConfig, p: Option<Proposal>) -> CardContext {
                 asks: vec![],
                 status: Status::Stale,
                 pending: false,
+                saving: false,
                 done: false,
                 message: String::new(),
                 other_pending: false,
@@ -160,7 +164,7 @@ async fn save(
 
 #[post("/proposals/<id>/save", data = "<form>")]
 pub async fn proposal_save(config: &State<Arc<AppConfig>>, id: &str, form: Asked) -> Template {
-    let Some(p) = proposals::get(id).filter(|p| p.status.is_actionable()) else {
+    let Some(p) = proposals::claim(id) else {
         return card(config, proposals::get(id)).await;
     };
     let p = match save(config, &p, &asked(form)).await {
@@ -183,7 +187,7 @@ pub async fn proposal_apply(
     form: Asked,
     meta: Metadata<'_>,
 ) -> RawHtml<String> {
-    let Some(p) = proposals::get(id).filter(|p| p.status.is_actionable()) else {
+    let Some(p) = proposals::claim(id) else {
         return render_card(&meta, config, proposals::get(id), String::new()).await;
     };
     if let Err((s, m)) = save(config, &p, &asked(form)).await {
@@ -195,6 +199,9 @@ pub async fn proposal_apply(
         )
         .await;
     }
+    // Saved from here on: a restart during activation must not leave it
+    // `Saving` (it would come back as interrupted).
+    proposals::set_status(id, Status::Saved, "Saved. Applying…");
     let (p, extra) = match apply_or_activate().await {
         Ok(out) => (
             proposals::set_status(
@@ -329,6 +336,7 @@ mod tests {
             }],
             status: Status::Pending,
             pending: true,
+            saving: false,
             done: false,
             message: String::new(),
             other_pending: false,

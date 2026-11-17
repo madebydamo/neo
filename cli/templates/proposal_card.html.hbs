@@ -2,7 +2,7 @@
      settings form's write path and apply like the Apply button. Secrets the
      assistant asks for are typed (or generated) in the inputs below and sent
      with the Save click only (static/proposal_card.js). --}}
-<div id="proposal-{{id}}" class="neo-proposal rounded-box border border-base-300 bg-base-100 p-3 sm:p-4 space-y-3" data-proposal="{{id}}" data-status="{{status}}" data-services="{{#each changes}}{{service}} {{/each}}">
+<div id="proposal-{{id}}" class="neo-proposal rounded-box border border-base-300 bg-base-100 p-3 sm:p-4 space-y-3" data-proposal="{{id}}" data-status="{{status}}" data-services="{{#each changes}}{{service}} {{/each}}"{{#if saving}} hx-get="/proposals/{{id}}/card" hx-trigger="load delay:2s" hx-swap="outerHTML"{{/if}}>
   {{#if found}}
     <div class="flex items-start gap-2">
       <span class="badge badge-sm {{#if done}}badge-success badge-soft{{else}}badge-primary badge-soft{{/if}} shrink-0 mt-0.5">Suggested change</span>

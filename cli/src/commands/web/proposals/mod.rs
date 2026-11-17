@@ -50,7 +50,7 @@ use store::*;
 pub use check::type_check;
 pub use plan::create;
 pub use save::ops_for_save;
-pub use store::{get, set_status};
+pub use store::{claim, get, set_status};
 
 /// Proposals expire after a day (seconds).
 const TTL: u64 = 24 * 3600;
@@ -147,6 +147,9 @@ pub enum Status {
     Rejected,
     Stale,
     Failed,
+    /// A Save click is running (claimed by [`claim`]); not actionable, so a
+    /// second click cannot save it twice.
+    Saving,
 }
 
 impl Status {
@@ -749,5 +752,61 @@ mod tests {
             ..back[0].clone()
         };
         assert!(!live(&old));
+    }
+
+    fn stored(id: &str, status: Status) -> Proposal {
+        let p = Proposal {
+            id: id.into(),
+            summary: "s".into(),
+            views: vec![],
+            asks: vec![],
+            planned: vec![],
+            fingerprint: String::new(),
+            status,
+            message: String::new(),
+            created: now_secs(),
+        };
+        put(p.clone());
+        p
+    }
+
+    #[test]
+    fn only_one_concurrent_claim_wins() {
+        let id = "c1aim0000000beef";
+        stored(id, Status::Pending);
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+        let wins: usize = (0..8)
+            .map(|_| {
+                let b = barrier.clone();
+                std::thread::spawn(move || {
+                    b.wait();
+                    claim(id).is_some()
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|h| h.join().unwrap() as usize)
+            .sum();
+        assert_eq!(wins, 1);
+        assert_eq!(get(id).unwrap().status, Status::Saving);
+        // A failed save hands it back; it can be claimed again.
+        set_status(id, Status::Failed, "nope");
+        assert_eq!(claim(id).unwrap().status, Status::Failed);
+        set_status(id, Status::Saved, "ok");
+        assert!(claim(id).is_none());
+    }
+
+    #[test]
+    fn interrupted_save_becomes_actionable() {
+        let mut p = stored("1nterrupted00000", Status::Saving);
+        interrupted(&mut p);
+        assert_eq!(p.status, Status::Failed);
+        assert!(p.status.is_actionable());
+        let mut done = Proposal {
+            status: Status::Saved,
+            ..p
+        };
+        interrupted(&mut done);
+        assert_eq!(done.status, Status::Saved);
     }
 }
