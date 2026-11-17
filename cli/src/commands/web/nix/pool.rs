@@ -308,7 +308,7 @@ impl EvalPool {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty() && PathBuf::from(s).is_dir());
         if let Some(p) = &neo_flake_path {
-            println!("web: nix repl will load host flake with --override-input neo → {p}");
+            eprintln!("web: nix repl will load host flake with --override-input neo → {p}");
         }
         let spec = Arc::new(ReplSpec {
             nix_cmd: nix_cmd.to_string(),
@@ -322,7 +322,7 @@ impl EvalPool {
             .and_then(|v| v.trim().parse::<usize>().ok())
             .unwrap_or(2)
             .clamp(1, 2);
-        println!(
+        eprintln!(
             "web: {repls} nix repl(s) for evaluations{}",
             if repls == 1 {
                 " (no background evaluation)"
@@ -553,7 +553,7 @@ impl EvalPool {
             let r = run_query(ev, key).await;
             let secs = t.elapsed().as_secs_f64();
             if secs >= 0.5 || r.is_err() {
-                println!(
+                eprintln!(
                     "web: eval {} on generation {}: {secs:.1}s{}",
                     key.id(),
                     gen.id,
@@ -781,7 +781,7 @@ impl EvalPool {
             ChangeKind::Values => "settings",
             ChangeKind::Structural => "structure",
         };
-        println!(
+        eprintln!(
             "web: evaluating generation {id} ({kind} change: {}{})",
             job.why,
             if job.fresh { ", new repl" } else { "" }
@@ -820,7 +820,7 @@ impl EvalPool {
                 }
                 drop(guard);
                 self.bump();
-                println!(
+                eprintln!(
                     "web: generation {id} serving after {:.1}s; changed: {}",
                     started.elapsed().as_secs_f64(),
                     if changed.is_empty() {
@@ -839,7 +839,7 @@ impl EvalPool {
             Err(e) => {
                 drop(guard);
                 let message = format!("{e:#}");
-                println!(
+                eprintln!(
                     "web: generation {id} failed after {:.1}s: {message}",
                     started.elapsed().as_secs_f64()
                 );
@@ -924,7 +924,7 @@ impl EvalPool {
         if !reuse {
             ev.add_gc_roots();
         }
-        println!(
+        eprintln!(
             "web: generation {} bound in {bound:.1}s ({}), {} results in {:.1}s",
             gen.id,
             if reuse { "same repl" } else { "new repl" },
@@ -964,7 +964,7 @@ impl EvalPool {
                     *e = (*e).max(gen.id);
                 }
             }
-            println!(
+            eprintln!(
                 "web: generation {} replayed {} more results in {:.1}s; changed: {}",
                 gen.id,
                 keys.len(),
@@ -1027,7 +1027,7 @@ impl EvalPool {
                 ev.add_gc_roots();
                 *guard = Some(ev);
             }
-            Err(e) => println!("web: spare nix repl not started: {e:#}"),
+            Err(e) => eprintln!("web: spare nix repl not started: {e:#}"),
         }
     }
 

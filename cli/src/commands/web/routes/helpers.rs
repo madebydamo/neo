@@ -249,10 +249,7 @@ pub async fn run_helper(
     let result = match run_helper_script(script_path, &stdin, &env_extra).await {
         Ok(r) => r,
         Err(e) => {
-            eprintln!(
-                "web: helper {} failed to start (id={}): {e:#}",
-                helper.id, helper.id
-            );
+            eprintln!("web: helper {} failed to start: {e:#}", helper.id);
             return Err(JsonError::new(
                 Status::InternalServerError,
                 "Helper failed to start",

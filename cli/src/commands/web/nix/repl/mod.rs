@@ -148,7 +148,7 @@ impl NixEvaluator {
         why: &str,
     ) -> Result<Self> {
         let started = Instant::now();
-        println!("web: starting nix repl #{serial} ({why})");
+        eprintln!("web: starting nix repl #{serial} ({why})");
         let supports_rebind = spec.supports_rebind();
         let (child, stdin, stdout, stderr) = Self::spawn_repl_process(&spec)?;
         let mut this = NixEvaluator {
@@ -166,7 +166,7 @@ impl NixEvaluator {
             stderr_buf: Arc::new(Mutex::new(String::new())),
         };
         let flake_secs = this.initialize_repl(stderr).await?;
-        println!(
+        eprintln!(
             "web: nix repl #{serial} ready in {:.1}s (flake {flake_secs:.1}s, rebind {})",
             started.elapsed().as_secs_f64(),
             if supports_rebind {
@@ -246,7 +246,7 @@ impl NixEvaluator {
                     }
                     Some(t) if t.elapsed() >= STDERR_ERROR_SETTLE => {
                         let detail = trim_for_error(&stderr_slice);
-                        println!("web: nix stderr error during wait for {marker}: {}", detail);
+                        eprintln!("web: nix stderr error during wait for {marker}: {}", detail);
                         bail!("nix error: {}", detail);
                     }
                     Some(_) => {}
@@ -339,7 +339,7 @@ impl NixEvaluator {
                     Ok(_) => {
                         let trimmed = line.trim_end();
                         if !trimmed.is_empty() {
-                            println!("[nix #{serial}] {}", trimmed);
+                            eprintln!("[nix #{serial}] {}", trimmed);
                             if let Ok(mut b) = buf.lock() {
                                 b.push_str(trimmed);
                                 b.push('\n');
@@ -488,31 +488,31 @@ impl NixEvaluator {
         if let Err(ref e) = result {
             let kind = super::errors::classify(&format!("{e:#}")).kind;
             if kind == super::errors::NixErrorKind::NetworkFetchFailed {
-                println!(
+                eprintln!(
                     "web: network/fetch failure during eval; retrying once after short backoff…"
                 );
                 tokio::time::sleep(Duration::from_secs(2)).await;
                 result = self.query_json_once(inner).await;
                 if result.is_ok() {
-                    println!("web: eval succeeded on network retry");
+                    eprintln!("web: eval succeeded on network retry");
                 }
             }
         }
 
         if let Err(e) = &result {
             if repl_needs_restart(e) {
-                println!("web: nix repl #{} unusable after: {e:#}", self.serial);
+                eprintln!("web: nix repl #{} unusable after: {e:#}", self.serial);
                 self.broken = true;
             } else {
                 // An error in the evaluated config (or in reading its result): the
                 // repl is back at its prompt and its bindings are still valid.
                 // Sync once to drain the error first.
-                println!("web: nix evaluation failed ({e:#}); keeping repl");
+                eprintln!("web: nix evaluation failed ({e:#}); keeping repl");
                 if let Err(se) = self
                     .print_marker("NEO_RESYNC", Duration::from_secs(30))
                     .await
                 {
-                    println!("web: repl resync after eval error failed ({se:#})");
+                    eprintln!("web: repl resync after eval error failed ({se:#})");
                     self.broken = true;
                 }
             }
@@ -559,8 +559,8 @@ impl NixEvaluator {
         let serial = self.serial;
         tokio::spawn(async move {
             match root_flake_sources(&spec, serial).await {
-                Ok(n) => println!("web: nix repl #{serial}: {n} flake sources rooted against GC"),
-                Err(e) => println!("web: nix repl #{serial}: GC roots not added: {e:#}"),
+                Ok(n) => eprintln!("web: nix repl #{serial}: {n} flake sources rooted against GC"),
+                Err(e) => eprintln!("web: nix repl #{serial}: GC roots not added: {e:#}"),
             }
         });
     }
@@ -622,7 +622,7 @@ async fn root_flake_sources(spec: &ReplSpec, serial: u64) -> Result<usize> {
         if st.status.success() {
             rooted += 1;
         } else {
-            println!(
+            eprintln!(
                 "web: nix repl #{serial}: no GC root for {p}: {}",
                 String::from_utf8_lossy(&st.stderr)
                     .lines()
