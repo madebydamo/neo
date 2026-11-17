@@ -101,6 +101,7 @@
               };
             }
             // lib.neo.mkSystemdUnits icalUnits
+            // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/ical-sync"
             // lib.neo.mkSystemdTimers icalUnits
             // lib.neo.mkServiceMeta {
               category = "Utilities";

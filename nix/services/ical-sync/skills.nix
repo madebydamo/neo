@@ -21,7 +21,7 @@
         - Collection URL: `<caldavUrl>/principal/<user>/<calendar>/`
         - Missing collections are created with MKCALENDAR (`ExecStartPre`) then `forceDiscover` + sync
         - iCal side wins (`conflict_resolution = a wins`); events deleted upstream are removed on CalDAV (`partial_sync` default revert)
-        - Status data: `/var/lib/vdirsyncer/ical-sync`
+        - Status data: `appdata/ical-sync/status` (runs as `homeserver`)
 
         ## Credentials
         - `services.ical-sync.user`: RustiCal principal id (usually the tinyauth username)

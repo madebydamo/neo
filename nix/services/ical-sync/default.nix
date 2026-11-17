@@ -8,6 +8,11 @@
   }:
     with lib; let
       cfg = config.neo.services."ical-sync";
+      appdata = cfg.appdata;
+      # vdirsyncer's sync state (which item came from where). Before 2026-11 it
+      # was in /var/lib/vdirsyncer/ical-sync; without it the first sync
+      # rebuilds it from both sides (the feed wins).
+      statusPath = "${appdata}/status";
       rusticalEnabled = config.neo.services.rustical.enabled or false;
       swagEnabled = config.neo.services.swag.enabled or false;
       hasSubscriptions = cfg.subscriptions != [];
@@ -23,7 +28,7 @@
         else url;
 
       # The password is a secret: rendered at activation and handed to the
-      # DynamicUser unit as a credential, read by vdirsyncer (password.fetch)
+      # unit as a credential, read by vdirsyncer (password.fetch)
       # and by the MKCALENDAR pre-start.
       unit = "vdirsyncer@ical-sync";
       passwordCredential = "/run/credentials/${unit}.service/password";
@@ -154,6 +159,10 @@
         services.vdirsyncer = mkIf hasSubscriptions {
           enable = true;
           jobs.ical-sync = {
+            # Neo-owned like the other services' appdata (homeserver = core.uid/gid),
+            # not a DynamicUser with a StateDirectory under /var/lib.
+            user = "homeserver";
+            group = "homeserver";
             forceDiscover = true;
             timerConfig = {
               OnBootSec = "5min";
@@ -161,7 +170,7 @@
               Persistent = true;
             };
             config = {
-              inherit pairs storages;
+              inherit pairs storages statusPath;
             };
           };
         };
@@ -171,13 +180,26 @@
           restartUnits = ["${unit}.service"];
         };
 
+        systemd.tmpfiles.rules = mkIf hasSubscriptions [
+          "d ${appdata} 0755 homeserver homeserver -"
+          "d ${statusPath} 0700 homeserver homeserver -"
+        ];
+
         systemd.services.${unit} = mkIf hasSubscriptions {
           after =
             optional rusticalEnabled "docker-rustical.service"
             ++ optional swagEnabled "docker-swag.service";
           serviceConfig = {
             LoadCredential = "password:${config.neo.core.secrets.templates."ical-sync-password".path}";
-            ExecStartPre = [ensureCalendars];
+            ExecStartPre = [
+              # As root, before the sandbox needs appdata: Clear appdata removes it.
+              "+${pkgs.coreutils}/bin/install -d -m 0755 -o homeserver -g homeserver ${appdata}"
+              "+${pkgs.coreutils}/bin/install -d -m 0700 -o homeserver -g homeserver ${statusPath}"
+              ensureCalendars
+            ];
+            # The module sets these only for its DynamicUser.
+            ProtectHome = true;
+            ReadWritePaths = [appdata];
           };
         };
       };
