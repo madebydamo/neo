@@ -1,32 +1,13 @@
 use anyhow::Result;
-use clap::ValueEnum;
 use std::process::{Command, Stdio};
 
 use crate::utils::command::{status_code, TOPLEVEL_ATTR};
+use crate::utils::generation::GenerationMode;
 use crate::utils::ops::OpStatus;
 use crate::utils::{
     format_command, get_current_branch, git_cmd, has_staged_changes, record_generation_in_commit,
     resolve_suffix, run_nix, run_write_flake, OperationKind, OperationLog,
 };
-
-/// How `neo activate` applies the new system generation.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
-pub enum ActivationMode {
-    /// Live `nixos-rebuild switch` (default; interactive UI/CLI).
-    #[default]
-    Switch,
-    /// `nixos-rebuild boot`: set boot default only; running system unchanged until reboot.
-    Boot,
-}
-
-impl ActivationMode {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            ActivationMode::Switch => "switch",
-            ActivationMode::Boot => "boot",
-        }
-    }
-}
 
 pub fn activate(
     config_path: &str,
@@ -34,7 +15,7 @@ pub fn activate(
     nix_cmd: &str,
     sudo_cmd: &str,
     activation_suffix: Option<&str>,
-    mode: ActivationMode,
+    mode: GenerationMode,
 ) -> Result<()> {
     let mode_s = mode.as_str();
     if dry_run {
@@ -93,12 +74,12 @@ pub fn activate(
     }
     if warnings {
         match mode {
-            ActivationMode::Switch => {
+            GenerationMode::Switch => {
                 println!(
                     "warning: nixos-rebuild exited 4 (success with warnings). The switch succeeded and the new generation is active. This is common for user session reloads (dbus-broker), non-critical service restarts, etc. Treating as success for activation tracking."
                 );
             }
-            ActivationMode::Boot => {
+            GenerationMode::Boot => {
                 println!(
                     "warning: nixos-rebuild exited 4 (success with warnings). Boot default was set; reboot to run the new generation. Treating as success for activation tracking."
                 );
@@ -114,7 +95,7 @@ pub fn activate(
     // mode, new kernel, Docker on old settings, a raised restart trigger;
     // nix/modules/core/restart.nix). Never restarts by itself.
     let restart = restart_required();
-    let reboot_pending = restart.required || mode == ActivationMode::Boot;
+    let reboot_pending = restart.required || mode == GenerationMode::Boot;
     op.write_state_extra(
         OpStatus::Success,
         phase,
@@ -127,7 +108,7 @@ pub fn activate(
     );
     record_gen_after_activate(config_path, activation_branch, has_changes);
     match mode {
-        ActivationMode::Switch => {
+        GenerationMode::Switch => {
             println!(
                 "Activated using branch {}{}",
                 activation_branch,
@@ -144,7 +125,7 @@ pub fn activate(
                 }
             }
         }
-        ActivationMode::Boot => {
+        GenerationMode::Boot => {
             println!(
                 "Boot default set using branch {}{}; reboot to run the new generation",
                 activation_branch,

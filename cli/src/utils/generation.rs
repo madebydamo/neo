@@ -41,9 +41,13 @@ pub struct GenerationsList {
     pub message: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// How a system generation is applied (`neo activate --mode`, generation switch).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
 pub enum GenerationMode {
+    /// Live `nixos-rebuild switch` (default; interactive UI/CLI).
+    #[default]
     Switch,
+    /// `nixos-rebuild boot`: set boot default only; running system unchanged until reboot.
     Boot,
 }
 

@@ -8,7 +8,7 @@ pub mod commands;
 pub mod utils;
 
 use crate::commands::{
-    activate::{activate, ActivationMode},
+    activate::activate,
     build::build,
     docker_update::docker_update,
     edit::edit,
@@ -23,6 +23,7 @@ use crate::commands::{
     update_inputs::update_inputs,
     web::web,
 };
+use crate::utils::generation::GenerationMode;
 use crate::utils::locks::{LockError, LockGuard, LockManager, LockSpec, OpInfo};
 use crate::utils::{
     execute_command, load_or_default_settings, resolve_config_path, resolve_profile,
@@ -97,9 +98,9 @@ enum Commands {
             long,
             env = "NEO_ACTIVATION_MODE",
             value_enum,
-            default_value_t = ActivationMode::Switch
+            default_value_t = GenerationMode::Switch
         )]
-        mode: ActivationMode,
+        mode: GenerationMode,
     },
     Update {
         #[arg(long, env = "NEO_UPDATE_SUFFIX")]
