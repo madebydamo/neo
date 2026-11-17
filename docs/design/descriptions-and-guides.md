@@ -1,6 +1,6 @@
 # Descriptions, guides and the privacy map
 
-Status: proposal · 2026-10-29
+Status: implemented · 2026-10-29 (proposed), updated 2026-11-17 to match the code
 
 Neo's web UI is used by people who are not technical. Today the texts they see
 are written for operators: upstream marketing, env var names, systemd syntax,
@@ -176,18 +176,20 @@ Cross-links use a small URI scheme, so the author never writes a UI route:
 | `[local IP](option:pihole.localIP)` | opens the pane scrolled to that field, highlighted; shows the current value |
 | `[Tailscale guide](guide:private-traffic-tailscale)` | guide card link |
 | `[Calendar](privacy:calendar)` | privacy map tile |
-| `[apply](action:apply)` | the existing Apply button (with its lock attr) |
 
 Inline helpers:
 
-- `{{domain}}`, `{{service.pihole.url}}`, `{{option.pihole.localIP}}`: current
-  values, so steps say `https://pihole.example.com` instead of `<sub>.<domain>`.
+- `{{domain}}` and `{{service.pihole.url}}`: current values, so steps say
+  `https://pihole.example.com` instead of `<sub>.<domain>`. Option values are
+  not substituted; link the option with `option:` instead.
 - Callouts: `> [!tip]`, `> [!warning]`, `> [!check]`. GitHub syntax, so the
   `.md` also reads fine on GitHub.
 
-**Validation** (flake check, like `service-targets-check.nix`): every `service:`,
-`option:`, `guide:` and `privacy:` target must exist; `services` must be real
-service names. Broken links fail `just check`, not the reader.
+**Missing targets**: extract (`extract_guides.nix`) lists every `service:`,
+`option:`, `guide:` and `privacy:` target that does not exist on this machine
+as `brokenLinks`; the renderer shows those as plain text. A target can be
+missing legitimately (a plugin service that is not installed), so this is not a
+build error.
 
 **Backlinks** are computed in extract, not written by hand:
 
@@ -226,7 +228,7 @@ Checks can carry a machine-readable command for Hermes:
 ````markdown
 > [!check] Pi-hole answers DNS
 > ```neo-check
-> dig +short @{{option.pihole.localIP}} doubleclick.net   # expect 0.0.0.0
+> docker exec pihole dig +short doubleclick.net @127.0.0.1   # 0.0.0.0 = blocked
 > ```
 ````
 
