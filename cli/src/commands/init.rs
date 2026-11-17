@@ -86,7 +86,7 @@ pub fn init(
     // Final git add + conditional commit (matches Bash exactly)
     git_cmd(config_path, &["add", "."])?;
 
-    if has_staged_changes(config_path) {
+    if has_staged_changes(config_path)? {
         git_cmd(config_path, &["commit", "-m", "Update from neo init"])?;
         println!("Committed initial changes");
     } else {

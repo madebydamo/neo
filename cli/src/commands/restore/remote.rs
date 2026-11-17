@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use super::backup::{self, Access, Source};
 use super::local::{commit_uncommitted, default_origin, remote_url, stage_repo, WORK_DIR};
 use super::{DataSource, RestoreArgs, DEFAULT_TARGET};
-use crate::utils::command::{confirm, nix_command, shell_quote, stdout_checked};
+use crate::utils::command::{confirm, nix_command, shell_quote, shell_words, stdout_checked};
 use crate::utils::execute_command;
 use crate::utils::fsutil::TempDir;
 
@@ -479,14 +479,7 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
     // The clone holds the config: gone before the long part starts.
     drop(tmp);
 
-    let cmd = format!(
-        "{neo} {}",
-        args.forwarded_argv(&origin)
-            .iter()
-            .map(|a| shell_quote(a))
-            .collect::<Vec<_>>()
-            .join(" ")
-    );
+    let cmd = format!("{neo} {}", shell_words(args.forwarded_argv(&origin)));
 
     // Plan first (no changes), then the run after a yes here.
     let check = format!("{cmd} --check");
@@ -622,11 +615,7 @@ mod tests {
     #[test]
     fn the_shell_on_the_target_keeps_arguments_whole() {
         let argv = all_set().forwarded_argv("it's");
-        let line = argv
-            .iter()
-            .map(|a| shell_quote(a))
-            .collect::<Vec<_>>()
-            .join(" ");
+        let line = shell_words(&argv);
         let out = Command::new("sh")
             .args(["-c", &format!("printf '%s\\n' {line}")])
             .output()

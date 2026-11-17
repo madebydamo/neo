@@ -9,7 +9,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use toml_edit::DocumentMut;
 
-use crate::utils::command::{output_checked, output_with_stdin, shell_quote, stdout_checked};
+use crate::utils::command::{
+    output_checked, output_with_stdin, shell_join, shell_words, stdout_checked,
+};
 use crate::utils::execute_command;
 use crate::utils::fsutil::write_private;
 use crate::utils::profile::{DEFAULT_CONFIG_REL, DEFAULT_VOLUMES_ROOT};
@@ -365,10 +367,7 @@ impl Access {
     }
 
     fn ssh_line(&self, source: &Source) -> String {
-        std::iter::once("ssh".to_string())
-            .chain(self.ssh_args(source).iter().map(|a| shell_quote(a)))
-            .collect::<Vec<_>>()
-            .join(" ")
+        shell_join("ssh", self.ssh_args(source))
     }
 
     /// An executable ssh with these keys and options, for `sftp -S` and
@@ -450,12 +449,9 @@ impl Access {
         match &source.location {
             Location::Ssh { dest, .. } => {
                 let mut c = Command::new("ssh");
-                c.args(self.ssh_args(source)).arg(dest).arg(
-                    argv.iter()
-                        .map(|a| shell_quote(a))
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                );
+                c.args(self.ssh_args(source))
+                    .arg(dest)
+                    .arg(shell_words(argv));
                 c
             }
             Location::Disk => {

@@ -6,6 +6,8 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use super::command::execute_command;
+
 const SYSTEM_PROFILE: &str = "/nix/var/nix/profiles/system";
 const PROFILES_DIR: &str = "/nix/var/nix/profiles";
 const RUNNING_SYSTEM: &str = "/run/current-system";
@@ -390,40 +392,20 @@ pub fn switch_system_generation(n: u64, mode: GenerationMode, sudo_cmd: &str) ->
     }
 
     // Point the system profile at this generation (boot default + current pointer).
-    let status = Command::new(sudo_cmd)
-        .args([
-            "-n",
-            "nix-env",
-            "-p",
-            SYSTEM_PROFILE,
-            "--switch-generation",
-            &n.to_string(),
-        ])
-        .status()
-        .context("spawn nix-env")?;
-    if !status.success() {
-        bail!(
-            "nix-env --switch-generation {} failed (exit {:?})",
-            n,
-            status.code()
-        );
-    }
-
-    let action = mode.as_str();
-    let stc_s = stc.to_string_lossy();
-    println!("→ {sudo_cmd} -n {stc_s} {action}");
-    let status = Command::new(sudo_cmd)
-        .args(["-n", stc_s.as_ref(), action])
-        .status()
-        .context("spawn switch-to-configuration")?;
-    if !status.success() {
-        bail!(
-            "switch-to-configuration {} failed (exit {:?})",
-            action,
-            status.code()
-        );
-    }
-    Ok(())
+    execute_command(Command::new(sudo_cmd).args([
+        "-n",
+        "nix-env",
+        "-p",
+        SYSTEM_PROFILE,
+        "--switch-generation",
+        &n.to_string(),
+    ]))?;
+    execute_command(
+        Command::new(sudo_cmd)
+            .arg("-n")
+            .arg(&stc)
+            .arg(mode.as_str()),
+    )
 }
 
 /// Build activation commit subject including optional generation.
@@ -485,13 +467,7 @@ pub fn record_generation_in_commit(
         // Same config re-activated, tree unchanged — still record gen on a new history node.
         cmd.args(["--allow-empty", "-m", &msg]);
     }
-    let status = cmd.status().context("git commit")?;
-    if !status.success() {
-        bail!(
-            "git commit failed while recording generation (exit {:?})",
-            status.code()
-        );
-    }
+    execute_command(&mut cmd).context("record the generation in the commit")?;
     Ok(gen)
 }
 

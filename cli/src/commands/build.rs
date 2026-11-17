@@ -26,7 +26,7 @@ pub fn build(config_path: &str, config: &DocumentMut, dry_run: bool, nix_cmd: &s
     run_nix(config_path, nix_cmd, &["build", TOPLEVEL_ATTR])?;
     run_nix(config_path, nix_cmd, &["build", &vm])?;
     git_cmd(config_path, &["add", "."])?;
-    if has_staged_changes(config_path) {
+    if has_staged_changes(config_path)? {
         let ts = get_timestamp();
         git_cmd(config_path, &["commit", "-m", &format!("Build: {}", ts)])?;
     }

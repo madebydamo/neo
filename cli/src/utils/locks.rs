@@ -762,14 +762,9 @@ fn now_epoch() -> i64 {
 
 /// `HH:MM` in the host's local time zone.
 pub fn local_hhmm(epoch: i64) -> String {
-    let t = epoch as libc::time_t;
-    // SAFETY: zeroed tm is a valid out-parameter; localtime_r is thread-safe.
-    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    let ok = unsafe { !libc::localtime_r(&t, &mut tm).is_null() };
-    if ok {
-        format!("{:02}:{:02}", tm.tm_hour, tm.tm_min)
-    } else {
-        format!("{:02}:{:02}", (epoch / 3600) % 24, (epoch / 60) % 60)
+    match super::command::local_time(epoch) {
+        Some(tm) => format!("{:02}:{:02}", tm.tm_hour, tm.tm_min),
+        None => format!("{:02}:{:02}", (epoch / 3600) % 24, (epoch / 60) % 60),
     }
 }
 

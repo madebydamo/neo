@@ -1,8 +1,8 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::ValueEnum;
 use std::process::{Command, Stdio};
 
-use crate::utils::command::TOPLEVEL_ATTR;
+use crate::utils::command::{status_code, TOPLEVEL_ATTR};
 use crate::utils::ops::OpStatus;
 use crate::utils::{
     format_command, get_current_branch, git_cmd, has_staged_changes, record_generation_in_commit,
@@ -73,19 +73,12 @@ pub fn activate(
     rebuild
         .current_dir(config_path)
         .args(["nixos-rebuild", mode_s, "--flake", ".#neo"]);
-    let display = format_command(&rebuild);
-    println!("→ {display}");
-    let status = rebuild
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()
-        .with_context(|| format!("failed to spawn: {display}"))?;
-    let code = status.code().unwrap_or(-1);
+    let code = status_code(&mut rebuild)?;
 
     // Exit 4: the rebuild succeeded with warnings (common for user session reloads on switch).
     let warnings = code == 4;
     branches.drop_build_branch(config_path);
-    if !status.success() && !warnings {
+    if code != 0 && !warnings {
         println!(
             "nixos-rebuild failed (non-zero exit {}). Keeping {} branch+checkout (check 'systemctl --failed' and logs).",
             code, activation_branch
@@ -96,7 +89,7 @@ pub fn activate(
             Some(&format!("exit code {}", code)),
             None,
         );
-        anyhow::bail!("Command failed: {display} (exit {code})");
+        anyhow::bail!("Command failed: {} (exit {code})", format_command(&rebuild));
     }
     if warnings {
         match mode {
@@ -214,7 +207,7 @@ fn prepare_branches(config_path: &str, op: &OperationLog, suffix: &str) -> Resul
     let branches = Branches {
         activation: format!("activation_{suffix}"),
         build: format!("build_{suffix}"),
-        has_changes: has_staged_changes(config_path),
+        has_changes: has_staged_changes(config_path)?,
     };
     if branches.has_changes {
         op.step("build-branch", || {

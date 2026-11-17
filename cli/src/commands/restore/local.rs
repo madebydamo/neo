@@ -12,23 +12,12 @@ use super::backup::{self, Access, Format, Source};
 use super::{
     access_tokens, int_setting, mount_zfs, restore_identity, under, DataSource, RestoreArgs,
 };
-use crate::utils::command::{confirm, is_root};
+use crate::utils::command::{confirm, is_root, stdout_checked};
 use crate::utils::execute_command;
 use crate::utils::profile::DEFAULT_SERVER_CONFIG_PATH;
 use crate::utils::settings::{self, disko_enabled, str_at, FILE as SETTINGS_FILE};
 
 pub const WORK_DIR: &str = "/root/neo-restore";
-
-fn capture(cmd: &mut Command) -> Result<String> {
-    let out = cmd
-        .stderr(Stdio::inherit())
-        .output()
-        .with_context(|| format!("run {:?}", cmd.get_program()))?;
-    if !out.status.success() {
-        bail!("{:?} failed", cmd.get_program());
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-}
 
 fn is_mountpoint(p: &Path) -> bool {
     Command::new("findmnt")
@@ -192,11 +181,13 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         changes.push(format!("disko.mainDisk = {disk}"));
     }
     if !args.keep_hardware {
-        let hw = capture(
+        let hw = stdout_checked(
             Command::new("nixos-generate-config")
                 .args(["--no-filesystems", "--show-hardware-config"]),
+            "nixos-generate-config",
         )
         .context("nixos-generate-config (pass --keep-hardware to keep the repo's)")?;
+        let hw = hw.trim();
         let path = staging.join("hardware-configuration.nix");
         if fs::read_to_string(&path).unwrap_or_default().trim() != hw.trim() {
             fs::write(&path, format!("{hw}\n"))?;
@@ -328,13 +319,18 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     } else {
         println!("Evaluating the configuration (first run builds a lot) …");
         Some(
-            capture(
+            // Build progress stays on the terminal (first runs take long).
+            stdout_checked(
                 Command::new("nix")
                     .args(["build", "--no-link", "--print-out-paths"])
                     .arg(format!("{flake}.config.system.build.diskoScript"))
-                    .env("NIX_CONFIG", &nix_config),
+                    .env("NIX_CONFIG", &nix_config)
+                    .stderr(Stdio::inherit()),
+                "nix build diskoScript",
             )
-            .context("the configuration does not evaluate")?,
+            .context("the configuration does not evaluate")?
+            .trim()
+            .to_string(),
         )
     };
 
@@ -495,7 +491,7 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
 
     // 8. Boot entry (UEFI): Neo's boot loader install puts NixOS first.
     if Path::new("/sys/firmware/efi/efivars").exists() {
-        if let Ok(out) = capture(&mut Command::new("efibootmgr")) {
+        if let Ok(out) = stdout_checked(&mut Command::new("efibootmgr"), "efibootmgr") {
             let first = out
                 .lines()
                 .find_map(|l| l.strip_prefix("BootOrder: "))
@@ -542,8 +538,8 @@ pub(crate) fn stage_repo(repo: &str, dest: &Path) -> Result<()> {
         return commit_uncommitted(dest);
     }
     if dir.join(".git").exists() {
-        let dirty = capture(git(dir).args(["status", "--porcelain"]))?;
-        if !dirty.is_empty() {
+        let dirty = stdout_checked(git(dir).args(["status", "--porcelain"]), "git status")?;
+        if !dirty.trim().is_empty() {
             println!("! {repo} has uncommitted changes: only its last commit is restored (commit them first to include them)");
         }
     }
@@ -591,8 +587,8 @@ pub(crate) fn commit_uncommitted(repo: &Path) -> Result<()> {
     if fresh {
         execute_command(git(repo).args(["init", "-q"]))?;
     }
-    let status = capture(git(repo).args(["status", "--porcelain"]))?;
-    if status.is_empty() {
+    let status = stdout_checked(git(repo).args(["status", "--porcelain"]), "git status")?;
+    if status.trim().is_empty() {
         return Ok(());
     }
     if !fresh {

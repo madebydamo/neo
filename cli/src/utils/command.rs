@@ -4,7 +4,7 @@ use anyhow::{bail, Context, Result};
 use std::ffi::OsStr;
 use std::io::Write;
 use std::os::unix::process::ExitStatusExt;
-use std::process::{Command, Output, Stdio};
+use std::process::{Command, ExitStatus, Output, Stdio};
 
 /// `value` when set and non-empty, else `default`.
 pub fn non_empty_or(value: Option<String>, default: &str) -> String {
@@ -130,12 +130,22 @@ pub fn shell_join(
     program: impl AsRef<OsStr>,
     args: impl IntoIterator<Item = impl AsRef<OsStr>>,
 ) -> String {
-    let mut parts = Vec::new();
-    parts.push(shell_quote(&program.as_ref().to_string_lossy()));
-    for a in args {
-        parts.push(shell_quote(&a.as_ref().to_string_lossy()));
+    let program = shell_quote(&program.as_ref().to_string_lossy());
+    let args = shell_words(args);
+    if args.is_empty() {
+        program
+    } else {
+        format!("{program} {args}")
     }
-    parts.join(" ")
+}
+
+/// Each word quoted for a POSIX shell, space-separated.
+pub fn shell_words(words: impl IntoIterator<Item = impl AsRef<OsStr>>) -> String {
+    words
+        .into_iter()
+        .map(|w| shell_quote(&w.as_ref().to_string_lossy()))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Format a `Command` for display: prompt-style cwd, then shell-copyable argv.
@@ -150,7 +160,8 @@ pub fn format_command(cmd: &Command) -> String {
     }
 }
 
-pub fn execute_command(cmd: &mut Command) -> Result<()> {
+/// Print `cmd`, run it on our terminal and return its status and display line.
+fn run_shown(cmd: &mut Command) -> Result<(ExitStatus, String)> {
     let display = format_command(cmd);
     println!("→ {display}");
     let status = cmd
@@ -164,19 +175,38 @@ pub fn execute_command(cmd: &mut Command) -> Result<()> {
     if status.signal() == Some(libc::SIGPIPE) {
         std::process::exit(128 + libc::SIGPIPE);
     }
+    Ok((status, display))
+}
+
+/// Print `cmd` and run it on our terminal; a non-zero exit is an error.
+pub fn execute_command(cmd: &mut Command) -> Result<()> {
+    let (status, display) = run_shown(cmd)?;
     if !status.success() {
-        anyhow::bail!("Command failed: {display}");
+        match status.code() {
+            Some(code) => bail!("Command failed: {display} (exit {code})"),
+            None => bail!("Command failed: {display} ({status})"),
+        }
     }
     Ok(())
 }
 
-/// `out` when the command succeeded, else `{what} failed: {stderr}`.
+/// Like [`execute_command`], for commands whose exit code carries meaning:
+/// returns it (`-1` when a signal ended the command) instead of failing.
+pub fn status_code(cmd: &mut Command) -> Result<i32> {
+    let (status, _) = run_shown(cmd)?;
+    Ok(status.code().unwrap_or(-1))
+}
+
+/// `out` when the command succeeded, else `{what} failed: {stderr}` (or the
+/// exit status when stderr was empty or not captured).
 pub fn check_output(out: Output, what: &str) -> Result<Output> {
     if !out.status.success() {
-        bail!(
-            "{what} failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stderr = stderr.trim();
+        if stderr.is_empty() {
+            bail!("{what} failed ({})", out.status);
+        }
+        bail!("{what} failed: {stderr}");
     }
     Ok(out)
 }
@@ -251,25 +281,48 @@ pub fn git_cmd(config_path: &str, args: &[&str]) -> Result<()> {
     execute_command(Command::new("git").current_dir(config_path).args(args))
 }
 
-pub fn get_timestamp() -> String {
-    Command::new("date")
-        .arg("+%Y%m%d-%H%M%S")
-        .output()
-        .map(|o| {
-            std::string::String::from_utf8_lossy(&o.stdout)
-                .trim()
-                .to_string()
-        })
-        .unwrap_or_else(|_| "ts".to_string())
+/// `epoch` broken down in the host's local time zone.
+pub fn local_time(epoch: i64) -> Option<libc::tm> {
+    let t = epoch as libc::time_t;
+    // SAFETY: zeroed tm is a valid out-parameter; localtime_r is thread-safe.
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    let ok = unsafe { !libc::localtime_r(&t, &mut tm).is_null() };
+    ok.then_some(tm)
 }
 
-pub fn has_staged_changes(config_path: &str) -> bool {
-    Command::new("git")
+/// `YYYYMMDD-HHMMSS` of `epoch` in local time (op ids, commit names).
+fn timestamp_at(epoch: i64) -> String {
+    match local_time(epoch) {
+        Some(tm) => format!(
+            "{:04}{:02}{:02}-{:02}{:02}{:02}",
+            tm.tm_year + 1900,
+            tm.tm_mon + 1,
+            tm.tm_mday,
+            tm.tm_hour,
+            tm.tm_min,
+            tm.tm_sec
+        ),
+        None => epoch.to_string(),
+    }
+}
+
+/// Now as `YYYYMMDD-HHMMSS` in local time.
+pub fn get_timestamp() -> String {
+    timestamp_at(i64::try_from(now_secs()).unwrap_or(i64::MAX))
+}
+
+/// Whether the index differs from HEAD (`git diff --staged --quiet`).
+pub fn has_staged_changes(config_path: &str) -> Result<bool> {
+    let status = Command::new("git")
         .current_dir(config_path)
         .args(["diff", "--staged", "--quiet"])
         .status()
-        .map(|s| !s.success())
-        .unwrap_or(false)
+        .context("run git diff --staged (is git installed?)")?;
+    match status.code() {
+        Some(0) => Ok(false),
+        Some(1) => Ok(true),
+        _ => bail!("git diff --staged failed in {config_path} ({status})"),
+    }
 }
 
 pub fn get_current_branch(config_path: &str) -> Result<String> {
@@ -324,6 +377,50 @@ mod tests {
         // A child that ignores its stdin only reports its own status.
         let out = output_with_stdin(&mut sh("exit 7"), &input, "t").unwrap();
         assert_eq!(out.status.code(), Some(7));
+    }
+
+    #[test]
+    fn status_code_returns_the_exit_code() {
+        assert_eq!(status_code(&mut sh("exit 0")).unwrap(), 0);
+        assert_eq!(status_code(&mut sh("exit 4")).unwrap(), 4);
+        assert!(status_code(&mut Command::new("/nonexistent/x")).is_err());
+        let e = execute_command(&mut sh("exit 3")).unwrap_err();
+        assert!(e.to_string().ends_with("(exit 3)"), "{e}");
+    }
+
+    #[test]
+    fn check_output_without_stderr_reports_the_status() {
+        let e = stdout_checked(sh("exit 5").stderr(Stdio::null()), "thing").unwrap_err();
+        assert!(
+            e.to_string().starts_with("thing failed (exit status: 5"),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn timestamp_is_local_date_and_time() {
+        let ts = get_timestamp();
+        assert_eq!(ts.len(), 15, "{ts}");
+        assert_eq!(&ts[8..9], "-");
+        assert!(ts.chars().filter(|c| *c != '-').all(|c| c.is_ascii_digit()));
+        let tm = local_time(0).unwrap();
+        let expect = format!(
+            "{:04}{:02}{:02}-{:02}{:02}{:02}",
+            tm.tm_year + 1900,
+            tm.tm_mon + 1,
+            tm.tm_mday,
+            tm.tm_hour,
+            tm.tm_min,
+            tm.tm_sec
+        );
+        assert_eq!(timestamp_at(0), expect);
+    }
+
+    #[test]
+    fn staged_changes_need_a_repository() {
+        let dir = crate::utils::fsutil::TempDir::new("neo-command-test").unwrap();
+        // Outside a git repo `git diff --staged` fails (exit 129): an error, not "no changes".
+        assert!(has_staged_changes(&dir.path().to_string_lossy()).is_err());
     }
 
     #[test]
