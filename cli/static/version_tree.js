@@ -1,5 +1,5 @@
 // version_tree.js — pure helpers for the Versioning timeline (versioning.js):
-// lane geometry, SVG edge paths, day grouping and change summaries. The lane
+// lane geometry, the SVG of both graphs, day grouping and change summaries. The lane
 // assignment itself happens server-side (cli/src/commands/web/version_tree).
 // Tested by version_tree.test.js (`just test-widgets`).
 (function (root) {
@@ -49,6 +49,86 @@
       d += ' L' + r1(xl) + ',' + r1(y2);
     }
     return d;
+  }
+
+  /**
+   * SVG paths of a graph's edges. `ys`: row index → anchor y; `height`: the
+   * list height (edges to an unloaded parent run open to the bottom);
+   * `pendingRow`: edges from that row are drawn as pending.
+   */
+  function edgesSvg(graph, ys, m, mirror, pendingRow, height) {
+    var out = '';
+    (graph.edges || []).forEach(function (e) {
+      var y1 = ys[e.fromRow];
+      if (y1 == null) return;
+      var open = e.toRow == null;
+      var y2 = open ? height - 2 : ys[e.toRow];
+      if (y2 == null) return;
+      var x1 = laneX(m, e.fromLane, mirror);
+      var xl = laneX(m, e.lane, mirror);
+      var x2 = laneX(m, e.toLane, mirror);
+      var cls = 'vt-edge' + (e.lane > 0 ? ' vt-edge-side' : '');
+      if (pendingRow != null && e.fromRow === pendingRow) cls += ' vt-edge-pending';
+      if (open) {
+        var cut = Math.max(y1, y2 - 22);
+        out += '<path class="' + cls + '" d="' + edgePath(x1, y1, xl, xl, cut, 18) + '"/>';
+        out += '<path class="' + cls + ' vt-edge-open" d="M' + xl + ',' + cut + ' L' + xl + ',' + y2 + '"/>';
+      } else {
+        out += '<path class="' + cls + '" d="' + edgePath(x1, y1, xl, x2, y2, 18) + '"/>';
+      }
+    });
+    return out;
+  }
+
+  /**
+   * SVG nodes of both graphs: { cfg, sys }. Config side: circles (pending,
+   * selection, running/head ring, activation dot or hollow commit); system
+   * side: squares for generations, diamonds for switches. `openKey`: the
+   * expanded row (null in compare mode).
+   */
+  function nodesSvg(rows, cfgY, sysY, cm, sm, openKey) {
+    var cfgNodes = '';
+    var sysNodes = '';
+    rows.forEach(function (row, i) {
+      var open = openKey != null && openKey === row.key;
+      if (row.pending && cfgY[i] != null) {
+        var px = laneX(cm, row.pendingLane || 0, false);
+        cfgNodes += '<circle class="vt-dot-pending" cx="' + px + '" cy="' + cfgY[i] + '" r="5.5"/>';
+      }
+      var c = row.commit;
+      if (c && cfgY[i] != null) {
+        var x = laneX(cm, c.lane, false);
+        var y = cfgY[i];
+        if (open) cfgNodes += '<circle class="vt-sel" cx="' + x + '" cy="' + y + '" r="12"/>';
+        if (c.isRunningConfig) cfgNodes += '<circle class="vt-ring-run" cx="' + x + '" cy="' + y + '" r="9"/>';
+        else if (c.isHead) cfgNodes += '<circle class="vt-ring-head" cx="' + x + '" cy="' + y + '" r="9"/>';
+        if (c.kind === 'activation') {
+          cfgNodes += '<circle class="vt-dot" cx="' + x + '" cy="' + y + '" r="' + (c.isHead ? 6 : 5) + '"/>';
+        } else {
+          cfgNodes += '<circle class="vt-dot-hollow" cx="' + x + '" cy="' + y + '" r="3.5"/>';
+        }
+      }
+      var s = row.system;
+      if (s && sysY[i] != null) {
+        var sx = laneX(sm, s.lane, true);
+        var sy = sysY[i];
+        if (open) sysNodes += '<circle class="vt-sel" cx="' + sx + '" cy="' + sy + '" r="12"/>';
+        if (s.type === 'generation') {
+          if (s.isRunning) {
+            sysNodes += '<rect class="vt-halo" x="' + (sx - 6) + '" y="' + (sy - 6) + '" width="12" height="12" rx="3"/>';
+          } else if (s.isBoot) {
+            sysNodes += '<rect class="vt-ring-boot" x="' + (sx - 9) + '" y="' + (sy - 9) + '" width="18" height="18" rx="4.5"/>';
+          }
+          sysNodes += '<rect class="vt-sq' + (s.isRunning ? ' vt-sq-run' : '') + '" x="' + (sx - 5.5) + '" y="' + (sy - 5.5) +
+            '" width="11" height="11" rx="2.5"/>';
+        } else {
+          var r = 5.5;
+          sysNodes += '<path class="vt-diamond' + (s.isLatest ? ' vt-diamond-now' : '') + '" d="M' + sx + ',' + (sy - r) +
+            ' L' + (sx + r) + ',' + sy + ' L' + sx + ',' + (sy + r) + ' L' + (sx - r) + ',' + sy + ' Z"/>';
+        }
+      }
+    });
+    return { cfg: cfgNodes, sys: sysNodes };
   }
 
   function dayKey(ts) {
@@ -181,6 +261,8 @@
     metrics: metrics,
     laneX: laneX,
     edgePath: edgePath,
+    edgesSvg: edgesSvg,
+    nodesSvg: nodesSvg,
     dayKey: dayKey,
     clockTime: clockTime,
     fullTime: fullTime,

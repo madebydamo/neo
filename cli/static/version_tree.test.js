@@ -103,3 +103,44 @@ test('fullTime pads every field and is empty without a timestamp', () => {
   assert.equal(VT.fullTime(ts), '2026-01-02 03:04:05');
   assert.equal(VT.fullTime(0), '');
 });
+
+test('edgesSvg draws closed and open edges, side lanes and pending rows', () => {
+  const m = VT.metrics(2, false);
+  const graph = {
+    edges: [
+      { fromRow: 0, toRow: 1, fromLane: 0, lane: 0, toLane: 0 },
+      { fromRow: 1, toRow: null, fromLane: 0, lane: 1, toLane: 1 },
+      { fromRow: 5, toRow: 1, fromLane: 0, lane: 0, toLane: 0 },
+    ],
+  };
+  const svg = VT.edgesSvg(graph, { 0: 10, 1: 50 }, m, false, 0, 200);
+  const paths = svg.match(/<path [^>]*\/>/g);
+  assert.equal(paths.length, 3); // the edge from an unmeasured row is skipped
+  assert.match(paths[0], /class="vt-edge vt-edge-pending"/);
+  assert.match(paths[1], /class="vt-edge vt-edge-side"/);
+  assert.match(paths[2], /class="vt-edge vt-edge-side vt-edge-open" d="M[\d.]+,176 L[\d.]+,198"/);
+  assert.equal(VT.edgesSvg({}, {}, m, false, null, 100), '');
+});
+
+test('nodesSvg: config circles and system squares or diamonds', () => {
+  const cm = VT.metrics(1, false);
+  const sm = VT.metrics(1, false);
+  const rows = [
+    { key: 'p', pending: true },
+    { key: 'a', commit: { lane: 0, kind: 'activation', isHead: true }, system: { type: 'generation', lane: 0, isRunning: true } },
+    { key: 'b', commit: { lane: 0, kind: 'commit', isRunningConfig: true }, system: { type: 'switch', lane: 0, isLatest: true } },
+    { key: 'c', system: { type: 'generation', lane: 0, isBoot: true } },
+  ];
+  const ys = { 0: 5, 1: 20, 2: 40, 3: 60 };
+  const { cfg, sys } = VT.nodesSvg(rows, ys, ys, cm, sm, 'a');
+  assert.match(cfg, /vt-dot-pending/);
+  assert.match(cfg, /vt-sel/);
+  assert.match(cfg, /vt-ring-head[^>]*\/><circle class="vt-dot"[^>]*r="6"/);
+  assert.match(cfg, /vt-ring-run[^>]*\/><circle class="vt-dot-hollow"/);
+  assert.match(sys, /vt-sel/);
+  assert.match(sys, /vt-halo/);
+  assert.match(sys, /vt-sq vt-sq-run/);
+  assert.match(sys, /vt-diamond vt-diamond-now/);
+  assert.match(sys, /vt-ring-boot/);
+  assert.doesNotMatch(VT.nodesSvg(rows, ys, ys, cm, sm, null).cfg, /vt-sel/);
+});
