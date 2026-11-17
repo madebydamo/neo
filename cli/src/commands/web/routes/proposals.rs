@@ -21,7 +21,7 @@ use crate::commands::web::proposals::{
 };
 use crate::commands::web::settings::edit::{apply_edit, Edit};
 use crate::commands::web::types::AppConfig;
-use crate::commands::web::util::{proc, Htmx};
+use crate::commands::web::util::{alert_html, proc, AlertKind, Htmx};
 
 #[derive(Serialize)]
 pub struct ProposalCreated {
@@ -236,10 +236,16 @@ async fn render_card(
     extra: String,
 ) -> RawHtml<String> {
     let ctx = card_ctx(config, p).await;
-    let html = meta
-        .render("proposal_card", ctx)
-        .map(|(_, h)| h)
-        .unwrap_or_default();
+    let html = match meta.render("proposal_card", ctx) {
+        Some((_, h)) => h,
+        None => {
+            eprintln!("web: proposal_card template failed to render");
+            alert_html(
+                AlertKind::Error,
+                "Could not show this suggestion. Reload the page.",
+            )
+        }
+    };
     RawHtml(format!("{html}{extra}"))
 }
 
