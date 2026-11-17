@@ -476,7 +476,7 @@ VM's host key, identical rendered files), web saves in every mode, key escrow ro
 | Piece | Where |
 |-------|-------|
 | `mkSecretOption`, templates, renderer, leak guard, `jsonString`, `copies` | `nix/lib/secrets.nix`, `nix/modules/core/secrets.nix` |
-| YAML reader (Nix / Rust) | `nix/lib/secrets-yaml.nix`, `cli/src/utils/secrets.rs` |
+| YAML reader (Nix / Rust) | `nix/lib/secrets-yaml.nix`, `cli/src/utils/secrets_yaml.rs` |
 | Template loading (`secrets.yaml` / `secrets.sops.yaml`) | `templates/homeserver/modules/settings.nix` |
 | split / enable / disable / rekey, encrypted saves, auto-rekey on SSH key change | `cli/src/utils/secrets_store.rs`, `neo secrets …` |
 | Settings → Secrets card (the switch) | `cli/src/commands/web/routes/secrets.rs` |

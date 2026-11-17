@@ -17,7 +17,7 @@ use super::bins;
 use super::command::git_cmd;
 use super::command::{check_output, env_or, output_checked, output_with_stdin, root_command};
 use super::fsutil::{write_atomic, write_private, TempDir};
-use super::secrets::{self, Backend, Node, Tree};
+use super::secrets_yaml::{self, Backend, Node, Tree};
 use super::settings::{authorized_keys, ensure_table, recorded_host_key};
 
 pub const IDENTITY_FILE: &str = "identity.sops.yaml";
@@ -97,7 +97,7 @@ pub fn encrypt(tree: &Tree, recipients: &[String]) -> Result<String> {
             "yaml",
             "/dev/stdin",
         ]),
-        secrets::emit(tree).as_bytes(),
+        secrets_yaml::emit(tree).as_bytes(),
         "sops encrypt",
     )?;
     let out = check_output(out, "sops encrypt")?;
@@ -138,7 +138,7 @@ pub fn decrypt(path: &Path) -> Result<Tree> {
 /// a private temp file, the same way as [`decrypt`].
 pub fn decrypt_text(text: &str) -> Result<Tree> {
     let dir = TempDir::new("neo-decrypt")?;
-    let tmp = dir.join(secrets::SOPS_FILE);
+    let tmp = dir.join(secrets_yaml::SOPS_FILE);
     write_private(&tmp, text.as_bytes())?;
     decrypt(&tmp)
 }
@@ -224,7 +224,7 @@ impl Store {
     }
 
     pub fn backend(&self) -> Backend {
-        secrets::backend_for(&self.settings_path())
+        secrets_yaml::backend_for(&self.settings_path())
     }
 
     fn load_doc(&self) -> Result<DocumentMut> {
@@ -277,7 +277,8 @@ impl Store {
                         && scan(&path, depth - 1)
                 } else {
                     name.ends_with(".nix")
-                        && fs::read_to_string(&path).is_ok_and(|t| t.contains(secrets::SOPS_FILE))
+                        && fs::read_to_string(&path)
+                            .is_ok_and(|t| t.contains(secrets_yaml::SOPS_FILE))
                 }
             })
         }
@@ -290,26 +291,26 @@ impl Store {
             bail!(
                 "this configuration does not load {} / {} yet (modules/settings.nix is older than secrets support): \
                  refresh it from the neo homeserver template first",
-                secrets::PLAIN_FILE,
-                secrets::SOPS_FILE
+                secrets_yaml::PLAIN_FILE,
+                secrets_yaml::SOPS_FILE
             );
         }
         let mut tree = match self.backend() {
             Backend::Sops(_) => bail!("secrets are already encrypted"),
-            Backend::Plain(p) => secrets::read_plain(&p)?,
+            Backend::Plain(p) => secrets_yaml::read_plain(&p)?,
             Backend::Inline => Tree::new(),
         };
         let mut doc = self.load_doc()?;
-        let split = secrets::split_into(&mut doc, &mut tree, patterns, None);
-        let plain = self.path(secrets::PLAIN_FILE);
+        let split = secrets_yaml::split_into(&mut doc, &mut tree, patterns, None);
+        let plain = self.path(secrets_yaml::PLAIN_FILE);
         if split.moved.is_empty() && plain.exists() {
             return Ok(vec![]);
         }
         // Secrets first: if settings.toml fails, the values exist twice and the
         // secrets file wins on evaluation.
-        secrets::write_plain(&plain, &tree)?;
+        secrets_yaml::write_plain(&plain, &tree)?;
         self.save_doc(&mut doc)?;
-        self.git_add(&[secrets::PLAIN_FILE, "settings.toml"])?;
+        self.git_add(&[secrets_yaml::PLAIN_FILE, "settings.toml"])?;
         Ok(split.moved)
     }
 
@@ -327,7 +328,7 @@ impl Store {
         let host = host_key(&doc)
             .context("no host key: run this on the machine (/etc/ssh/ssh_host_ed25519_key.pub)")?;
         self.split(patterns)?;
-        let tree = secrets::read_plain(&self.path(secrets::PLAIN_FILE))?;
+        let tree = secrets_yaml::read_plain(&self.path(secrets_yaml::PLAIN_FILE))?;
         let mut recipients = vec![host.clone()];
         recipients.extend(admins.iter().cloned());
         let encrypted = encrypt(&tree, &recipients)?;
@@ -353,11 +354,11 @@ impl Store {
         let mut fresh = self.load_doc()?;
         record_host_key(&mut fresh, &host);
         self.save_doc(&mut fresh)?;
-        self.write_atomic(secrets::SOPS_FILE, &encrypted)?;
-        fs::remove_file(self.path(secrets::PLAIN_FILE)).context("remove secrets.yaml")?;
+        self.write_atomic(secrets_yaml::SOPS_FILE, &encrypted)?;
+        fs::remove_file(self.path(secrets_yaml::PLAIN_FILE)).context("remove secrets.yaml")?;
         self.git_add(&[
-            secrets::PLAIN_FILE,
-            secrets::SOPS_FILE,
+            secrets_yaml::PLAIN_FILE,
+            secrets_yaml::SOPS_FILE,
             IDENTITY_FILE,
             SOPS_CONFIG,
             "settings.toml",
@@ -375,13 +376,13 @@ impl Store {
             bail!("secrets are not encrypted");
         };
         let tree = decrypt(&sops)?;
-        secrets::write_plain(&self.path(secrets::PLAIN_FILE), &tree)?;
-        for name in [secrets::SOPS_FILE, IDENTITY_FILE, SOPS_CONFIG] {
+        secrets_yaml::write_plain(&self.path(secrets_yaml::PLAIN_FILE), &tree)?;
+        for name in [secrets_yaml::SOPS_FILE, IDENTITY_FILE, SOPS_CONFIG] {
             let _ = fs::remove_file(self.path(name));
         }
         self.git_add(&[
-            secrets::PLAIN_FILE,
-            secrets::SOPS_FILE,
+            secrets_yaml::PLAIN_FILE,
+            secrets_yaml::SOPS_FILE,
             IDENTITY_FILE,
             SOPS_CONFIG,
         ])?;
@@ -417,8 +418,8 @@ impl Store {
             self.write_atomic(IDENTITY_FILE, &text)?;
         }
         self.write_atomic(SOPS_CONFIG, &sops_config(&host, &admins))?;
-        self.write_atomic(secrets::SOPS_FILE, &encrypted)?;
-        self.git_add(&[secrets::SOPS_FILE, IDENTITY_FILE, SOPS_CONFIG])?;
+        self.write_atomic(secrets_yaml::SOPS_FILE, &encrypted)?;
+        self.git_add(&[secrets_yaml::SOPS_FILE, IDENTITY_FILE, SOPS_CONFIG])?;
         Ok(recipients.len())
     }
 
@@ -436,17 +437,17 @@ impl Store {
         };
         // Dry run on the key structure (readable without decrypting): no new
         // value and nothing cleared → no sudo, no re-encryption.
-        let keys_before = secrets::read_plain(&sops)?;
+        let keys_before = secrets_yaml::read_plain(&sops)?;
         let mut keys = keys_before.clone();
         let mut probe = doc.clone();
-        let split = secrets::split_into(&mut probe, &mut keys, patterns, scope);
+        let split = secrets_yaml::split_into(&mut probe, &mut keys, patterns, scope);
         if split.moved.is_empty() && prune_tree(&keys) == prune_tree(&keys_before) {
             *doc = probe;
             return Ok(false);
         }
         let mut tree = decrypt(&sops)?;
         let before = tree.clone();
-        secrets::split_into(doc, &mut tree, patterns, scope);
+        secrets_yaml::split_into(doc, &mut tree, patterns, scope);
         if prune_tree(&tree) == prune_tree(&before) {
             return Ok(false);
         }
@@ -455,7 +456,7 @@ impl Store {
         let mut recipients = vec![host];
         recipients.extend(admins);
         let encrypted = encrypt(&prune_tree(&tree), &recipients)?;
-        self.write_atomic(secrets::SOPS_FILE, &encrypted)?;
+        self.write_atomic(secrets_yaml::SOPS_FILE, &encrypted)?;
         Ok(true)
     }
 }

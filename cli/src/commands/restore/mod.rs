@@ -17,8 +17,8 @@ use std::path::{Path, PathBuf};
 use toml_edit::DocumentMut;
 
 use crate::utils::fsutil::write_private;
-use crate::utils::secrets::{self, Node, Tree};
 use crate::utils::secrets_store::{decrypt_with_key, IDENTITY_FILE};
+use crate::utils::secrets_yaml::{self, Node, Tree};
 use crate::utils::settings::{item_at, recorded_host_key};
 
 pub(crate) mod local;
@@ -155,10 +155,12 @@ pub(crate) fn access_tokens(
             }
         }
     }
-    let tree = if repo.join(secrets::SOPS_FILE).exists() {
-        Some(decrypt_with_key(&repo.join(secrets::SOPS_FILE), key)?)
-    } else if repo.join(secrets::PLAIN_FILE).exists() {
-        Some(secrets::read_plain(&repo.join(secrets::PLAIN_FILE))?)
+    let tree = if repo.join(secrets_yaml::SOPS_FILE).exists() {
+        Some(decrypt_with_key(&repo.join(secrets_yaml::SOPS_FILE), key)?)
+    } else if repo.join(secrets_yaml::PLAIN_FILE).exists() {
+        Some(secrets_yaml::read_plain(
+            &repo.join(secrets_yaml::PLAIN_FILE),
+        )?)
     } else {
         None
     };
@@ -189,11 +191,11 @@ pub(crate) fn restore_identity(
 ) -> Result<bool> {
     let escrow = repo.join(IDENTITY_FILE);
     if !escrow.exists() {
-        if repo.join(secrets::SOPS_FILE).exists() {
+        if repo.join(secrets_yaml::SOPS_FILE).exists() {
             bail!(
                 "{} is encrypted but {IDENTITY_FILE} is missing: a new host key could not decrypt it. \
                  Decrypt and re-encrypt from a checkout first (`neo secrets disable` / `enable`).",
-                secrets::SOPS_FILE
+                secrets_yaml::SOPS_FILE
             );
         }
         return Ok(false);
@@ -231,7 +233,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("neo-restore-test-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         fs::write(
-            dir.join(secrets::PLAIN_FILE),
+            dir.join(secrets_yaml::PLAIN_FILE),
             "core:\n  git:\n    tokens:\n      github.com: \"pat\"\n",
         )
         .unwrap();

@@ -21,7 +21,7 @@
       # Placeholder of an encrypted secret: from Nix, masked and resolved in Rust.
       "@NEO_SECRET:" = [
         ../lib/secrets.nix
-        ../../cli/src/utils/secrets.rs
+        ../../cli/src/utils/secrets_yaml.rs
       ];
       # Marks setup units; the web UI's extract cannot reach lib.neo.
       "X-Neo-Setup" = [

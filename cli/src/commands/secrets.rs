@@ -13,8 +13,8 @@ use std::fs;
 use crate::commands::web::nix::registry::{EXTRACT_LIB, EXTRACT_SECRET_PATHS};
 use crate::utils::command::{nix_command, output_checked};
 use crate::utils::fsutil::TempDir;
-use crate::utils::secrets::{self, Backend};
 use crate::utils::secrets_store::{Store, IDENTITY_FILE};
+use crate::utils::secrets_yaml::{self, Backend};
 
 /// Secret option paths of the config flake at `config_path` ("*" = any attrsOf key).
 pub fn secret_paths(config_path: &str, nix_cmd: &str) -> Result<Vec<Vec<String>>> {
@@ -53,13 +53,13 @@ pub fn split(config_path: &str, dry_run: bool, nix_cmd: &str) -> Result<()> {
     if dry_run {
         println!(
             "DRY-RUN: would move secret settings into {}",
-            secrets::PLAIN_FILE
+            secrets_yaml::PLAIN_FILE
         );
         return Ok(());
     }
     let moved = store.split(&patterns)?;
     for p in &moved {
-        println!("  {} → {}", p.join("."), secrets::PLAIN_FILE);
+        println!("  {} → {}", p.join("."), secrets_yaml::PLAIN_FILE);
     }
     if moved.is_empty() {
         println!("No secret settings left in settings.toml");
@@ -73,7 +73,10 @@ pub fn enable(config_path: &str, dry_run: bool, nix_cmd: &str) -> Result<()> {
     let store = Store::new(config_path);
     let patterns = secret_paths(config_path, nix_cmd)?;
     if dry_run {
-        println!("DRY-RUN: would encrypt secrets into {}", secrets::SOPS_FILE);
+        println!(
+            "DRY-RUN: would encrypt secrets into {}",
+            secrets_yaml::SOPS_FILE
+        );
         return Ok(());
     }
     let r = store.enable(&patterns)?;
@@ -81,7 +84,7 @@ pub fn enable(config_path: &str, dry_run: bool, nix_cmd: &str) -> Result<()> {
         "Encrypted {} secret(s) for {} recipient(s) into {}",
         r.values,
         r.recipients,
-        secrets::SOPS_FILE
+        secrets_yaml::SOPS_FILE
     );
     if r.escrowed {
         println!("Host key escrowed for the admins in {IDENTITY_FILE}");
@@ -96,22 +99,22 @@ pub fn disable(config_path: &str, dry_run: bool) -> Result<()> {
     if dry_run {
         println!(
             "DRY-RUN: would decrypt {} into {}",
-            secrets::SOPS_FILE,
-            secrets::PLAIN_FILE
+            secrets_yaml::SOPS_FILE,
+            secrets_yaml::PLAIN_FILE
         );
         return Ok(());
     }
     let n = Store::new(config_path).disable()?;
     println!(
         "Decrypted {n} secret(s) into {}; activate to apply",
-        secrets::PLAIN_FILE
+        secrets_yaml::PLAIN_FILE
     );
     Ok(())
 }
 
 pub fn rekey(config_path: &str, dry_run: bool) -> Result<()> {
     if dry_run {
-        println!("DRY-RUN: would re-encrypt {}", secrets::SOPS_FILE);
+        println!("DRY-RUN: would re-encrypt {}", secrets_yaml::SOPS_FILE);
         return Ok(());
     }
     let n = Store::new(config_path).rekey()?;
