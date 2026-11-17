@@ -186,6 +186,35 @@ enum GenerationAction {
     Boot { n: u64 },
 }
 
+/// Variables the CLI reads outside clap that the `sudo -u homeserver`
+/// re-exec must keep.
+const PRESERVED_ENV_EXTRA: &[&str] = &[
+    "NEO_GENSWITCH_SUFFIX",
+    "TEMPLATE_DIR",
+    "STATIC_DIR",
+    "DEFAULT_SETTINGS_PATH",
+];
+
+/// Every `env = …` of the CLI's arguments (all subcommands) plus
+/// [`PRESERVED_ENV_EXTRA`], sorted, for `sudo --preserve-env`.
+fn preserved_env() -> Vec<String> {
+    fn walk(cmd: &clap::Command, out: &mut Vec<String>) {
+        for arg in cmd.get_arguments() {
+            if let Some(var) = arg.get_env() {
+                out.push(var.to_string_lossy().into_owned());
+            }
+        }
+        for sub in cmd.get_subcommands() {
+            walk(sub, out);
+        }
+    }
+    let mut out: Vec<String> = PRESERVED_ENV_EXTRA.iter().map(|s| s.to_string()).collect();
+    walk(&Cli::command(), &mut out);
+    out.sort();
+    out.dedup();
+    out
+}
+
 fn main() {
     let cli = Cli::parse();
     // Rust ignores SIGPIPE, so `println!` panics once a pipe reader such as
@@ -244,9 +273,7 @@ fn run(cli: Cli) -> Result<()> {
             Command::new(sudo_bin)
                 .arg("-u")
                 .arg("homeserver")
-                .arg(
-                    "--preserve-env=NEO_NEO_INPUT,NEO_TEMPLATE,NEO_REMOTE_URL,NIX_BINARY_PATH,SUDO_BINARY_PATH,NEO_ACTIVATION_SUFFIX,NEO_ACTIVATION_MODE,NEO_UPDATE_SUFFIX,NEO_GENSWITCH_SUFFIX,NEO_LOCK_WAIT,NEO_SECTION,NEO_PROFILE,TEMPLATE_DIR,STATIC_DIR,DEFAULT_SETTINGS_PATH",
-                )
+                .arg(format!("--preserve-env={}", preserved_env().join(",")))
                 .args(env::args()),
         )?;
         return Ok(());
@@ -489,4 +516,94 @@ fn init_skippable_while_system_locked(err: &LockError, config_path: &str) -> boo
     }
     let p = std::path::Path::new(config_path);
     p.join(".git").is_dir() && p.join("flake.nix").is_file()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Commands {
+        let argv = std::iter::once("neo").chain(args.iter().copied());
+        Cli::try_parse_from(argv)
+            .unwrap_or_else(|e| panic!("{args:?}: {e}"))
+            .command
+            .unwrap_or_else(|| panic!("{args:?}: no subcommand"))
+    }
+
+    #[test]
+    fn preserve_env_covers_every_clap_env() {
+        let vars = preserved_env();
+        for var in [
+            "NEO_NEO_INPUT",
+            "NEO_TEMPLATE",
+            "NEO_REMOTE_URL",
+            "NIX_BINARY_PATH",
+            "SUDO_BINARY_PATH",
+            "NEO_ACTIVATION_SUFFIX",
+            "NEO_ACTIVATION_MODE",
+            "NEO_UPDATE_SUFFIX",
+            "NEO_GENSWITCH_SUFFIX",
+            "NEO_LOCK_WAIT",
+            "NEO_SECTION",
+            "NEO_PROFILE",
+            "TEMPLATE_DIR",
+            "STATIC_DIR",
+            "DEFAULT_SETTINGS_PATH",
+        ] {
+            assert!(vars.iter().any(|v| v == var), "{var} missing from {vars:?}");
+        }
+        assert!(vars.iter().all(|v| !v.is_empty() && !v.contains(',')));
+    }
+
+    #[test]
+    fn mutating_commands_take_a_lock() {
+        let locked: &[&[&str]] = &[
+            &["generate-hardware"],
+            &["paste-settings"],
+            &["init"],
+            &["update-inputs"],
+            &["migrate"],
+            &["build"],
+            &["activate"],
+            &["activate", "--mode", "boot"],
+            &["update"],
+            &["nuke"],
+            &["docker-update", "jellyfin"],
+            &["generation", "switch", "3"],
+            &["generation", "boot", "3"],
+            &["secrets", "split"],
+            &["secrets", "enable"],
+            &["secrets", "disable"],
+            &["secrets", "rekey"],
+        ];
+        for args in locked {
+            assert!(
+                command_lock(&parse(args)).is_some(),
+                "{args:?} takes no lock"
+            );
+        }
+        // Long-lived, interactive or read-only; restore and backup lock inside.
+        let unlocked: &[&[&str]] = &[
+            &["web"],
+            &["edit"],
+            &["git"],
+            &["lg"],
+            &["generation"],
+            &["generation", "list"],
+        ];
+        for args in unlocked {
+            assert!(
+                command_lock(&parse(args)).is_none(),
+                "{args:?} takes a lock"
+            );
+        }
+    }
+
+    #[test]
+    fn docker_update_locks_the_unit_either_way() {
+        for name in ["jellyfin", "docker-jellyfin"] {
+            let (_, info, _) = command_lock(&parse(&["docker-update", name])).unwrap();
+            assert_eq!(info.label, "Image update of docker-jellyfin");
+        }
+    }
 }
