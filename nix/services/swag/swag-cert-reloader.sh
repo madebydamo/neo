@@ -1,28 +1,27 @@
-#!/usr/bin/env bash
-#
-# SWAG certificate reloader.
+# SWAG certificate reloader (writeShellApplication in default.nix).
 # Periodically checks mtime of fullchain.pem symlinks under the live/ directory
 # (handles per-domain subdirs created by certbot/SWAG) and reloads nginx inside
 # the SWAG container when updates are detected. Robust to live/ and subdomain
 # dir creation/deletion during initial issuance or re-issuance.
+#
+# Env (set by default.nix):
+#   WATCH_DIR       letsencrypt live/ folder in SWAG's appdata
+#   CONTAINER_NAME  the SWAG container
 
-set -uo pipefail
-
-: "${WATCH_DIR:=/var/neo/DATA/AppData/swag/etc/letsencrypt/live}"
-: "${CONTAINER_NAME:=swag}"
-: "${NGINX_RELOAD_CMD:=nginx -c /config/nginx/nginx.conf -s reload}"
+nginx_reload=(nginx -c /config/nginx/nginx.conf -s reload)
 
 log() { echo "$(date '+%F %T') [swag-cert] $*"; }
 
 get_latest_mtime() {
   local m
-  m=$(find "$WATCH_DIR" -name fullchain.pem -exec stat -c %Y {} + 2>/dev/null | sort -rn | head -1)
+  # The folder may vanish while certbot works.
+  m=$(find "$WATCH_DIR" -name fullchain.pem -exec stat -c %Y {} + 2>/dev/null | sort -rn | head -1) || true
   echo "${m:-0}"
 }
 
 reload_nginx() {
   log "Triggering nginx reload in container '$CONTAINER_NAME'..."
-  if docker exec "$CONTAINER_NAME" $NGINX_RELOAD_CMD; then
+  if docker exec "$CONTAINER_NAME" "${nginx_reload[@]}"; then
     log "nginx reload successful"
   else
     log "ERROR: nginx reload failed (container may not be running or nginx config error)"

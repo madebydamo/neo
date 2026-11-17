@@ -341,23 +341,25 @@
             wantedBy = ["multi-user.target"];
             after = ["docker.service" "docker-swag.service"];
             wants = ["docker-swag.service"];
-            path = [pkgs.docker];
             serviceConfig = {
               Type = "simple";
               Restart = "always";
               RestartSec = "10";
+              ExecStart = getExe (pkgs.writeShellApplication {
+                name = "swag-cert-reloader";
+                runtimeInputs = [pkgs.docker pkgs.coreutils pkgs.findutils];
+                runtimeEnv = {
+                  WATCH_DIR = "${cfg.appdata}/etc/letsencrypt/live";
+                  CONTAINER_NAME = "swag";
+                };
+                text = builtins.readFile ./swag-cert-reloader.sh;
+              });
             };
-            script = ''
-              WATCH_DIR="${cfg.appdata}/etc/letsencrypt/live"
-              CONTAINER_NAME="swag"
-              NGINX_RELOAD_CMD="nginx -c /config/nginx/nginx.conf -s reload"
-              ${builtins.readFile ./swag-cert-reloader.sh}
-            '';
           };
 
-          # Non-blocking setup (lib.neo.mkSetupService): the patcher waits for
-          # SWAG to write nginx.conf, and a oneshot would hold
-          # switch-to-configuration for that whole wait.
+          # Non-blocking setup (lib.neo.mkSetupService): the patcher fails until
+          # SWAG wrote nginx.conf and proxy.conf and is retried every 5 s, and a
+          # oneshot would hold switch-to-configuration for that whole wait.
           systemd.services."swag-patcher" = lib.neo.mkSetupService {
             inherit pkgs;
             name = "swag-patcher";
@@ -366,16 +368,19 @@
             # Re-run when SWAG restarts: preStart deletes nginx.conf, so a
             # patch that already succeeded would never inject dbip again.
             partOf = ["docker-swag.service"];
-            path = [pkgs.docker];
             retryInterval = 5;
-            script = ''
-              APPDATA="${cfg.appdata}"
-              NEO_UID="${toString config.neo.core.uid}"
-              NEO_GID="${toString config.neo.core.gid}"
-              NEO_SUPPORT=${lib.boolToString ((config.neo.services.neo.iframeCookieSupport) && (config.neo.services.neo.enabled))}
-              DASHBOARD_SUBDOMAIN="${cfg.subdomain}"
-              ${builtins.readFile ./swag-patcher.sh}
-            '';
+            script = getExe (pkgs.writeShellApplication {
+              name = "swag-patcher";
+              runtimeInputs = [pkgs.docker pkgs.coreutils pkgs.gnugrep pkgs.gnused];
+              runtimeEnv = {
+                APPDATA = cfg.appdata;
+                NEO_UID = toString config.neo.core.uid;
+                NEO_GID = toString config.neo.core.gid;
+                NEO_SUPPORT = lib.boolToString (config.neo.services.neo.iframeCookieSupport && config.neo.services.neo.enabled);
+                DASHBOARD_SUBDOMAIN = cfg.subdomain;
+              };
+              text = builtins.readFile ./swag-patcher.sh;
+            });
           };
         };
     };

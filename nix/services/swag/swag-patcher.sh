@@ -1,32 +1,22 @@
-#!/usr/bin/env bash
 # SWAG post-start patches (conf.d / dbip includes, iframe proxy.conf, dashboard conf cleanup).
-set -uo pipefail
-
-: "${APPDATA:=/var/neo/DATA/AppData/swag}"
-: "${NEO_UID:=1000}"
-: "${NEO_GID:=1000}"
-: "${NEO_SUPPORT:=false}"
-: "${DASHBOARD_SUBDOMAIN:=swag}"
+# One attempt of the swag-patcher setup unit (default.nix), which runs it
+# again every few seconds until it succeeds.
+#
+# Env (set by default.nix):
+#   APPDATA              SWAG's appdata
+#   NEO_UID / NEO_GID    owner of proxy.conf
+#   NEO_SUPPORT          true: let apps be shown in frames (iframe support)
+#   DASHBOARD_SUBDOMAIN  SWAG's own subdomain
 
 NGINX_CONF="$APPDATA/nginx/nginx.conf"
 echo "=== Patching nginx.conf ==="
 
 # SWAG copies nginx.conf from the image after the container is already
 # "started". Patching too early is a silent no-op (the setup unit then stays
-# done), so $lan-ip from dbip.conf never exists. Wait for the insertion point.
-nginx_conf_ready() {
-  [ -f "$NGINX_CONF" ] && grep -qE 'include[[:space:]]+/config/nginx/resolver\.conf;' "$NGINX_CONF"
-}
-
-for i in $(seq 1 180); do
-  if nginx_conf_ready; then
-    break
-  fi
-  sleep 1
-done
-
-if ! nginx_conf_ready; then
-  echo "⚠ nginx.conf not ready after waiting (no resolver.conf include)" >&2
+# done), so $lan-ip from dbip.conf never exists. Fail until the insertion
+# point is there; the setup unit tries again.
+if ! { [ -f "$NGINX_CONF" ] && grep -qE 'include[[:space:]]+/config/nginx/resolver\.conf;' "$NGINX_CONF"; }; then
+  echo "⚠ nginx.conf not ready yet (no resolver.conf include)" >&2
   exit 1
 fi
 
@@ -52,35 +42,29 @@ fi
 PROXY_CONF="$APPDATA/nginx/proxy.conf"
 echo "=== Patching proxy.conf ==="
 
-for i in $(seq 1 120); do
-  if [ -f "$PROXY_CONF" ]; then
-    break
-  fi
-  sleep 1
-done
-
+# SWAG writes it next to nginx.conf; fail until it is there (the unit retries).
 if [ ! -f "$PROXY_CONF" ]; then
-  echo "⚠ proxy.conf not found after waiting"
-else
-  touch "$PROXY_CONF"
-  chown "$NEO_UID":"$NEO_GID" "$PROXY_CONF" || true
-  chmod 0664 "$PROXY_CONF" || true
+  echo "⚠ proxy.conf not there yet" >&2
+  exit 1
+fi
+touch "$PROXY_CONF"
+chown "$NEO_UID":"$NEO_GID" "$PROXY_CONF" || true
+chmod 0664 "$PROXY_CONF" || true
 
-  MARKER="# neo-iframe-embed-support"
+MARKER="# neo-iframe-embed-support"
 
-  if $NEO_SUPPORT; then
-    if ! grep -q "$MARKER" "$PROXY_CONF"; then
-      printf '%s\n' "$MARKER" "proxy_hide_header X-Frame-Options;" "proxy_hide_header Content-Security-Policy;" >> "$PROXY_CONF"
-      echo "→ Added iframe/embed headers"
-    else
-      echo "→ iframe/embed support already present"
-    fi
+if [ "$NEO_SUPPORT" = true ]; then
+  if ! grep -q "$MARKER" "$PROXY_CONF"; then
+    printf '%s\n' "$MARKER" "proxy_hide_header X-Frame-Options;" "proxy_hide_header Content-Security-Policy;" >>"$PROXY_CONF"
+    echo "→ Added iframe/embed headers"
   else
-    sed -i "/$MARKER/d" "$PROXY_CONF" || true
-    sed -i '/proxy_hide_header X-Frame-Options/d' "$PROXY_CONF" || true
-    sed -i '/proxy_hide_header Content-Security-Policy/d' "$PROXY_CONF" || true
-    echo "→ Removed iframe/embed headers"
+    echo "→ iframe/embed support already present"
   fi
+else
+  sed -i "/$MARKER/d" "$PROXY_CONF" || true
+  sed -i '/proxy_hide_header X-Frame-Options/d' "$PROXY_CONF" || true
+  sed -i '/proxy_hide_header Content-Security-Policy/d' "$PROXY_CONF" || true
+  echo "→ Removed iframe/embed headers"
 fi
 
 echo "=== Cleaning mod-default dashboard vhost ==="
