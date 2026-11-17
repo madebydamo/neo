@@ -11,7 +11,7 @@ use super::{insert_dotted, json_to_toml_item, json_to_toml_value};
 use crate::commands::web::locks::Blocked;
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::proc;
-use crate::utils::{secrets, sort_document_alphabetically};
+use crate::utils::{secrets, settings};
 
 /// Why a settings write did not happen: 409 from the settings lock, else a status
 /// and plain-text reason, which the form and the proposal card show as they are.
@@ -57,28 +57,24 @@ impl<'r> Responder<'r, 'static> for SaveError {
     }
 }
 
+/// settings.toml as a document; a missing or empty file is an empty one. The
+/// errors never quote the file (a TOML parse error shows the line).
 pub fn load_settings_doc(path: &Path) -> Result<DocumentMut, SaveError> {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    let content = if path.exists() {
-        fs::read_to_string(path).map_err(|e| SaveError::internal(format!("read settings: {e}")))?
-    } else {
-        String::new()
-    };
-    if content.trim().is_empty() {
-        Ok(DocumentMut::new())
-    } else {
-        content
-            .parse()
-            .map_err(|_| SaveError::internal("settings.toml is not valid TOML"))
+    if !path.exists() {
+        return Ok(DocumentMut::new());
     }
+    settings::load(path).map_err(|e| match e.downcast_ref::<std::io::Error>() {
+        Some(io) => SaveError::internal(format!("read settings: {io}")),
+        None => SaveError::internal("settings.toml is not valid TOML"),
+    })
 }
 
+/// Write settings.toml sorted and atomically ([`settings::save`]).
 pub fn write_settings_doc(path: &Path, doc: &mut DocumentMut) -> Result<(), SaveError> {
-    sort_document_alphabetically(doc);
-    fs::write(path, doc.to_string())
-        .map_err(|e| SaveError::internal(format!("write settings: {e}")))
+    settings::save(path, doc).map_err(|e| SaveError::internal(format!("write settings: {e:#}")))
 }
 
 /// Apply a JSON object payload into a TOML table (supports dotted leaf keys).
@@ -191,4 +187,34 @@ pub async fn finish_save(
     })?;
     refresh_after_settings_change(config);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::fsutil::TempDir;
+
+    #[test]
+    fn settings_doc_round_trip() {
+        let dir = TempDir::new("neo-web-settings-save-test").unwrap();
+        let path = dir.join("settings.toml");
+        // Missing and empty files are empty documents.
+        assert!(load_settings_doc(&path).unwrap().is_empty());
+        fs::write(&path, " \n").unwrap();
+        assert!(load_settings_doc(&path).unwrap().is_empty());
+        let mut doc: DocumentMut = "[services.b]\nx = 1\n[services.a]\ny = \"secret\"\n"
+            .parse()
+            .unwrap();
+        write_settings_doc(&path, &mut doc).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(
+            text.find("[services.a]") < text.find("[services.b]"),
+            "{text}"
+        );
+        assert_eq!(load_settings_doc(&path).unwrap().to_string(), text);
+        // A parse error never quotes the file.
+        fs::write(&path, "y = \"secret").unwrap();
+        let e = load_settings_doc(&path).unwrap_err();
+        assert_eq!(e.message(), "settings.toml is not valid TOML");
+    }
 }
