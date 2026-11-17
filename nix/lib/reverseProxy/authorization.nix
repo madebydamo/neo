@@ -4,7 +4,10 @@
 #   TINYAUTH_REGEX = r"\n\s+include \/config\/nginx\/tinyauth-location\.conf;.*"
 # authBlock  → location-level include (tinyauth-location.conf)
 # authLocations → server-level include (tinyauth-server.conf)
-{lib, ...}: {
+{lib, ...}: let
+  inherit ((import ./geo.nix {inherit lib;}).libExtensions.geo.neo) geoAccessInclude;
+  inherit ((import ./listen.nix {inherit lib;}).libExtensions.listen.neo) httpsListenInclude;
+in {
   libExtensions.authorization = {
     neo = rec {
       # Location-block snippet. Leading "\n  " is required for the dashboard regex.
@@ -119,12 +122,12 @@
         body,
       }:
         "server {\n"
-        + "  include /config/nginx/listen-https.conf;\n"
+        + httpsListenInclude
         + "  http2 on;\n"
         + "  server_name ${cfg.subdomain}.*;\n"
         + "  include /config/nginx/ssl.conf;\n"
         + lib.optionalString (maxBodySize != null) "\n  client_max_body_size ${maxBodySize};\n"
-        + lib.optionalString geo "  include /config/nginx/geo-access.conf;\n"
+        + lib.optionalString geo geoAccessInclude
         + extra
         + "\n"
         + body

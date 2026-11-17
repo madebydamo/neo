@@ -50,19 +50,12 @@
       else ''| json lvl="level" | lvl=~"(?i)(error|critical|fatal)"''
     );
 
-  red = {
-    mode = "absolute";
-    steps = [
-      {
-        color = "green";
-        value = null;
-      }
-      {
-        color = "red";
-        value = 1;
-      }
-    ];
-  };
+  red = g.thresholdsGreenRed [
+    {
+      color = "red";
+      value = 1;
+    }
+  ];
 in {
   libExtensions.appTelemetry.neo = {
     grafana.app = {

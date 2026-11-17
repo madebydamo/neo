@@ -2,6 +2,7 @@
 # Parallel to reverse-proxy: skills.nix sets skill.conf; hermes materializes SKILL.md trees.
 {lib, ...}: let
   neoUi = (import ./ui.nix {inherit lib;}).libExtensions.ui.neo.ui;
+  inherit ((import ./reverseProxy/reverseProxy.nix {inherit lib;}).libExtensions.reverseProxy.neo) publicUrl;
 in {
   libExtensions.skills = {
     neo = rec {
@@ -91,13 +92,16 @@ in {
             && (v.skill.conf or null) != null
         ) (config.neo.services or {});
 
+      # lib.neo.publicUrl, or a note for the skill text when it is unknown.
       skillPublicUrl = {
         subdomain,
         domain,
-      }:
-        if domain != null && domain != "" && subdomain != null
-        then "https://${subdomain}.${domain}"
-        else if subdomain != null
+      }: let
+        url = publicUrl {neo.services.swag = {inherit domain;};} {inherit subdomain;};
+      in
+        if url != null
+        then url
+        else if subdomain != null && subdomain != ""
         then "(set services.swag.domain; subdomain=${subdomain})"
         else "n/a (no subdomain)";
 
