@@ -17,7 +17,7 @@ use std::sync::Mutex;
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
-use super::model::NotesView;
+use super::view::NotesView;
 use crate::commands::web::util::{state_dir, state_file};
 use crate::commands::web::zfs::sanitize_comment;
 

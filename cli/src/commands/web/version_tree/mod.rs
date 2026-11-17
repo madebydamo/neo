@@ -6,15 +6,18 @@
 //! inputs from git and the system profile.
 mod changes;
 mod lanes;
-mod model;
+mod lineage;
+mod links;
 pub mod notes;
+mod rows;
+mod view;
 
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-pub use model::TreeView;
-use model::{build_tree, CommitIn, GenIn, TreeInput};
+pub use view::TreeView;
+use view::{build_tree, CommitIn, GenIn, TreeInput};
 
 use super::git::{activation_tips, git_stdout, is_worktree_dirty};
 use crate::utils::command::mtime_secs;
