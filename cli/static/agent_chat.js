@@ -1250,7 +1250,7 @@
     paintHeader();
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
+  root.NeoUtil.onReady(document, function () {
     var form = el('neo-agent-form');
     if (!form) return;
     var input = el('neo-agent-input');

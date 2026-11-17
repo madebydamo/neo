@@ -8,13 +8,13 @@
 // 401 after the server was gone (edge auth lost the session) reloads too, which then
 // leads to the login page.
 (function (root, factory) {
-  var api = factory();
+  var api = factory((root && root.NeoUtil) || require('./neo_util.js'));
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) {
     root.NeoRebootWatch = api;
     api.autostart(root);
   }
-})(typeof window !== 'undefined' ? window : null, function () {
+})(typeof window !== 'undefined' ? window : null, function (NeoUtil) {
   'use strict';
 
   var INTERVAL_MS = 3000;
@@ -130,8 +130,7 @@
           if (doc.body) mo.observe(doc.body, { childList: true, subtree: true });
           scan(win);
         };
-        if (doc.body) start();
-        else doc.addEventListener('DOMContentLoaded', start);
+        NeoUtil.onReady(doc, start);
       }
     },
   };

@@ -172,8 +172,7 @@
         var start = function () {
           if (doc.body) mo.observe(doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-locks'] });
         };
-        if (doc.body) start();
-        else doc.addEventListener('DOMContentLoaded', start);
+        NeoUtil.onReady(doc, start);
       }
     },
   };

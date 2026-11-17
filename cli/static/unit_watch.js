@@ -64,7 +64,7 @@
   });
 
   // If the option pane was already present when the script ran (unlikely), sync once.
-  document.addEventListener('DOMContentLoaded', function () {
+  NeoUtil.onReady(document, function () {
     neoSyncWatchedUnits(document.getElementById('config-content'));
   });
 })();

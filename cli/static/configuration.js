@@ -319,7 +319,7 @@ window.configShell = function configShell() {
   });
 
   // Deep links with ?focus= (guide option: links) on a full page load.
-  document.addEventListener('DOMContentLoaded', function () {
+  NeoUtil.onReady(document, function () {
     setTimeout(function () {
       var pane = document.getElementById('options-pane');
       if (pane) focusOptionFromUrl(pane);
@@ -470,7 +470,7 @@ window.configShell = function configShell() {
   });
 
   // Only on full page load: reopen the op monitor that was running before a reload.
-  document.addEventListener('DOMContentLoaded', function () {
+  NeoUtil.onReady(document, function () {
     if (window.NeoOpMonitor) window.NeoOpMonitor.resume(window);
     updateStickyBarsFuse();
   });
