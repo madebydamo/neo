@@ -51,7 +51,9 @@
             # As root, before the sandbox needs appdata: Clear appdata removes it
             # (tmpfiles only creates it at boot and switch).
             ExecStartPre = ["+${pkgs.coreutils}/bin/install -d -m 0755 -o homeserver -g homeserver ${appdata}"];
-            ReadWritePaths = [appdata];
+            # "-": a missing appdata (after Clear appdata) must not fail the
+            # namespace setup before ExecStartPre has recreated it.
+            ReadWritePaths = ["-${appdata}"];
           };
         }
       ]);

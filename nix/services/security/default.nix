@@ -236,7 +236,8 @@
             NoNewPrivileges = true;
             # decisions.json (Not relevant here / Review again); the scan
             # only reads it. report.json and verdicts.json stay the scan's.
-            ReadWritePaths = [appdata requestDir];
+            # "-": appdata may be missing (Clear appdata) until ExecStartPre recreates it.
+            ReadWritePaths = ["-${appdata}" requestDir];
           };
           # systemctl is-active neo-security-scan for the page's check state.
           path = [pkgs.systemd];

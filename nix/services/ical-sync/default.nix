@@ -199,7 +199,9 @@
             ];
             # The module sets these only for its DynamicUser.
             ProtectHome = true;
-            ReadWritePaths = [appdata];
+            # "-": a missing appdata (after Clear appdata) must not fail the
+            # namespace setup before ExecStartPre has recreated it.
+            ReadWritePaths = ["-${appdata}"];
           };
         };
       };
