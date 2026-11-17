@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseSse, proposalIds, toolLabel } = require('./agent_chat_core.js');
+const core = require('./agent_chat_core.js');
+const { parseSse, proposalIds, toolLabel } = core;
 
 test('parseSse splits complete frames and keeps the rest', () => {
   const buf =
@@ -267,4 +268,141 @@ test('parseSavedRun accepts only well-formed saved turns', () => {
   const noRun = parseSavedRun(JSON.stringify({ session_id: 'neo-x' }));
   assert.equal(noRun.run_id, null);
   assert.equal(noRun.title, 'Assistant');
+});
+
+test('headerState: approval first, then working, then unread', () => {
+  const { headerState, HEADER_LABEL } = core;
+  assert.equal(headerState('waiting', true), 'waiting');
+  assert.equal(headerState('working', true), 'working');
+  assert.equal(headerState('stopping', false), 'working');
+  assert.equal(headerState('idle', true), 'unread');
+  assert.equal(headerState('idle', false), '');
+  for (const st of ['waiting', 'working', 'unread', '']) assert.ok(HEADER_LABEL[st]);
+});
+
+test('persistedState keeps a running turn and an unread reply only with a session', () => {
+  const { persistedState } = core;
+  const base = { session: 'neo-general-1', run: 'run_ab', context: 'general', title: 'T', started: 7, unread: false };
+  assert.deepEqual(persistedState({ ...base, phase: 'working' }).run, {
+    session_id: 'neo-general-1', run_id: 'run_ab', context: 'general', title: 'T', started: 7,
+  });
+  assert.equal(persistedState({ ...base, phase: 'idle' }).run, null);
+  assert.equal(persistedState({ ...base, phase: 'working', run: null }).run, null);
+  assert.equal(persistedState({ ...base, phase: 'idle' }).unread, null);
+  assert.deepEqual(persistedState({ ...base, phase: 'idle', unread: true }).unread, {
+    session_id: 'neo-general-1', context: 'general', title: 'T',
+  });
+  assert.equal(persistedState({ ...base, phase: 'idle', unread: true, session: null }).unread, null);
+});
+
+test('polledPhase waits while a prompt is open or Hermes says so', () => {
+  assert.equal(core.polledPhase(true, 'running'), 'waiting');
+  assert.equal(core.polledPhase(false, 'waiting_for_approval'), 'waiting');
+  assert.equal(core.polledPhase(false, 'running'), 'working');
+});
+
+test('approvalExpires only with a positive timeout', () => {
+  assert.equal(core.approvalExpires(30, 1000), 31000);
+  assert.equal(core.approvalExpires(0, 1000), null);
+  assert.equal(core.approvalExpires(undefined, 1000), null);
+  assert.equal(core.approvalExpires('30', 1000), null);
+});
+
+test('approvalAnswer echoes the prompt id and generation', () => {
+  assert.deepEqual(core.approvalAnswer({}, 'run_a', 'once'), { run_id: 'run_a', choice: 'once' });
+  assert.deepEqual(
+    core.approvalAnswer({ run_id: 'run_b', request_id: 'r1', execution_generation: 0 }, 'run_a', 'deny'),
+    { run_id: 'run_b', choice: 'deny', request_id: 'r1', execution_generation: 0 },
+  );
+  assert.equal('execution_generation' in core.approvalAnswer({ execution_generation: '2' }, 'run_a', 'once'), false);
+});
+
+test('approvalResult ends the card on success or an ended prompt, else keeps it open', () => {
+  assert.deepEqual(core.approvalResult({ ok: true }, 'deny'), { end: true, text: 'Denied.', cls: '' });
+  assert.deepEqual(core.approvalResult({ ok: true }, 'once'), { end: true, text: 'Allowed. The assistant continues.', cls: 'text-success' });
+  assert.deepEqual(core.approvalResult({ ended: true, error: 'gone' }, 'once'), { end: true, text: 'gone', cls: 'text-warning' });
+  assert.deepEqual(core.approvalResult({}, 'once'), { end: false, text: 'Could not send the answer.', cls: 'text-error' });
+  assert.equal(core.approvalResult({ error: 'busy' }, 'once').text, 'busy');
+});
+
+test('approvalGone: open, idle, known and no longer pending', () => {
+  const a = { open: true, sending: false, id: 'r1' };
+  assert.equal(core.approvalGone(a, ['r2']), true);
+  assert.equal(core.approvalGone(a, ['r1']), false);
+  assert.equal(core.approvalGone({ ...a, sending: true }, []), false);
+  assert.equal(core.approvalGone({ ...a, open: false }, []), false);
+  assert.equal(core.approvalGone({ ...a, id: null }, []), false);
+});
+
+test('toolGroupSummary counts tools and failures', () => {
+  assert.equal(core.toolGroupSummary([{ status: 'done' }]), '✓ Used 1 tool');
+  assert.equal(core.toolGroupSummary([{ status: 'done' }, { status: 'error' }]), '⚠ Used 2 tools (1 failed)');
+});
+
+test('firstRunning finds the earliest running call of a tool', () => {
+  const lines = [
+    { name: 'a', status: 'done' },
+    { name: 'a', status: 'running', n: 1 },
+    { name: 'a', status: 'running', n: 2 },
+    { name: 'b', status: 'running' },
+  ];
+  assert.equal(core.firstRunning(lines, 'a').n, 1);
+  assert.equal(core.firstRunning(lines, 'c'), null);
+});
+
+test('matchToolResults pairs the nth call of a tool with its nth line', () => {
+  const lines = [{ name: 'a' }, { name: 'b', args: { x: 1 } }, { name: 'a' }];
+  core.matchToolResults(lines, [
+    { name: 'a', result: 'r1', args: { q: 1 } },
+    { name: 'b', result: 'rb', args: { x: 2 } },
+    { name: 'a', result: 'r2' },
+  ]);
+  assert.deepEqual(lines, [
+    { name: 'a', result: 'r1', args: { q: 1 } },
+    { name: 'b', result: 'rb', args: { x: 1 } },
+    { name: 'a', result: 'r2' },
+  ]);
+});
+
+test('historyMeta joins label, time and message count; icon by context', () => {
+  const now = 1_700_000_000_000;
+  const m = core.historyMeta({ label: 'Immich', last_active: now / 1000 - 120, message_count: 1, context: 'service:immich' }, now);
+  assert.equal(m.meta, 'Immich · 2 min ago · 1 message');
+  assert.equal(m.icon, '▣');
+  assert.equal(core.historyMeta({ context: 'guide:x', message_count: 3 }, now).meta, '3 messages');
+  assert.equal(core.historyMeta({ context: 'guide:x' }, now).icon, '☰');
+  assert.equal(core.historyMeta({ context: 'general' }, now).icon, '✦');
+});
+
+// The drawer is split over several scripts sharing NeoAgentChat: load them in
+// the template order and check every cross-file call has a definition.
+test('drawer scripts load in template order and define what they call', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const vm = require('vm');
+  const tpl = fs.readFileSync(path.join(__dirname, '../templates/configuration.html.hbs'), 'utf8');
+  const order = [...tpl.matchAll(/\/static\/(agent_chat[a-z_]*\.js)/g)].map((m) => m[1]);
+  assert.deepEqual(order.slice(0, 2), ['agent_chat_core.js', 'agent_chat_refs.js']);
+  assert.equal(order[order.length - 1], 'agent_chat.js');
+  const security = fs.readFileSync(path.join(__dirname, '../templates/security/report.html.hbs'), 'utf8');
+  assert.deepEqual([...security.matchAll(/\/static\/(agent_chat[a-z_]*\.js)/g)].map((m) => m[1]), order);
+  const doc = {
+    readyState: 'loading',
+    getElementById: () => null,
+    addEventListener() {},
+    querySelectorAll: () => [],
+  };
+  const sandbox = { document: doc, setTimeout, clearTimeout, console };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, 'neo_util.js'), 'utf8'), sandbox);
+  const called = new Set();
+  for (const f of order) {
+    const src = fs.readFileSync(path.join(__dirname, f), 'utf8');
+    for (const m of src.matchAll(/\bA\.([A-Za-z_]+)/g)) called.add(m[1]);
+    vm.runInContext(src, sandbox, { filename: f });
+  }
+  for (const name of called) assert.notEqual(sandbox.NeoAgentChat[name], undefined, `NeoAgentChat.${name}`);
+  assert.deepEqual(Object.keys(sandbox.NeoAgent).sort(), ['close', 'history', 'newChat', 'open', 'stop']);
 });

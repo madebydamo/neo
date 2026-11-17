@@ -1,5 +1,6 @@
 // agent_chat_core.js — the assistant chat's logic without DOM access: SSE parsing,
-// @ references, tool rows, time and run formatting. Tested by agent_chat.test.js.
+// @ references, tool rows, time and run formatting, approval answers and the
+// drawer state that survives a reload. Tested by agent_chat.test.js.
 (function (root) {
   'use strict';
 
@@ -411,6 +412,123 @@
     };
   }
 
+  // ---- drawer state (status, header, persistence) ---------------------------
+
+  var HEADER_LABEL = {
+    working: 'Assistant is working…',
+    waiting: 'The assistant is waiting for your approval',
+    unread: 'The assistant has a new reply',
+    '': 'Ask the assistant',
+  };
+
+  /** State of the header Assistant button: 'waiting' | 'working' | 'unread' | ''. */
+  function headerState(phase, unread) {
+    return phase === 'waiting' ? 'waiting' : phase !== 'idle' ? 'working' : unread ? 'unread' : '';
+  }
+
+  /** What survives a reload: the running turn and the unread reply (null = forget). */
+  function persistedState(s) {
+    var busy = s.phase !== 'idle';
+    return {
+      run: busy && s.run && s.session ? {
+        session_id: s.session,
+        run_id: s.run,
+        context: s.context,
+        title: s.title,
+        started: s.started,
+      } : null,
+      unread: s.unread && s.session ? {
+        session_id: s.session,
+        context: s.context,
+        title: s.title,
+      } : null,
+    };
+  }
+
+  /** Phase of a polled turn that is not done. */
+  function polledPhase(anyOpen, status) {
+    return anyOpen || status === 'waiting_for_approval' ? 'waiting' : 'working';
+  }
+
+  // ---- approvals ---------------------------------------------------------------
+
+  var APPROVAL_LABELS = { once: 'Allow once', session: 'Allow for this chat', always: 'Always allow', deny: 'Deny' };
+
+  /** Expiry time (ms) of a prompt with `timeout_s`, or null without one. */
+  function approvalExpires(timeoutS, nowMs) {
+    return typeof timeoutS === 'number' && timeoutS > 0 ? nowMs + timeoutS * 1000 : null;
+  }
+
+  /** Body of /agent/approve: Hermes answers one exact prompt (id + generation). */
+  function approvalAnswer(d, run, choice) {
+    var answer = { run_id: d.run_id || run, choice: choice };
+    if (d.request_id) answer.request_id = d.request_id;
+    if (typeof d.execution_generation === 'number') answer.execution_generation = d.execution_generation;
+    return answer;
+  }
+
+  /**
+   * What an answer did, from the /agent/approve reply `j` ({ok} or the error
+   * JSON): { end: true, text, cls } ends the card, { end: false, … } keeps it open.
+   */
+  function approvalResult(j, choice) {
+    if (j.ok) {
+      return choice === 'deny'
+        ? { end: true, text: 'Denied.', cls: '' }
+        : { end: true, text: 'Allowed. The assistant continues.', cls: 'text-success' };
+    }
+    if (j.ended) return { end: true, text: j.error, cls: 'text-warning' };
+    return { end: false, text: j.error || 'Could not send the answer.', cls: 'text-error' };
+  }
+
+  /** Whether a shown prompt is over because /agent/run no longer lists it. */
+  function approvalGone(a, pendingIds) {
+    return !!(a.open && !a.sending && a.id && pendingIds.indexOf(a.id) < 0);
+  }
+
+  // ---- tool rows -----------------------------------------------------------------
+
+  var TOOL_STATUS_ICON = { running: '…', done: '✓', error: '✗', stopped: '–' };
+
+  /** Collapsed header of a finished tool group ("✓ Used 2 tools"). */
+  function toolGroupSummary(lines) {
+    var failed = lines.filter(function (l) { return l.status === 'error'; }).length;
+    return (failed ? '⚠ ' : '✓ ') + 'Used ' + lines.length + (lines.length === 1 ? ' tool' : ' tools') +
+      (failed ? ' (' + failed + ' failed)' : '');
+  }
+
+  /** The earliest running line of tool `name` (parallel calls finish in any order). */
+  function firstRunning(lines, name) {
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].status === 'running' && lines[i].name === name) return lines[i];
+    }
+    return null;
+  }
+
+  /** Results from the turn transcript into the lines: nth call of a tool ↔ nth line of it. */
+  function matchToolResults(lines, calls) {
+    var used = [];
+    lines.forEach(function (line) {
+      for (var i = 0; i < calls.length; i++) {
+        if (used[i] || calls[i].name !== line.name) continue;
+        used[i] = true;
+        if (calls[i].result !== undefined) line.result = calls[i].result;
+        if (line.args == null && calls[i].args != null) line.args = calls[i].args;
+        break;
+      }
+    });
+  }
+
+  // ---- past chats ------------------------------------------------------------------
+
+  /** Second line and fallback icon of a past chat in the list. */
+  function historyMeta(s, nowMs) {
+    var bits = [s.label, relativeTime(s.last_active, nowMs)];
+    if (s.message_count) bits.push(s.message_count + (s.message_count === 1 ? ' message' : ' messages'));
+    var icon = s.context && s.context.indexOf('guide:') === 0 ? '☰' : s.context === 'general' ? '✦' : '▣';
+    return { meta: bits.filter(Boolean).join(' · '), icon: icon };
+  }
+
   var KIND_LABEL = { service: 'App', option: 'Setting', guide: 'Guide', privacy: 'Privacy', finding: 'Finding' };
 
   var api = {
@@ -422,6 +540,20 @@
     groupSessions: groupSessions,
     outcomeText: outcomeText,
     parseSavedRun: parseSavedRun,
+    HEADER_LABEL: HEADER_LABEL,
+    headerState: headerState,
+    persistedState: persistedState,
+    polledPhase: polledPhase,
+    APPROVAL_LABELS: APPROVAL_LABELS,
+    approvalExpires: approvalExpires,
+    approvalAnswer: approvalAnswer,
+    approvalResult: approvalResult,
+    approvalGone: approvalGone,
+    TOOL_STATUS_ICON: TOOL_STATUS_ICON,
+    toolGroupSummary: toolGroupSummary,
+    firstRunning: firstRunning,
+    matchToolResults: matchToolResults,
+    historyMeta: historyMeta,
     parseSse: parseSse,
     proposalIds: proposalIds,
     toolLabel: toolLabel,

@@ -22,13 +22,13 @@
   </div>
   <div id="neo-agent-log" class="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2.5" aria-live="polite"></div>
   <div id="neo-agent-history" class="hidden flex-1 min-h-0 overflow-y-auto px-3 py-3" aria-label="Past chats"></div>
-  {{!-- Turn status (phase, elapsed time, current tool): agent_chat.js paintStatus(). --}}
+  {{!-- Turn status (phase, elapsed time, current tool): agent_chat_status.js paintStatus(). --}}
   <div id="neo-agent-status" class="neo-agent-status hidden" data-phase="idle">
     <span class="neo-agent-status-icon" aria-hidden="true"></span>
     <span id="neo-agent-status-text" class="min-w-0 flex-1 truncate"></span>
   </div>
   <form id="neo-agent-form" class="relative border-t border-base-300 p-2.5 flex items-end gap-2 shrink-0">
-    {{!-- @ references popup: filled by refPicker() in agent_chat.js. --}}
+    {{!-- @ references popup: filled by picker() in agent_chat_refs.js. --}}
     <div id="neo-agent-refs" class="neo-agent-refs hidden" role="listbox" aria-label="{{#if refs_label}}{{refs_label}}{{else}}Apps, settings and guides{{/if}} to mention"></div>
     <textarea id="neo-agent-input" rows="2" class="textarea textarea-sm flex-1 resize-none min-h-0 leading-snug"
               placeholder="{{#if placeholder}}{{placeholder}}{{else}}Ask the assistant… Type @ to mention an app, setting or guide.{{/if}}" aria-label="Message"></textarea>
