@@ -3,6 +3,7 @@
 use anyhow::Result;
 use std::process::Command;
 
+use crate::utils::bins;
 use crate::utils::command::stdout_checked;
 use crate::utils::execute_command;
 
@@ -12,7 +13,7 @@ pub fn docker_update(container: &str, sudo_cmd: &str) -> Result<()> {
 
     // Inspect the running image ref (resolves current tag/digest for :latest etc)
     let img = stdout_checked(
-        Command::new("docker").args(["inspect", "--format", "{{.Config.Image}}", cname]),
+        Command::new(bins::docker()).args(["inspect", "--format", "{{.Config.Image}}", cname]),
         "docker inspect",
     )?
     .trim()
@@ -22,7 +23,7 @@ pub fn docker_update(container: &str, sudo_cmd: &str) -> Result<()> {
     }
     println!("image: {}", img);
 
-    execute_command(Command::new("docker").args(["pull", &img]))?;
+    execute_command(Command::new(bins::docker()).args(["pull", &img]))?;
 
     let unit = format!("docker-{}", cname);
     execute_command(Command::new(sudo_cmd).args([

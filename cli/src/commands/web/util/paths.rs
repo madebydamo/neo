@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use crate::utils::command::{env_or, sudo_bin};
+use crate::utils::bins;
+use crate::utils::command::env_or;
 
 /// neo-web state directory (version notes, proposals): systemd's `$STATE_DIRECTORY` (neo-web),
 /// else `$XDG_STATE_HOME/neo` or `~/.local/state/neo` (local / dev runs).
@@ -38,12 +39,13 @@ pub fn read_token_file(var: &str) -> Option<String> {
     (!token.is_empty()).then(|| token.to_string())
 }
 
+// Program paths come from `utils::bins` (one rule for CLI and web).
 pub fn sudo_cmd() -> String {
-    sudo_bin()
+    bins::sudo()
 }
 
 pub fn nix_bin() -> String {
-    env_or("NIX_BINARY_PATH", "/run/current-system/sw/bin/nix")
+    bins::nix()
 }
 
 pub fn neo_bin() -> String {
@@ -63,11 +65,11 @@ pub fn static_dir() -> String {
 /// Docker CLI for inspect/pull. neo-web's systemd PATH does not include docker,
 /// so a bare `"docker"` lookup fails with ENOENT (`os error 2`).
 pub fn docker_bin() -> String {
-    env_or("DOCKER_BINARY_PATH", "/run/current-system/sw/bin/docker")
+    bins::docker()
 }
 
 pub fn zfs_bin() -> String {
-    env_or("ZFS_BINARY_PATH", "/run/current-system/sw/bin/zfs")
+    bins::zfs()
 }
 
 pub fn rsync_bin() -> String {
@@ -93,7 +95,7 @@ mod tests {
     use crate::utils::command::non_empty_or;
 
     #[test]
-    fn docker_bin_default_is_nixos_system_path_not_bare_name() {
+    fn docker_bin_default_is_nixos_system_path_when_present() {
         assert!(
             std::env::var("DOCKER_BINARY_PATH")
                 .ok()
@@ -101,7 +103,12 @@ mod tests {
                 .is_none(),
             "DOCKER_BINARY_PATH is set; unset it to assert the default"
         );
-        assert_eq!(docker_bin(), "/run/current-system/sw/bin/docker");
+        let system = "/run/current-system/sw/bin/docker";
+        if std::path::Path::new(system).exists() {
+            assert_eq!(docker_bin(), system);
+        } else {
+            assert_eq!(docker_bin(), "docker");
+        }
     }
 
     #[test]

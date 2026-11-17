@@ -236,7 +236,7 @@ fn run(cli: Cli) -> Result<()> {
     let needs_root = matches!(command, Commands::Restore(_) | Commands::Backup { .. });
     if etc_settings.exists() && env::var("USER").unwrap_or_default() != "homeserver" && !needs_root
     {
-        let sudo_bin = cli.sudo_path.as_deref().unwrap_or("sudo");
+        let sudo_bin = cli.sudo_path.as_deref().unwrap_or(utils::bins::SUDO_CLI);
         // The child prints its own error. A failed `neo init` still exits
         // through this sudo, so do not describe that as a user-switch failure.
         execute_command(
@@ -271,8 +271,9 @@ fn run(cli: Cli) -> Result<()> {
     let web_settings_path: PathBuf = PathBuf::from(&config_path).join(utils::settings::FILE);
 
     let dry_run = cli.dry_run;
-    let nix_cmd = cli.nix_path.as_deref().unwrap_or("nix");
-    let sudo_cmd = cli.sudo_path.as_deref().unwrap_or("sudo");
+    // PATH lookups for the interactive CLI: see `utils::bins`.
+    let nix_cmd = cli.nix_path.as_deref().unwrap_or(utils::bins::NIX_CLI);
+    let sudo_cmd = cli.sudo_path.as_deref().unwrap_or(utils::bins::SUDO_CLI);
     if dry_run {
         println!(
             "=== DRY-RUN ENABLED for {:?} (profile={}) ===",

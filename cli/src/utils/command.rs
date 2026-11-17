@@ -18,10 +18,8 @@ pub fn env_or(var: &str, default: &str) -> String {
     non_empty_or(std::env::var(var).ok(), default)
 }
 
-/// The sudo binary: `$SUDO_BINARY_PATH`, else `sudo` from the PATH.
-pub fn sudo_bin() -> String {
-    env_or("SUDO_BINARY_PATH", "sudo")
-}
+/// The sudo binary (kept for the web UI's imports; see [`super::bins`]).
+pub use super::bins::sudo as sudo_bin;
 
 /// `sudo -n`: fails at once when a rule is missing, for anything that runs
 /// without a terminal to ask on.

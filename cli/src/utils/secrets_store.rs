@@ -13,10 +13,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use toml_edit::{value, DocumentMut};
 
+use super::bins;
 use super::command::git_cmd;
-use super::command::{
-    check_output, env_or, output_checked, output_with_stdin, root_command, sudo_bin,
-};
+use super::command::{check_output, env_or, output_checked, output_with_stdin, root_command};
 use super::fsutil::{write_atomic, write_private, TempDir};
 use super::secrets::{self, Backend, Node, Tree};
 use super::settings::{authorized_keys, ensure_table, recorded_host_key};
@@ -26,10 +25,6 @@ pub const SOPS_CONFIG: &str = ".sops.yaml";
 const HOST_PUB: &str = "/etc/ssh/ssh_host_ed25519_key.pub";
 const ROOT_HELPER: &str = "/run/current-system/sw/bin/neo-secrets-root";
 
-fn sops_bin() -> String {
-    env_or("SOPS_BINARY_PATH", "sops")
-}
-
 fn root_helper() -> Option<String> {
     let p = env_or("NEO_SECRETS_ROOT_CMD", ROOT_HELPER);
     Path::new(&p).is_file().then_some(p)
@@ -37,7 +32,7 @@ fn root_helper() -> Option<String> {
 
 /// Run the root helper (directly as root, else `sudo -n`).
 fn helper_output(helper: &str, args: &[&str]) -> Result<Vec<u8>> {
-    let mut cmd = root_command(helper, &sudo_bin(), true);
+    let mut cmd = root_command(helper, &bins::sudo(), true);
     let what = format!("{helper} {}", args.first().copied().unwrap_or(""));
     Ok(output_checked(cmd.args(args), &what)?.stdout)
 }
@@ -92,7 +87,7 @@ pub fn encrypt(tree: &Tree, recipients: &[String]) -> Result<String> {
         bail!("no recipients to encrypt to");
     }
     let out = output_with_stdin(
-        Command::new(sops_bin()).args([
+        Command::new(bins::sops()).args([
             "encrypt",
             "--age",
             &recipients.join(","),
@@ -151,7 +146,7 @@ pub fn decrypt_text(text: &str) -> Result<Tree> {
 /// Decrypt with sops directly, using `key` (an ssh-ed25519 private key) or
 /// sops' default (~/.ssh/id_ed25519, prompting for its passphrase).
 pub fn decrypt_with_key(path: &Path, key: Option<&Path>) -> Result<Tree> {
-    let mut cmd = Command::new(sops_bin());
+    let mut cmd = Command::new(bins::sops());
     cmd.args(["decrypt", "--input-type", "yaml", "--output-type", "json"])
         .arg(path)
         .stdin(Stdio::inherit())

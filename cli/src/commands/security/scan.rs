@@ -8,11 +8,8 @@ use std::path::Path;
 use std::process::Command;
 
 use super::model::{Finding, Severity};
-use crate::utils::command::{env_or, stdout_checked};
-
-pub fn docker_bin() -> String {
-    env_or("DOCKER_BINARY_PATH", "docker")
-}
+use crate::utils::bins;
+use crate::utils::command::stdout_checked;
 
 /// The running system's store path (`/run/current-system` resolved once, so a
 /// switch during the scan does not mix two closures).
@@ -127,7 +124,7 @@ pub struct Container {
 
 pub fn list_containers() -> Result<Vec<Container>> {
     let ids = stdout_checked(
-        Command::new(docker_bin()).args(["ps", "-aq", "--no-trunc"]),
+        Command::new(bins::docker()).args(["ps", "-aq", "--no-trunc"]),
         "docker ps",
     )?;
     let ids: Vec<&str> = ids.split_whitespace().collect();
@@ -135,7 +132,7 @@ pub fn list_containers() -> Result<Vec<Container>> {
         return Ok(Vec::new());
     }
     let out = stdout_checked(
-        Command::new(docker_bin())
+        Command::new(bins::docker())
             .args([
                 "inspect",
                 "--format",
@@ -168,7 +165,7 @@ pub fn add_configured(containers: &mut Vec<Container>, cfg: &super::config::Conf
                 continue;
             }
             let id = stdout_checked(
-                Command::new(docker_bin())
+                Command::new(bins::docker())
                     .args(["image", "inspect", "--format", "{{.Id}}", image_ref]),
                 "docker image inspect",
             );
