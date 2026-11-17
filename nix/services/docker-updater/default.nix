@@ -34,198 +34,40 @@
 
       rollbackTagFor = image: "neo-rollback:${replaceStrings ["/" ":"] ["__" "__"] image}";
 
-      updateScript = pkgs.writeShellScript "neo-docker-update" ''
-        set -euo pipefail
-        JQ=${pkgs.jq}/bin/jq
-        ${lib.neo.updaterRunPrelude dockerHistoryDir}
-        updates_json='[]'
-        changed=0
-        failed=0
-        hist_done=0
+      # One entry per image (update.sh): a single pull restarts all its consumers.
+      plan = pkgs.writeText "neo-docker-update-plan.json" (builtins.toJSON (map (image: let
+        cs = containersByImage.${image};
+      in {
+        inherit image;
+        consumers = concatMapStringsSep ", " (c: "${c.container} (${c.service})") cs;
+        rollback_tag = rollbackTagFor image;
+        units = map (c: "docker-${c.container}") cs;
+        restarts =
+          map (c: {
+            unit = "docker-${c.container}";
+            inherit (c) service;
+          })
+          cs;
+      }) (attrNames containersByImage)));
 
-        write_hist() {
-          local in_progress=$1
-          local finished=$2
-          $JQ -n \
-            --arg run_id "$run_id" \
-            --arg started "$started_at" \
-            --argjson in_progress "$in_progress" \
-            --argjson changed "$([ "$changed" -eq 1 ] && echo true || echo false)" \
-            --argjson failed "$([ "$failed" -eq 1 ] && echo true || echo false)" \
-            --argjson updates "$updates_json" \
-            --arg finished "$finished" \
-            --arg log "$run_id.log" \
-            '{kind:"docker",run_id:$run_id,started_at:$started,in_progress:$in_progress,changed:$changed,failed:$failed,updates:$updates,finished_at:(if $finished == "" then null else $finished end),log:$log}' \
-            > "$hist"
-        }
+      updateScript = pkgs.writeShellApplication {
+        name = "neo-docker-update";
+        runtimeInputs = [pkgs.coreutils pkgs.docker pkgs.jq pkgs.systemd pkgs.util-linux];
+        runtimeEnv = {
+          NEO_HISTORY_DIR = dockerHistoryDir;
+          NEO_PLAN = plan;
+          NEO_SUPERVISE = boolToString supervise;
+          NEO_LOCK_DIR = "/run/neo/locks";
+        };
+        text = builtins.readFile ./update.sh;
+      };
 
-        finalize() {
-          [ "$hist_done" -eq 1 ] && return
-          hist_done=1
-          trap - EXIT INT TERM HUP
-          if [ "''${1:-}" = abort ]; then
-            failed=1
-          fi
-          write_hist false "$(date -Iseconds)"
-          echo "Wrote $hist (changed=$changed failed=$failed in_progress=false); last.json -> $run_id.json"
-        }
-
-        write_hist true ""
-        ln -sfn "$run_id.json" ${dockerHistoryDir}/last.json
-        echo "Started run $run_id; last.json -> $run_id.json (in_progress)"
-        trap 'finalize abort' EXIT INT TERM HUP
-
-        ${concatMapStringsSep "\n" (
-            image: let
-              cs = containersByImage.${image};
-              consumers = concatMapStringsSep ", " (c: "${c.container} (${c.service})") cs;
-              rollbackTag = rollbackTagFor image;
-              unitsJson = builtins.toJSON (map (c: "docker-${c.container}") cs);
-            in ''
-              echo "[$(date -Iseconds)] Checking ${escapeShellArg image} (used by: ${consumers})..."
-              # Normalize inspect output: trim whitespace; missing image => none.
-              # Only content-addressed ids (sha256:…) are taggable; anything else is a
-              # first pull (empty, "none", or garbage like a leading newline + "none").
-              old_id=$(${pkgs.docker}/bin/docker image inspect --format '{{.Id}}' ${escapeShellArg image} 2>/dev/null || true)
-              old_id=$(printf '%s' "$old_id" | tr -d '[:space:]')
-              case "$old_id" in
-                sha256:*|sha512:*) ;;
-                *) old_id=none ;;
-              esac
-              ${pkgs.docker}/bin/docker pull ${escapeShellArg image} || true
-              new_id=$(${pkgs.docker}/bin/docker image inspect --format '{{.Id}}' ${escapeShellArg image} 2>/dev/null || true)
-              new_id=$(printf '%s' "$new_id" | tr -d '[:space:]')
-              case "$new_id" in
-                sha256:*|sha512:*) ;;
-                *) new_id=none ;;
-              esac
-              if [ "$old_id" != "$new_id" ] && [ "$new_id" != "none" ]; then
-                echo "  Image updated ($old_id -> $new_id); restarting all consumers"
-                rollback_tag=""
-                ${optionalString supervise ''
-                if [ "$old_id" != "none" ]; then
-                  echo "  Tagging previous image as ${escapeShellArg rollbackTag}"
-                  ${pkgs.docker}/bin/docker tag "$old_id" ${escapeShellArg rollbackTag} || true
-                  rollback_tag=${escapeShellArg rollbackTag}
-                else
-                  echo "  First pull (no previous image id); skipping rollback tag"
-                fi
-              ''}
-                changed=1
-                updates_json=$(${pkgs.jq}/bin/jq -c \
-                  --arg image ${escapeShellArg image} \
-                  --arg old "$old_id" \
-                  --arg new "$new_id" \
-                  --arg tag "$rollback_tag" \
-                  --argjson units ${escapeShellArg unitsJson} \
-                  '. + [{image:$image, old_id:$old, new_id:$new, rollback_tag:$tag, units:$units}]' \
-                  <<<"$updates_json")
-                ${concatMapStringsSep "\n" (c: ''
-                  unit="docker-${c.container}"
-                  # Require a loaded unit before restart. Optional sidecars (e.g. gated
-                  # out of systemdUnits / oci-containers) must not flip failed=true.
-                  load_state=$(${pkgs.systemd}/bin/systemctl show -p LoadState --value "$unit" 2>/dev/null || echo not-found)
-                  if [ "$load_state" != "loaded" ]; then
-                    echo "    skipped $unit (${c.service}): unit not found (LoadState=$load_state)"
-                  else
-                    echo "    systemctl restart $unit (${c.service})"
-                    rc=0
-                    ${pkgs.util-linux}/bin/flock -E 75 -w 120 \
-                      ${escapeShellArg "/run/neo/locks/unit_docker-${c.container}.service.lock"} \
-                      ${pkgs.systemd}/bin/systemctl restart "$unit" || rc=$?
-                    if [ "$rc" -eq 75 ]; then
-                      echo "    skipped $unit: locked by a neo operation (restore / clear appdata / pull)"
-                    elif [ "$rc" -ne 0 ]; then
-                      echo "    restart failed: $unit"
-                      failed=1
-                    fi
-                  fi
-                '')
-                cs}
-              else
-                echo "  Up to date or no change."
-              fi
-            ''
-          )
-          (attrNames containersByImage)}
-        echo "Docker update check complete."
-        finalize ok
-      '';
-
-      rollbackScript = pkgs.writeShellScriptBin "neo-docker-rollback" ''
-        set -euo pipefail
-        MANIFEST=${dockerManifest}
-        DOCKER=${pkgs.docker}/bin/docker
-        SYSTEMCTL=${pkgs.systemd}/bin/systemctl
-        JQ=${pkgs.jq}/bin/jq
-
-        usage() {
-          echo "usage: neo-docker-rollback [--all] [--image IMAGE] [--manifest FILE]" >&2
-          exit 2
-        }
-
-        filter=""
-        while [ $# -gt 0 ]; do
-          case "$1" in
-            --all) shift ;;
-            --image)
-              [ $# -ge 2 ] || usage
-              filter=$2
-              shift 2
-              ;;
-            --manifest)
-              [ $# -ge 2 ] || usage
-              MANIFEST=$2
-              shift 2
-              ;;
-            -h|--help) usage ;;
-            *) usage ;;
-          esac
-        done
-
-        if [ ! -f "$MANIFEST" ]; then
-          echo "neo-docker-rollback: missing $MANIFEST" >&2
-          exit 1
-        fi
-
-        any=0
-        fail=0
-        while IFS= read -r row; do
-          image=$($JQ -r .image <<<"$row")
-          if [ -n "$filter" ] && [ "$image" != "$filter" ]; then
-            continue
-          fi
-          old_id=$($JQ -r .old_id <<<"$row")
-          if [ "$old_id" = "none" ] || [ -z "$old_id" ] || [ "$old_id" = "null" ]; then
-            echo "skip $image: no previous image id"
-            continue
-          fi
-          any=1
-          echo "Rolling back $image to $old_id"
-          $DOCKER tag "$old_id" "$image"
-          while IFS= read -r unit; do
-            [ -n "$unit" ] || continue
-            echo "  systemctl restart $unit"
-            if $SYSTEMCTL restart "$unit"; then
-              if $SYSTEMCTL is-active --quiet "$unit"; then
-                echo "  $unit active"
-              else
-                echo "  $unit not active after restart" >&2
-                fail=1
-              fi
-            else
-              echo "  restart failed: $unit" >&2
-              fail=1
-            fi
-          done < <($JQ -r '.units[]' <<<"$row")
-        done < <($JQ -c '.updates[]' "$MANIFEST")
-
-        if [ "$any" -eq 0 ]; then
-          echo "neo-docker-rollback: no matching updates in $MANIFEST" >&2
-          exit 1
-        fi
-        exit "$fail"
-      '';
+      rollbackScript = pkgs.writeShellApplication {
+        name = "neo-docker-rollback";
+        runtimeInputs = [pkgs.docker pkgs.jq pkgs.systemd];
+        runtimeEnv.NEO_MANIFEST = dockerManifest;
+        text = builtins.readFile ./rollback.sh;
+      };
     in {
       config = mkIf cfg.enabled {
         environment.systemPackages = optional supervise rollbackScript;
@@ -239,7 +81,7 @@
             # System scope shared for the whole run (cli/src/utils/locks/): an
             # activation (system exclusive) waits for it and it waits for one, so
             # an update never restarts apps while a switch stops and starts them.
-            ExecStart = "${pkgs.util-linux}/bin/flock -s -w 3600 /run/neo/locks/system.lock ${updateScript}";
+            ExecStart = "${pkgs.util-linux}/bin/flock -s -w 3600 /run/neo/locks/system.lock ${getExe updateScript}";
             User = "root";
           };
         };
