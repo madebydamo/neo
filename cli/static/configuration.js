@@ -1,6 +1,7 @@
 // configuration.js
 // The config page shell: Alpine tabs + breadcrumb, the unsaved-changes guard, the sticky
-// bars, and syncing them with what htmx swaps in. Loaded only by configuration.html.hbs.
+// bars, and syncing them with what htmx swaps in. Loaded only by configuration.html.hbs,
+// after configuration_core.js (NeoConfigCore: the decisions without DOM access).
 
 NeoUtil.markStandalone();
 
@@ -13,13 +14,7 @@ window.neoIsConfigFormDirty = function neoIsConfigFormDirty() {
     var pane = document.getElementById('options-pane');
     if (!pane) return false;
     if (typeof Alpine === 'undefined' || !Alpine.$data) return false;
-    var data = Alpine.$data(pane);
-    if (!data || !data.values || typeof data.isAtOriginal !== 'function') return false;
-    var names = Object.keys(data.values);
-    for (var i = 0; i < names.length; i++) {
-      if (!data.isAtOriginal(names[i])) return true;
-    }
-    return false;
+    return NeoConfigCore.formDirty(Alpine.$data(pane));
   } catch (e) {
     return false;
   }
@@ -48,10 +43,7 @@ window.configShell = function configShell() {
     detail: initialDetail || null, // null | service/core section name when option pane is open
 
     sectionLabel() {
-      if (this.tab === 'settings') return 'Settings';
-      if (this.tab === 'versioning') return 'Versioning';
-      if (this.tab === 'guides') return 'Guides';
-      return 'Services';
+      return NeoConfigCore.sectionLabel(this.tab);
     },
 
     setDetail(name) {
@@ -64,11 +56,7 @@ window.configShell = function configShell() {
 
     /** Canonical tab content URL under /configuration/... */
     tabUrl(tab) {
-      if (tab === 'settings') return '/configuration/settings';
-      if (tab === 'versioning') return '/configuration/versioning';
-      if (tab === 'guides') return '/configuration/guides';
-      // Prefer /configuration (not /configuration/services) as the services home URL.
-      return '/configuration';
+      return NeoConfigCore.tabUrl(tab);
     },
 
     /**
@@ -171,26 +159,6 @@ window.configShell = function configShell() {
     } catch (e) {}
   }
 
-  /** Resolve #config-content whether detail.target is an element or a selector string. */
-  function isConfigContentTarget(target) {
-    if (!target) return false;
-    if (typeof target === 'string') {
-      return target === '#config-content' || target === 'config-content';
-    }
-    if (target.id === 'config-content') return true;
-    // htmx sometimes reports the requesting elt; treat swaps into #config-content as nav.
-    return !!(target.getAttribute && target.getAttribute('hx-target') === '#config-content');
-  }
-
-  /** A request that replaces #config-content, however htmx reports its target. */
-  function isNavRequest(detail) {
-    return (
-      isConfigContentTarget(detail.target) ||
-      isConfigContentTarget(detail.elt) ||
-      isConfigContentTarget(detail.requestConfig && detail.requestConfig.target)
-    );
-  }
-
   /**
    * Hold #config-content's current height while a nav request is in flight so the
    * document does not collapse when a tall option pane is swapped for a shorter grid
@@ -214,7 +182,7 @@ window.configShell = function configShell() {
   // After a successful save, option_form updates originals before reload, so dirty is false.
   document.body.addEventListener('htmx:beforeRequest', function (evt) {
     try {
-      if (!isNavRequest(evt.detail || {})) return;
+      if (!NeoConfigCore.isNavRequest(evt.detail || {})) return;
       lockConfigContentHeight();
       if (window.neoAllowNextConfigNav) {
         window.neoAllowNextConfigNav = false;
@@ -258,7 +226,7 @@ window.configShell = function configShell() {
   ['htmx:responseError', 'htmx:sendError'].forEach(function (name) {
     document.body.addEventListener(name, function (evt) {
       try {
-        if (isConfigContentTarget((evt.detail || {}).target)) unlockConfigContentHeight();
+        if (NeoConfigCore.isConfigContentTarget((evt.detail || {}).target)) unlockConfigContentHeight();
       } catch (e) {
         unlockConfigContentHeight();
       }
@@ -274,7 +242,6 @@ window.configShell = function configShell() {
     } catch (err) {}
   });
 
-  /** Sync shell.detail / shell.tab after HTMX swaps into #config-content. */
   /**
    * `?focus=<option>` (guide option: links): open the option's section, scroll
    * to the field and flash it once.
@@ -315,7 +282,7 @@ window.configShell = function configShell() {
     var d = evt.detail || {};
     var path = (d.pathInfo && d.pathInfo.requestPath) || '';
     // After discarding changes the open pane would hold stale values.
-    if (d.successful && (path === '/actions/reset' || path === '/changes/revert')) NeoUtil.reloadPane();
+    if (d.successful && NeoConfigCore.discardsChanges(path)) NeoUtil.reloadPane();
   });
 
   // Deep links with ?focus= (guide option: links) on a full page load.
@@ -326,39 +293,18 @@ window.configShell = function configShell() {
     }, 400);
   });
 
+  /** Sync shell.detail / shell.tab after HTMX swaps into #config-content. */
   function syncConfigShellFromContent() {
     try {
       var shell = document.getElementById('config-shell');
       if (!shell || typeof Alpine === 'undefined' || !Alpine.$data) return;
       var data = Alpine.$data(shell);
       if (!data) return;
-      var content = document.getElementById('config-content');
-      var pane = content && content.querySelector('#options-pane');
-      var guide = content && content.querySelector('#guide-page');
-      var privacy = content && content.querySelector('#privacy-map');
-      if (pane) {
-        data.setDetail(pane.getAttribute('data-service'));
-        data.tab = pane.getAttribute('data-is-core') === 'true' ? 'settings' : 'services';
-        focusOptionFromUrl(pane);
-      } else if (guide) {
-        data.setDetail(guide.getAttribute('data-guide-title') || 'Guide');
-        data.tab = 'guides';
-      } else if (privacy) {
-        data.setDetail('Privacy map');
-        data.tab = 'guides';
-      } else {
-        data.clearDetail();
-        // Infer active tab from grid/branches partials (Back/Forward history restore).
-        if (content && content.querySelector('#core-grid')) data.tab = 'settings';
-        else if (
-          content &&
-          (content.querySelector('#versioning-root') ||
-            content.querySelector('#branches-section'))
-        )
-          data.tab = 'versioning';
-        else if (content && content.querySelector('#guides-grid')) data.tab = 'guides';
-        else if (content && content.querySelector('#services-grid')) data.tab = 'services';
-      }
+      var s = NeoConfigCore.shellState(document.getElementById('config-content'));
+      if (s.detail) data.setDetail(s.detail);
+      else data.clearDetail();
+      if (s.tab) data.tab = s.tab;
+      if (s.pane) focusOptionFromUrl(s.pane);
     } catch (e) {}
   }
 
@@ -406,10 +352,8 @@ window.configShell = function configShell() {
         return;
       }
       var stickyTop = parseFloat(getComputedStyle(save).top) || 0;
-      var ar = action.getBoundingClientRect();
-      var sr = save.getBoundingClientRect();
-      var stuck = sr.top <= stickyTop + 0.5;
-      if (!stuck) {
+      var plate = NeoConfigCore.fusedPlate(stickyTop, action.getBoundingClientRect(), save.getBoundingClientRect());
+      if (!plate) {
         clearStickyBarsFuse();
         return;
       }
@@ -418,10 +362,10 @@ window.configShell = function configShell() {
       // One plate from the top of the action bar to the bottom of the save strip,
       // matching the action bar's width so the fused chrome is continuous.
       glass.hidden = false;
-      glass.style.top = ar.top + 'px';
-      glass.style.left = ar.left + 'px';
-      glass.style.width = ar.width + 'px';
-      glass.style.height = Math.max(0, sr.bottom - ar.top) + 'px';
+      glass.style.top = plate.top + 'px';
+      glass.style.left = plate.left + 'px';
+      glass.style.width = plate.width + 'px';
+      glass.style.height = plate.height + 'px';
     } catch (e) {
       clearStickyBarsFuse();
     }
@@ -496,7 +440,7 @@ window.configShell = function configShell() {
   document.body.addEventListener('htmx:swapError', function (evt) {
     try {
       var resp = evt.detail && evt.detail.xhr && evt.detail.xhr.responseText;
-      if (resp && (/id="unit-controls-/.test(resp) || /id="update-out-/.test(resp))) {
+      if (NeoConfigCore.isStaleUnitSwap(resp)) {
         evt.stopImmediatePropagation();
       }
     } catch (e) {}
