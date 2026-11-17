@@ -1,10 +1,12 @@
 // Small helpers shared by every page's scripts. Loaded first on both pages
 // (configuration, navigator), so it must not touch document.body at load time.
+// Also wires the generic markup hooks every page may use (wireHooks).
 (function (root, factory) {
   var api = factory();
   if (root) {
     root.NeoUtil = api;
     root.neoToast = api.toast;
+    if (root.document) api.wireHooks(root.document);
   }
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : null, function () {
@@ -187,7 +189,45 @@
     return el;
   }
 
+  /**
+   * Delegated handlers for markup hooks, on the document so swapped-in content
+   * works too:
+   * - [data-neo-reload]: click reloads the page.
+   * - [data-neo-scroll-to="<id>"]: click scrolls smoothly to that element
+   *   (in-page links that must not change the URL hash).
+   * - img[data-neo-icon-fallback]: a broken icon hides itself and shows its next
+   *   sibling (the placeholder glyph).
+   */
+  function wireHooks(doc) {
+    doc.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      if (t.closest('[data-neo-reload]')) {
+        doc.defaultView.location.reload();
+        return;
+      }
+      var link = t.closest('[data-neo-scroll-to]');
+      if (link) {
+        e.preventDefault();
+        var target = doc.getElementById(link.getAttribute('data-neo-scroll-to'));
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+    // error does not bubble: listen in the capture phase.
+    doc.addEventListener(
+      'error',
+      function (e) {
+        var img = e.target;
+        if (!img || img.tagName !== 'IMG' || !img.hasAttribute('data-neo-icon-fallback')) return;
+        img.style.display = 'none';
+        if (img.nextElementSibling) img.nextElementSibling.style.display = 'flex';
+      },
+      true
+    );
+  }
+
   return {
+    wireHooks: wireHooks,
     esc: esc,
     toast: toast,
     store: store,

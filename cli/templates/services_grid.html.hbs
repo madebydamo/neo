@@ -107,7 +107,7 @@
         <span class="relative w-11 h-11 shrink-0 rounded-xl bg-base-200 p-2 flex items-center justify-center{{#unless enabled}} grayscale-[35%] opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition{{/unless}}">
           {{#if icon}}
             <img src="{{icon}}" class="max-w-full max-h-full object-contain" alt="" loading="lazy"
-                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+                 data-neo-icon-fallback />
             <span class="hidden text-xl leading-none opacity-50">⚙</span>
           {{else}}
             <span class="text-xl leading-none opacity-50">⚙</span>

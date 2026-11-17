@@ -32,7 +32,7 @@
     <div class="relative w-8 h-8 flex items-center justify-center">
       {{#if icon}}
         <img src="{{icon}}" class="w-8 h-8 object-contain" alt="" draggable="false"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+             data-neo-icon-fallback />
         <span class="hidden text-3xl leading-none">⚙</span>
       {{else}}
         <span class="text-3xl leading-none">⚙</span>

@@ -1,6 +1,7 @@
 {{!-- Assistant chat drawer (static/agent_chat.js). Opened by any element with
      data-neo-agent="<context>"; hidden until then. Each open starts a new chat;
      "Chats" lists past ones (#neo-agent-history replaces the log meanwhile).
+     Header and Stop buttons: data-neo-agent-action (history | new | close | stop).
      Params: placeholder, refs_label (what @ mentions; default apps, settings, guides). --}}
 <aside id="neo-agent" class="hidden neo-agent fixed z-50 inset-0 sm:inset-auto sm:top-3 sm:bottom-3 sm:right-3 sm:w-[26rem] flex flex-col bg-base-100 sm:rounded-box border border-base-300 shadow-2xl"
        role="dialog" aria-label="Assistant chat">
@@ -9,13 +10,13 @@
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M4 5.5A1.5 1.5 0 015.5 4h13A1.5 1.5 0 0120 5.5v9a1.5 1.5 0 01-1.5 1.5H10l-4 4v-4H5.5A1.5 1.5 0 014 14.5z"/></svg>
     </span>
     <h2 id="neo-agent-title" class="font-semibold text-sm min-w-0 flex-1 truncate">Assistant</h2>
-    <button id="neo-agent-chats" type="button" class="btn btn-ghost btn-xs gap-1" onclick="NeoAgent.history()"
+    <button id="neo-agent-chats" type="button" class="btn btn-ghost btn-xs gap-1" data-neo-agent-action="history"
             aria-pressed="false" title="Past chats">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clip-rule="evenodd"/></svg>
       Chats
     </button>
-    <button id="neo-agent-new" type="button" class="btn btn-ghost btn-xs" onclick="NeoAgent.newChat()" title="Start a new chat">New chat</button>
-    <button type="button" class="btn btn-ghost btn-sm btn-square" onclick="NeoAgent.close()" aria-label="Close">
+    <button id="neo-agent-new" type="button" class="btn btn-ghost btn-xs" data-neo-agent-action="new" title="Start a new chat">New chat</button>
+    <button type="button" class="btn btn-ghost btn-sm btn-square" data-neo-agent-action="close" aria-label="Close">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5" aria-hidden="true"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
     </button>
   </div>
@@ -32,6 +33,6 @@
     <textarea id="neo-agent-input" rows="2" class="textarea textarea-sm flex-1 resize-none min-h-0 leading-snug"
               placeholder="{{#if placeholder}}{{placeholder}}{{else}}Ask the assistant… Type @ to mention an app, setting or guide.{{/if}}" aria-label="Message"></textarea>
     <button id="neo-agent-send" type="submit" class="btn btn-sm btn-primary">Send</button>
-    <button id="neo-agent-stop" type="button" class="btn btn-sm hidden" onclick="NeoAgent.stop()">Stop</button>
+    <button id="neo-agent-stop" type="button" class="btn btn-sm hidden" data-neo-agent-action="stop">Stop</button>
   </form>
 </aside>

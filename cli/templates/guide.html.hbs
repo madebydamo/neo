@@ -64,8 +64,7 @@
             <div class="text-xs font-semibold uppercase tracking-wider text-base-content/55 mb-1.5">On this page</div>
             <ul class="space-y-1">
               {{#each toc}}
-                <li><a href="#{{id}}" class="link link-hover text-base-content/75"
-                       onclick="event.preventDefault();var t=document.getElementById('{{id}}');if(t)t.scrollIntoView({behavior:'smooth',block:'start'});">{{title}}</a></li>
+                <li><a href="#{{id}}" class="link link-hover text-base-content/75" data-neo-scroll-to="{{id}}">{{title}}</a></li>
               {{/each}}
             </ul>
           </nav>

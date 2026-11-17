@@ -48,12 +48,12 @@
           <div class="text-xs text-base-content/60">Download a backup or replace the working-tree file. Contains secrets. Activate afterwards to apply.</div>
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
-          <button type="button" class="btn btn-sm btn-ghost" onclick="neoDownloadSettingsToml()">Download</button>
+          <button type="button" class="btn btn-sm btn-ghost" data-neo-settings-download>Download</button>
           <label class="btn btn-sm btn-soft btn-primary">
             Upload…
             <input type="file" accept=".toml,text/plain,application/toml" class="hidden"
               aria-label="Upload settings.toml"
-              onchange="neoUploadSettingsToml(this)" />
+              data-neo-settings-upload />
           </label>
         </div>
       </div>

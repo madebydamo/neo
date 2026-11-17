@@ -1270,6 +1270,12 @@
         form.requestSubmit();
       }
     });
+    // The drawer's own buttons: data-neo-agent-action="<NeoAgent method>".
+    el('neo-agent').addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-neo-agent-action]');
+      var fn = b && DRAWER_ACTIONS[b.getAttribute('data-neo-agent-action')];
+      if (fn) fn();
+    });
     // Buttons anywhere (also in swapped content): data-neo-agent="<context>".
     document.body.addEventListener('click', function (e) {
       var b = e.target.closest && e.target.closest('[data-neo-agent]');
@@ -1301,18 +1307,22 @@
     if (hit) window.NeoUtil.reloadPane();
   });
 
+  function newChat() {
+    if (busy()) return;
+    startNew(state.context, {
+      title: state.defaultTitle || state.title,
+      starter: state.starter || undefined,
+      hint: state.hint || undefined,
+    });
+  }
+
+  var DRAWER_ACTIONS = { history: toggleHistory, new: newChat, close: close, stop: stop };
+
   root.NeoAgent = {
     open: open,
     close: close,
     stop: stop,
     history: toggleHistory,
-    newChat: function () {
-      if (busy()) return;
-      startNew(state.context, {
-        title: state.defaultTitle || state.title,
-        starter: state.starter || undefined,
-        hint: state.hint || undefined,
-      });
-    },
+    newChat: newChat,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

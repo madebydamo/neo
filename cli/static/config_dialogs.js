@@ -7,7 +7,7 @@
  * A plain <a href="/settings/download"> would replace the page when this UI
  * is embedded in the navigator iframe (or when the attachment is blocked).
  */
-window.neoDownloadSettingsToml = function neoDownloadSettingsToml() {
+function neoDownloadSettingsToml() {
   var status = document.getElementById('settings-toml-status');
   fetch('/settings/download')
     .then(function (res) {
@@ -34,13 +34,13 @@ window.neoDownloadSettingsToml = function neoDownloadSettingsToml() {
         status.innerHTML = '<div class="alert alert-error text-sm">Download failed</div>';
       }
     });
-};
+}
 
 /**
  * Replace working-tree settings.toml from a file input (Settings tab).
  * @param {HTMLInputElement} input
  */
-window.neoUploadSettingsToml = function neoUploadSettingsToml(input) {
+function neoUploadSettingsToml(input) {
   var file = input.files && input.files[0];
   input.value = '';
   if (!file) return;
@@ -78,7 +78,15 @@ window.neoUploadSettingsToml = function neoUploadSettingsToml(input) {
         status.innerHTML = '<div class="alert alert-error text-sm">Upload failed</div>';
       }
     });
-};
+}
+
+// The settings.toml card is swapped in with the Settings tab: delegate.
+document.addEventListener('click', function (e) {
+  if (e.target.closest && e.target.closest('[data-neo-settings-download]')) neoDownloadSettingsToml();
+});
+document.addEventListener('change', function (e) {
+  if (e.target.matches && e.target.matches('input[data-neo-settings-upload]')) neoUploadSettingsToml(e.target);
+});
 
 (function () {
   // Live unit logs (SSE from /sse/logs/<unit>). The output panel is the same
@@ -208,7 +216,7 @@ window.neoUploadSettingsToml = function neoUploadSettingsToml(input) {
         }
       }
       var cb = helperDialogOnApply;
-      window.closeHelperDialog();
+      closeHelperDialog();
       if (typeof cb === 'function') cb(inputs);
       return false;
     };
@@ -216,15 +224,20 @@ window.neoUploadSettingsToml = function neoUploadSettingsToml(input) {
     var first = fields.querySelector('input, select');
     if (first) setTimeout(function () { first.focus(); }, 50);
   };
-  window.closeHelperDialog = function () {
+  function closeHelperDialog() {
     var dlg = document.getElementById('helper-dialog');
     var fields = document.getElementById('helper-dialog-fields');
     helperDialogOnApply = null;
     if (fields) fields.innerHTML = '';
     if (dlg) dlg.close();
-  };
+  }
   var hd = document.getElementById('helper-dialog');
   if (hd) {
+    var cancel = hd.querySelector('[data-neo-helper-cancel]');
+    if (cancel) cancel.addEventListener('click', closeHelperDialog);
+    // openHelperDialog sets the real handler; never navigate before that.
+    var hform = document.getElementById('helper-dialog-form');
+    if (hform) hform.addEventListener('submit', function (ev) { ev.preventDefault(); });
     hd.addEventListener('close', function () {
       helperDialogOnApply = null;
       var fields = document.getElementById('helper-dialog-fields');
