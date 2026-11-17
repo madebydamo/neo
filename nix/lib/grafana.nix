@@ -22,6 +22,14 @@
       uid = "loki";
     };
 
+    # Query letter for the i-th target (0-based): A … Z, then AA, AB, … like Grafana.
+    refId = i: let
+      letters = lib.stringToCharacters "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    in
+      if i < 26
+      then builtins.elemAt letters i
+      else refId (i / 26 - 1) + builtins.elemAt letters (lib.mod i 26);
+
     pq = expr: legend: {
       datasource = prom;
       inherit expr;
@@ -93,7 +101,7 @@
           x = null;
           y = null;
         };
-      targets = lib.imap0 (i: t: t // {refId = builtins.elemAt ["A" "B" "C" "D" "E" "F"] i;}) targets;
+      targets = lib.imap0 (i: t: t // {refId = refId i;}) targets;
       fieldConfig = {
         defaults =
           {inherit mappings custom;}

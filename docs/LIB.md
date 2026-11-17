@@ -209,6 +209,8 @@ neo.monitoring.apps.${name} = {
 virtualisation.oci-containers.containers.${name}.environment = lib.mkIf config.neo.monitoring.collecting { METRICS = "true"; };
 ```
 
+A panel takes any number of `targets`; they get the query letters A … Z, AA, AB, … (`lib.neo.grafana.refId i`) in order.
+
 | `metrics.<scrape>` field | Default | Meaning |
 |---|---|---|
 | `container` + `port` | | Container (use `plugin.name`) and port; found on `network` |
