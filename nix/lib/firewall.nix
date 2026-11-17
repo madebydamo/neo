@@ -34,6 +34,7 @@
           # the few containers with mkHostAccess, not every app.
           ifaces = ["neo-host"];
           # Rules of older configs that forwarded from every bridge.
+          # Remove after 2027-01: every server has switched once since 2026-11-14 (neo-host only).
           legacyIfaces = ["br+" "docker0"];
         in
           mkIf (portList != []) {

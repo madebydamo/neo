@@ -32,6 +32,9 @@
     else joined;
 
   # Legacy list form: ids from the repository name, `-<index>` on a clash.
+  # Remove after 2027-01 (list form from before 2026-11-05; migration
+  # 014-plugin-tables rewrites it), together with the Rust and widget copies
+  # and the `lists` vectors in cli/src/utils/plugin_id_vectors.json.
   fromList = urls: let
     ids = map (u: sanitize (label u)) urls;
     clash = id: lib.length (lib.filter (x: x == id) ids) > 1;

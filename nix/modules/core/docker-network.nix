@@ -42,6 +42,7 @@
 
     # Created by Neo before networks were labelled. Removed like managed ones
     # once no one declares them and they are empty. Never `internal`.
+    # Remove after 2027-01: by then every server ran this since 2026-11-14 and dropped it.
     legacyNetworks = ["monitoring"];
 
     ipv4Networks = lib.filterAttrs (n: _: n != ipv6Net) cfg.networks;
