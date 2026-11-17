@@ -138,7 +138,7 @@ document.addEventListener('change', function (e) {
   function stopUnitLogs() {
     if (!currentLogSource) return;
     var prev = currentLogSource;
-    var currentLogSource = null;
+    currentLogSource = null;
     prev.onopen = null;
     prev.onmessage = null;
     prev.onerror = null;
