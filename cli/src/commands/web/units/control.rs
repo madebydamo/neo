@@ -95,8 +95,6 @@ fn render_unit_controls_content_with_state(unit: &str, st: &UnitStatus, pulling:
     let u = escape_html(unit);
     // Disabled by static/locks.js while the unit is locked (restore, pull, …).
     let lk = lock_attr(&[(Scope::unit(unit), LockMode::Exclusive)]);
-    // Basic JS string escape for onclick arg (single quotes in unit names are rare for units)
-    let u_js = u.replace('\'', "\\'");
 
     let mut inner = format!(
         r#"<span class="neo-unit-state" title="{title}: {detail}"><span class="neo-unit-dot" data-state="{dot}" aria-hidden="true"></span><span class="truncate">{label}</span></span>"#,
@@ -134,9 +132,10 @@ fn render_unit_controls_content_with_state(unit: &str, st: &UnitStatus, pulling:
         ));
     }
 
-    // Logs always opens the dialog (live via SSE).
+    // Logs always opens the dialog (live via SSE, config_dialogs.js).
     inner.push_str(&format!(
-        r#"<button type="button" class="{BTN}" onclick="openUnitLogs('{u_js}')" title="Live logs" aria-label="Logs of {u}">{ICON_LOGS}</button>"#
+        r#"<button type="button" class="{BTN}" data-neo-unit-logs="{u_attr}" title="Live logs" aria-label="Logs of {u}">{ICON_LOGS}</button>"#,
+        u_attr = escape_attr(unit),
     ));
 
     inner

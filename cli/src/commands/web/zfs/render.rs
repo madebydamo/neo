@@ -162,7 +162,7 @@ pub fn comment_form(s: &Snapshot, query: &str, ctx: &ManageCtx) -> String {
         r#"<form class="flex flex-wrap items-center gap-1.5 sm:pl-12" hx-post="{base}/comment?{q}" {hx}>
 <input type="text" name="comment" maxlength="{max}" value="{cur}" placeholder="e.g. Known good after setup" class="input input-sm flex-1 min-w-40" aria-label="Snapshot comment" autofocus>
 <button type="submit" class="btn btn-sm btn-primary">Save</button>
-<button type="button" class="btn btn-sm btn-ghost" onclick="this.closest('form').remove()">Cancel</button>
+<button type="button" class="btn btn-sm btn-ghost" data-neo-remove-closest="form">Cancel</button>
 </form>"#,
         base = ctx.base,
         hx = ctx.hx,

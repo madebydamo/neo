@@ -197,7 +197,24 @@
    *   (in-page links that must not change the URL hash).
    * - img[data-neo-icon-fallback]: a broken icon hides itself and shows its next
    *   sibling (the placeholder glyph).
+   * - [data-neo-copy="<id>"]: click copies that element's text to the clipboard;
+   *   the button says "Copied" for a moment.
+   * - [data-neo-remove-closest="<selector>"]: click removes the closest ancestor
+   *   matching the selector (e.g. Cancel of an inline form).
    */
+  function copyText(doc, button) {
+    var src = doc.getElementById(button.getAttribute('data-neo-copy'));
+    var clip = doc.defaultView.navigator && doc.defaultView.navigator.clipboard;
+    if (!src || !clip) return;
+    if (button.neoCopyLabel == null) button.neoCopyLabel = button.textContent;
+    clip.writeText(src.textContent.trim()).then(function () {
+      button.textContent = 'Copied';
+      doc.defaultView.setTimeout(function () {
+        button.textContent = button.neoCopyLabel;
+      }, 1500);
+    });
+  }
+
   function wireHooks(doc) {
     doc.addEventListener('click', function (e) {
       var t = e.target;
@@ -211,6 +228,17 @@
         e.preventDefault();
         var target = doc.getElementById(link.getAttribute('data-neo-scroll-to'));
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      var copy = t.closest('[data-neo-copy]');
+      if (copy) {
+        copyText(doc, copy);
+        return;
+      }
+      var remover = t.closest('[data-neo-remove-closest]');
+      if (remover) {
+        var gone = remover.closest(remover.getAttribute('data-neo-remove-closest'));
+        if (gone) gone.remove();
       }
     });
     // error does not bubble: listen in the capture phase.

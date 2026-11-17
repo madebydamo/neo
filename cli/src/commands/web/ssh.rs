@@ -165,8 +165,7 @@ fn card_ok(spec: &KeySpec, key: &str) -> String {
       <div class="text-xs text-base-content/60">{hint} <span class="font-mono text-base-content/45 break-all">{path}</span></div>
     </div>
     <div class="flex items-center gap-1.5 shrink-0">
-      <button type="button" class="btn btn-sm btn-ghost"
-        onclick="var b=this;navigator.clipboard.writeText(document.getElementById('ssh-pubkey-value-{id}').textContent.trim()).then(function(){{b.textContent='Copied';setTimeout(function(){{b.textContent='Copy'}},1500)}})">Copy</button>
+      <button type="button" class="btn btn-sm btn-ghost" data-neo-copy="ssh-pubkey-value-{id}">Copy</button>
       <button type="button" class="btn btn-sm btn-soft btn-warning"{lk}
         hx-post="/ssh/{id}/regenerate"
         hx-target="#ssh-pubkey-card-{id}"

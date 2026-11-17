@@ -6,7 +6,7 @@ use super::git::dirty_state;
 use super::ops::kind::id_timestamp;
 use super::ops::store::{gc_old_ops, running_ops};
 use super::types::AppConfig;
-use super::util::{escape_html, op_id_ok, proc};
+use super::util::{escape_attr, op_id_ok, proc};
 use crate::utils::ops::OperationKind;
 
 /// Running op shown in the action bar (first match wins), with its button label and class.
@@ -35,11 +35,12 @@ fn progress_button(kind: OperationKind, kind_label: &str, id: &str, btn_class: &
             r#"<button class="btn btn-sm btn-soft {btn_class} gap-1.5" title="{title} in progress">{spinner}<span class="hidden sm:inline">{kind_label}</span></button>"#,
         );
     }
-    let esc = escape_html(id);
-    let ts = escape_html(id_timestamp(id));
-    // Title + fine timestamp; monitor response also OOBs #changes-modal-title.
+    // Title + fine timestamp (config_dialogs.js); the monitor response also OOBs
+    // #changes-modal-title.
     format!(
-        "<button class=\"btn btn-sm btn-soft {btn_class} gap-1.5\" title=\"{title} in progress — view output\" onclick=\"var m=document.getElementById('changes-modal');var t=m.querySelector('#changes-modal-title')||m.querySelector('h3');t.innerHTML='{title} <span class=\\'font-normal text-sm opacity-50\\'>{ts}</span>';m.showModal();htmx.ajax('GET','/op/monitor/{esc}',{{target:'#changes-body',swap:'innerHTML'}})\">{spinner}<span class=\"hidden sm:inline\">{kind_label}</span></button>",
+        r#"<button class="btn btn-sm btn-soft {btn_class} gap-1.5" title="{title} in progress — view output" data-neo-changes-open="/op/monitor/{id}" data-neo-changes-title="{title}" data-neo-changes-time="{ts}">{spinner}<span class="hidden sm:inline">{kind_label}</span></button>"#,
+        id = escape_attr(id),
+        ts = escape_attr(id_timestamp(id)),
     )
 }
 
@@ -58,7 +59,7 @@ fn render_action_bar_dynamic_inner(config: &AppConfig) -> String {
     let pending = if let Some(button) = running {
         button
     } else if d.worktree_dirty || d.settings_dirty {
-        r#"<button class="btn btn-sm btn-soft btn-warning gap-1.5" title="Saved changes not yet activated — review" onclick="var m=document.getElementById('changes-modal');m.querySelector('h3').textContent='Pending changes';m.showModal();htmx.ajax('GET','/changes/summary',{target:'#changes-body',swap:'innerHTML'})"><span class="neo-unit-dot" data-state="partial" aria-hidden="true"></span>Changes<span class="hidden lg:inline">pending</span></button>"#.to_string()
+        r#"<button class="btn btn-sm btn-soft btn-warning gap-1.5" title="Saved changes not yet activated — review" data-neo-changes-open="/changes/summary" data-neo-changes-title="Pending changes"><span class="neo-unit-dot" data-state="partial" aria-hidden="true"></span>Changes<span class="hidden lg:inline">pending</span></button>"#.to_string()
     } else {
         r#"<span class="hidden sm:inline-flex items-center gap-1.5 px-2 text-xs text-base-content/55" title="Configuration matches the last activation"><span class="neo-unit-dot" data-state="ok" aria-hidden="true"></span>Up to date</span>"#.to_string()
     };

@@ -137,3 +137,64 @@ test('h sets classes, text, attributes, listeners, properties and children', () 
     delete globalThis.document;
   }
 });
+
+/** A document with the click listener wireHooks adds, and elements by id. */
+function hookDoc(byId) {
+  const listeners = {};
+  const timers = [];
+  const copied = [];
+  const doc = {
+    addEventListener: (type, fn) => { listeners[type] = fn; },
+    getElementById: (id) => byId[id] || null,
+    defaultView: {
+      navigator: { clipboard: { writeText: (t) => { copied.push(t); return Promise.resolve(); } } },
+      setTimeout: (fn) => timers.push(fn),
+    },
+  };
+  NeoUtil.wireHooks(doc);
+  const click = (target) => listeners.click({ target, preventDefault() {} });
+  return { click, timers, copied };
+}
+
+/** An element whose closest() finds the first of `chain` matching the selector. */
+function el(attrs, chain) {
+  const self = {
+    attrs,
+    textContent: attrs.text || '',
+    removed: false,
+    getAttribute: (k) => (k in attrs ? attrs[k] : null),
+    remove() { self.removed = true; },
+    closest(sel) {
+      for (const c of [self, ...(chain || [])]) {
+        const m = /^\[([\w-]+)\]$/.exec(sel);
+        if (m ? m[1] in c.attrs : c.attrs.tag === sel) return c;
+      }
+      return null;
+    },
+  };
+  return self;
+}
+
+test('wireHooks copies an element\'s text and restores the label', async () => {
+  const key = { textContent: '  ssh-ed25519 AAAA host \n' };
+  const button = el({ 'data-neo-copy': 'key', text: 'Copy' });
+  const { click, timers, copied } = hookDoc({ key });
+  click(button);
+  await Promise.resolve();
+  assert.deepStrictEqual(copied, ['ssh-ed25519 AAAA host']);
+  assert.strictEqual(button.textContent, 'Copied');
+  // A second click meanwhile keeps the original label.
+  click(button);
+  await Promise.resolve();
+  timers.forEach((f) => f());
+  assert.strictEqual(button.textContent, 'Copy');
+});
+
+test('wireHooks removes the closest match of data-neo-remove-closest', () => {
+  const form = el({ tag: 'form' });
+  const cancel = el({ 'data-neo-remove-closest': 'form' }, [form]);
+  const { click } = hookDoc({});
+  click(cancel);
+  assert.strictEqual(form.removed, true);
+  assert.strictEqual(cancel.removed, false);
+});

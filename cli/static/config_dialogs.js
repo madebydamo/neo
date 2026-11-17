@@ -1,6 +1,7 @@
 // config_dialogs.js
 // Dialogs on the config page that are not tied to one pane: settings.toml download and
-// upload, live unit logs, the option helper form. Runs after their markup is parsed.
+// upload, the changes modal from the action bar, live unit logs, the option helper
+// form. Runs after their markup is parsed.
 
 /**
  * Download working-tree settings.toml without navigating this document.
@@ -88,6 +89,23 @@ document.addEventListener('change', function (e) {
   if (e.target.matches && e.target.matches('input[data-neo-settings-upload]')) neoUploadSettingsToml(e.target);
 });
 
+// Action bar (pushed over the WS): [data-neo-changes-open="<url>"] opens the
+// changes modal titled data-neo-changes-title (plus data-neo-changes-time, faint)
+// and loads the URL into it.
+document.addEventListener('click', function (e) {
+  var b = e.target.closest && e.target.closest('[data-neo-changes-open]');
+  var m = b && document.getElementById('changes-modal');
+  if (!m) return;
+  var t = m.querySelector('#changes-modal-title') || m.querySelector('h3');
+  if (t) {
+    t.textContent = b.getAttribute('data-neo-changes-title') || '';
+    var time = b.getAttribute('data-neo-changes-time');
+    if (time) t.append(' ', NeoUtil.h('span', { class: 'font-normal text-sm opacity-50', text: time }));
+  }
+  m.showModal();
+  htmx.ajax('GET', b.getAttribute('data-neo-changes-open'), { target: '#changes-body', swap: 'innerHTML' });
+});
+
 (function () {
   // Live unit logs (SSE from /sse/logs/<unit>). The output panel is the same
   // logPane activation and update use, including Latest when follow is paused.
@@ -148,6 +166,11 @@ document.addEventListener('change', function (e) {
   if (ld) {
     ld.addEventListener('close', stopUnitLogs);
   }
+  // Unit controls (swapped in and pushed over the WS): [data-neo-unit-logs="<unit>"].
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-neo-unit-logs]');
+    if (b) window.openUnitLogs(b.getAttribute('data-neo-unit-logs'));
+  });
 
   // Option helper form dialog (password/hash generators etc.)
   var helperDialogOnApply = null;
