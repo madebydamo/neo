@@ -1,16 +1,60 @@
 #!/usr/bin/env bash
+# Format the staged Nix and Rust files before the commit.
+#
+# Only staged files are touched. A file that is staged completely is formatted
+# in place and staged again. A file that also has unstaged edits is never
+# re-added (that would commit the unstaged edits): its staged version is only
+# checked, and the commit stops when that version is not formatted.
 set -euo pipefail
 
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 
-if ! command -v just >/dev/null 2>&1; then
-  echo "pre-commit: 'just' is not on PATH; install it or skip with git commit --no-verify" >&2
-  exit 1
-fi
+for tool in alejandra rustfmt; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "pre-commit: '$tool' is not on PATH; run 'nix develop' or skip with git commit --no-verify" >&2
+    exit 1
+  fi
+done
 
-just format
+# Formatter command (stdin → stdout) for a path; empty when we don't format it.
+formatter() {
+  case "$1" in
+    build/*) ;;
+    *.nix) echo "alejandra --quiet -" ;;
+    *.rs) echo "rustfmt --edition 2021 --emit stdout" ;;
+  esac
+}
+
+declare -A unstaged=()
+while IFS= read -r -d '' file; do
+  unstaged["$file"]=1
+done < <(git diff --name-only -z)
+
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+failed=()
 
 while IFS= read -r -d '' file; do
-  git add -- "$file"
+  fmt="$(formatter "$file")"
+  [ -n "$fmt" ] || continue
+  if [ -n "${unstaged[$file]:-}" ]; then
+    if ! git show ":$file" | $fmt >"$tmp" 2>/dev/null; then
+      failed+=("$file (does not parse)")
+    elif ! git show ":$file" | cmp -s - "$tmp"; then
+      failed+=("$file (not formatted, has unstaged edits)")
+    fi
+  elif ! $fmt <"$file" >"$tmp"; then
+    failed+=("$file (does not parse)")
+  elif ! cmp -s "$file" "$tmp"; then
+    cat "$tmp" >"$file"
+    git add -- "$file"
+  fi
 done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+
+if [ "${#failed[@]}" -gt 0 ]; then
+  echo "pre-commit: commit stopped:" >&2
+  printf '  %s\n' "${failed[@]}" >&2
+  echo "Run 'just format', stage the result and commit again (or git commit --no-verify)." >&2
+  exit 1
+fi

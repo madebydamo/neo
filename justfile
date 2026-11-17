@@ -140,8 +140,8 @@ web:
     MTIME=$(get_mtime)
     # Always build via nix so native deps (openssl, pkg-config) are provided.
     # Rebuild is a no-op (or very fast) when nothing changed; triggers on cli edits.
-    nix build .#neo -o /tmp/neo-web-dev
-    /tmp/neo-web-dev/bin/neo --settings "$SETTINGS" web &
+    nix build .#neo -o build/.neo-web-dev
+    build/.neo-web-dev/bin/neo --settings "$SETTINGS" web &
     SERVER_PID=$!
     echo "[$(date +%H:%M:%S)] started (pid $SERVER_PID)"
     while kill -0 "$SERVER_PID" 2>/dev/null; do
@@ -203,13 +203,16 @@ ssh:
 format:
   #!/usr/bin/env bash
   set -euo pipefail
-  alejandra -e ./build/ . 2> /dev/null
-  if command -v cargo >/dev/null 2>&1; then
-    cargo fmt --all --manifest-path cli/Cargo.toml
-  else
-    nix develop --command cargo fmt --all --manifest-path cli/Cargo.toml
-  fi
+  alejandra --quiet -e ./build/ .
+  cargo fmt --all --manifest-path cli/Cargo.toml
   echo "Rust formatted"
+
+# Rust tests and the web UI JS tests.
+test: test-widgets
+  cargo test --manifest-path cli/Cargo.toml
+
+clippy:
+  cargo clippy --manifest-path cli/Cargo.toml --all-targets -- -D warnings
 
 test-widgets:
   #!/usr/bin/env bash
@@ -220,21 +223,19 @@ test-widgets:
     nix-shell -p nodejs --run 'node --test cli/templates/options/widgets/*.test.js cli/templates/options/widgets/test/*.test.js cli/static/*.test.js'
   fi
 
+# Flakes only see tracked files: untracked ones under nix/, templates/ and cli/ are listed, not added.
+# Formatting, then nix flake check (Nix checks, Rust tests + clippy, widget tests).
 check:
   #!/usr/bin/env bash
   set -euo pipefail
-  git add flake.nix nix/ templates/
-  nix flake check
-  #if [ -d build ]; then
-  #  (cd build && git add . && nix flake check)
-  #fi
-  alejandra -c -e ./build/ . 2> /dev/null
-  if command -v cargo >/dev/null 2>&1; then
-    cargo fmt --all --manifest-path cli/Cargo.toml -- --check
-  else
-    nix develop --command cargo fmt --all --manifest-path cli/Cargo.toml -- --check
+  alejandra --quiet --check -e ./build/ .
+  cargo fmt --all --manifest-path cli/Cargo.toml -- --check
+  untracked=$(git ls-files --others --exclude-standard -- flake.nix nix templates cli)
+  if [ -n "$untracked" ]; then
+    echo "warning: untracked files the flake cannot see (git add them):" >&2
+    echo "$untracked" | sed 's/^/  /' >&2
   fi
-
+  nix flake check
 
 # Install the disko layout into disk images and boot them from the disk
 # under UEFI and BIOS firmware (GRUB, firmware boot entry). Needs KVM; minutes.
