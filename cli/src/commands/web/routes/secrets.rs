@@ -193,9 +193,7 @@ where
     F: FnOnce(&Store) -> anyhow::Result<String> + Send + 'static,
 {
     let store = config.secrets_store();
-    proc::blocking(move || f(&store).map_err(|e| format!("{e:#}")))
-        .await
-        .and_then(|r| r)
+    proc::blocking_try(move || f(&store).map_err(|e| format!("{e:#}"))).await
 }
 
 fn done(config: &AppConfig, result: Result<String, String>) -> RawHtml<String> {

@@ -75,11 +75,12 @@ pub async fn versioning_note(form: Form<NoteForm>) -> RawJson<String> {
         _ => Err("invalid note target".to_string()),
     };
     let res = match target {
-        Ok(t) => proc::blocking(move || {
-            version_tree::notes::set(&t, &f.note).map_err(|e| format!("{e:#}"))
-        })
-        .await
-        .and_then(|r| r),
+        Ok(t) => {
+            proc::blocking_try(move || {
+                version_tree::notes::set(&t, &f.note).map_err(|e| format!("{e:#}"))
+            })
+            .await
+        }
         Err(e) => Err(e),
     };
     RawJson(match res {
@@ -96,9 +97,7 @@ pub async fn versioning_services(config: &State<Arc<AppConfig>>, rev: &str) -> R
     }
     let dir = config.config_dir();
     let rev = rev.to_string();
-    let services = proc::blocking(move || enabled_services_at_rev(&dir, &rev))
-        .await
-        .and_then(|r| r);
+    let services = proc::blocking_try(move || enabled_services_at_rev(&dir, &rev)).await;
     match services {
         Ok(s) => RawJson(serde_json::to_string(&s).unwrap_or_else(|_| "{}".to_string())),
         Err(e) => RawJson(serde_json::json!({"error": e}).to_string()),

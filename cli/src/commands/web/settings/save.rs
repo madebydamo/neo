@@ -176,7 +176,7 @@ pub async fn finish_save(
     write_settings_doc(path, doc)?;
     // New or removed SSH keys change who may decrypt: re-encrypt right away.
     let store = config.secrets_store();
-    proc::blocking(move || {
+    proc::blocking_try(move || {
         if store.needs_rekey() {
             store.rekey().map(|_| ()).map_err(|e| format!("{e:#}"))
         } else {
@@ -184,7 +184,6 @@ pub async fn finish_save(
         }
     })
     .await
-    .and_then(|r| r)
     .map_err(|e| {
         SaveError::internal(format!(
             "Saved, but re-encrypting secrets for the new SSH keys failed: {e}"

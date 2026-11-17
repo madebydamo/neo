@@ -77,9 +77,7 @@ pub async fn discard_response(config: &Arc<AppConfig>) -> Result<RawHtml<String>
         OpInfo::new("settings", "Discarding changes"),
     )?;
     let cfg = Arc::clone(config);
-    let discarded = proc::blocking(move || discard_pending_changes(&cfg))
-        .await
-        .and_then(|r| r);
+    let discarded = proc::blocking_try(move || discard_pending_changes(&cfg)).await;
     Ok(RawHtml(match discarded {
         Ok(()) => alert_html(
             AlertKind::Success,

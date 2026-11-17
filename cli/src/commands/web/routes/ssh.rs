@@ -111,20 +111,7 @@ fn rotate_key(spec: &KeySpec) -> Result<String, String> {
             Command::new(&script).arg("rotate").output()
         }
         .map_err(|e| format!("run {script} rotate: {e}"))?;
-        if !out.status.success() {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            return Err(format!(
-                "{script} rotate failed ({}): {}{}",
-                out.status,
-                stderr.trim(),
-                if stdout.trim().is_empty() {
-                    String::new()
-                } else {
-                    format!(" / {}", stdout.trim())
-                }
-            ));
-        }
+        proc::check(out, &format!("{script} rotate"))?;
         return read_public_key(spec);
     }
     if spec.sudo {
@@ -153,12 +140,7 @@ fn rotate_key(spec: &KeySpec) -> Result<String, String> {
         .map_err(|e| {
             format!("ssh-keygen failed ({e}); install/activate so {script} is available")
         })?;
-    if !out.status.success() {
-        return Err(format!(
-            "ssh-keygen failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
-    }
+    proc::check(out, "ssh-keygen")?;
     let _ = fs::set_permissions(spec.key_path, fs::Permissions::from_mode(0o600));
     let _ = fs::set_permissions(&pub_path, fs::Permissions::from_mode(0o644));
     read_public_key(spec)
@@ -250,9 +232,7 @@ pub async fn ssh_regenerate(key: &str) -> Result<Option<RawHtml<String>>, Blocke
         &LockSpec::system_shared(),
         OpInfo::new("ssh-key", format!("Regenerating the {key} key")),
     )?;
-    let rotated = proc::blocking(move || rotate_key(spec))
-        .await
-        .and_then(|r| r);
+    let rotated = proc::blocking_try(move || rotate_key(spec)).await;
     Ok(Some(RawHtml(match rotated {
         Ok(k) => card_ok(spec, &k),
         Err(msg) => card_err(spec, &format!("Regenerate failed: {msg}")),

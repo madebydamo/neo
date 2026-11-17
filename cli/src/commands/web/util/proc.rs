@@ -18,6 +18,15 @@ where
         .map_err(|e| format!("background task failed: {e}"))
 }
 
+/// [`blocking`] for work that itself fails with a message: one `Result` for both.
+pub async fn blocking_try<T, F>(f: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    blocking(f).await?
+}
+
 /// `sudo -n`: neo-web has no terminal, so a missing sudo rule fails at once.
 pub fn sudo() -> Command {
     let mut c = Command::new(sudo_bin());
