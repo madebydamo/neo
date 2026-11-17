@@ -371,13 +371,15 @@ impl LockGuard {
     /// Make systemd refuse to start `units` until [`Self::release_unit_guards`]
     /// or drop. Marker files contain this holder's id so a stale-holder cleanup
     /// never removes a newer holder's guard.
-    pub fn guard_units(&mut self, units: &[String]) -> Result<(), String> {
+    ///
+    /// Errors carry one flat message (callers print them with `{e}`).
+    pub fn guard_units(&mut self, units: &[String]) -> anyhow::Result<()> {
         let names: Vec<String> = units.iter().map(|u| full_unit_name(u)).collect();
         if let Some(bad) = names.iter().find(|n| !marker_name_ok(n)) {
-            return Err(format!("invalid unit name for start guard: {bad}"));
+            anyhow::bail!("invalid unit name for start guard: {bad}");
         }
         let Some((_, file, holder)) = self.holder.as_mut() else {
-            return Err("no holder file (lock directory not writable)".to_string());
+            anyhow::bail!("no holder file (lock directory not writable)");
         };
         for n in &names {
             if !holder.guarded_units.contains(n) {
@@ -385,12 +387,12 @@ impl LockGuard {
             }
         }
         // Record first: a crash after this leaves markers the cleanup knows about.
-        write_holder_in_place(file, holder).map_err(|e| format!("holder file: {e}"))?;
+        write_holder_in_place(file, holder).map_err(|e| anyhow::anyhow!("holder file: {e}"))?;
         fs::create_dir_all(&self.guard_dir)
-            .map_err(|e| format!("{}: {e}", self.guard_dir.display()))?;
+            .map_err(|e| anyhow::anyhow!("{}: {e}", self.guard_dir.display()))?;
         for n in &names {
             let p = self.guard_dir.join(n);
-            fs::write(&p, &holder.id).map_err(|e| format!("{}: {e}", p.display()))?;
+            fs::write(&p, &holder.id).map_err(|e| anyhow::anyhow!("{}: {e}", p.display()))?;
         }
         Ok(())
     }
@@ -572,8 +574,7 @@ impl LockManager {
         let deadline = Instant::now() + wait;
         loop {
             match self.try_acquire(spec, info) {
-                Err(LockError::Conflict(c)) if Instant::now() < deadline => {
-                    let _ = c;
+                Err(LockError::Conflict(_)) if Instant::now() < deadline => {
                     std::thread::sleep(POLL);
                 }
                 other => return other,
@@ -661,7 +662,7 @@ impl LockManager {
             .open(&tmp)?;
         // Lock before it gets its visible name: readers treat unlocked holder files as stale.
         flock(&file, libc::LOCK_EX | libc::LOCK_NB)?;
-        file.write_all(&serde_json::to_vec(&holder).unwrap_or_default())?;
+        file.write_all(&holder_json(&holder)?)?;
         if let Err(e) = fs::rename(&tmp, &path) {
             let _ = fs::remove_file(&tmp);
             return Err(e);
@@ -729,8 +730,13 @@ fn older_than(path: &Path, secs: u64) -> bool {
         .is_some_and(|d| d.as_secs() > secs)
 }
 
+/// A holder file never ends up empty: an empty one reads as a broken holder.
+fn holder_json(holder: &Holder) -> std::io::Result<Vec<u8>> {
+    serde_json::to_vec(holder).map_err(std::io::Error::other)
+}
+
 fn write_holder_in_place(file: &mut File, holder: &Holder) -> std::io::Result<()> {
-    let data = serde_json::to_vec(holder).unwrap_or_default();
+    let data = holder_json(holder)?;
     file.set_len(0)?;
     file.seek(SeekFrom::Start(0))?;
     file.write_all(&data)?;
@@ -757,7 +763,7 @@ fn remove_marker_if_owned(guard_dir: &Path, unit: &str, holder_id: &str) {
 }
 
 fn now_epoch() -> i64 {
-    super::command::now_secs() as i64
+    i64::try_from(super::command::now_secs()).unwrap_or(i64::MAX)
 }
 
 /// `HH:MM` in the host's local time zone.
@@ -992,7 +998,7 @@ mod tests {
         assert!(g_invalid(&m).is_err());
     }
 
-    fn g_invalid(m: &LockManager) -> Result<(), String> {
+    fn g_invalid(m: &LockManager) -> anyhow::Result<()> {
         let mut g = m.try_acquire(&LockSpec::unit("x"), &info("x")).unwrap();
         g.guard_units(&["../evil".to_string()])
     }

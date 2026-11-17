@@ -195,6 +195,16 @@ pub fn sops_config(host: &str, admins: &[String]) -> String {
     )
 }
 
+/// Recipients this repo should be encrypted to now.
+fn recipients(doc: &DocumentMut) -> Result<(String, Vec<String>)> {
+    let admins = admin_keys(doc);
+    if admins.is_empty() {
+        bail!("core.ssh.authorizedKeys has no ssh-ed25519 key left: refusing to re-encrypt for the host alone");
+    }
+    let host = host_key(doc).context("no host key recorded (core.secrets.hostKey)")?;
+    Ok((host, admins))
+}
+
 /// Files of one config repo.
 pub struct Store {
     pub dir: PathBuf,
@@ -378,16 +388,6 @@ impl Store {
         Ok(count_leaves(&tree))
     }
 
-    /// Recipients this repo should be encrypted to now.
-    fn recipients(&self, doc: &DocumentMut) -> Result<(String, Vec<String>)> {
-        let admins = admin_keys(doc);
-        if admins.is_empty() {
-            bail!("core.ssh.authorizedKeys has no ssh-ed25519 key left: refusing to re-encrypt for the host alone");
-        }
-        let host = host_key(doc).context("no host key recorded (core.secrets.hostKey)")?;
-        Ok((host, admins))
-    }
-
     /// Whether core.ssh.authorizedKeys changed since the last encryption.
     pub fn needs_rekey(&self) -> bool {
         if !matches!(self.backend(), Backend::Sops(_)) {
@@ -396,7 +396,7 @@ impl Store {
         let Ok(doc) = self.load_doc() else {
             return false;
         };
-        let Ok((host, admins)) = self.recipients(&doc) else {
+        let Ok((host, admins)) = recipients(&doc) else {
             return false;
         };
         fs::read_to_string(self.path(SOPS_CONFIG)).ok() != Some(sops_config(&host, &admins))
@@ -408,7 +408,7 @@ impl Store {
             bail!("secrets are not encrypted");
         };
         let doc = self.load_doc()?;
-        let (host, admins) = self.recipients(&doc)?;
+        let (host, admins) = recipients(&doc)?;
         let tree = decrypt(&sops)?;
         let mut recipients = vec![host.clone()];
         recipients.extend(admins.iter().cloned());
@@ -451,7 +451,7 @@ impl Store {
             return Ok(false);
         }
         let current = self.load_doc()?;
-        let (host, admins) = self.recipients(&current)?;
+        let (host, admins) = recipients(&current)?;
         let mut recipients = vec![host];
         recipients.extend(admins);
         let encrypted = encrypt(&prune_tree(&tree), &recipients)?;

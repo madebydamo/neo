@@ -5,7 +5,7 @@ use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 use toml_edit::DocumentMut;
 
-use crate::commands::restore::backup::{self, Access, Source};
+use crate::commands::restore::backup::{self, Access, Format, Source};
 use crate::commands::restore::local::{commit_uncommitted, remote_url};
 use crate::commands::restore::remote::default_key;
 use crate::utils::command::root_command;
@@ -17,11 +17,11 @@ const ROTATE_UNIT: &str = "backup-rotate-key.service";
 /// Start backup-rotate-key.service: new data key, new repository, full backup,
 /// old repository removed (backup.sh). It waits for a running backup.
 pub fn rotate_key(doc: &DocumentMut, dry_run: bool, sudo_cmd: &str) -> Result<()> {
-    // Every encrypted destination gets a new key.
-    let encrypted = backup::enabled_destinations(doc)
+    // Every encrypted destination gets a new key. No sources when the backup is off.
+    let encrypted = Source::from_settings(doc)?
         .iter()
-        .any(|(_, d)| d.get("format").and_then(|v| v.as_str()) == Some("encrypted"));
-    if !backup::backup_enabled(doc) || !encrypted {
+        .any(|s| s.format == Format::Encrypted);
+    if !encrypted {
         bail!("only the encrypted backup has a key: add a destination with format = \"encrypted\" and apply first");
     }
     if dry_run {

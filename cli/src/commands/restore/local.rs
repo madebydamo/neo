@@ -14,7 +14,7 @@ use super::{
 };
 use crate::utils::command::{confirm, is_root, stdout_checked};
 use crate::utils::execute_command;
-use crate::utils::profile::DEFAULT_SERVER_CONFIG_PATH;
+use crate::utils::profile::{resolve_config_path, PROFILE_SERVER};
 use crate::utils::settings::{self, disko_enabled, str_at, FILE as SETTINGS_FILE};
 
 pub const WORK_DIR: &str = "/root/neo-restore";
@@ -237,9 +237,7 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     let pool = str_at(&doc, &["disko", "poolName"])
         .unwrap_or("zroot")
         .to_string();
-    let config_path = str_at(&doc, &["neo-cli", "server", "configPath"])
-        .unwrap_or(DEFAULT_SERVER_CONFIG_PATH)
-        .to_string();
+    let config_path = resolve_config_path(&doc, PROFILE_SERVER);
     let config_rel = config_path
         .strip_prefix(&format!("{root}/"))
         .map(str::to_string);
