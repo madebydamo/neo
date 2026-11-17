@@ -13,8 +13,8 @@ use super::super::diff::parse::{
 use super::super::diff::secrets_overlay::{secret_pair, SecretPair, SecretTexts};
 use super::super::diff::{diff_settings, SettingsDiff};
 use super::plumbing::{git_output, git_stdout};
-use crate::utils::secrets;
 use crate::utils::secrets_store;
+use crate::utils::secrets_yaml;
 
 /// Context lines requested from git; the renderer folds long unchanged runs.
 const CONTEXT_ARG: &str = "-U20";
@@ -27,8 +27,8 @@ const LOCK_FILE: &str = "flake.lock";
 /// Files whose content is never shown: secret values (plain) or ciphertext noise.
 /// Their changes appear masked in the settings summary instead.
 const HIDDEN_FILES: &[&str] = &[
-    secrets::PLAIN_FILE,
-    secrets::SOPS_FILE,
+    secrets_yaml::PLAIN_FILE,
+    secrets_yaml::SOPS_FILE,
     secrets_store::IDENTITY_FILE,
 ];
 const HIDDEN_REASON: &str =
@@ -352,7 +352,8 @@ pub fn settings_semantic(
     set: &ChangeSet,
     range: DiffRange,
 ) -> Option<Result<SettingsDiff, String>> {
-    let secrets_touched = touches(set, secrets::PLAIN_FILE) || touches(set, secrets::SOPS_FILE);
+    let secrets_touched =
+        touches(set, secrets_yaml::PLAIN_FILE) || touches(set, secrets_yaml::SOPS_FILE);
     if !touches(set, SETTINGS_FILE) && !secrets_touched {
         return None;
     }
@@ -361,8 +362,8 @@ pub fn settings_semantic(
         Err(e) => return Some(Err(format!("{e:#}"))),
     };
     let pair = if secrets_touched {
-        match file_pair(dir, range, secrets::PLAIN_FILE)
-            .and_then(|p| Ok((p, file_pair(dir, range, secrets::SOPS_FILE)?)))
+        match file_pair(dir, range, secrets_yaml::PLAIN_FILE)
+            .and_then(|p| Ok((p, file_pair(dir, range, secrets_yaml::SOPS_FILE)?)))
         {
             Ok(((po, pn), (so, sn))) => secret_pair(
                 SecretTexts {

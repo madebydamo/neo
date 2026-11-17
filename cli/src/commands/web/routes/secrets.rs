@@ -14,8 +14,8 @@ use crate::commands::web::settings::save::refresh_after_settings_change;
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::proc;
 use crate::utils::locks::{LockSpec, OpInfo};
-use crate::utils::secrets::PLAIN_FILE;
 use crate::utils::secrets_store::Store;
+use crate::utils::secrets_yaml::PLAIN_FILE;
 
 fn card(config: &AppConfig, message: Option<(&str, &str)>) -> Template {
     Template::render("secrets_card", card_context(config, message))

@@ -17,7 +17,7 @@ use toml_edit::{DocumentMut, Item};
 use crate::commands::web::diff::flake_lock::input_updates;
 use crate::commands::web::diff::secrets_overlay::{secret_pair, SecretPair, SecretTexts};
 use crate::commands::web::diff::settings_semantic::{diff_settings, Transition};
-use crate::utils::{secrets, secrets_store};
+use crate::utils::{secrets_store, secrets_yaml};
 
 /// Cached secret comparisons (value-free tokens) — at most this many.
 const SECRET_CACHE_MAX: usize = 512;
@@ -197,8 +197,8 @@ pub fn summarize_commits(
     revs.sort();
     revs.dedup();
     let blobs = read_blobs(dir, &revs, "settings.toml");
-    let plains = read_blobs(dir, &revs, secrets::PLAIN_FILE);
-    let sopses = read_blobs(dir, &revs, secrets::SOPS_FILE);
+    let plains = read_blobs(dir, &revs, secrets_yaml::PLAIN_FILE);
+    let sopses = read_blobs(dir, &revs, secrets_yaml::SOPS_FILE);
     let locks = read_blobs(dir, &revs, "flake.lock");
     let texts = |rev: &str| SecretTexts {
         settings: blobs.get(rev).map_or("", String::as_str),

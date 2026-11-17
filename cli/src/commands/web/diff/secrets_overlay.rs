@@ -7,7 +7,7 @@
 use anyhow::Result;
 use toml_edit::{DocumentMut, Item, Value};
 
-use crate::utils::secrets::{self, Node, Tree};
+use crate::utils::secrets_yaml::{self, Node, Tree};
 
 /// Token of a secret leaf equal on both sides (or present on one side only).
 const SAME: &str = "=";
@@ -158,7 +158,7 @@ fn pull_inline(o: &mut Tree, n: &mut Tree, old_settings: &str, new_settings: &st
 }
 
 fn parse(text: &str, what: &str, notes: &mut Vec<String>) -> Tree {
-    secrets::parse(text).unwrap_or_else(|e| {
+    secrets_yaml::parse(text).unwrap_or_else(|e| {
         notes.push(format!("Could not read {what}: {e:#}"));
         Tree::new()
     })
@@ -172,12 +172,12 @@ pub fn secret_pair(
     decrypt: &dyn Fn(&str) -> Result<Tree>,
 ) -> SecretPair {
     let mut notes = Vec::new();
-    let mut o = parse(old.plain, secrets::PLAIN_FILE, &mut notes);
-    let mut n = parse(new.plain, secrets::PLAIN_FILE, &mut notes);
+    let mut o = parse(old.plain, secrets_yaml::PLAIN_FILE, &mut notes);
+    let mut n = parse(new.plain, secrets_yaml::PLAIN_FILE, &mut notes);
     let mut comparable = true;
     if old.sops == new.sops {
         // Unchanged ciphertext: identical leaves on both sides.
-        let t = parse(old.sops, secrets::SOPS_FILE, &mut notes);
+        let t = parse(old.sops, secrets_yaml::SOPS_FILE, &mut notes);
         merge_tree(&mut o, t.clone());
         merge_tree(&mut n, t);
     } else {
@@ -198,8 +198,8 @@ pub fn secret_pair(
                     "Encrypted secrets could not be decrypted to compare ({e:#}): only added and removed secrets are listed."
                 ));
                 comparable = false;
-                merge_tree(&mut o, parse(old.sops, secrets::SOPS_FILE, &mut notes));
-                merge_tree(&mut n, parse(new.sops, secrets::SOPS_FILE, &mut notes));
+                merge_tree(&mut o, parse(old.sops, secrets_yaml::SOPS_FILE, &mut notes));
+                merge_tree(&mut n, parse(new.sops, secrets_yaml::SOPS_FILE, &mut notes));
             }
         }
     }
@@ -269,7 +269,7 @@ mod tests {
     #[test]
     fn changed_sops_is_decrypted_and_plain_to_sops_move_is_no_change() {
         let decrypt = |text: &str| -> Result<Tree> {
-            Ok(secrets::parse(&text.replace("ENC", "")).expect("parse"))
+            Ok(secrets_yaml::parse(&text.replace("ENC", "")).expect("parse"))
         };
         let p = secret_pair(
             SecretTexts {

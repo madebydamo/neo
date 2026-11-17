@@ -11,7 +11,7 @@ use super::{insert_dotted, json_to_toml_item, json_to_toml_value};
 use crate::commands::web::locks::Blocked;
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::proc;
-use crate::utils::{secrets, settings};
+use crate::utils::{secrets_yaml, settings};
 
 /// Why a settings write did not happen: 409 from the settings lock, else a status
 /// and plain-text reason, which the form and the proposal card show as they are.
@@ -111,8 +111,8 @@ pub async fn route_secrets(
     doc: &mut DocumentMut,
     scope: Option<&[String]>,
 ) -> Result<(), SaveError> {
-    let backend = secrets::backend_for(&config.settings_path);
-    if backend == secrets::Backend::Inline {
+    let backend = secrets_yaml::backend_for(&config.settings_path);
+    if backend == secrets_yaml::Backend::Inline {
         return Ok(());
     }
     // A settings.nix older than secrets support never reads the secrets file:
@@ -121,8 +121,8 @@ pub async fn route_secrets(
     if !store.loads_secret_files() {
         return Err(SaveError::internal(format!(
             "Not saved: modules/settings.nix does not load {} / {} (refresh the config from the neo homeserver template, e.g. neo update)",
-            secrets::PLAIN_FILE,
-            secrets::SOPS_FILE
+            secrets_yaml::PLAIN_FILE,
+            secrets_yaml::SOPS_FILE
         )));
     }
     // Without the list of secret paths a save could write secrets inline: refuse.
@@ -137,15 +137,15 @@ pub async fn route_secrets(
         ));
     }
     match backend {
-        secrets::Backend::Inline => Ok(()),
-        secrets::Backend::Plain(path) => {
-            let mut tree = secrets::read_plain(&path)
+        secrets_yaml::Backend::Inline => Ok(()),
+        secrets_yaml::Backend::Plain(path) => {
+            let mut tree = secrets_yaml::read_plain(&path)
                 .map_err(|e| SaveError::internal(format!("Not saved: {e:#}")))?;
-            secrets::split_into(doc, &mut tree, &patterns, scope);
-            secrets::write_plain(&path, &tree)
+            secrets_yaml::split_into(doc, &mut tree, &patterns, scope);
+            secrets_yaml::write_plain(&path, &tree)
                 .map_err(|e| SaveError::internal(format!("Writing secrets failed: {e:#}")))
         }
-        secrets::Backend::Sops(_) => {
+        secrets_yaml::Backend::Sops(_) => {
             // Placeholders (unchanged values) are dropped; changed or cleared
             // secrets are re-encrypted (decrypting needs the root helper).
             let scope = scope.map(<[String]>::to_vec);

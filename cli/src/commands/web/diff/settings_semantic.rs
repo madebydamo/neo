@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Context, Result};
 use toml_edit::{DocumentMut, Item, Table, TableLike, Value};
 
-use crate::utils::secrets::{Node, Tree};
+use crate::utils::secrets_yaml::{Node, Tree};
 
 /// Placeholder shown instead of secret values.
 pub const MASK: &str = "••••••";

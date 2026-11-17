@@ -2,8 +2,8 @@
 
 use super::nix::value_to_display;
 use super::types::{AppConfig, OptionPaneContext, OptionSchema};
-use crate::utils::secrets::{self, Backend, Node, Tree, PLACEHOLDER_PREFIX};
 use crate::utils::secrets_store;
+use crate::utils::secrets_yaml::{self, Backend, Node, Tree, PLACEHOLDER_PREFIX};
 
 /// A service (or core section) pane from the serving evaluation, with settings
 /// saved since laid over it. Secrets stay placeholders on encrypted configs.
@@ -32,7 +32,7 @@ fn secret_value<'a>(tree: &'a Tree, s: &str) -> Option<&'a str> {
 
 pub(crate) fn has_placeholder(v: &serde_json::Value) -> bool {
     match v {
-        serde_json::Value::String(s) => secrets::is_placeholder(s),
+        serde_json::Value::String(s) => secrets_yaml::is_placeholder(s),
         serde_json::Value::Array(a) => a.iter().any(has_placeholder),
         serde_json::Value::Object(m) => m.values().any(has_placeholder),
         _ => false,
@@ -63,7 +63,7 @@ fn reveal_secrets(config: &AppConfig, pane: &mut OptionPaneContext) {
     {
         return;
     }
-    let Backend::Sops(path) = secrets::backend_for(&config.settings_path) else {
+    let Backend::Sops(path) = secrets_yaml::backend_for(&config.settings_path) else {
         return;
     };
     let tree = match secrets_store::decrypt(&path) {
@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn placeholders_are_filled_from_the_tree() {
-        let tree = secrets::parse(
+        let tree = secrets_yaml::parse(
             "services:\n  rathole:\n    token: \"t0k\"\ncore:\n  git:\n    tokens:\n      github.com: \"pat\"\n",
         )
         .unwrap();

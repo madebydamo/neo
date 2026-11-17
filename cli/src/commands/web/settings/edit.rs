@@ -376,11 +376,11 @@ mod tests {
 
     #[test]
     fn nested_entry_fields_and_their_secrets() {
-        use crate::utils::secrets::{self, Node};
+        use crate::utils::secrets_yaml::{self, Node};
         let mut doc: DocumentMut = "[services.x.accounts.tinyauth]\nusername = \"admin\"\n"
             .parse()
             .unwrap();
-        let mut tree = secrets::parse(
+        let mut tree = secrets_yaml::parse(
             "services:\n  x:\n    accounts:\n      tinyauth:\n        password: \"old\"\n",
         )
         .unwrap();
@@ -400,14 +400,14 @@ mod tests {
             ],
         )
         .unwrap();
-        secrets::split_into(&mut doc, &mut tree, &patterns, None);
+        secrets_yaml::split_into(&mut doc, &mut tree, &patterns, None);
         let s = doc.to_string();
         assert!(s.contains("tmr") && !s.contains("typed"), "{s}");
         assert_eq!(
             doc["services"]["x"]["accounts"]["tinyauth"]["username"].as_str(),
             Some("admin")
         );
-        let accounts = |t: &secrets::Tree| match t.get("services").and_then(|n| match n {
+        let accounts = |t: &secrets_yaml::Tree| match t.get("services").and_then(|n| match n {
             Node::Map(m) => m.get("x"),
             _ => None,
         }) {
@@ -433,9 +433,9 @@ mod tests {
             }],
         )
         .unwrap();
-        secrets::split_into(&mut doc, &mut tree, &patterns, Some(&entry));
+        secrets_yaml::split_into(&mut doc, &mut tree, &patterns, Some(&entry));
         // Emptied maps are pruned when the secrets file is written.
-        let yaml = secrets::emit(&tree);
+        let yaml = secrets_yaml::emit(&tree);
         assert!(!yaml.contains("tinyauth") && yaml.contains("tmr"), "{yaml}");
     }
 

@@ -9,7 +9,7 @@ use crate::commands::web::settings::save::load_settings_doc;
 use crate::commands::web::settings::toml_item_to_json;
 use crate::commands::web::types::{AppConfig, OptionHelper, OptionSchema, OptionType};
 use crate::commands::web::util::service_name_ok;
-use crate::utils::secrets::{self, Backend, Node, Tree};
+use crate::utils::secrets_yaml::{self, Backend, Node, Tree};
 
 /// Top-level settings sections (besides services / core) with their own pane.
 const TOP_SECTIONS: &[&str] = &["neo-cli", "disko"];
@@ -436,7 +436,7 @@ pub(super) fn saved_value(
     }
     overlay(
         item.and_then(toml_item_to_json),
-        secrets::lookup(tree, path),
+        secrets_yaml::lookup(tree, path),
     )
 }
 
@@ -457,7 +457,7 @@ pub(super) fn stale_secrets(keys: &Tree, path: &[String], value: &Value) -> Vec<
         }
     }
     let mut out = Vec::new();
-    if let Some(node) = secrets::lookup(keys, path) {
+    if let Some(node) = secrets_yaml::lookup(keys, path) {
         walk(node, &mut path.to_vec(), Some(value), &mut out);
     }
     out
@@ -480,8 +480,8 @@ pub(super) fn without_nulls(v: &Value) -> Value {
 /// The secrets file with its key structure: an encrypted file has encrypted
 /// values here, which is enough to see what exists without decrypting.
 pub(super) fn secret_keys(config: &AppConfig) -> anyhow::Result<Tree> {
-    match secrets::backend_for(&config.settings_path) {
+    match secrets_yaml::backend_for(&config.settings_path) {
         Backend::Inline => Ok(Tree::new()),
-        Backend::Plain(path) | Backend::Sops(path) => secrets::read_plain(&path),
+        Backend::Plain(path) | Backend::Sops(path) => secrets_yaml::read_plain(&path),
     }
 }

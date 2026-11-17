@@ -57,7 +57,7 @@
   }
 
   // ---- @ references -------------------------------------------------------
-  // Same token rules as agent_refs.rs parse_refs: `@` after the start, a space,
+  // Same token rules as web/chat/refs.rs parse_refs: `@` after the start, a space,
   // an opening bracket or quote; token chars [A-Za-z0-9_.:-]; trailing . : -
   // are punctuation, not part of the token.
 

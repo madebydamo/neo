@@ -13,12 +13,16 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use crate::commands::web::settings::toml_item_to_json;
-use crate::utils::secrets::{self, Node, Tree, PLACEHOLDER_PREFIX};
+use crate::utils::secrets_yaml::{self, Node, Tree, PLACEHOLDER_PREFIX};
 
 pub const SETTINGS_FILE: &str = "settings.toml";
 
 /// Files read as data by `modules/settings.nix` (copied for an in-process rebind).
-pub const SETTINGS_FILES: [&str; 3] = [SETTINGS_FILE, secrets::PLAIN_FILE, secrets::SOPS_FILE];
+pub const SETTINGS_FILES: [&str; 3] = [
+    SETTINGS_FILE,
+    secrets_yaml::PLAIN_FILE,
+    secrets_yaml::SOPS_FILE,
+];
 
 /// How two snapshots differ.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -128,10 +132,10 @@ fn merged_settings(files: &[(&'static str, Vec<u8>)]) -> Value {
         None => None,
     }
     .unwrap_or_else(|| Value::Object(Default::default()));
-    if let Some(Ok(plain)) = file(secrets::PLAIN_FILE).map(|t| secrets::parse(&t)) {
+    if let Some(Ok(plain)) = file(secrets_yaml::PLAIN_FILE).map(|t| secrets_yaml::parse(&t)) {
         merge(&mut tree, tree_to_json(&plain, &mut Vec::new(), false));
     }
-    if let Some(Ok(sops)) = file(secrets::SOPS_FILE).map(|t| secrets::parse(&t)) {
+    if let Some(Ok(sops)) = file(secrets_yaml::SOPS_FILE).map(|t| secrets_yaml::parse(&t)) {
         merge(&mut tree, tree_to_json(&sops, &mut Vec::new(), true));
     }
     tree

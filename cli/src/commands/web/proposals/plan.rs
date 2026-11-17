@@ -21,7 +21,7 @@ use crate::commands::web::settings::edit::PatchOp;
 use crate::commands::web::settings::save::load_settings_doc;
 use crate::commands::web::types::{AppConfig, OptionSchema};
 use crate::utils::command::now_secs;
-use crate::utils::secrets::Tree;
+use crate::utils::secrets_yaml::Tree;
 
 /// The setting a copy or move reads, as found when proposing.
 #[derive(Debug)]

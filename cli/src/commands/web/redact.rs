@@ -7,7 +7,7 @@
 use serde_json::{json, Value};
 
 use crate::commands::web::types::{OptionSchema, OptionType};
-use crate::utils::secrets::is_placeholder;
+use crate::utils::secrets_yaml::is_placeholder;
 
 /// Shown in place of a secret value.
 pub const SET: &str = "<set>";

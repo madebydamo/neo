@@ -15,8 +15,8 @@ use crate::commands::web::redact::is_set;
 use crate::commands::web::settings::edit::PatchOp;
 use crate::commands::web::settings::save::load_settings_doc;
 use crate::commands::web::types::AppConfig;
-use crate::utils::secrets::{self, Backend, Tree};
 use crate::utils::secrets_store;
+use crate::utils::secrets_yaml::{self, Backend, Tree};
 
 /// Patch ops for saving `p` now with the values the user entered on the card
 /// (`asked`, by input name): refuses when an asked secret is empty (the card
@@ -147,8 +147,8 @@ pub(super) fn read_saved(
     })?;
     let needs_secret = copies
         .iter()
-        .any(|path| secrets::lookup(&keys, path).is_some());
-    let tree = match secrets::backend_for(&config.settings_path) {
+        .any(|path| secrets_yaml::lookup(&keys, path).is_some());
+    let tree = match secrets_yaml::backend_for(&config.settings_path) {
         Backend::Sops(path) if needs_secret => secrets_store::decrypt(&path).map_err(|e| {
             eprintln!("web: proposal cannot decrypt the secrets: {e:#}");
             unreadable()
@@ -215,7 +215,7 @@ mod tests {
         let dir = TempDir::new("neo-proposals-save-test").unwrap();
         std::fs::write(dir.join("settings.toml"), settings).unwrap();
         if let Some(y) = secrets_yaml {
-            std::fs::write(dir.join(secrets::PLAIN_FILE), y).unwrap();
+            std::fs::write(dir.join(secrets_yaml::PLAIN_FILE), y).unwrap();
         }
         let config = AppConfig::for_tests(dir.join("settings.toml"));
         (dir, config)
@@ -366,7 +366,7 @@ mod tests {
         let (_dir, config) = repo(
             &format!(
                 "[services.y.accounts.a]\npassword = \"{}x\"\n",
-                secrets::PLACEHOLDER_PREFIX
+                secrets_yaml::PLACEHOLDER_PREFIX
             ),
             None,
         );

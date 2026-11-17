@@ -11,7 +11,7 @@ use crate::commands::web::redact::tests::accounts;
 use crate::commands::web::settings::edit::PatchOp;
 use crate::commands::web::types::OptionType;
 use crate::utils::command::now_secs;
-use crate::utils::secrets;
+use crate::utils::secrets_yaml;
 use serde_json::json;
 
 fn t(v: serde_json::Value) -> OptionType {
@@ -380,7 +380,7 @@ fn saved_value_lays_secrets_over_settings() {
         "[services.y.accounts.tinyauth]\nusername = \"admin\"\nport = 8\n"
             .parse()
             .unwrap();
-    let tree = secrets::parse("services:\n  y:\n    accounts:\n      tinyauth:\n        password: \"pw\"\n      only:\n        password: \"s\"\n").unwrap();
+    let tree = secrets_yaml::parse("services:\n  y:\n    accounts:\n      tinyauth:\n        password: \"pw\"\n      only:\n        password: \"s\"\n").unwrap();
     let v = saved_value(&doc, &tree, &p("services.y.accounts.tinyauth")).unwrap();
     assert_eq!(v, json!({"username": "admin", "port": 8, "password": "pw"}));
     // Only in the secrets file, only in settings, and nowhere.
@@ -453,7 +453,7 @@ fn stale_secrets_stay_cleared_unless_refilled_later() {
 #[test]
 fn copying_over_an_entry_clears_secrets_the_source_lacks() {
     use crate::commands::web::settings::edit::apply_ops;
-    let keys = secrets::parse(
+    let keys = secrets_yaml::parse(
         "services:\n  x:\n    a:\n      password: \"old\"\n      totpSecret: \"old\"\n",
     )
     .unwrap();
@@ -474,12 +474,12 @@ fn copying_over_an_entry_clears_secrets_the_source_lacks() {
         secret: true,
     }));
     apply_ops(&mut doc, &ops).unwrap();
-    secrets::split_into(&mut doc, &mut tree, &patterns, None);
+    secrets_yaml::split_into(&mut doc, &mut tree, &patterns, None);
     for s in &stale {
-        secrets::split_into(&mut doc, &mut tree, &patterns, Some(s));
+        secrets_yaml::split_into(&mut doc, &mut tree, &patterns, Some(s));
     }
     assert!(!doc.to_string().contains("new"));
-    let yaml = secrets::emit(&tree);
+    let yaml = secrets_yaml::emit(&tree);
     assert!(
         yaml.contains("new") && !yaml.contains("totpSecret"),
         "{yaml}"

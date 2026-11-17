@@ -7,8 +7,8 @@ use toml_edit::DocumentMut;
 
 use crate::commands::web::settings::save::load_settings_doc;
 use crate::commands::web::types::AppConfig;
-use crate::utils::secrets::{Backend, PLAIN_FILE, SOPS_FILE};
 use crate::utils::secrets_store::{admin_keys, host_key, ignored_keys, IDENTITY_FILE};
+use crate::utils::secrets_yaml::{Backend, PLAIN_FILE, SOPS_FILE};
 
 /// Short display form of a public key: type, …last 12 chars, comment.
 fn short_key(key: &str) -> String {

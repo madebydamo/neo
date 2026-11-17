@@ -341,7 +341,7 @@ and an invalid value shows the banner while the UI keeps working.
 
 ## 11. Implementation notes
 
-Code: `cli/src/commands/web/nix/{pool,snapshot,overlay}.rs`, `nix/repl/mod.rs`,
+Code: `cli/src/commands/web/nix/pool/`, `nix/{snapshot,overlay}.rs`, `nix/repl/`,
 `static/eval_sync.js`, template `modules/settings.nix` (`neoSettingsDir`).
 
 - **No interrupting.** A build is never cancelled; saves within 300 ms become
