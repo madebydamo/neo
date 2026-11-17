@@ -8,8 +8,8 @@
 #   NEO_SUPERVISE    true: tag the previous image for neo-docker-rollback
 #   NEO_LOCK_DIR     neo operation locks (cli/src/utils/locks.rs)
 
-# Start of the run, like lib.neo.updaterRunPrelude: run_id, history file and
-# log, all further output also to the log.
+# Start of the run (the same in system-updater/auto-update.sh): run_id, history file and log,
+# all further output also to the log. The web UI reads <run_id>.json/.log.
 run_id=$(date -u +%Y%m%dT%H%M%SZ)-$$
 started_at=$(date -Iseconds)
 mkdir -p "$NEO_HISTORY_DIR"

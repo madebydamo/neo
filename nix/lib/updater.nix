@@ -34,16 +34,6 @@ in {
             group = "homeserver";
           })
           dirs);
-
-      # Start of a run script: sets run_id, started_at, hist and log_file, and
-      # sends all further output to the run's log too.
-      updaterRunPrelude = dir: ''
-        run_id=$(date -u +%Y%m%dT%H%M%SZ)-$$
-        started_at=$(date -Iseconds)
-        mkdir -p ${dir}
-        hist=${dir}/$run_id.json
-        log_file=${dir}/$run_id.log
-        exec > >(tee -a "$log_file") 2>&1'';
     };
   };
 }

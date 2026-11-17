@@ -382,5 +382,4 @@ Never hand-roll sudo path lists or per-service SSH/git config. Host services tha
 | `piholeDnsPublishPorts` | `{ splitDnsActive, localIP }` | Docker port specs for Pi-hole; **internal** |
 | `mkUpdaterPaths` | appdata path | `{ stateDir, dockerHistoryDir, systemHistoryDir, dockerLast, systemLast }`; **internal** |
 | `mkUpdaterHistoryDirs` | `config`, list of paths | Activation script creating update history directories (`0775`, `homeserver`); **internal** |
-| `updaterRunPrelude` | directory | Shell lines starting an update run: `run_id`, `started_at`, `hist`, `log_file`, output teed to the log; **internal** |
 | `hermesProviderIds`, `hermesProviderCatalog`, `mkHermesLlmEnv { provider ? null, apiKey ? null }`, `mkNeoHermesAuth pkgs script`, `hermesCustomKeyEnv` | | Hermes LLM provider catalog and helpers; **internal** |
