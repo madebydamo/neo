@@ -103,28 +103,6 @@ impl<'a> OpState<'a> {
     }
 }
 
-/// [`OpState::write`] with positional fields (kept for the web UI's op store).
-pub fn write_op_state(
-    id: &str,
-    status: OpStatus,
-    phase: &str,
-    err: Option<&str>,
-    branch: Option<&str>,
-    started_at: Option<&str>,
-    extra: Option<serde_json::Value>,
-) {
-    OpState {
-        id,
-        status,
-        phase,
-        error: err,
-        branch,
-        started_at,
-        extra,
-    }
-    .write();
-}
-
 pub fn append_log(path: &Path, line: &str) {
     if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(path) {
         let _ = writeln!(f, "{line}");

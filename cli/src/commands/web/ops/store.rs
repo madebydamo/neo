@@ -7,7 +7,7 @@ use std::time::SystemTime;
 use crate::utils::command::{mtime_secs, now_secs};
 use crate::utils::locks::{Holder, LockManager};
 pub use crate::utils::ops::{append_log, log_path, state_path};
-use crate::utils::ops::{operations_dir, write_op_state, OpStatus, OperationKind};
+use crate::utils::ops::{operations_dir, OpState, OpStatus, OperationKind};
 
 /// How long a web-triggered op may stay in phase `triggered` before the child
 /// process has taken its lock (systemd-run handoff + short lock wait).
@@ -15,7 +15,11 @@ const TRIGGER_GRACE_SECS: u64 = 120;
 
 /// Write op state (no branch / start time / extra fields).
 pub fn write_state(id: &str, status: OpStatus, phase: &str, err: Option<&str>) {
-    write_op_state(id, status, phase, err, None, None, None);
+    OpState {
+        error: err,
+        ..OpState::new(id, status, phase)
+    }
+    .write();
 }
 
 /// True when a live lock holder still owns this op (or the web trigger grace applies).
@@ -66,19 +70,14 @@ fn mark_op_aborted(id: &str, last_phase: &str) {
         }
     }
     let err = format!("no longer running (last phase: {last_phase}); aborted or crashed");
-    write_op_state(
-        id,
-        OpStatus::Failed,
-        "aborted",
-        Some(&err),
+    OpState {
+        error: Some(&err),
         branch,
         started_at,
-        if extra.is_empty() {
-            None
-        } else {
-            Some(serde_json::Value::Object(extra))
-        },
-    );
+        extra: (!extra.is_empty()).then_some(serde_json::Value::Object(extra)),
+        ..OpState::new(id, OpStatus::Failed, "aborted")
+    }
+    .write();
     append_log(
         &log_path(id),
         &format!("operation {id} marked aborted (process no longer running)"),
