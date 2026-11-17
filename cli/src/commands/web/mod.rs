@@ -29,6 +29,7 @@ mod proposals;
 mod redact;
 mod resources;
 mod routes;
+mod secrets_card;
 mod settings;
 mod ssh;
 mod trigger;
