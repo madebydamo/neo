@@ -33,6 +33,21 @@
         exec ${unwrapped}/bin/neo-store-gate "$@"
       '';
 
+      # Storage and client folders (setup.sh).
+      setup = pkgs.writeShellApplication {
+        name = "backup-store-setup";
+        runtimeInputs = [pkgs.coreutils] ++ optional isDataset config.boot.zfs.package;
+        runtimeEnv = {
+          NEO_STORAGE = cfg.storage;
+          NEO_PATH = cfg.path;
+          NEO_DATASET = cfg.dataset;
+          NEO_ENCRYPTED = boolToString (isDataset && cfg.encrypted);
+          NEO_KEY_FILE = optionalString (isDataset && cfg.encrypted) keyFile;
+          NEO_CLIENTS = concatStringsSep "\n" (mapAttrsToList (client: c: "${client} ${c.format}") cfg.clients);
+        };
+        text = builtins.readFile ./setup.sh;
+      };
+
       userOf = client: "backup-${client}";
       keysFile = client: c:
         concatMapStrings (key: ''
@@ -162,20 +177,11 @@
             retryInterval = 10;
             maxAttempts = 3;
             after = optionals isDataset ["zfs-import.target" "zfs-mount.service"];
-            path = [pkgs.coreutils] ++ optional isDataset config.boot.zfs.package;
-            environment = {
-              NEO_STORAGE = cfg.storage;
-              NEO_PATH = cfg.path;
-              NEO_DATASET = cfg.dataset;
-              NEO_ENCRYPTED = boolToString (isDataset && cfg.encrypted);
-              NEO_KEY_FILE = optionalString (isDataset && cfg.encrypted) keyFile;
-              NEO_CLIENTS = concatStringsSep "\n" (mapAttrsToList (client: c: "${client} ${c.format}") cfg.clients);
-            };
             # A declared mount for the folder must be there, or backups would
             # land on the system disk below an empty mountpoint.
             unitConfig.RequiresMountsFor = mkIf (!isDataset) cfg.path;
             serviceConfig.TimeoutStartSec = 120;
-            script = builtins.readFile ./setup.sh;
+            script = getExe setup;
           };
 
           systemd.services.backup-store-sshd = {
