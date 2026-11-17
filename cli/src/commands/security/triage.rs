@@ -196,7 +196,7 @@ pub fn collect_evidence(cfg: &Config, groups: &mut [Group], containers: &[Contai
 }
 
 /// Verdicts that need no AI.
-pub fn rule_verdict(g: &Group) -> Option<Verdict> {
+fn rule_verdict(g: &Group) -> Option<Verdict> {
     let v = |status, summary: &str, explanation: &str, action: &str| Verdict {
         status,
         confidence: "high".into(),

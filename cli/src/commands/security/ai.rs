@@ -315,7 +315,7 @@ struct RawVerdict {
 /// The JSON object in a model answer (it may come wrapped in prose or a code
 /// fence): `{"verdicts": [...]}`, or a single verdict object. Entries with an
 /// unknown status are skipped; their findings stay open.
-pub fn parse_verdicts(content: &str) -> Result<Vec<(String, Verdict)>> {
+fn parse_verdicts(content: &str) -> Result<Vec<(String, Verdict)>> {
     let start = content
         .find('{')
         .ok_or_else(|| anyhow!("no JSON in AI answer: {}", truncate(content, 200)))?;

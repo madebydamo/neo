@@ -51,7 +51,7 @@ pub fn scan_nix(target: &str, work: &Path) -> Result<(Vec<Finding>, Vec<String>)
 /// vulnxscan CSV: vuln_id, url, package, version_local, severity (CVSS),
 /// grype/osv/vulnix (1 when that scanner reported it), and with --triage
 /// `classify` (fix_update_to_version_nixpkgs, err_not_vulnerable_based_on_repology, …).
-pub fn parse_vulnxscan(csv_text: &str) -> Result<Vec<Finding>> {
+fn parse_vulnxscan(csv_text: &str) -> Result<Vec<Finding>> {
     let mut rdr = csv::Reader::from_reader(csv_text.as_bytes());
     let headers = rdr.headers().context("vulnxscan csv header")?.clone();
     let col = |name: &str| headers.iter().position(|h| h == name);
@@ -205,7 +205,7 @@ pub fn scan_image(image_id: &str) -> Result<Vec<Finding>> {
     parse_trivy(&out)
 }
 
-pub fn parse_trivy(json: &str) -> Result<Vec<Finding>> {
+fn parse_trivy(json: &str) -> Result<Vec<Finding>> {
     let v: Value = serde_json::from_str(json).context("trivy json")?;
     let mut out = Vec::new();
     for res in v["Results"].as_array().into_iter().flatten() {

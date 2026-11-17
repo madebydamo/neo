@@ -269,7 +269,7 @@ pub fn run_nix(config_path: &str, nix_cmd: &str, args: &[&str]) -> Result<()> {
 /// on the laptop checkout. Pure eval hides paths outside the config repo, so a
 /// pure write-flake leaves `neo.url` at `github:madebydamo/neo`. `--impure` is a
 /// flag of `nix run` and is rejected before the subcommand.
-pub fn write_flake_args() -> &'static [&'static str] {
+fn write_flake_args() -> &'static [&'static str] {
     &["run", "--impure", ".#write-flake"]
 }
 

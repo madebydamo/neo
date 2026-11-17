@@ -23,7 +23,7 @@ use crate::utils::fsutil::TempDir;
 const UNIT: &str = "neo-restore";
 
 /// `root@IP:PORT` → (`root@IP`, Some(PORT)). IPv6 needs brackets: `root@[::1]:22`.
-pub(crate) fn split_port(host: &str) -> (String, Option<String>) {
+fn split_port(host: &str) -> (String, Option<String>) {
     if let Some((h, p)) = host.rsplit_once(':') {
         let bracketed = h.contains('[') && h.ends_with(']');
         if !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()) && (bracketed || !h.contains(':'))
@@ -392,7 +392,7 @@ fn nix_run_neo(flake_ref: &str) -> String {
 }
 
 /// The neo revision the config's flake.lock pins (github inputs), else the default.
-pub(crate) fn pinned_neo(repo: &Path) -> String {
+fn pinned_neo(repo: &Path) -> String {
     let lock = fs::read_to_string(repo.join("flake.lock")).unwrap_or_default();
     let v: serde_json::Value = serde_json::from_str(&lock).unwrap_or_default();
     let l = &v["nodes"]["neo"]["locked"];

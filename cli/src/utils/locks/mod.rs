@@ -49,11 +49,11 @@ mod guards;
 use guards::remove_marker_if_owned;
 
 /// Runtime root on a Neo host (created by tmpfiles, owned by homeserver).
-pub const RUN_DIR: &str = "/run/neo";
+const RUN_DIR: &str = "/run/neo";
 /// Scope keys held exclusively by an ancestor process (space separated).
-pub const INHERIT_ENV: &str = "NEO_LOCKS_HELD";
+const INHERIT_ENV: &str = "NEO_LOCKS_HELD";
 /// Override for the runtime root (tests, development).
-pub const RUN_DIR_ENV: &str = "NEO_RUN_DIR";
+const RUN_DIR_ENV: &str = "NEO_RUN_DIR";
 /// Seconds a CLI command waits for its locks (default 0: fail fast).
 pub const WAIT_ENV: &str = "NEO_LOCK_WAIT";
 
@@ -286,7 +286,7 @@ pub struct Holder {
 
 impl Holder {
     /// Mode this holder holds `scope` in.
-    pub fn mode_for(&self, scope: &Scope) -> Option<LockMode> {
+    fn mode_for(&self, scope: &Scope) -> Option<LockMode> {
         let key = scope.key();
         self.scopes.iter().find(|h| h.scope == key).map(|h| h.mode)
     }

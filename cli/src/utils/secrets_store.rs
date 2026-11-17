@@ -21,7 +21,7 @@ use super::secrets_yaml::{self, Backend, Node, Tree};
 use super::settings::{authorized_keys, ensure_table, recorded_host_key};
 
 pub const IDENTITY_FILE: &str = "identity.sops.yaml";
-pub const SOPS_CONFIG: &str = ".sops.yaml";
+const SOPS_CONFIG: &str = ".sops.yaml";
 const HOST_PUB: &str = "/etc/ssh/ssh_host_ed25519_key.pub";
 const ROOT_HELPER: &str = "/run/current-system/sw/bin/neo-secrets-root";
 
@@ -179,7 +179,7 @@ fn escrow(admins: &[String]) -> Result<Option<String>> {
 }
 
 /// .sops.yaml so a plain `sops edit` on a checkout uses the same recipients.
-pub fn sops_config(host: &str, admins: &[String]) -> String {
+fn sops_config(host: &str, admins: &[String]) -> String {
     let mut all = vec![host.to_string()];
     all.extend(admins.iter().cloned());
     format!(

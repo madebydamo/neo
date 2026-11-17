@@ -83,7 +83,7 @@ impl ProcIndex {
             .collect()
     }
 
-    pub fn container_procs<'a>(&'a self, container_id: &'a str) -> impl Iterator<Item = &'a Proc> {
+    fn container_procs<'a>(&'a self, container_id: &'a str) -> impl Iterator<Item = &'a Proc> {
         self.procs
             .iter()
             .filter(move |p| p.container_id.as_deref() == Some(container_id))
@@ -102,7 +102,7 @@ fn map_path(line: &str) -> Option<&str> {
 
 /// `0::/system.slice/hermes-agent.service` → unit `hermes-agent`;
 /// `…/docker-<64 hex>.scope` → that container id.
-pub fn parse_cgroup(text: &str) -> (Option<String>, Option<String>) {
+fn parse_cgroup(text: &str) -> (Option<String>, Option<String>) {
     let mut unit = None;
     let mut container = None;
     for line in text.lines() {
@@ -140,7 +140,7 @@ fn store_name_matches(path: &str, want: &str) -> bool {
 /// Files an OS package installed in a container, read through a process's
 /// root (`/proc/<pid>/root`). Debian/Ubuntu dpkg lists and Alpine's apk db;
 /// None for other distributions.
-pub fn os_package_files(pid: u32, package: &str) -> Option<HashSet<String>> {
+fn os_package_files(pid: u32, package: &str) -> Option<HashSet<String>> {
     let root = format!("/proc/{pid}/root");
     let dpkg = format!("{root}/var/lib/dpkg/info");
     if let Ok(dir) = fs::read_dir(&dpkg) {

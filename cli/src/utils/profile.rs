@@ -9,12 +9,12 @@
 
 use toml_edit::{DocumentMut, Item};
 
-pub const PROFILE_LOCAL: &str = "local";
+const PROFILE_LOCAL: &str = "local";
 pub const PROFILE_SERVER: &str = "server";
 
 /// Normalize an explicit profile/section string into `local` or `server`.
 /// Returns `None` if empty (caller should apply auto detection).
-pub fn normalize_profile_arg(raw: &str) -> Option<&'static str> {
+fn normalize_profile_arg(raw: &str) -> Option<&'static str> {
     let s = raw.trim();
     if s.is_empty() {
         return None;
@@ -60,17 +60,17 @@ pub fn resolve_profile(
 }
 
 /// Default flake input for neo. The server profile uses this unless overridden.
-pub const DEFAULT_NEO_INPUT: &str = "github:madebydamo/neo";
+const DEFAULT_NEO_INPUT: &str = "github:madebydamo/neo";
 
 /// `neo.core.volumes.root` unless the settings move it.
 pub const DEFAULT_VOLUMES_ROOT: &str = "/var/neo";
 /// The config repo below the volumes root unless `configPath` moves it.
 pub const DEFAULT_CONFIG_REL: &str = "DATA/AppData/configuration";
 /// [`DEFAULT_VOLUMES_ROOT`]/[`DEFAULT_CONFIG_REL`] (checked by a test).
-pub const DEFAULT_SERVER_CONFIG_PATH: &str = "/var/neo/DATA/AppData/configuration";
+const DEFAULT_SERVER_CONFIG_PATH: &str = "/var/neo/DATA/AppData/configuration";
 
 /// Default `nix flake init -t` template.
-pub const DEFAULT_TEMPLATE: &str = "github:madebydamo/neo#homeserver";
+const DEFAULT_TEMPLATE: &str = "github:madebydamo/neo#homeserver";
 
 /// Look up a string key: profile table first, then shared neo-cli.
 pub fn neo_cli_get<'a>(doc: &'a DocumentMut, profile: &str, key: &str) -> Option<&'a str> {
@@ -102,7 +102,7 @@ pub fn is_local_flake_ref(raw: &str) -> bool {
 }
 
 /// Directory form of a local flake ref, without a `git+file:` / `path:` prefix.
-pub fn local_flake_dir(raw: &str) -> Option<String> {
+fn local_flake_dir(raw: &str) -> Option<String> {
     let base = raw.trim().split('#').next().unwrap_or("").trim();
     let path = base
         .strip_prefix("git+file://")
@@ -119,7 +119,7 @@ pub fn local_flake_dir(raw: &str) -> Option<String> {
 }
 
 /// `nix flake init -t` ref for a neo input. Local inputs become `<dir>#homeserver`.
-pub fn template_from_neo_input(input: &str) -> String {
+fn template_from_neo_input(input: &str) -> String {
     let input = input.trim();
     if input.is_empty() {
         return DEFAULT_TEMPLATE.to_string();
@@ -138,7 +138,7 @@ pub fn template_from_neo_input(input: &str) -> String {
 ///
 /// Profile value wins. A shared value that points at a local checkout is not
 /// used for the server profile; that profile falls through to GitHub.
-pub fn resolve_neo_input(doc: &DocumentMut, profile: &str) -> String {
+fn resolve_neo_input(doc: &DocumentMut, profile: &str) -> String {
     if let Some(v) = profile_str(doc, profile, "neoInput") {
         return v.to_string();
     }

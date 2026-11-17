@@ -76,7 +76,7 @@ impl<'a> OpState<'a> {
     }
 
     /// The JSON object written to the state file (`log_path` included).
-    pub fn to_json(&self) -> serde_json::Value {
+    fn to_json(&self) -> serde_json::Value {
         let mut s = serde_json::to_value(self).unwrap_or_else(|_| serde_json::json!({}));
         if let Some(obj) = s.as_object_mut() {
             obj.insert(
@@ -234,7 +234,7 @@ impl OperationLog {
     }
 
     /// Write an "in_progress" marker for the given phase (before running the step body).
-    pub fn record_step(&self, phase: &str) {
+    fn record_step(&self, phase: &str) {
         self.write_state(OpStatus::InProgress, phase, None, None);
     }
 

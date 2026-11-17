@@ -25,7 +25,7 @@ use super::fsutil::TempDir;
 /// Verbatim copy of the files the last template provided (git-ignored).
 pub const PRISTINE_DIR: &str = ".neo-template";
 /// Suffix of the new template version of a file whose edits did not merge.
-pub const NEW_SUFFIX: &str = ".neo-new";
+const NEW_SUFFIX: &str = ".neo-new";
 const FLAKE: &str = "flake.nix";
 const GITIGNORE: &str = ".gitignore";
 

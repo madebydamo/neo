@@ -43,7 +43,7 @@ pub fn plugin_label(url: &str) -> String {
 }
 
 /// URL without scheme, query and fragment (`github:o/r?dir=x` → `o/r`).
-pub fn url_path(url: &str) -> String {
+fn url_path(url: &str) -> String {
     let mut s = url.trim();
     if let Some(i) = s.find(['?', '#']) {
         s = &s[..i];
@@ -70,7 +70,7 @@ pub fn url_path(url: &str) -> String {
 }
 
 /// Id from free text: lowercase `[a-z0-9-]`, never empty, no leading digit.
-pub fn sanitize_id(s: &str) -> String {
+fn sanitize_id(s: &str) -> String {
     let lower = s.to_lowercase();
     let joined = lower
         .split(|c: char| !(c.is_ascii_lowercase() || c.is_ascii_digit()))
@@ -87,7 +87,7 @@ pub fn sanitize_id(s: &str) -> String {
 }
 
 /// `[a-z][a-z0-9-]*`
-pub fn valid_id(id: &str) -> bool {
+fn valid_id(id: &str) -> bool {
     id.starts_with(|c: char| c.is_ascii_lowercase())
         && id
             .chars()
@@ -95,7 +95,7 @@ pub fn valid_id(id: &str) -> bool {
 }
 
 /// Empty, or `[a-z][a-z0-9]*` (prefixed names stay valid subdomains).
-pub fn valid_prefix(prefix: &str) -> bool {
+fn valid_prefix(prefix: &str) -> bool {
     prefix.is_empty()
         || (prefix.starts_with(|c: char| c.is_ascii_lowercase())
             && prefix
@@ -104,7 +104,7 @@ pub fn valid_prefix(prefix: &str) -> bool {
 }
 
 /// Ids for the old list form, in list order.
-pub fn ids_for_urls(urls: &[String]) -> Vec<String> {
+fn ids_for_urls(urls: &[String]) -> Vec<String> {
     let ids: Vec<String> = urls.iter().map(|u| sanitize_id(&plugin_label(u))).collect();
     ids.iter()
         .enumerate()
@@ -241,7 +241,7 @@ pub fn validate_plugins(entries: &[PluginEntry]) -> Vec<String> {
 }
 
 /// Repository identity of a URL, ignoring branch / ref (`github:o/r/dev` → `github:o/r`).
-pub fn repo_key(url: &str) -> String {
+fn repo_key(url: &str) -> String {
     let trimmed = url.trim();
     let base = trimmed.split(['?', '#']).next().unwrap_or(trimmed);
     let base = base.trim_end_matches('/');

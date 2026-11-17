@@ -29,7 +29,7 @@ pub struct Access {
 
 impl Access {
     /// `ssh` with the keys and the settings' extraOptions.
-    pub fn ssh_args(&self, source: &Source) -> Vec<String> {
+    fn ssh_args(&self, source: &Source) -> Vec<String> {
         let mut args = vec![
             "-o".into(),
             "BatchMode=yes".into(),
