@@ -86,8 +86,7 @@
 
   function bubble(role, html, text) {
     var log = el('neo-agent-log');
-    var b = document.createElement('div');
-    b.className = 'neo-agent-msg neo-agent-msg--' + role;
+    var b = h('div', { class: 'neo-agent-msg neo-agent-msg--' + role });
     if (html != null) b.innerHTML = html;
     else b.textContent = text || '';
     log.appendChild(b);
@@ -155,17 +154,10 @@
         node.appendChild(document.createTextNode(p.text != null ? p.text : '@' + p.ref));
         return;
       }
-      var a = document.createElement('a');
-      a.className = 'neo-agent-ref';
+      var a = h('a', { class: 'neo-agent-ref', title: (core.KIND_LABEL[it.kind] || '') + ': ' + it.label },
+        it.icon && h('img', { src: it.icon, alt: '' }),
+        document.createTextNode('@' + it.token));
       navLink(a, it.url);
-      a.title = (core.KIND_LABEL[it.kind] || '') + ': ' + it.label;
-      if (it.icon) {
-        var img = document.createElement('img');
-        img.src = it.icon;
-        img.alt = '';
-        a.appendChild(img);
-      }
-      a.appendChild(document.createTextNode('@' + it.token));
       node.appendChild(a);
     });
     if (typeof htmx !== 'undefined') htmx.process(node);
@@ -198,9 +190,7 @@
         else node.textContent = text;
         if (typeof htmx !== 'undefined') htmx.process(node);
         proposalIds(text).forEach(function (id) {
-          var slot = document.createElement('div');
-          slot.className = 'mt-2';
-          node.appendChild(slot);
+          var slot = node.appendChild(h('div', { class: 'mt-2' }));
           if (typeof htmx !== 'undefined') {
             // The card arrives after the reply: scroll again once it is in.
             var loaded = htmx.ajax('GET', '/proposals/' + id + '/card', { target: slot, swap: 'innerHTML' });
@@ -281,10 +271,11 @@
     };
     var labels = { once: 'Allow once', session: 'Allow for this chat', always: 'Always allow', deny: 'Deny' };
     (d.choices || ['once', 'deny']).forEach(function (c) {
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'btn btn-xs ' + (c === 'deny' ? 'btn-ghost' : c === 'once' ? 'btn-primary' : '');
-      btn.textContent = labels[c] || c;
+      var btn = h('button', {
+        type: 'button',
+        class: 'btn btn-xs ' + (c === 'deny' ? 'btn-ghost' : c === 'once' ? 'btn-primary' : ''),
+        text: labels[c] || c,
+      });
       btn.addEventListener('click', function () {
         if (!ctl.open || ctl.sending) return;
         ctl.sending = true;
@@ -553,8 +544,7 @@
   Turn.prototype.text = function (delta) {
     var t = this.texts[this.texts.length - 1];
     if (!t || this.seg !== t.el) {
-      var el = document.createElement('div');
-      el.className = 'neo-agent-msg neo-agent-msg--assistant neo-agent-typing';
+      var el = h('div', { class: 'neo-agent-msg neo-agent-msg--assistant neo-agent-typing' });
       t = { el: el, raw: '' };
       this.texts.push(t);
       this.append(el);
@@ -568,13 +558,9 @@
   Turn.prototype.group = function () {
     var g = this.groups[this.groups.length - 1];
     if (g && this.seg === g.el) return g;
-    var el = document.createElement('details');
-    el.className = 'neo-agent-tools';
-    var sum = document.createElement('summary');
-    var body = document.createElement('div');
-    body.className = 'neo-agent-tools-body';
-    el.appendChild(sum);
-    el.appendChild(body);
+    var sum = h('summary');
+    var body = h('div', { class: 'neo-agent-tools-body' });
+    var el = h('details', { class: 'neo-agent-tools' }, sum, body);
     g = { el: el, sum: sum, body: body, lines: [] };
     this.groups.push(g);
     this.append(el);
@@ -600,18 +586,13 @@
   function paintLine(line) {
     var s = line.sum;
     s.textContent = '';
-    var icon = document.createElement('span');
-    icon.className = 'neo-agent-tool-icon neo-agent-tool-icon--' + line.status;
-    icon.textContent = STATUS_ICON[line.status] || '✓';
-    s.appendChild(icon);
+    s.appendChild(h('span', {
+      class: 'neo-agent-tool-icon neo-agent-tool-icon--' + line.status,
+      text: STATUS_ICON[line.status] || '✓',
+    }));
     s.appendChild(document.createTextNode(toolLabel(line.name)));
     var d = toolDetail(line);
-    if (d.duration) {
-      var t = document.createElement('span');
-      t.className = 'neo-agent-tool-time';
-      t.textContent = d.duration;
-      s.appendChild(t);
-    }
+    if (d.duration) s.appendChild(h('span', { class: 'neo-agent-tool-time', text: d.duration }));
     if (line.el.open) paintDetail(line);
   }
 
@@ -620,31 +601,21 @@
     var d = toolDetail(line);
     var body = line.body;
     body.textContent = '';
-    var meta = document.createElement('div');
-    meta.className = 'neo-agent-tool-meta';
-    meta.textContent = d.meta;
-    body.appendChild(meta);
+    body.appendChild(h('div', { class: 'neo-agent-tool-meta', text: d.meta }));
     d.sections.forEach(function (sec) {
-      var label = document.createElement('div');
-      label.className = 'neo-agent-tool-label';
-      label.textContent = sec.label;
-      body.appendChild(label);
-      var v = document.createElement(sec.pre ? 'pre' : 'div');
-      v.className = sec.pre ? 'neo-agent-tool-pre' : sec.mono ? 'neo-agent-tool-name' : 'neo-agent-tool-note';
-      v.textContent = sec.text;
-      body.appendChild(v);
+      body.appendChild(h('div', { class: 'neo-agent-tool-label', text: sec.label }));
+      body.appendChild(h(sec.pre ? 'pre' : 'div', {
+        class: sec.pre ? 'neo-agent-tool-pre' : sec.mono ? 'neo-agent-tool-name' : 'neo-agent-tool-note',
+        text: sec.text,
+      }));
     });
   }
 
   /** A collapsible tool call inside group `g`. */
   function toolLine(g, data) {
-    var el = document.createElement('details');
-    el.className = 'neo-agent-tool';
-    var sum = document.createElement('summary');
-    var body = document.createElement('div');
-    body.className = 'neo-agent-tool-body';
-    el.appendChild(sum);
-    el.appendChild(body);
+    var sum = h('summary');
+    var body = h('div', { class: 'neo-agent-tool-body' });
+    var el = h('details', { class: 'neo-agent-tool' }, sum, body);
     g.body.appendChild(el);
     var line = {
       name: data.name || '',
@@ -747,9 +718,10 @@
     userBubble(text);
     state.empty = false;
     var turn = new Turn(el('neo-agent-log'));
-    var waiting = turn.append(document.createElement('div'));
-    waiting.className = 'neo-agent-msg neo-agent-msg--note';
-    waiting.innerHTML = '<span class="loading loading-dots loading-xs"></span>';
+    var waiting = turn.append(h('div', {
+      class: 'neo-agent-msg neo-agent-msg--note',
+      innerHTML: '<span class="loading loading-dots loading-xs"></span>',
+    }));
     var finalText = '';
     var outcome = null;
     var failure = null;
@@ -1003,10 +975,10 @@
     var box = el('neo-agent-history');
     if (!box) return;
     box.textContent = '';
-    var loading = document.createElement('div');
-    loading.className = 'neo-agent-msg neo-agent-msg--note neo-agent-loading';
-    loading.innerHTML = SPINNER + ' Loading your chats…';
-    box.appendChild(loading);
+    var loading = box.appendChild(h('div', {
+      class: 'neo-agent-msg neo-agent-msg--note neo-agent-loading',
+      innerHTML: SPINNER + ' Loading your chats…',
+    }));
     fetch('/agent/sessions?context=' + encodeURIComponent(state.context), { credentials: 'same-origin' })
       .then(jsonOrThrow)
       .then(function (j) {
@@ -1021,34 +993,20 @@
   function renderHistory(items) {
     var box = el('neo-agent-history');
     box.textContent = '';
-    var top = document.createElement('div');
-    top.className = 'flex items-center gap-2 mb-2';
-    var back = document.createElement('button');
-    back.type = 'button';
-    back.className = 'btn btn-ghost btn-xs';
-    back.textContent = '← Back to the chat';
-    back.addEventListener('click', backToChat);
-    top.appendChild(back);
-    box.appendChild(top);
+    box.appendChild(h('div', { class: 'flex items-center gap-2 mb-2' },
+      h('button', { type: 'button', class: 'btn btn-ghost btn-xs', text: '← Back to the chat', on: { click: backToChat } })));
     var groups = groupSessions(items, state.context);
     if (!groups.length) {
-      var none = document.createElement('p');
-      none.className = 'neo-agent-msg neo-agent-msg--note';
-      none.textContent = 'No earlier chats yet. A chat shows up here after its first message.';
-      box.appendChild(none);
+      box.appendChild(h('p', {
+        class: 'neo-agent-msg neo-agent-msg--note',
+        text: 'No earlier chats yet. A chat shows up here after its first message.',
+      }));
       return;
     }
     groups.forEach(function (g) {
-      var h = document.createElement('h3');
-      h.className = 'neo-agent-hist-head';
-      h.textContent = g.label;
-      box.appendChild(h);
-      var ul = document.createElement('ul');
-      ul.className = 'neo-agent-hist-list';
-      g.items.forEach(function (s) {
-        ul.appendChild(historyRow(s, items));
-      });
-      box.appendChild(ul);
+      box.appendChild(h('h3', { class: 'neo-agent-hist-head', text: g.label }));
+      box.appendChild(h('ul', { class: 'neo-agent-hist-list' },
+        ...g.items.map(function (s) { return historyRow(s, items); })));
     });
   }
 
