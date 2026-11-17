@@ -112,6 +112,42 @@ pub fn service_name_ok(name: &str) -> bool {
         .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
+/// A path segment that passed [`service_name_ok`]. As a route parameter an
+/// invalid name never reaches the handler: Rocket answers 422 (the UI only
+/// ever sends names it got from the server, so nothing swaps on that).
+#[derive(Debug, Clone, Copy)]
+pub struct ServiceName<'r>(&'r str);
+
+impl<'r> ServiceName<'r> {
+    pub fn as_str(&self) -> &'r str {
+        self.0
+    }
+}
+
+impl std::ops::Deref for ServiceName<'_> {
+    type Target = str;
+    fn deref(&self) -> &str {
+        self.0
+    }
+}
+
+impl std::fmt::Display for ServiceName<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
+impl<'r> rocket::request::FromParam<'r> for ServiceName<'r> {
+    type Error = &'r str;
+    fn from_param(param: &'r str) -> Result<Self, Self::Error> {
+        if service_name_ok(param) {
+            Ok(ServiceName(param))
+        } else {
+            Err(param)
+        }
+    }
+}
+
 /// Settings sections stored under `[core]`: the aggregate `core` pane and its keys.
 pub const CORE_NESTED_SECTIONS: &[&str] = &[
     "ssh",
@@ -176,6 +212,10 @@ mod tests {
     fn service_name_rejects_fallback() {
         assert!(!service_name_ok("service"));
         assert!(service_name_ok("jellyfin"));
+        use rocket::request::FromParam;
+        assert!(ServiceName::from_param("jellyfin").is_ok());
+        assert!(ServiceName::from_param("../etc").is_err());
+        assert!(ServiceName::from_param("service").is_err());
     }
 
     #[test]

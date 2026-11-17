@@ -7,18 +7,14 @@ use rocket::{post, State};
 use crate::commands::web::settings::edit::{apply_edit, Edit};
 use crate::commands::web::settings::save::SaveError;
 use crate::commands::web::types::AppConfig;
-use crate::commands::web::util::{core_section_ok, service_name_ok};
+use crate::commands::web::util::{core_section_ok, ServiceName};
 
 #[post("/save/<service>", data = "<payload>")]
 pub async fn save_service(
     config: &State<Arc<AppConfig>>,
-    service: &str,
+    service: ServiceName<'_>,
     payload: Json<serde_json::Value>,
 ) -> Result<Status, SaveError> {
-    if !service_name_ok(service) {
-        eprintln!("web: refusing save for invalid service name {:?}", service);
-        return Ok(Status::BadRequest);
-    }
     apply_edit(
         config,
         Edit::ReplaceService {

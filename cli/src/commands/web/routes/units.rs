@@ -15,7 +15,7 @@ use crate::commands::web::units::{
     unit_name_valid, update_out_oob, ClearJob, ServiceStatusRequest, ServiceStatusResponse,
     UnitAction,
 };
-use crate::commands::web::util::{escape_html, proc, service_name_ok, status_err, status_pulling};
+use crate::commands::web::util::{escape_html, proc, status_err, status_pulling, ServiceName};
 use crate::utils::locks::{LockSpec, OpInfo};
 
 /// Shared post-action path: kick systemctl, push OOB once, then burst-refresh while it settles.
@@ -111,12 +111,10 @@ pub async fn container_update(
 /// Path and units come from trusted flake evaluation (never from the client).
 #[post("/service/<service>/clear-appdata")]
 pub async fn clear_appdata(
-    service: &str,
+    service: ServiceName<'_>,
     config: &State<Arc<AppConfig>>,
 ) -> Result<RawHtml<String>, Blocked> {
-    if !service_name_ok(service) {
-        return Ok(RawHtml(String::new()));
-    }
+    let service = service.as_str();
     let (pane, appdata) = match trusted_appdata(config, service).await {
         Ok(v) => v,
         Err(e) => {

@@ -23,5 +23,5 @@ pub use paths::{
 pub use validate::{
     branch_ok, core_section_ok, generation_ok, oauth_env_key_ok, oauth_session_ok, op_id_ok,
     option_name_ok, provider_id_ok, rev_ok, run_as_ok, service_name_ok, unit_name_valid,
-    CORE_NESTED_SECTIONS,
+    ServiceName, CORE_NESTED_SECTIONS,
 };

@@ -9,9 +9,7 @@ use crate::commands::web::locks::{try_lock, Blocked};
 use crate::commands::web::power::{hold_until_down, power_lock};
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::units::{begin_clear_appdata, pane_lock_spec, trusted_appdata};
-use crate::commands::web::util::{
-    escape_html, service_name_ok, status_err, status_ok, status_pulling,
-};
+use crate::commands::web::util::{escape_html, status_err, status_ok, status_pulling, ServiceName};
 use crate::commands::web::zfs::service as service_zfs;
 use crate::commands::web::zfs::service::{
     locate_appdata, manual_snapshot_name, render_service_snapshots, run_restore, snapshot_out_oob,
@@ -27,10 +25,11 @@ fn out_err(service: &str, msg: &str) -> RawHtml<String> {
 
 /// Snapshot card for the option pane (lazy-loaded).
 #[get("/service/<service>/snapshots")]
-pub async fn service_snapshots(service: &str, config: &State<Arc<AppConfig>>) -> RawHtml<String> {
-    if !service_name_ok(service) {
-        return RawHtml(String::new());
-    }
+pub async fn service_snapshots(
+    service: ServiceName<'_>,
+    config: &State<Arc<AppConfig>>,
+) -> RawHtml<String> {
+    let service = service.as_str();
     match trusted_appdata(config, service).await {
         Ok((_, appdata)) => {
             let busy = config.clear_appdata_in_flight.contains(service);
@@ -47,12 +46,10 @@ pub async fn service_snapshots(service: &str, config: &State<Arc<AppConfig>>) ->
 /// Manual snapshot of the dataset holding the service's appdata.
 #[post("/service/<service>/snapshots/create")]
 pub async fn service_snapshot_create(
-    service: &str,
+    service: ServiceName<'_>,
     config: &State<Arc<AppConfig>>,
 ) -> Result<RawHtml<String>, Blocked> {
-    if !service_name_ok(service) {
-        return Ok(RawHtml(String::new()));
-    }
+    let service = service.as_str();
     let appdata = match trusted_appdata(config, service).await {
         Ok((_, a)) => a,
         Err(e) => return Ok(out_err(service, &e)),
@@ -84,13 +81,11 @@ pub async fn service_snapshot_create(
 /// Restore the service's appdata folder from a snapshot (background job, WS progress).
 #[post("/service/<service>/snapshots/restore?<snap>")]
 pub async fn service_snapshot_restore(
-    service: &str,
+    service: ServiceName<'_>,
     snap: &str,
     config: &State<Arc<AppConfig>>,
 ) -> Result<RawHtml<String>, Blocked> {
-    if !service_name_ok(service) {
-        return Ok(RawHtml(String::new()));
-    }
+    let service = service.as_str();
     if !snapshot_name_ok(snap) {
         return Ok(out_err(service, "invalid snapshot name"));
     }
@@ -136,9 +131,6 @@ async fn service_manage(
     action: SnapAction,
     config: &State<Arc<AppConfig>>,
 ) -> RawHtml<String> {
-    if !service_name_ok(service) {
-        return RawHtml(String::new());
-    }
     if !snapshot_name_ok(snap) {
         return out_err(service, "invalid snapshot name");
     }
@@ -168,38 +160,42 @@ async fn service_manage(
 
 #[post("/service/<service>/snapshots/delete?<snap>")]
 pub async fn service_snapshot_delete(
-    service: &str,
+    service: ServiceName<'_>,
     snap: &str,
     config: &State<Arc<AppConfig>>,
 ) -> RawHtml<String> {
+    let service = service.as_str();
     service_manage(service, snap, SnapAction::Delete, config).await
 }
 
 #[post("/service/<service>/snapshots/pin?<snap>")]
 pub async fn service_snapshot_pin(
-    service: &str,
+    service: ServiceName<'_>,
     snap: &str,
     config: &State<Arc<AppConfig>>,
 ) -> RawHtml<String> {
+    let service = service.as_str();
     service_manage(service, snap, SnapAction::Pin, config).await
 }
 
 #[post("/service/<service>/snapshots/unpin?<snap>")]
 pub async fn service_snapshot_unpin(
-    service: &str,
+    service: ServiceName<'_>,
     snap: &str,
     config: &State<Arc<AppConfig>>,
 ) -> RawHtml<String> {
+    let service = service.as_str();
     service_manage(service, snap, SnapAction::Unpin, config).await
 }
 
 #[get("/service/<service>/snapshots/comment?<snap>")]
 pub async fn service_snapshot_comment_form(
-    service: &str,
+    service: ServiceName<'_>,
     snap: &str,
     config: &State<Arc<AppConfig>>,
 ) -> RawHtml<String> {
-    if !service_name_ok(service) || !snapshot_name_ok(snap) {
+    let service = service.as_str();
+    if !snapshot_name_ok(snap) {
         return RawHtml(String::new());
     }
     match trusted_appdata(config, service).await {
@@ -210,11 +206,12 @@ pub async fn service_snapshot_comment_form(
 
 #[post("/service/<service>/snapshots/comment?<snap>", data = "<form>")]
 pub async fn service_snapshot_comment(
-    service: &str,
+    service: ServiceName<'_>,
     snap: &str,
     form: Form<CommentForm>,
     config: &State<Arc<AppConfig>>,
 ) -> RawHtml<String> {
+    let service = service.as_str();
     let comment = form.into_inner().comment;
     service_manage(service, snap, SnapAction::Comment(comment), config).await
 }
