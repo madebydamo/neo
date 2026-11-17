@@ -86,6 +86,7 @@
     };
 
     time.timeZone = config.neo.core.timeZone;
+    networking.timeServers = config.neo.core.timeServers;
 
     system.activationScripts.homeserver-ssh-key = ''
       ${homeserverSshKey}/bin/neo-homeserver-ssh-key ensure

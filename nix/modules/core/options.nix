@@ -175,6 +175,16 @@
         rank = 30;
       };
 
+      # networking.timeServers, used by systemd-timesyncd. The Exact time
+      # service (chrony, services/ntp) replaces timesyncd and has its own list.
+      options.neo.core.timeServers = mkOption {
+        type = types.listOf types.str;
+        default = ["pool.ntp.org"];
+        description = "Internet time servers this server sets its clock from. The default works worldwide; while Exact time is on, its own time servers are used instead.";
+        rank = 31;
+        ui = labelled group.advanced "Time servers";
+      };
+
       # zramSwap: compressed swap in RAM.
       options.neo.core.zramSwap.enabled = mkEnableOption "compressed memory swap, which helps the server cope when memory runs low. Recommended with 8 GB of RAM or less" {
         rank = 35;

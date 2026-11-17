@@ -13,6 +13,7 @@ Everything a plugin (or a core service) can read from `config.neo` and call from
 | `config.neo.core.volumes.documents` | str, `<root>/DATA/Documents` | Documents |
 | `config.neo.core.uid` / `gid` | int, `1000` | uid/gid of the `homeserver` user; `PUID`/`PGID`, file ownership |
 | `config.neo.core.timeZone` | str, `Europe/Zurich` | `TZ` |
+| `config.neo.core.timeServers` | listOf str, `[ "pool.ntp.org" ]` | `networking.timeServers` (systemd-timesyncd) |
 | `config.neo.core.hostname` | str, `nixos` | Hostname |
 | `config.neo.core.git.users` | list of str, internal | Append a local user that needs the machine git key and tokens |
 | `config.neo.services.swag.domain` | null or str, `null` | Primary domain; public URL is `https://<subdomain>.<domain>` |
