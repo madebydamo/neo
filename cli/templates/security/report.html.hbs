@@ -5,7 +5,7 @@
     {{!-- No manifest: this server has no /site.webmanifest. --}}
     {{> partials/head_meta title="neo security" no_manifest=true}}
     <link rel="stylesheet" href="/static/neo-ui.css" />
-    <script src="https://unpkg.com/alpinejs@3.17.5/dist/cdn.min.js" defer></script>
+    {{> partials/vendor_scripts alpine=true}}
     <script src="/static/neo_util.js"></script>
     {{#if assistant}}
       {{!-- neo web's chat drawer; routes from web::chat with this page's host (security/chat.rs). --}}

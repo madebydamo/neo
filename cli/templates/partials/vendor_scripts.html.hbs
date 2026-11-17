@@ -1,0 +1,12 @@
+{{!-- Third-party scripts from the CDN, so their versions live in one place.
+     Params (each optional): htmx, htmx_ext (sse + ws extensions, needs htmx), alpine. --}}
+{{#if htmx}}
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+{{#if htmx_ext}}
+<script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/sse.js"></script>
+<script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
+{{/if}}
+{{/if}}
+{{#if alpine}}
+<script src="https://unpkg.com/alpinejs@3.17.5/dist/cdn.min.js" defer></script>
+{{/if}}
