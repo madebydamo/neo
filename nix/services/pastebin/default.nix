@@ -22,7 +22,6 @@
           volumes = [
             "${appdata}:/upload"
           ];
-          networks = [(lib.neo.docker.serviceNetwork "pastebin")];
         };
       };
     };

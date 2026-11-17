@@ -53,7 +53,6 @@
                 "${cfg.appdata}/server:/data"
                 "/etc/localtime:/etc/localtime:ro"
               ];
-              networks = [(lib.neo.docker.serviceNetwork "immich")];
             };
 
             immich-machine-learning = {
@@ -61,7 +60,6 @@
               volumes = [
                 "${cfg.appdata}/cache:/cache"
               ];
-              networks = [(lib.neo.docker.serviceNetwork "immich")];
             };
           };
         }

@@ -91,6 +91,24 @@
         neo.core.docker.links.${name} = containers;
       };
 
+      # { <container> = <service>; } for the containers enabled services run:
+      # `docker-*` entries of `systemdUnits` (an image option alone does not
+      # mean the container exists, e.g. an optional sidecar that is off).
+      unitContainers = config:
+        lib.foldl' (acc: x: acc // x) {} (
+          lib.mapAttrsToList (
+            sname: svc:
+              lib.genAttrs
+              (map (lib.removePrefix "docker-") (lib.filter (lib.hasPrefix "docker-") (svc.systemdUnits or [])))
+              (_: sname)
+          ) (lib.filterAttrs (_: svc: svc.enabled or false) (config.neo.services or {}))
+        );
+
+      # Priority of the service network every container of a service gets by
+      # default (docker-network.nix): above mkOptionDefault, below mkDefault,
+      # so any `networks` a module sets replaces it.
+      serviceNetworkPriority = 1200;
+
       # { <container> = <service>; } for enabled services: keys of
       # `containers` and `docker-*` entries of `systemdUnits`.
       containerService = config:

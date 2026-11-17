@@ -22,7 +22,6 @@
             // neo.mkVpnOptions {
               containers = ["searxng"];
               internalContainers = ["searxng-redis"];
-              networks = [(lib.neo.docker.serviceNetwork "searxng")];
               ports = [8080];
             }
             // lib.neo.mkContainerDefinitions {

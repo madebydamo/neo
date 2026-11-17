@@ -18,7 +18,6 @@
           image = cfg.containers.bentopdf;
           environment.PORT = toString cfg.port;
           volumes = ["${runtimeConfig}:/usr/share/nginx/html/config.json:ro"];
-          networks = [(lib.neo.docker.serviceNetwork "bentopdf")];
         };
       };
     };

@@ -42,7 +42,6 @@
               "--health-retries=3"
               "--health-start-period=10s"
             ];
-            networks = [(lib.neo.docker.serviceNetwork "immich-drop")];
           };
         };
       };

@@ -150,7 +150,6 @@
                 "--health-retries=30"
                 "--health-start-period=60s"
               ];
-              networks = [(lib.neo.docker.serviceNetwork "dawarich")];
             };
 
             dawarich-sidekiq = {
@@ -168,7 +167,6 @@
                 "${appdata}/watched:/var/app/tmp/imports/watched"
                 "${appdata}/storage:/var/app/storage"
               ];
-              networks = [(lib.neo.docker.serviceNetwork "dawarich")];
             };
           };
         }

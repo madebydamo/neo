@@ -50,7 +50,6 @@
             "${engineDir}/data:/var/lib/crowdsec/data"
             "${swagLogs}:/var/log/swag:ro"
           ];
-          networks = [(lib.neo.docker.serviceNetwork "swag")];
         };
 
         virtualisation.oci-containers.containers.swag = {

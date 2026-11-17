@@ -32,7 +32,6 @@
             volumes = [
               "${dataDir}:/app/data"
             ];
-            networks = [(lib.neo.docker.serviceNetwork "isponsorblocktv")];
           };
 
           # Setup service using host ttyd

@@ -66,6 +66,7 @@
               MKNOD = true;
               SYS_ADMIN = true;
             };
+            # Named here: the link to Nextcloud replaces the service network default.
             networks = [(lib.neo.docker.serviceNetwork "collabora")];
           };
 

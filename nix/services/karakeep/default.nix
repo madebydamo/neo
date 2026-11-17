@@ -45,7 +45,6 @@
             volumes = [
               "${appdata}/meilisearch:/meili_data"
             ];
-            networks = [(lib.neo.docker.serviceNetwork "karakeep")];
           };
 
           karakeep-chrome = {
@@ -60,7 +59,6 @@
               "--window-size=1440,900"
             ];
             extraOptions = ["--init"];
-            networks = [(lib.neo.docker.serviceNetwork "karakeep")];
           };
 
           karakeep = {
@@ -81,7 +79,6 @@
             volumes = [
               "${appdata}/data:/data"
             ];
-            networks = [(lib.neo.docker.serviceNetwork "karakeep")];
           };
         };
       };

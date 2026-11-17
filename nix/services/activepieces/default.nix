@@ -74,7 +74,6 @@
               volumes = [
                 "${appdata}/cache:/usr/src/app/cache"
               ];
-              networks = [(lib.neo.docker.serviceNetwork "activepieces")];
             };
           };
         }

@@ -226,10 +226,20 @@
     };
 
     config = {
-      virtualisation.oci-containers.containers = lib.genAttrs (lib.filter (c: !(lib.elem c routed)) (lib.unique cfg.hostAccess)) (_: {
-        networks = lib.mkAfter [docker.hostNetwork];
-        extraOptions = [docker.hostAlias];
-      });
+      virtualisation.oci-containers.containers = lib.mkMerge [
+        # Every container of a service is on the service's network unless a
+        # module names its networks (any priority above this default wins:
+        # explicit lists, mkLink, mkHostAccess, VPN routing, vpn.networks).
+        # A container with a link or host access lists its service network
+        # itself (docker-network-isolation checks it).
+        (lib.mapAttrs (_: service: {
+          networks = lib.mkOverride docker.serviceNetworkPriority [(docker.serviceNetwork service)];
+        }) (docker.unitContainers config))
+        (lib.genAttrs (lib.filter (c: !(lib.elem c routed)) (lib.unique cfg.hostAccess)) (_: {
+          networks = lib.mkAfter [docker.hostNetwork];
+          extraOptions = [docker.hostAlias];
+        }))
+      ];
 
       neo.core.docker.networks = lib.mkMerge [
         (lib.genAttrs

@@ -40,7 +40,6 @@
           extraOptions = [
             "--memory=1000m"
           ];
-          networks = [(lib.neo.docker.serviceNetwork "mealie")];
         };
       };
     };

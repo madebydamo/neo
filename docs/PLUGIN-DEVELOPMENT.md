@@ -192,7 +192,7 @@ Work through every item. Each one exists because it is easy to forget.
 
 - [ ] Everything inside `config = lib.mkIf cfg.enabled { … }`.
 - [ ] Appdata directories created with `neo.core.containerDirs.${name} = [ … ];` (or tmpfiles for native units).
-- [ ] Containers: `image = cfg.containers.<c>`, `networks = [(lib.neo.docker.serviceNetwork name)]` (sidecars too).
+- [ ] Containers: `image = cfg.containers.<c>`, each listed in `mkContainerDefinitions` (sidecars too): that puts it on the service network. Set `networks = [(lib.neo.docker.serviceNetwork name)]` only on a container that also has a link or host access.
 - [ ] `environment = lib.neo.linuxserverEnv config // { … }` (`PUID`, `PGID`, `TZ`) if the image supports them; never a literal time zone.
 - [ ] All state under `${config.neo.core.volumes.appdata}/<name>`. Media and documents from `config.neo.core.volumes.media` / `.documents`.
 - [ ] No host ports for web UIs; SWAG reaches containers over the service network. Only publish non-HTTP protocol ports.
@@ -353,7 +353,6 @@ Notes:
           "${appdata}/data:/data"
           "${config.neo.core.volumes.documents}:/documents"
         ];
-        networks = [(lib.neo.docker.serviceNetwork name)];
       };
 
       # Secrets reach the container through a rendered env file, never `environment`.
@@ -380,7 +379,7 @@ Notes:
 
 Notes:
 
-- **Network.** Put every container of the service on `lib.neo.docker.serviceNetwork name` (`app-<name>`). Its containers reach each other by container name; SWAG joins the network of every proxied service; containers of other services (core or plugin) cannot reach them. Container names are still global Docker names: name sidecars after the service (`"${name}-db"`, `"${name}-redis"`). Neo creates every network a container names. To call another service inside Docker, both sides share a link (`lib.neo.docker.mkLink { name; containers = [ … ]; }`); otherwise use its public URL. Services of one plugin that talk to each other (an *arr stack) put those containers on one link. Host services (`host.docker.internal`) are reachable only with `lib.neo.docker.mkHostAccess <container>`; SWAG already has it. See [LIB.md](LIB.md#docker-networks-libneodocker).
+- **Network.** Every container of the service (its `docker-<container>` unit in `systemdUnits`, which `mkContainerDefinitions` does) is on `lib.neo.docker.serviceNetwork name` (`app-<name>`) unless it sets `networks`. A container with a link or `mkHostAccess` sets `networks = [(lib.neo.docker.serviceNetwork name)]` itself: those helpers add networks, which replaces the default. Its containers reach each other by container name; SWAG joins the network of every proxied service; containers of other services (core or plugin) cannot reach them. Container names are still global Docker names: name sidecars after the service (`"${name}-db"`, `"${name}-redis"`). Neo creates every network a container names. To call another service inside Docker, both sides share a link (`lib.neo.docker.mkLink { name; containers = [ … ]; }`); otherwise use its public URL. Services of one plugin that talk to each other (an *arr stack) put those containers on one link. Host services (`host.docker.internal`) are reachable only with `lib.neo.docker.mkHostAccess <container>`; SWAG already has it. See [LIB.md](LIB.md#docker-networks-libneodocker).
 - **VPN.** Declare networks and links as if there were no VPN. A container routed through the VPN (`vpn.enabled`) runs in gluetun's network namespace; gluetun then joins its service network, its links and (with `mkHostAccess`) `neo-host` under its name, and its metrics are scraped through gluetun. List the service network in `mkVpnOptions { networks = [(lib.neo.docker.serviceNetwork name)]; }` too.
 - **The `internal` network.** Plugins written before service networks use `networks = ["internal"]`. That keeps working unchanged: SWAG is on it, gluetun joins it for VPN-routed plugin containers, and everything on it reaches everything else on it. Built-in services left it, so a plugin container on `internal` can no longer call a built-in container by name (use the public URL or a link). Move to `serviceNetwork` to isolate the plugin's services from each other and from other plugins.
 - **Ownership.** `neo.core.containerDirs` (like `mkEnsureDirs`) creates missing directories owned by `neo.core.uid:gid` (the `homeserver` user). Pass `{ dirPath; user; group; mode; }` for images that run as a fixed uid (for example postgres `999`).

@@ -321,6 +321,8 @@
             capabilities = {
               NET_ADMIN = true;
             };
+            # Networks go in extraOptions (below), not the service network default.
+            networks = [];
             extraOptions =
               [
                 # Shared network of plugins that do not use their own (docker-network.nix).

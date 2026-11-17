@@ -29,7 +29,6 @@
               USER_EMAIL = "not-that-important@example.com";
               USER_PASSWORD = "whatever";
             };
-          networks = [(lib.neo.docker.serviceNetwork "beszel")];
         };
       };
     };

@@ -67,7 +67,6 @@
           volumes = [
             "${cfg.appdata}:/data"
           ];
-          networks = [(lib.neo.docker.serviceNetwork "vaultwarden")];
         };
       };
     };

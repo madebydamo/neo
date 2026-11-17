@@ -110,7 +110,6 @@
               volumes = [
                 "${appdata}/storage:/app/data/storage"
               ];
-              networks = [(lib.neo.docker.serviceNetwork "docmost")];
             };
 
             docmost-sso = mkIf ssoActive {
@@ -131,7 +130,6 @@
                 "${./sso.py}:/app/sso.py:ro"
                 "${sqlStatusDir}:${sqlStatusMount}:ro"
               ];
-              networks = [(lib.neo.docker.serviceNetwork "docmost")];
             };
 
             docmost-mcp = mkIf mcpActive {
@@ -154,7 +152,6 @@
                 "${./mcp.py}:/app/mcp.py:ro"
                 "${sqlStatusDir}:${sqlStatusMount}:ro"
               ];
-              networks = [(lib.neo.docker.serviceNetwork "docmost")];
             };
           };
 

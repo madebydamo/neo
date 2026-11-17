@@ -40,7 +40,6 @@
             }
             // lib.neo.mkVpnOptions {
               containers = ["webtop"];
-              networks = [(lib.neo.docker.serviceNetwork "webtop")];
               ports = [3050 3051 8082];
             }
             // lib.neo.mkContainerDefinitions {

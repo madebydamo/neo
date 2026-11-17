@@ -67,7 +67,6 @@
                 "${appdata}/export:/usr/src/paperless/export"
                 "${appdata}/consume:/usr/src/paperless/consume"
               ];
-              networks = [(lib.neo.docker.serviceNetwork "paperless")];
             };
           };
         }

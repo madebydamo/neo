@@ -284,7 +284,6 @@
           volumes = [
             "${cfg.appdata}:/data"
           ];
-          networks = [(lib.neo.docker.serviceNetwork "tinyauth")];
         };
 
         virtualisation.oci-containers.containers.tinyauth-entra = mkIf entraEnabled {
@@ -292,7 +291,6 @@
           cmd = ["python3" "/app/entra_userinfo.py"];
           environment.PORT = toString entraBridgePort;
           volumes = ["${./entra_userinfo.py}:/app/entra_userinfo.py:ro"];
-          networks = [(lib.neo.docker.serviceNetwork "tinyauth")];
         };
       };
     };

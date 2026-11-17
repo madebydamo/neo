@@ -67,7 +67,6 @@
             "${appdata}/data:/data"
           ];
           ports = sshPorts;
-          networks = [(lib.neo.docker.serviceNetwork "gitea")];
         };
       };
     };

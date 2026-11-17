@@ -121,7 +121,6 @@
                 runAs
                 "--shm-size=512m"
               ];
-              networks = [(lib.neo.docker.serviceNetwork "authentik")];
             };
 
             authentik-worker = {
@@ -138,7 +137,6 @@
                 runAs
                 "--shm-size=512m"
               ];
-              networks = [(lib.neo.docker.serviceNetwork "authentik")];
             };
           };
         }

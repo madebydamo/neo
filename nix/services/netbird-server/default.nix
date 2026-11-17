@@ -216,7 +216,6 @@
               "${appdata}/data:/var/lib/netbird"
             ];
             ports = ["${toString cfg.stunPort}:${toString cfg.stunPort}/udp"];
-            networks = [(lib.neo.docker.serviceNetwork "netbird-server")];
           };
 
           netbird-dashboard = {
@@ -235,7 +234,6 @@
               NGINX_SSL_PORT = "443";
               LETSENCRYPT_DOMAIN = "none";
             };
-            networks = [(lib.neo.docker.serviceNetwork "netbird-server")];
           };
         };
 

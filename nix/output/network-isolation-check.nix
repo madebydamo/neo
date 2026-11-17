@@ -3,7 +3,7 @@
 # with a container of another, apart from SWAG, gluetun and declared links.
 # No built-in container is left on the shared `internal` network, none lands
 # on Docker's default bridge, and none names a network twice (Docker refuses
-# that). Design: docs/design/network-isolation.md.
+# that), and each one is on its service network. Design: docs/design/network-isolation.md.
 {
   config,
   inputs,
@@ -82,6 +82,16 @@
     # Docker's default bridge connects everything on it.
     ++ map (c: "container ${c} has no network (Docker's default bridge)")
     (lib.filter (c: !(usesHost containers.${c}) && docker.containerNetworks containers.${c} == []) (lib.attrNames containers))
+    # A container that names its networks (link, host access) keeps its
+    # service network: the default (docker-network.nix) no longer applies.
+    ++ map (c: "container ${c} is not on ${docker.serviceNetwork owner.${c}}, the network of its service ${owner.${c}}")
+    (lib.filter (c:
+      owner ? ${c}
+      && !(lib.elem c hubs)
+      && !(lib.elem c routed)
+      && !(usesHost containers.${c})
+      && !(lib.elem (docker.serviceNetwork owner.${c}) (docker.containerNetworks containers.${c})))
+    (lib.attrNames containers))
     # Docker refuses a network listed twice.
     ++ lib.concatMap (c: let
       nets = docker.containerNetworks containers.${c};

@@ -102,23 +102,24 @@ List every setup unit in the service's `systemdUnits` (`extraUnits` or `mkSystem
 
 ### Docker networks: `lib.neo.docker`
 
-Each service runs on its own network, so containers of different services cannot reach each other (design: [design/network-isolation.md](design/network-isolation.md)). Name the network in `networks`; `neo-docker-network` creates every network a container names and removes empty ones no one declares. SWAG joins `app-<service>` of every proxied service on its own.
+Each service runs on its own network, so containers of different services cannot reach each other (design: [design/network-isolation.md](design/network-isolation.md)). Every container whose `docker-<container>` unit is in an enabled service's `systemdUnits` (all containers of `mkContainerDefinitions`) is on `app-<service>` by default, so most containers set no `networks`. The default is a low-priority value: any `networks` a module sets replaces it, including `mkLink` and `mkHostAccess`, so a container with a link or host access lists its service network itself (the `docker-network-isolation` check fails otherwise). `neo-docker-network` creates every network a container names and removes empty ones no one declares. SWAG joins `app-<service>` of every proxied service on its own.
 
 | Name | Arguments | Returns |
 |------|-----------|---------|
-| `docker.serviceNetwork` | Service name (`plugin.name "<service>"` in plugins) | `"app-<service>"`: put every container of the service there |
+| `docker.serviceNetwork` | Service name (`plugin.name "<service>"` in plugins) | `"app-<service>"`: every container of the service is there by default; name it when the container also joins other networks |
 | `docker.mkLink` | `{ name, containers }` | Module fragment for `mkMerge`: network `link-<name>` joined by exactly `containers` (any service, core or plugin), after their own network. For endpoints only reachable inside Docker; prefer the other app's public URL. Works with the VPN on or off: for a VPN-routed member gluetun joins the link under the member's name |
 | `docker.mkHostAccess` | Container name | Module fragment: the container joins `neo-host` and reaches host services (bound to `127.0.0.1` with `mkDockerToLocalhostForward`, or all interfaces) as `host.docker.internal`. Only the `neo-host` bridge may connect to host ports. For a VPN-routed container gluetun joins `neo-host` instead (every routed container then reaches host services) |
 | `docker.sharedNetwork` | | `"internal"`: the shared network of plugins written before service networks; SWAG is on it, everything on it reaches everything else on it |
 | `docker.hostNetwork`, `hostSubnet`, `hostGateway`, `hostAlias` | | `"neo-host"`, `172.31.255.0/24`, `172.31.255.1`, the `--add-host` option for `host.docker.internal` |
-| `docker.containerNetworks`, `usedNetworks`, `containerService`, `networkName`, `isCreatedNetwork` | | Readers for checks and tooling; **internal** |
+| `docker.containerNetworks`, `usedNetworks`, `containerService`, `unitContainers`, `networkName`, `isCreatedNetwork`, `serviceNetworkPriority` | | Readers for checks and tooling; **internal** |
 | `config.neo.core.docker.networks.<name>` | `{ internal ? false, subnet ? null, gateway ? null, bridgeName ? null }` | Flags of a network (`internal` = no route to the internet); **internal** |
 
 ```nix
 virtualisation.oci-containers.containers.${name} = {
-  image = cfg.containers.${name};
-  networks = [(lib.neo.docker.serviceNetwork name)];
+  image = cfg.containers.${name};   # on app-${name} by default
 };
+# A container with a link names its service network too:
+virtualisation.oci-containers.containers."${name}-web".networks = [(lib.neo.docker.serviceNetwork name)];
 ```
 
 **VPN.** A container with `vpn.enabled` runs in gluetun's network namespace (`networks = ["container:vpn"]`) and has no networks of its own. gluetun stands in for it, answering for its name on each network it would be on: its service network, the `vpn.networks` of its service (`internal` for old plugins), every link it is a member of, and `neo-host` with `mkHostAccess`. So names, links and SWAG work the same with the VPN on or off; declare networks and links as if there were no VPN. The price, by choice: all routed containers share one namespace and reach each other on `localhost`. `lib.neo.vpnRoutedContainers config` lists the routed containers. App metrics of a routed container are scraped through gluetun automatically.

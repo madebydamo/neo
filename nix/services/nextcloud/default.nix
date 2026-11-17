@@ -52,12 +52,10 @@
             volumes = [
               "${appdata}/db:/var/lib/mysql"
             ];
-            networks = [(lib.neo.docker.serviceNetwork "nextcloud")];
           };
 
           nextcloud-redis = {
             image = cfg.containers."nextcloud-redis";
-            networks = [(lib.neo.docker.serviceNetwork "nextcloud")];
           };
 
           nextcloud = {
@@ -76,6 +74,7 @@
             volumes = [
               "${appdata}/html:/var/www/html"
             ];
+            # Named here: the link to Collabora replaces the service network default.
             networks = [(lib.neo.docker.serviceNetwork "nextcloud")];
           };
 
@@ -96,7 +95,6 @@
             volumes = [
               "${appdata}/html:/var/www/html"
             ];
-            networks = [(lib.neo.docker.serviceNetwork "nextcloud")];
           };
         };
 

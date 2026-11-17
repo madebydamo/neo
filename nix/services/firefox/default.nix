@@ -33,7 +33,6 @@
           extraOptions = [
             "--shm-size=1gb"
           ];
-          networks = [(lib.neo.docker.serviceNetwork "firefox")];
         };
       };
     };

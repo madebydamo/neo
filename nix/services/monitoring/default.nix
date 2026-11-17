@@ -437,7 +437,6 @@
             ];
             # Loopback only: the agent on this machine writes here.
             ports = ["127.0.0.1:${toString cfg.prometheusPort}:9090"];
-            networks = [network];
           };
 
           loki = {
@@ -449,7 +448,6 @@
               "${lokiConfig}:/etc/loki/neo.yaml:ro"
             ];
             ports = ["127.0.0.1:${toString cfg.lokiPort}:3100"];
-            networks = [network];
           };
         };
 

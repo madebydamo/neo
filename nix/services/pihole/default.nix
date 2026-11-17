@@ -66,7 +66,6 @@
             "--health-timeout=5s"
             "--health-retries=3"
           ];
-          networks = [(lib.neo.docker.serviceNetwork "pihole")];
         };
 
         systemd.services."pihole-update-gravity" = {
