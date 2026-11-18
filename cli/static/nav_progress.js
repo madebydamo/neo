@@ -320,8 +320,8 @@
       },
       true
     );
-    // Refresh after the click finished dispatching: a confirm() inside the
-    // handler (unsaved changes) may have blocked for a while.
+    // Refresh after the click finished dispatching: a slow handler may have
+    // held it for a while.
     if (typeof window !== 'undefined') {
       window.addEventListener('click', function () {
         if (lastClick) lastClick.at = Date.now();
@@ -329,7 +329,7 @@
     }
 
     // Listen on document (bubble) so page handlers on body that cancel the
-    // request (unsaved-changes confirm) have already run: check defaultPrevented.
+    // request have already run: check defaultPrevented.
     doc.addEventListener('htmx:beforeRequest', function (evt) {
       try {
         if (evt.defaultPrevented) return;

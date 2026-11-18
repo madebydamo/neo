@@ -21,12 +21,12 @@ window.neoIsConfigFormDirty = function neoIsConfigFormDirty() {
 };
 
 /**
- * If the option form is dirty, ask the user to discard unsaved changes.
- * Returns true when navigation may proceed (not dirty, or user confirmed discard).
+ * If the option form is dirty, ask the user (in-page dialog) to discard unsaved changes.
+ * Resolves true when navigation may proceed (not dirty, or user confirmed discard).
  */
 window.neoConfirmLeaveConfigForm = function neoConfirmLeaveConfigForm() {
-  if (!window.neoIsConfigFormDirty()) return true;
-  return window.confirm('You have unsaved changes. Discard them?');
+  if (!window.neoIsConfigFormDirty()) return Promise.resolve(true);
+  return NeoUtil.confirm('You have unsaved changes. Discard them?', { okLabel: 'Discard', danger: true });
 };
 
 // One-shot: loadTab/goUp confirm first, then set this so htmx:beforeRequest does not re-prompt.
@@ -96,9 +96,12 @@ window.configShell = function configShell() {
      * layout does not collapse while the option pane is still on screen.
      */
     loadTab(tab) {
-      if (!window.neoConfirmLeaveConfigForm()) return;
-      this.tab = tab;
-      this.navigateContent(this.tabUrl(tab));
+      var self = this;
+      window.neoConfirmLeaveConfigForm().then(function (ok) {
+        if (!ok) return;
+        self.tab = tab;
+        self.navigateContent(self.tabUrl(tab));
+      });
     },
 
     /**
@@ -106,15 +109,20 @@ window.configShell = function configShell() {
      * Breadcrumb stays visible until the grid swap lands (see syncConfigShellFromContent).
      */
     goUp() {
-      if (!window.neoConfirmLeaveConfigForm()) return;
-      this.navigateContent(this.tabUrl(this.tab));
+      var self = this;
+      window.neoConfirmLeaveConfigForm().then(function (ok) {
+        if (ok) self.navigateContent(self.tabUrl(self.tab));
+      });
     },
 
     /** Logo / home: services tab at /configuration. */
     goHome() {
-      if (!window.neoConfirmLeaveConfigForm()) return;
-      this.tab = 'services';
-      this.navigateContent('/configuration');
+      var self = this;
+      window.neoConfirmLeaveConfigForm().then(function (ok) {
+        if (!ok) return;
+        self.tab = 'services';
+        self.navigateContent('/configuration');
+      });
     },
   };
 };
@@ -177,21 +185,27 @@ window.configShell = function configShell() {
     el.style.minHeight = '';
   }
 
-  // Guard attribute-based (and other) HTMX navigations that replace #config-content.
+  // Guard attribute-based (and other) HTMX navigations that replace #config-content
+  // (NeoUtil runs request guards on htmx:confirm, before hx-confirm's question).
   // Skip modals, action bar, unit controls, changes-body, etc. (other targets).
   // After a successful save, option_form updates originals before reload, so dirty is false.
-  document.body.addEventListener('htmx:beforeRequest', function (evt) {
+  NeoUtil.guardRequests(function (detail) {
     try {
-      if (!NeoConfigCore.isNavRequest(evt.detail || {})) return;
-      lockConfigContentHeight();
+      if (!NeoConfigCore.isNavRequest(detail)) return true;
       if (window.neoAllowNextConfigNav) {
         window.neoAllowNextConfigNav = false;
-        return;
+        return true;
       }
-      if (!window.neoConfirmLeaveConfigForm()) {
-        unlockConfigContentHeight();
-        evt.preventDefault();
-      }
+      if (!window.neoIsConfigFormDirty()) return true;
+      return window.neoConfirmLeaveConfigForm();
+    } catch (e) {
+      return true;
+    }
+  });
+
+  document.body.addEventListener('htmx:beforeRequest', function (evt) {
+    try {
+      if (NeoConfigCore.isNavRequest(evt.detail || {})) lockConfigContentHeight();
     } catch (e) {}
   });
 

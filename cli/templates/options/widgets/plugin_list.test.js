@@ -306,7 +306,7 @@ test('confirmPluginRemoval dialog: cancel keeps the entry', async () => {
   assert.deepEqual(Object.keys(form.values.plugins), ['bar']);
 });
 
-test('confirmPluginRemoval fallback: window.confirm decides', async () => {
+test('confirmPluginRemoval fallback: the in-page confirm decides', async () => {
   const keep = formWithPlugins({ current: { bar: one('x') }, confirm: () => false });
   await keep.removePlugin('plugins', 'bar');
   assert.deepEqual(Object.keys(keep.values.plugins), ['bar']);

@@ -190,6 +190,155 @@
   }
 
   /**
+   * In-page replacement for window.confirm / alert / prompt: a modal <dialog> made
+   * of ordinary buttons, so browser-driving agents (which cannot reach the
+   * browser's own dialogs) can answer it too. A message whose first paragraph is
+   * followed by a blank line shows that paragraph as the title.
+   * opts: message, okLabel ('OK'), cancelLabel ('Cancel'), cancel (false: no
+   * Cancel button), danger (red OK button), input (string: show a text field
+   * with this value).
+   * Resolves true / false, or with input the text / null when cancelled.
+   */
+  function dialog(opts) {
+    opts = opts || {};
+    var doc = document;
+    var paras = String(opts.message == null ? '' : opts.message).split(/\n\s*\n/);
+    var title = paras.length > 1 ? paras.shift() : '';
+    var asks = opts.input != null;
+    return new Promise(function (resolve) {
+      var settled = false;
+      var dlg;
+      function done(ok) {
+        if (settled) return;
+        settled = true;
+        if (dlg.open) dlg.close();
+        dlg.remove();
+        if (asks) resolve(ok ? field.value : null);
+        else resolve(ok);
+      }
+      var field = asks
+        ? h('input', { type: 'text', class: 'input input-bordered input-sm w-full mt-3', value: String(opts.input), attrs: { 'aria-label': title || paras.join(' ') } })
+        : null;
+      var cancel = opts.cancel === false
+        ? null
+        : h('button', { type: 'button', class: 'btn btn-sm btn-ghost', text: opts.cancelLabel || 'Cancel', attrs: { 'data-neo-dialog': 'cancel' }, on: { click: function () { done(false); } } });
+      var ok = h('button', {
+        type: 'submit',
+        class: 'btn btn-sm ' + (opts.danger ? 'btn-error' : 'btn-primary'),
+        text: opts.okLabel || 'OK',
+        attrs: { 'data-neo-dialog': 'ok' },
+      });
+      var box = h(
+        'form',
+        { class: 'modal-box max-w-md', attrs: { method: 'dialog' }, on: { submit: function (e) { e.preventDefault(); done(true); } } },
+        title ? h('h3', { class: 'font-bold text-lg mb-2', text: title }) : null,
+        h('p', { class: 'text-sm whitespace-pre-line', text: paras.join('\n\n') }),
+        field,
+        h('div', { class: 'modal-action' }, cancel, ok)
+      );
+      dlg = h(
+        'dialog',
+        { class: 'modal modal-bottom sm:modal-middle', attrs: { role: 'alertdialog', 'data-neo-dialog': '' } },
+        box,
+        h('div', { class: 'modal-backdrop', on: { click: function () { done(opts.cancel === false); } } })
+      );
+      // Escape: the browser fires cancel, then close.
+      dlg.addEventListener('cancel', function (e) {
+        e.preventDefault();
+        done(opts.cancel === false);
+      });
+      doc.body.appendChild(dlg);
+      if (dlg.showModal) dlg.showModal();
+      else dlg.setAttribute('open', '');
+      (field || ok).focus();
+      if (field) field.select();
+    });
+  }
+
+  /** In-page confirm: resolves true on OK. opts as for dialog. */
+  function confirm(message, opts) {
+    return dialog(Object.assign({}, opts, { message: message }));
+  }
+
+  /** In-page alert with a single OK button. */
+  function alert(message, opts) {
+    return dialog(Object.assign({}, opts, { message: message, cancel: false })).then(function () {});
+  }
+
+  /** In-page prompt: resolves the entered text, or null when cancelled. */
+  function prompt(message, value, opts) {
+    return dialog(Object.assign({}, opts, { message: message, input: value == null ? '' : value }));
+  }
+
+  /**
+   * Checks every htmx request passes before it is sent (unsaved-changes guard).
+   * fn(detail) gets htmx:confirm's detail (elt, target, verb, path) and returns
+   * true/undefined to let it through, false to drop it, or a Promise<boolean>
+   * (e.g. from NeoUtil.confirm). Guards run in order, before hx-confirm's question.
+   */
+  var requestGuards = [];
+  function guardRequests(fn) {
+    requestGuards.push(fn);
+  }
+
+  /** Run checks in order: true / false when all answer at once, else a Promise. */
+  function runChecks(checks) {
+    for (var i = 0; i < checks.length; i++) {
+      var r = checks[i]();
+      if (r === false) return false;
+      if (r && typeof r.then === 'function') {
+        var rest = checks.slice(i + 1);
+        return r.then(function (ok) {
+          return ok ? runChecks(rest) : false;
+        });
+      }
+    }
+    return true;
+  }
+
+  /** OK label for an hx-confirm dialog: the button's own short text or label. */
+  function confirmLabel(elt) {
+    if (!elt || !elt.getAttribute) return 'OK';
+    var own = elt.getAttribute('data-neo-confirm-ok');
+    if (own) return own;
+    var text = (elt.textContent || '').replace(/\s+/g, ' ').trim();
+    if (text && text.length <= 32) return text;
+    return elt.getAttribute('aria-label') || elt.getAttribute('title') || 'OK';
+  }
+
+  /** Red OK button: destructive buttons, or a question about deleting or erasing. */
+  function confirmDanger(elt, question) {
+    if (elt && elt.closest && elt.closest('.btn-error, [class*="text-error"]')) return true;
+    return /cannot be undone|delete|erase|discard/i.test(question || '');
+  }
+
+  /**
+   * htmx:confirm: run the request guards, then ask hx-confirm's question in an
+   * in-page dialog instead of window.confirm. issueRequest(true) sends the
+   * request without htmx asking again.
+   */
+  function onHtmxConfirm(e) {
+    var d = e.detail || {};
+    var checks = requestGuards.map(function (g) {
+      return function () {
+        return g(d);
+      };
+    });
+    if (d.question) {
+      checks.push(function () {
+        return confirm(d.question, { okLabel: confirmLabel(d.elt), danger: confirmDanger(d.elt, d.question) });
+      });
+    }
+    var r = runChecks(checks);
+    if (r === true) return;
+    e.preventDefault();
+    if (r === false) return;
+    r.then(function (ok) {
+      if (ok) d.issueRequest(true);
+    });
+  }
+
+  /**
    * Delegated handlers for markup hooks, on the document so swapped-in content
    * works too:
    * - [data-neo-reload]: click reloads the page.
@@ -201,6 +350,8 @@
    *   the button says "Copied" for a moment.
    * - [data-neo-remove-closest="<selector>"]: click removes the closest ancestor
    *   matching the selector (e.g. Cancel of an inline form).
+   * - hx-confirm: asked in an in-page dialog (onHtmxConfirm), never window.confirm;
+   *   the OK button reads data-neo-confirm-ok, else the button's text.
    */
   function copyText(doc, button) {
     var src = doc.getElementById(button.getAttribute('data-neo-copy'));
@@ -216,6 +367,7 @@
   }
 
   function wireHooks(doc) {
+    doc.addEventListener('htmx:confirm', onHtmxConfirm);
     doc.addEventListener('click', function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
@@ -265,5 +417,12 @@
     readJson: readJson,
     isContentSwap: isContentSwap,
     h: h,
+    dialog: dialog,
+    confirm: confirm,
+    alert: alert,
+    prompt: prompt,
+    guardRequests: guardRequests,
+    runChecks: runChecks,
+    confirmLabel: confirmLabel,
   };
 });

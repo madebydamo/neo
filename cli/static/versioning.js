@@ -512,23 +512,29 @@ window.versioningPage = function versioningPage() {
 
     restore(c) {
       if (this.tree && this.tree.dirty) {
-        window.alert('You have unapplied changes. Activate or discard them before restoring an earlier version.');
+        window.NeoUtil.alert('You have unapplied changes. Activate or discard them before restoring an earlier version.');
         return;
       }
       var msg =
         'Restore the settings from ' + this.fullTime(c.timestamp) + ' (version ' + c.short + ')?\n\n' +
         'Your settings are switched back to this version and the server is rebuilt and activated. ' +
         'This takes a few minutes and saves a new version on a new branch; nothing is deleted.';
-      if (!window.confirm(msg)) return;
-      this.post('/versioning/activate/' + encodeURIComponent(c.id), 'Restoring version ' + c.short);
+      this.askPost(msg, { okLabel: 'Restore' }, '/versioning/activate/' + encodeURIComponent(c.id), 'Restoring version ' + c.short);
     },
 
     activateCurrent() {
       var msg =
         'Build and activate your current settings?\n\n' +
         'This runs a full activation (write-flake + nixos-rebuild) and can take several minutes.';
-      if (!window.confirm(msg)) return;
-      this.post('/actions/activate', 'Activating current settings');
+      this.askPost(msg, { okLabel: 'Activate' }, '/actions/activate', 'Activating current settings');
+    },
+
+    /** Ask in the in-page dialog, then post; resolves true once posted, false when declined. */
+    askPost(msg, opts, url, title) {
+      var self = this;
+      return window.NeoUtil.confirm(msg, opts).then(function (ok) {
+        return ok ? self.post(url, title).then(function () { return true; }) : false;
+      });
     },
 
     commitNote(c) {
@@ -542,8 +548,13 @@ window.versioningPage = function versioningPage() {
     /** Set / clear the note on a version (`commit`, full id) or a generation (number). */
     editNote(kind, id, label) {
       var cur = kind === 'commit' ? VT.commitNote(this.tree && this.tree.notes, id) : this.genNoteText(id);
-      var note = window.prompt('Note for ' + label + ' (empty to remove):', cur || '');
-      if (note === null) return;
+      var self = this;
+      window.NeoUtil.prompt('Note for ' + label + ' (empty to remove):', cur || '', { okLabel: 'Save' }).then(function (note) {
+        if (note !== null) self.saveNote(kind, id, note);
+      });
+    },
+
+    saveNote(kind, id, note) {
       var self = this;
       fetch('/versioning/notes', {
         method: 'POST',
@@ -567,9 +578,9 @@ window.versioningPage = function versioningPage() {
         'Switch the running system to generation ' + n + '?\n\n' +
         'Your settings are not changed. The switch runs in the background and may restart ' +
         'this web UI — wait a moment and reload if the page disconnects.';
-      if (!window.confirm(msg)) return;
       var self = this;
-      this.post('/versioning/generations/' + n + '/switch', 'Switching to generation ' + n).then(function () {
+      this.askPost(msg, { okLabel: 'Switch' }, '/versioning/generations/' + n + '/switch', 'Switching to generation ' + n).then(function (posted) {
+        if (!posted) return;
         toast('Generation switch started', 'info');
         setTimeout(function () {
           if (self.$root.isConnected) self.loadTree();
@@ -582,8 +593,7 @@ window.versioningPage = function versioningPage() {
         'Boot into generation ' + n + '?\n\n' +
         'Generation ' + n + ' becomes the boot default and the server restarts right away. ' +
         'All services are down until it is back. Your settings are not changed.';
-      if (!window.confirm(msg)) return;
-      this.post('/versioning/generations/' + n + '/boot', 'Booting into generation ' + n);
+      this.askPost(msg, { okLabel: 'Boot and restart', danger: true }, '/versioning/generations/' + n + '/boot', 'Booting into generation ' + n);
     },
   };
 };

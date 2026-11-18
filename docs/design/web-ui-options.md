@@ -135,6 +135,17 @@ Reference consumers:
   `markStandalone`, `readJson(res, fallback)`, `h(tag, props, ...children)`
   (element builder), `isContentSwap(target)`, and the global `neoToast`.
 - `reloadPane`: the leave guard asks, so callers do not confirm.
+- `confirm(message, opts)`, `alert`, `prompt(message, value)` (Promises) and
+  `dialog(opts)`: an in-page modal instead of the browser's own dialogs, which
+  agents driving the browser cannot click. A blank line after the first
+  paragraph makes it the title; `okLabel`, `danger` (red OK).
+- `hx-confirm` goes through the same dialog (the `htmx:confirm` hook in
+  `wireHooks`): its OK button reads `data-neo-confirm-ok`, else the button's
+  short text; it is red for error buttons or delete/discard questions.
+  `guardRequests(fn)` adds a check every htmx request passes first (the
+  unsaved-changes guard in `configuration.js`). Never call `window.confirm`,
+  `alert` or `prompt`. Hard reloads with unsaved edits still get the browser's
+  own leave warning (`beforeunload` cannot be replaced).
 - `wireHooks` handles the markup hooks `data-neo-reload`, `-scroll-to`, `-copy`
   and `-remove-closest`.
 

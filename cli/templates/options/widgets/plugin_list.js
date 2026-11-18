@@ -351,10 +351,11 @@
           const svcs = p.services.length ? p.services.join(', ') : 'no service tables';
           return `${p.id}: ${svcs}`;
         });
-        return Promise.resolve(window.confirm(
+        return window.NeoUtil.confirm(
           'Remove plugin from the list?\n\n' + lines.join('\n') +
-          '\n\nAppdata directories are kept. Save afterwards to drop settings.toml tables.'
-        ));
+          '\n\nAppdata directories are kept. Save afterwards to drop settings.toml tables.',
+          { okLabel: 'Remove plugin', danger: true }
+        );
       }
       this.plRemovePreview = { ...this.plRemovePreview, [optionName]: preview };
       return new Promise((resolve) => {

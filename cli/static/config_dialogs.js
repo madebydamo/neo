@@ -45,12 +45,17 @@ function neoUploadSettingsToml(input) {
   var file = input.files && input.files[0];
   input.value = '';
   if (!file) return;
-  var ok = window.confirm(
+  NeoUtil.confirm(
     'Replace working-tree settings.toml with "' +
       file.name +
-      '"? Review pending changes and apply to activate.'
-  );
-  if (!ok) return;
+      '"? Review pending changes and apply to activate.',
+    { okLabel: 'Replace' }
+  ).then(function (ok) {
+    if (ok) uploadSettingsToml(file);
+  });
+}
+
+function uploadSettingsToml(file) {
   var status = document.getElementById('settings-toml-status');
   file
     .text()

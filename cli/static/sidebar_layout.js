@@ -394,19 +394,19 @@
         dlg.removeAttribute('data-group-id');
       });
     }
-    var resetDlg = doc.getElementById('sidebar-reset-dialog');
     var resetBtn = doc.getElementById('sidebar-reset');
-    if (resetDlg && resetBtn) {
+    if (resetBtn) {
       resetBtn.addEventListener('click', function () {
-        resetDlg.returnValue = '';
-        resetDlg.showModal();
-      });
-      resetDlg.addEventListener('close', function () {
-        if (resetDlg.returnValue !== 'reset') return;
-        clear();
-        // The server order is the original DOM order: reload the fragment.
-        if (win.htmx) win.htmx.ajax('GET', '/nav-services', { target: '#nav-services', swap: 'innerHTML' });
-        else win.location.reload();
+        win.NeoUtil.confirm(
+          'Reset the sidebar?\n\nYour order and groups are removed on every device you use and the default order comes back.',
+          { okLabel: 'Reset' }
+        ).then(function (ok) {
+          if (!ok) return;
+          clear();
+          // The server order is the original DOM order: reload the fragment.
+          if (win.htmx) win.htmx.ajax('GET', '/nav-services', { target: '#nav-services', swap: 'innerHTML' });
+          else win.location.reload();
+        });
       });
     }
   }

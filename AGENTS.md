@@ -168,7 +168,7 @@ Rank bands for the top level of `neo.services.<name>` (siblings only):
 | 300 | `containers` (`mkContainerDefinitions`) |
 
 - Widgets: `cli/templates/options/widgets/<name>.{html.hbs,js,test.js}` (snake_case), registered on `NeoWidgets`, dispatched on `ui.widget` only; run `just test-widgets`.
-- Shared front-end pieces: `static/neo_util.js` (`NeoUtil`), `options/entry_field` and the `partials/`. Markup from Rust uses `data-neo-*` hooks, never inline `onclick`.
+- Shared front-end pieces: `static/neo_util.js` (`NeoUtil`), `options/entry_field` and the `partials/`. Markup from Rust uses `data-neo-*` hooks, never inline `onclick`. Never `window.confirm` / `alert` / `prompt` (agents driving the browser cannot click them): `hx-confirm` and `NeoUtil.confirm` / `alert` / `prompt` show an in-page dialog.
 - Loading feedback is generic (`cli/static/nav_progress.js`, `data-neo-progress`); no per-page loading hacks.
 
 Sections, choices, `keysFrom`, the widget list, the checklist for a new special UI and the shared scripts: [docs/design/web-ui-options.md](docs/design/web-ui-options.md).

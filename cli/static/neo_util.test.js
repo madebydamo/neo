@@ -198,3 +198,55 @@ test('wireHooks removes the closest match of data-neo-remove-closest', () => {
   assert.strictEqual(form.removed, true);
   assert.strictEqual(cancel.removed, false);
 });
+
+test('runChecks: true/false at once, a Promise once a check is async', async () => {
+  assert.strictEqual(NeoUtil.runChecks([() => true, () => undefined]), true);
+  assert.strictEqual(NeoUtil.runChecks([() => true, () => false, () => { throw new Error('ran'); }]), false);
+  const order = [];
+  const r = NeoUtil.runChecks([
+    () => Promise.resolve(true).then((v) => (order.push('a'), v)),
+    () => (order.push('b'), Promise.resolve(false)),
+    () => { throw new Error('ran after a refusal'); },
+  ]);
+  assert.ok(r && typeof r.then === 'function');
+  assert.strictEqual(await r, false);
+  assert.deepStrictEqual(order, ['a', 'b']);
+});
+
+test('confirmLabel: data-neo-confirm-ok, short text, then aria-label', () => {
+  const el = (attrs, text) => ({ getAttribute: (k) => (k in attrs ? attrs[k] : null), textContent: text });
+  assert.strictEqual(NeoUtil.confirmLabel(el({ 'data-neo-confirm-ok': 'Wipe' }, 'Clear')), 'Wipe');
+  assert.strictEqual(NeoUtil.confirmLabel(el({}, '\n  Shut   down \n')), 'Shut down');
+  assert.strictEqual(NeoUtil.confirmLabel(el({ 'aria-label': 'Delete' }, '')), 'Delete');
+  assert.strictEqual(NeoUtil.confirmLabel(null), 'OK');
+});
+
+test('htmx:confirm: guards hold the request and send it once they agree', async () => {
+  const handlers = {};
+  const doc = { addEventListener: (type, fn) => { handlers[type] = fn; } };
+  NeoUtil.wireHooks(doc);
+  let answer;
+  NeoUtil.guardRequests((d) => (d.path === '/guarded' ? new Promise((res) => { answer = res; }) : true));
+
+  const fire = (path) => {
+    const evt = { prevented: false, sent: null, preventDefault() { this.prevented = true; } };
+    evt.detail = { path, question: null, issueRequest: (skip) => { evt.sent = skip; } };
+    handlers['htmx:confirm'](evt);
+    return evt;
+  };
+
+  const free = fire('/free');
+  assert.strictEqual(free.prevented, false);
+
+  const held = fire('/guarded');
+  assert.strictEqual(held.prevented, true);
+  assert.strictEqual(held.sent, null);
+  answer(true);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.strictEqual(held.sent, true);
+
+  const refused = fire('/guarded');
+  answer(false);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.strictEqual(refused.sent, null);
+});

@@ -85,9 +85,13 @@ function installGlobals(opts) {
   const document = opts.document || createDocument(opts);
   globalThis.document = document;
   if (!globalThis.window) globalThis.window = globalThis;
-  globalThis.window.confirm = opts.confirm || (() => true);
   globalThis.window.neoToast = opts.neoToast || (() => {});
-  globalThis.window.NeoUtil = require('../../../../static/neo_util.js');
+  // The in-page confirm dialog answers with opts.confirm (default: OK).
+  const answer = opts.confirm || (() => true);
+  globalThis.window.NeoUtil = {
+    ...require('../../../../static/neo_util.js'),
+    confirm: (message) => Promise.resolve().then(() => answer(message)),
+  };
   if (opts.fetch) {
     globalThis.fetch = opts.fetch;
   }

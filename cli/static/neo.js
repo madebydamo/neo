@@ -379,7 +379,7 @@
       domain = domain || (btn && btn.dataset && btn.dataset.domain) || '';
 
       if (!subdomain || (!isNeo && !domain)) {
-        win.alert('Missing domain or subdomain configuration');
+        win.NeoUtil.alert('Missing domain or subdomain configuration');
         return;
       }
 
