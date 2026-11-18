@@ -78,7 +78,7 @@
         expr = ''sum by (host, provider) (increase(neo_auth_events_total{event="login",result="failure"}[15m]))'';
         above = 10;
         for = "0s";
-        summary = "{{ printf \"%.0f\" $values.B.Value }} failed {{ $labels.provider }} sign-ins on {{ $labels.host }} in the last 15 minutes.";
+        summary = "{{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}Many{{ end }} failed {{ $labels.provider }} sign-ins on {{ $labels.host }} in the last 15 minutes.";
       })
       (rule {
         uid = "neo-server-errors";
@@ -86,7 +86,7 @@
         expr = ''(sum by (host, service) (rate(neo_http_requests_total{status_class="5xx"}[10m])) / sum by (host, service) (rate(neo_http_requests_total[10m]))) and on (host, service) sum by (host, service) (rate(neo_http_requests_total{status_class="5xx"}[10m])) > 0.02'';
         above = 0.2;
         for = "10m";
-        summary = "{{ humanizePercentage $values.B.Value }} of requests to {{ $labels.service }} on {{ $labels.host }} end in a server error.";
+        summary = "{{ with $values.B }}{{ humanizePercentage .Value }}{{ else }}Many{{ end }} of requests to {{ $labels.service }} on {{ $labels.host }} end in a server error.";
       })
     ]
     ++ iso.alertRules;

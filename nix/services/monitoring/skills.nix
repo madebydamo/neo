@@ -78,7 +78,8 @@
         Grafana sends firing and resolved alerts to the Hermes webhook route `grafana`. The payload has `status`,
         `alerts[].labels` (alertname, host, target, name, service, mountpoint) and `alerts[].annotations.summary`.
         When asked to look into one: check the target or unit, its recent logs and whether it recovered, then answer
-        in a few sentences. Do not restart or change anything unless the owner asks.
+        in at most two short lines: what is broken, and the cause if you found it. Do not restart or change anything
+        unless the owner asks.
         Title and message of alerts are rendered by Grafana (contact point templates); the summary comes from each rule's `summary` annotation.
 
         ## Credentials

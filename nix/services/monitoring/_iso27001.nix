@@ -84,14 +84,14 @@ in {
       expr = timerAgeHours "backup.timer";
       above = 26;
       for = "0s";
-      summary = "The last backup on {{ $labels.host }} started {{ printf \"%.0f\" $values.B.Value }} hours ago (A.8.13).";
+      summary = "The last backup on {{ $labels.host }} started {{ with $values.B }}{{ printf \"%.0f\" .Value }} hours ago{{ else }}too long ago (no data){{ end }} (A.8.13).";
     })
     (isoRule {
       uid = "neo-iso-logs-dropped";
       title = "Logs are being lost";
       expr = "sum by (host) (increase(loki_write_dropped_entries_total[15m]))";
       for = "0s";
-      summary = "{{ $labels.host }} could not deliver {{ printf \"%.0f\" $values.B.Value }} log lines in 15 minutes (A.8.15).";
+      summary = "{{ $labels.host }} could not deliver {{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}many{{ end }} log lines in 15 minutes (A.8.15).";
     })
     (isoRule {
       uid = "neo-iso-logs-silent";

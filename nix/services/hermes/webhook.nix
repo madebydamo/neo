@@ -19,12 +19,20 @@
     on = cfg.enabled && wh.routes != {};
     dir = dirOf wh.secretFile;
     envFile = "${dir}/webhook.env";
+    # The Hermes module deep-merges settings into the config.yaml on disk, so a
+    # key a route stops setting would keep its old value (skills left on after
+    # an option turned them off). Every route therefore names all of them.
+    routeDefaults = {
+      skills = [];
+      toolsets = [];
+      deliver_only = false;
+    };
     settings = {
       platforms.webhook = {
         enabled = true;
         extra = {
           inherit (wh) port;
-          inherit (wh) routes;
+          routes = lib.mapAttrs (_: route: routeDefaults // route) wh.routes;
         };
       };
     };

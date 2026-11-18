@@ -415,6 +415,8 @@ in {
     };
 
     # Alert rules for the standard metrics; merge into
+    # (Summaries read $values.B through `with`: without data, e.g. noData =
+    # "alerting", it is missing, the template fails and Grafana sends the raw text.)
     # neo.monitoring.apps.<service>.alerts. Only what the app exports:
     # turn on llm / logins / jobs / data as they apply.
     monitoring.appAlerts = {
@@ -446,7 +448,7 @@ in {
           }} [15m]))";
           above = errorThreshold;
           for = "0s";
-          summary = "${label} on {{ $labels.host }} logged {{ printf \"%.0f\" $values.B.Value }} errors in the last 15 minutes.";
+          summary = "${label} on {{ $labels.host }} logged {{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}many{{ end }} errors in the last 15 minutes.";
         };
       }
       // lib.optionalAttrs llm {
@@ -457,7 +459,7 @@ in {
           above = 0.5;
           for = "5m";
           severity = "critical";
-          summary = "{{ humanizePercentage $values.B.Value }} of AI calls to {{ $labels.provider }} from ${label} failed in the last 15 minutes (API down, key revoked or out of credit).";
+          summary = "{{ with $values.B }}{{ humanizePercentage .Value }}{{ else }}Most{{ end }} of AI calls to {{ $labels.provider }} from ${label} failed in the last 15 minutes (API down, key revoked or out of credit).";
         };
         llm-auth = {
           title = "${label}: AI key rejected";
@@ -474,7 +476,7 @@ in {
           expr = ''sum by (host) (increase(neo_app_logins_total{${s}, result="failure"}[15m]))'';
           above = 10;
           for = "0s";
-          summary = "{{ printf \"%.0f\" $values.B.Value }} failed sign-ins to ${label} in the last 15 minutes.";
+          summary = "{{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}Many{{ end }} failed sign-ins to ${label} in the last 15 minutes.";
         };
       }
       // lib.mapAttrs' (job: maxAge:
@@ -484,7 +486,7 @@ in {
           above = maxAge;
           for = "0s";
           noData = "alerting";
-          summary = "${label}: ${job} last succeeded {{ humanizeDuration $values.B.Value }} ago.";
+          summary = "${label}: ${job} {{ with $values.B }}last succeeded {{ humanizeDuration .Value }} ago{{ else }}never reported a success (no data){{ end }}.";
         })
       jobs
       // lib.mapAttrs' (source: maxAge:
@@ -494,7 +496,7 @@ in {
           above = maxAge;
           for = "0s";
           noData = "alerting";
-          summary = "${label}: ${source} was last updated {{ humanizeDuration $values.B.Value }} ago.";
+          summary = "${label}: ${source} {{ with $values.B }}was last updated {{ humanizeDuration .Value }} ago{{ else }}never reported an update (no data){{ end }}.";
         })
       data;
   };

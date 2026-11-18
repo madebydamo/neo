@@ -95,7 +95,9 @@ With `assistantAlerts` and Hermes on the same machine, the provisioned contact p
 
 - `neo.services.hermes.webhook.routes.grafana`, rendered into Hermes' `platforms.webhook.extra.routes`.
 - The HMAC key is generated once at activation (`webhook.secretFile`), handed to Hermes as `WEBHOOK_SECRET` and to Grafana as a read-only file (`$__file{}` in the contact point's `hmacConfig`). Grafana signs the body with it as `X-Webhook-Signature`, which is Hermes' generic HMAC check.
-- `deliver_only` sends the alert text straight to the Telegram home channel; title and message come from the contact point's templates (one line per alert from its `summary`). With `assistantInvestigates`, Hermes runs a turn with the `neo-monitoring` skill first and sends its summary instead.
+- `deliver_only` sends the alert text straight to the Telegram home channel; title and message come from the contact point's templates (the alert name, then one line per alert from its `summary`; no link, which Telegram would expand into a preview). With `assistantInvestigates`, Hermes runs a turn with the `neo-monitoring` skill and the `terminal` toolset (webhook turns otherwise only get web tools) and sends its reply, at most two lines, instead.
+- Hermes deep-merges its settings into the `config.yaml` on disk, so `hermes/webhook.nix` gives every route `skills`, `toolsets` and `deliver_only` explicitly; otherwise turning `assistantInvestigates` off would keep the skill, and Hermes would prepend the whole skill text to every plain alert.
+- Summaries read query values through `{{ with $values.B }}…{{ else }}…{{ end }}`: a rule without data (`noData = "alerting"`, or the NoData state) has no `$values.B`, the template fails and Grafana sends it unrendered.
 - Without a Telegram bot the route delivers to Hermes' log.
 
 The Hermes listener binds all interfaces on port 8644, which is not opened in the firewall: only the host and its Docker bridges reach it.

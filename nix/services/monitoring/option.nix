@@ -52,7 +52,7 @@
               assistantInvestigates = mkOption {
                 type = types.bool;
                 default = false;
-                description = "Let the assistant look into each alert (logs, status) before it messages you. Each alert then uses your AI provider.";
+                description = "Let the assistant look into each alert (logs, status) and send you a two-line summary of what is broken instead of the plain alert. Each alert then uses your AI provider.";
                 rank = 41;
                 ui = lib.neo.ui.mkUi {
                   label = "Assistant looks into alerts";

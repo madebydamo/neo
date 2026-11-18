@@ -220,7 +220,9 @@
         '';
 
       # Signed like Hermes' generic V1 webhook: hex HMAC-SHA256 of the body.
-      # title/message are what Hermes forwards to Telegram (route prompt).
+      # title/message are what Hermes forwards to Telegram (route prompt): the
+      # alert name and one line per alert, no link (Telegram would show a
+      # preview of Grafana's home page under every alert).
       contactPoints = yaml.generate "contact-points.yaml" {
         apiVersion = 1;
         contactPoints = [
@@ -240,7 +242,7 @@
                     header = "X-Webhook-Signature";
                   };
                   title = ''{{ if eq .Status "firing" }}🔴 {{ .CommonLabels.alertname }}{{ else }}✅ Resolved: {{ .CommonLabels.alertname }}{{ end }}'';
-                  message = ''{{ range .Alerts }}{{ if eq .Status "resolved" }}(resolved) {{ end }}{{ or .Annotations.summary .Labels.alertname }}{{ "\n" }}{{ end }}{{ .ExternalURL }}'';
+                  message = ''{{ range .Alerts }}{{ if eq .Status "resolved" }}(resolved) {{ end }}{{ or .Annotations.summary .Labels.alertname }}{{ "\n" }}{{ end }}'';
                 };
               }
             ];
@@ -440,10 +442,18 @@
               if cfg.assistantInvestigates && deliver != "log"
               then {
                 skills = ["neo-monitoring"];
+                # Webhook turns get only web tools by default; looking into an
+                # alert needs journalctl, systemctl, docker and curl.
+                toolsets = ["terminal"];
                 prompt = ''
-                  A monitoring alert from Grafana changed state ({status}). Look into it on this homeserver
-                  (logs, unit status, the Grafana/Loki/Prometheus APIs per the neo-monitoring skill) and reply with
-                  a short message for the owner: what is wrong, the likely cause and what to do. Do not change anything.
+                  Grafana alert ({status}). Find out what is broken on this homeserver: check the unit, target or
+                  container named in the labels, its recent logs and whether it already recovered (commands and APIs
+                  in the neo-monitoring skill). Read only: do not restart or change anything.
+
+                  Your reply is a Telegram message to the owner and must be at most two short lines, no headings,
+                  no lists, no Markdown: what is broken (app and host), then the cause in a few words if you found
+                  one. Add a fix only when it is one obvious step. If it already recovered, say so in one line.
+                  If the status is resolved, reply only "✅ <alert name> resolved".
 
                   {__raw__}
                 '';
@@ -452,7 +462,6 @@
                 deliver_only = deliver != "log";
                 prompt = ''
                   {title}
-
                   {message}
                 '';
               }
