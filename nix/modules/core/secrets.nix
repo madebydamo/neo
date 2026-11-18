@@ -13,9 +13,10 @@
 # the host key for admins (identity.sops.yaml).
 #
 # Restarts: a template whose rendered content changed queues its restartUnits
-# in /run/nixos/activation-restart-list (switch-to-configuration restarts them).
-# On an unencrypted config the store source (holding the value) is also a
-# restartTrigger; with sops it only holds placeholders.
+# in /run/nixos/activation-restart-list (switch-to-configuration restarts them)
+# and its reloadUnits in activation-reload-list. On an unencrypted config the
+# store source (holding the value) is also a restartTrigger (reloadTrigger);
+# with sops it only holds placeholders.
 #
 # Generated secrets (neo.core.secrets.generated.<name>): random keys the
 # machine makes itself and the operator never sees, kept in
@@ -75,6 +76,11 @@
           type = lib.types.listOf lib.types.str;
           default = [];
           description = "Units (name.service) restarted when the rendered content changes";
+        };
+        reloadUnits = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+          description = "Units (name.service) reloaded instead when the rendered content changes, for services whose reload restarts them gently";
         };
         copies = lib.mkOption {
           type = lib.types.listOf lib.types.str;
@@ -148,13 +154,16 @@
 
     unitName = u: lib.removeSuffix ".service" u;
 
-    # Every unit that some template restarts → its template sources.
-    triggers = lib.foldl' (acc: name:
-      lib.foldl' (a: u: a // {${unitName u} = (a.${unitName u} or []) ++ [sources.${name}];}) acc
-      templates.${name}.restartUnits) {} (lib.attrNames templates);
+    # Every unit that some template restarts (reloads) → its template sources.
+    unitSources = field:
+      lib.foldl' (acc: name:
+        lib.foldl' (a: u: a // {${unitName u} = (a.${unitName u} or []) ++ [sources.${name}];}) acc
+        templates.${name}.${field}) {} (lib.attrNames templates);
+    triggers = unitSources "restartUnits";
+    reloadTriggers = unitSources "reloadUnits";
 
     renderLines =
-      lib.concatStringsSep "\n" (lib.mapAttrsToList (name: t: "neo_secrets_render ${lib.escapeShellArgs ([sources.${name} t.path t.owner t.group t.mode (lib.concatStringsSep ":" t.copies)] ++ t.restartUnits)}")
+      lib.concatStringsSep "\n" (lib.mapAttrsToList (name: t: "neo_secrets_render ${lib.escapeShellArgs ([sources.${name} t.path t.owner t.group t.mode (lib.concatStringsSep ":" t.copies) (lib.concatStringsSep ":" t.reloadUnits)] ++ t.restartUnits)}")
         templates);
 
     keep = lib.concatStringsSep " " (map lib.escapeShellArg (lib.attrNames templates));
@@ -250,7 +259,10 @@
           })
           cfg.containerEnv;
 
-        systemd.services = lib.mapAttrs (_: srcs: {restartTriggers = srcs;}) triggers;
+        systemd.services = lib.mkMerge [
+          (lib.mapAttrs (_: srcs: {restartTriggers = srcs;}) triggers)
+          (lib.mapAttrs (_: srcs: {reloadTriggers = srcs;}) reloadTriggers)
+        ];
 
         environment.systemPackages = [rootHelper];
 
@@ -388,8 +400,8 @@
               }
 
               neo_secrets_render() {
-                local src=$1 dst=$2 owner=$3 group=$4 mode=$5 copies=$6
-                shift 6
+                local src=$1 dst=$2 owner=$3 group=$4 mode=$5 copies=$6 reloads=$7
+                shift 7
                 local text tmp
                 text=$(cat "$src"; printf x)
                 text=''${text%x}
@@ -398,9 +410,10 @@
                 printf '%s' "$text" > "$tmp"
                 chown "$owner:$group" "$tmp"
                 chmod "$mode" "$tmp"
-                # Changed (not new: boot renders everything) → restart its units.
+                # Changed (not new: boot renders everything) → restart/reload its units.
                 if [ -e "$dst" ] && ! ${pkgs.diffutils}/bin/cmp -s "$tmp" "$dst"; then
                   for u in "$@"; do echo "$u" >> /run/nixos/activation-restart-list; done
+                  for u in ''${reloads//:/ }; do echo "$u" >> /run/nixos/activation-reload-list; done
                 fi
                 mv -f "$tmp" "$dst"
                 local IFS=:

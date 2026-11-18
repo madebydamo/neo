@@ -196,7 +196,8 @@ neo.core.secrets.templates."vikunja-db-password" = {
 ```
 
 Template options: `content` or `env` (attrs → `KEY=value` lines), `owner`/`group` (default
-root), `mode` (default 0400), `restartUnits`, and `path` (read-only). Rendered files live in
+root), `mode` (default 0400), `restartUnits`, `reloadUnits` (reloaded instead, for a unit whose
+reload restarts it gently, e.g. the Hermes gateway draining running turns), and `path` (read-only). Rendered files live in
 `/run/neo-secrets/rendered/` (tmpfs), never in appdata. Apps that rewrite their config file are
 the exception: they need a `mkSetupService` that copies the file into appdata (decided case by
 case). `DynamicUser` services read root-owned templates through `LoadCredential`.
@@ -225,7 +226,8 @@ every service that consumes a secret goes through a template, which is the preco
 
 ### 2.4 Restarts
 
-The store source of each template is a `restartTrigger` of its `restartUnits`. The source holds
+The store source of each template is a `restartTrigger` of its `restartUnits` (a `reloadTrigger`
+of its `reloadUnits`). The source holds
 the value (plain) or a placeholder with the ciphertext stamp (sops), so changing a secret
 restarts exactly the units that use it. No runtime diffing is needed.
 
