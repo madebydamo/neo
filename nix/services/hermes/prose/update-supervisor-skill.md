@@ -16,17 +16,17 @@ Unattended run after `neo-auto-update` or `neo-docker-updater`. Preloaded by `ne
 Skip Hermes entirely when the marker says `changed=false` and `failed=false` (the wrapper already does this). If you were launched, something changed or failed — still apply the three-way classification.
 
 ## Docker rollback
-Previous images are tagged `neo-rollback:<image-with-slashes-and-colons-as-__>` and listed in the marker (`old_id`, `rollback_tag`, `units`).
+The marker lists each changed image (`image`, `old_id`, `new_id`, `units`). Replaced versions stay on disk (tagged `neo-history/<image-with-/-:-as-__>:<12-hex-id>`) for the updater's "Delete old versions after" time; older ones are downloaded again by digest.
 
 Roll back **only** images you judged **broken** (not warnings):
 
 ```bash
-sudo neo-docker-rollback --image '<repo:tag>'
-# or all changed images (only if every update is broken):
-sudo neo-docker-rollback --all
+sudo neo-docker-rollback --previous --image '<repo:tag>'
+# or every image the last run changed (only if every update is broken):
+sudo neo-docker-rollback --previous
 ```
 
-Then `systemctl is-active` the listed units. If rollback fails, say so in the notification.
+It retags the image, restarts its units and checks they are active. Settings are not changed: the next scheduled update tries the new version again, so say in the notification what broke. If rollback fails, say so in the notification.
 
 Do not invent `docker tag` commands. Do not roll back images that are merely warning.
 

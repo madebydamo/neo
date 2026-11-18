@@ -32,9 +32,10 @@ pub async fn service_snapshots(
 ) -> RawHtml<String> {
     let service = service.as_str();
     match trusted_appdata(config, service).await {
-        Ok((_, appdata)) => {
+        Ok((pane, appdata)) => {
             let busy = config.clear_appdata_in_flight.contains(service);
-            RawHtml(render_service_snapshots(service, &appdata, busy, false).await)
+            let units = ServiceJob::new(service, appdata.clone(), &pane).units;
+            RawHtml(render_service_snapshots(service, &appdata, &units, busy, false).await)
         }
         Err(e) => RawHtml(format!(
             r#"<div id="snapshots-{}" class="text-[10px] text-error mb-2">{}</div>"#,
@@ -51,10 +52,11 @@ pub async fn service_snapshot_create(
     config: &State<Arc<AppConfig>>,
 ) -> Result<RawHtml<String>, Blocked> {
     let service = service.as_str();
-    let appdata = match trusted_appdata(config, service).await {
-        Ok((_, a)) => a,
+    let (pane, appdata) = match trusted_appdata(config, service).await {
+        Ok(v) => v,
         Err(e) => return Ok(out_err(service, &e)),
     };
+    let units = ServiceJob::new(service, appdata.clone(), &pane).units;
     let Some(loc) = locate_appdata(&appdata) else {
         return Ok(out_err(service, "appdata is not on a ZFS dataset"));
     };
@@ -67,7 +69,7 @@ pub async fn service_snapshot_create(
         match create_snapshot(&loc.mount.dataset, &manual_snapshot_name(service)).await {
             Ok(full) => {
                 let busy = config.clear_appdata_in_flight.contains(service);
-                let card = render_service_snapshots(service, &appdata, busy, true).await;
+                let card = render_service_snapshots(service, &appdata, &units, busy, true).await;
                 let (inner, title) = status_ok(&format!("created {full}"));
                 RawHtml(format!(
                     "{card}{}",
@@ -80,10 +82,12 @@ pub async fn service_snapshot_create(
 }
 
 /// Restore the service's appdata folder from a snapshot (background job, WS progress).
-#[post("/service/<service>/snapshots/restore?<snap>")]
+/// `apps`: also return the app to the image versions it ran then.
+#[post("/service/<service>/snapshots/restore?<snap>&<apps>")]
 pub async fn service_snapshot_restore(
     service: ServiceName<'_>,
     snap: &str,
+    apps: Option<bool>,
     config: &State<Arc<AppConfig>>,
 ) -> Result<RawHtml<String>, Blocked> {
     let service = service.as_str();
@@ -103,12 +107,18 @@ pub async fn service_snapshot_restore(
     begin_clear_appdata(config, service);
 
     let job = ServiceJob::new(service, appdata.clone(), &pane);
-    let card = render_service_snapshots(service, &appdata, true, true).await;
+    let card = render_service_snapshots(service, &appdata, &job.units, true, true).await;
     let (inner, title) = status_pulling("starting restore…");
     let out = snapshot_out_oob(service, &inner, &title);
     let html = config.broadcast_all(&[&card, &out]);
 
-    tokio::spawn(run_restore(job, snap.to_string(), lock, Arc::clone(config)));
+    tokio::spawn(run_restore(
+        job,
+        snap.to_string(),
+        apps.unwrap_or(false),
+        lock,
+        Arc::clone(config),
+    ));
     Ok(html)
 }
 
@@ -129,10 +139,11 @@ async fn service_manage(
     if !snapshot_name_ok(snap) {
         return out_err(service, "invalid snapshot name");
     }
-    let appdata = match trusted_appdata(config, service).await {
-        Ok((_, a)) => a,
+    let (pane, appdata) = match trusted_appdata(config, service).await {
+        Ok(v) => v,
         Err(e) => return out_err(service, &e),
     };
+    let units = ServiceJob::new(service, appdata.clone(), &pane).units;
     // Shared, like create: refused while a restore or clear holds the service.
     let _lock = match try_lock(
         &LockSpec::new().with(Scope::service(service), LockMode::Shared),
@@ -146,7 +157,7 @@ async fn service_manage(
         Err(e) => status_err(&e),
     };
     let busy = config.clear_appdata_in_flight.contains(service);
-    let card = render_service_snapshots(service, &appdata, busy, true).await;
+    let card = render_service_snapshots(service, &appdata, &units, busy, true).await;
     RawHtml(format!(
         "{card}{}",
         snapshot_out_oob(service, &inner, &title)
@@ -283,6 +294,16 @@ pub async fn versioning_zfs_dismiss() -> RawHtml<String> {
         Err(card) => return card,
     };
     RawHtml(data::dismiss().await)
+}
+
+/// After a data restore: return the apps to the versions from the snapshot time.
+#[post("/versioning/zfs/apps")]
+pub async fn versioning_zfs_apps() -> RawHtml<String> {
+    let _lock = match try_data_lock("Return apps to earlier versions").await {
+        Ok(l) => l,
+        Err(card) => return card,
+    };
+    RawHtml(data::return_apps().await)
 }
 
 async fn data_manage(ds: &str, snap: &str, action: SnapAction) -> String {

@@ -8,10 +8,12 @@
 //!
 //! Optionally the boot generation is switched to the one that was running when
 //! the snapshot was taken ([`GenerationTimeline`]), so restored settings and
-//! system match.
+//! system match. After the reboot, the result banner offers to return the apps
+//! to the image versions that ran then ([`super::apps`]).
 use super::super::locks::{system_lock_attr, LockMode};
 use super::super::power::{self, PowerAction};
 use super::super::util::{escape_attr, escape_html, sudo_cmd};
+use super::apps;
 use super::render::{self, ManageCtx, BTN_SECONDARY};
 use super::{
     create_snapshot, dataset_name_ok, format_epoch_utc, get_property, inherit_property,
@@ -24,6 +26,9 @@ use crate::utils::generation::{
 
 const PROP_RESTORE: &str = "neo:restore";
 const PROP_RESULT: &str = "neo:restore-result";
+/// When the restored snapshot was taken (Unix seconds): the banner after the
+/// restore offers to return the apps to the versions that ran then.
+const PROP_APPS_AT: &str = "neo:restore-apps-at";
 const CARD_ID: &str = "versioning-zfs";
 /// Most snapshots shown per dataset (newest first).
 const MAX_ROWS: usize = 60;
@@ -93,7 +98,7 @@ fn pending_banner(p: &str) -> Banner {
     }
 }
 
-fn result_banner(r: &str) -> Banner {
+fn result_banner(r: &str, apps_at: Option<i64>) -> Banner {
     let mut parts = r.splitn(3, '|');
     let status = parts.next().unwrap_or("");
     let ts = parts.next().unwrap_or("");
@@ -103,11 +108,35 @@ fn result_banner(r: &str) -> Banner {
     } else {
         ("alert-error", "Last restore failed")
     };
+    let apps_btn = apps_at
+        .filter(|_| status == "ok")
+        .map(|at| {
+            let picks = apps::versions_at(&apps::ledger(), at, None);
+            if picks.is_empty() {
+                return String::new();
+            }
+            let when = format_epoch_utc(at);
+            let names = apps::names(&picks);
+            let confirm = format!(
+                "Return {n} app(s) ({names}) to the versions they ran on {when}?\n\n\
+                 • Their containers restart; versions no longer on disk are downloaded again.\n\
+                 • Settings are not changed: the next automatic update moves them forward again.",
+                n = picks.len(),
+            );
+            format!(
+                r##"<button type="button" class="btn btn-xs btn-primary" hx-post="/versioning/zfs/apps"{lk} hx-target="#{CARD_ID}" hx-swap="outerHTML" hx-disabled-elt="this" hx-confirm="{c}" title="{t}">Return apps to the versions from {w}</button>"##,
+                lk = system_lock_attr(LockMode::Shared),
+                c = escape_attr(&confirm),
+                t = escape_attr(&names),
+                w = escape_html(&when),
+            )
+        })
+        .unwrap_or_default();
     Banner {
         tone,
         html: format!(
             r##"<span>{head} ({when}): <span class="font-mono">{detail}</span></span>
-<button type="button" class="btn btn-xs btn-ghost ml-auto" hx-post="/versioning/zfs/dismiss"{lk} hx-target="#{CARD_ID}" hx-swap="outerHTML">Dismiss</button>"##,
+<span class="flex gap-1 ml-auto">{apps_btn}<button type="button" class="btn btn-xs btn-ghost" hx-post="/versioning/zfs/dismiss"{lk} hx-target="#{CARD_ID}" hx-swap="outerHTML">Dismiss</button></span>"##,
             when = escape_html(&ts_display(ts)),
             detail = escape_html(detail),
             lk = system_lock_attr(LockMode::Shared),
@@ -129,7 +158,12 @@ pub async fn render_card(notice: Option<(&'static str, String)>) -> String {
     let pending = get_property(&pool, PROP_RESTORE).await.ok().flatten();
     banners.extend(pending.as_deref().map(pending_banner));
     if let Some(r) = get_property(&pool, PROP_RESULT).await.ok().flatten() {
-        banners.push(result_banner(&r));
+        let apps_at = get_property(&pool, PROP_APPS_AT)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|v| v.trim().parse::<i64>().ok());
+        banners.push(result_banner(&r, apps_at));
     }
 
     let sudo = sudo_cmd();
@@ -381,7 +415,10 @@ pub async fn snapshot_now() -> String {
 pub async fn cancel() -> String {
     let notice = match restore_target() {
         Some((pool, _)) => match inherit_property(&pool, PROP_RESTORE).await {
-            Ok(()) => ok_notice("scheduled restore cancelled"),
+            Ok(()) => {
+                let _ = inherit_property(&pool, PROP_APPS_AT).await;
+                ok_notice("scheduled restore cancelled")
+            }
             Err(e) => err_notice(&e),
         },
         None => None,
@@ -392,8 +429,36 @@ pub async fn cancel() -> String {
 pub async fn dismiss() -> String {
     if let Some((pool, _)) = restore_target() {
         let _ = inherit_property(&pool, PROP_RESULT).await;
+        let _ = inherit_property(&pool, PROP_APPS_AT).await;
     }
     render_card(None).await
+}
+
+/// Return every app to the image version that ran when the restored snapshot
+/// was taken (`neo-docker-rollback --at`), then forget the offer.
+pub async fn return_apps() -> String {
+    let Some((pool, _)) = restore_target() else {
+        return render_card(None).await;
+    };
+    let Some(at) = get_property(&pool, PROP_APPS_AT)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|v| v.trim().parse::<i64>().ok())
+    else {
+        return render_card(err_notice("no restore to match app versions to")).await;
+    };
+    let notice = match apps::rollback(at, None, true).await {
+        Ok(_) => {
+            let _ = inherit_property(&pool, PROP_APPS_AT).await;
+            ok_notice(&format!(
+                "apps returned to the versions from {}; the next automatic update moves them forward again",
+                format_epoch_utc(at)
+            ))
+        }
+        Err(e) => err_notice(&format!("returning apps failed: {e}")),
+    };
+    render_card(notice).await
 }
 
 /// A data restore is scheduled for the next boot.
@@ -451,11 +516,13 @@ pub async fn restore(ds: &str, snap: &str, gen: Option<u64>) -> String {
     {
         return render_card(err_notice("a restore is already scheduled")).await;
     }
-    match list_snapshots(ds, false).await {
-        Ok(list) if list.iter().any(|s| s.name == snap) => {}
-        Ok(_) => return render_card(err_notice(&format!("{ds}@{snap} not found"))).await,
+    let taken = match list_snapshots(ds, false).await {
+        Ok(list) => match list.iter().find(|s| s.name == snap) {
+            Some(s) => s.creation,
+            None => return render_card(err_notice(&format!("{ds}@{snap} not found"))).await,
+        },
         Err(e) => return render_card(err_notice(&e)).await,
-    }
+    };
 
     if let Some(n) = gen {
         if let Err(e) = power::set_boot_generation(n).await {
@@ -472,6 +539,8 @@ pub async fn restore(ds: &str, snap: &str, gen: Option<u64>) -> String {
     }
     // A stale result would read like the outcome of this restore.
     let _ = inherit_property(&pool, PROP_RESULT).await;
+    // Offered after the reboot; the image ledger is not part of the data.
+    let _ = set_property(&pool, PROP_APPS_AT, &taken.to_string()).await;
 
     power::schedule(PowerAction::Reboot);
     let gen_msg = gen

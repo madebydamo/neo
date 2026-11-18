@@ -55,6 +55,7 @@ SSH to a finished host as **`homeserver@…`** for `neo`. **`admin@…`** uses t
 | `neo git` / `neo lg` | Open `lazygit` in the config repo |
 | `neo migrate` | Apply settings migrations from older layouts (`update` runs it for you) |
 | `neo docker-update <container>` | Pull the container's current image again and restart its `docker-<container>` unit |
+| `neo docker-ledger reconcile\|gc\|select` | Internal (root, hidden): the docker updater's image ledger and image cleanup, driven by `neo-docker-updater` and `neo-docker-rollback` ([docker-image-retention](design/docker-image-retention.md)). Use `sudo neo-docker-rollback --previous\|--at TIME [--image REF]` to go back to an earlier app version |
 | `neo secrets split` | Move secret settings from `settings.toml` into `secrets.yaml` (still plain text) |
 | `neo secrets enable` | Encrypt them into `secrets.sops.yaml` for this machine's SSH host key and the ssh-ed25519 `authorizedKeys`, and escrow the host key in `identity.sops.yaml`. Run on the machine |
 | `neo secrets disable` | Decrypt back into a plain `secrets.yaml` |

@@ -76,7 +76,7 @@
       - broken: notify via `hermes send --to all`
         ${
         if kind == "docker"
-        then "- for each broken image, run `sudo neo-docker-rollback --image '<repo:tag>'` then confirm the unit is active; mention the rollback in the notification"
+        then "- for each broken image, run `sudo neo-docker-rollback --previous --image '<repo:tag>'` then confirm the unit is active; mention the rollback in the notification"
         else "- do NOT roll back the NixOS generation; only report what failed so the operator can fix it"
       }
 

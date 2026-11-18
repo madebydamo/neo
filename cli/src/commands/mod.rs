@@ -3,6 +3,7 @@
 pub mod activate;
 pub mod backup;
 pub mod build;
+pub mod docker_ledger;
 pub mod docker_update;
 pub mod edit;
 pub mod generate_hardware;

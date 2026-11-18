@@ -29,6 +29,19 @@
                   visibleWhen = "enabled";
                 };
               };
+              # `neo docker-ledger gc --older-than` at the start of each run: replaced
+              # images older than this, and every image no container uses, are deleted
+              # (docs/design/docker-image-retention.md). Units s/m/h/d/w; null skips GC.
+              garbageCollectOlderThan = mkOption {
+                type = types.nullOr (types.strMatching "[0-9]+[smhdw]");
+                default = "30d";
+                description = "Delete old app versions after this long (e.g. 30d) to free disk space. Older versions can no longer be rolled back to without downloading them again.";
+                rank = 20;
+                ui = lib.neo.ui.mkUi {
+                  label = "Delete old versions after";
+                  visibleWhen = "enabled";
+                };
+              };
             }
             // lib.neo.mkSystemdUnits ["neo-docker-updater"]
             // lib.neo.mkSystemdTimers ["neo-docker-updater"]
@@ -48,6 +61,7 @@
               notes = ''
                 Pulls newer images for every enabled service's containers (from the central containers registry) and restarts the matching docker-* units when an image changed.
                 Shared images (e.g. one redis tag used by several services) are pulled once; every container using it is restarted.
+                Each run first deletes app versions replaced longer ago than Delete old versions after, and every image no container uses (including ones you built or pulled by hand and have not started).
                 A declarative alternative to watchtower without an extra container. Image tags are set per container under each service's containers setting.
               '';
             }

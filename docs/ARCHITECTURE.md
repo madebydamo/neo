@@ -68,7 +68,7 @@ flowchart LR
 ```
 
 - **system-updater** runs `neo update` and then activates the new system on a schedule (default 04:00). It can switch live, or only set the next boot and restart the machine. It also cleans out old builds.
-- **docker-updater** pulls newer container images (default Sundays 05:00, after the system update; it waits while an activation runs) and restarts only the containers whose image changed. It keeps the previous image so a bad update can be rolled back.
+- **docker-updater** pulls newer container images (default Sundays 05:00, after the system update; it waits while an activation runs) and restarts only the containers whose image changed. Replaced versions stay on disk for a while (30 days by default) and each run first deletes older ones and images nothing uses. It records which version ran when, so a bad update, or a restore of older data, can return an app to the version it ran then ([design](design/docker-image-retention.md)).
 - **Hermes** (optional, `superviseUpdates`) reads the logs after an update that changed something. If a container broke, it rolls that container back and tells you. It never rolls back the system on its own. When a system update needs a restart, the check happens after the restart: a few minutes into the new boot, Neo records whether the server came back on the new version with everything running, and Hermes reports it.
 
 Combined with Nix rollbacks, updates are something Neo does *for* you, not a second job.

@@ -92,6 +92,7 @@ pub fn routes() -> Vec<rocket::Route> {
         snapshots::versioning_zfs_reboot,
         snapshots::versioning_zfs_cancel,
         snapshots::versioning_zfs_dismiss,
+        snapshots::versioning_zfs_apps,
         snapshots::versioning_zfs_delete,
         snapshots::versioning_zfs_pin,
         snapshots::versioning_zfs_unpin,

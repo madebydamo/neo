@@ -1,12 +1,16 @@
-# Docker auto-update run (default.nix): pull every image once, restart all
-# containers that use it when its id changed, and record the run.
+# Docker auto-update run (default.nix): delete old images, pull every image
+# once, restart all containers that use it when its id changed, and record the
+# run and the image ledger (docs/design/docker-image-retention.md).
 #
 # Env (set by default.nix):
-#   NEO_HISTORY_DIR  run history (<run>.json, <run>.log, last.json)
-#   NEO_PLAN         JSON list, one entry per image:
-#                    {image, consumers, rollback_tag, units, restarts: [{unit, service}]}
-#   NEO_SUPERVISE    true: tag the previous image for neo-docker-rollback
-#   NEO_LOCK_DIR     neo operation locks (cli/src/utils/locks.rs)
+#   NEO_HISTORY_DIR     run history (<run>.json, <run>.log, last.json, images.json)
+#   NEO_PLAN            JSON list, one entry per image:
+#                       {image, consumers, units, restarts: [{unit, service}]}
+#   NEO_LOCK_DIR        neo operation locks (cli/src/utils/locks.rs)
+#   NEO_CLI             neo (docker-ledger)
+#   NEO_LEDGER          image ledger (root dataset, not restored with data)
+#   NEO_KEEP_REFS       JSON list of every declared container image (never deleted)
+#   NEO_GC_OLDER_THAN   keep replaced versions this long; "" = never delete
 
 # Start of the run (the same in system-updater/auto-update.sh): run_id, history file and log,
 # all further output also to the log. The web UI reads <run_id>.json/.log.
@@ -84,10 +88,32 @@ restart() {
   fi
 }
 
+# record_ledger: what every planned reference points at now, plus the copy
+# in the run history (every data snapshot then knows what ran at its time).
+# With a GC age, also moves the neo-history tags (deletes nothing).
+record_ledger() {
+  local age=()
+  [ -n "$NEO_GC_OLDER_THAN" ] && age=(--older-than "$NEO_GC_OLDER_THAN")
+  "$NEO_CLI" docker-ledger reconcile --plan "$NEO_PLAN" --ledger "$NEO_LEDGER" \
+    --copy "$NEO_HISTORY_DIR/images.json" "${age[@]}" ||
+    echo "  warning: could not update the image ledger"
+}
+
 write_hist true ""
 ln -sfn "$run_id.json" "$NEO_HISTORY_DIR/last.json"
 echo "Started run $run_id; last.json -> $run_id.json (in_progress)"
 trap 'finalize abort' EXIT INT TERM HUP
+
+# Old versions first, before anything new is pulled (never fails the run).
+if [ -n "$NEO_GC_OLDER_THAN" ]; then
+  echo "[$(date -Iseconds)] Removing app versions replaced more than $NEO_GC_OLDER_THAN ago and unused images..."
+  "$NEO_CLI" docker-ledger gc --plan "$NEO_PLAN" --ledger "$NEO_LEDGER" \
+    --copy "$NEO_HISTORY_DIR/images.json" \
+    --keep-refs "$NEO_KEEP_REFS" --older-than "$NEO_GC_OLDER_THAN" ||
+    echo "  warning: image cleanup failed; nothing more is removed this run"
+else
+  record_ledger
+fi
 
 while IFS= read -r entry; do
   image=$(jq -r .image <<<"$entry")
@@ -97,26 +123,15 @@ while IFS= read -r entry; do
   new_id=$(image_id "$image")
   if [ "$old_id" != "$new_id" ] && [ "$new_id" != "none" ]; then
     echo "  Image updated ($old_id -> $new_id); restarting all consumers"
-    rollback_tag=""
-    if [ "$NEO_SUPERVISE" = true ]; then
-      tag=$(jq -r .rollback_tag <<<"$entry")
-      if [ "$old_id" != "none" ]; then
-        echo "  Tagging previous image as $tag"
-        docker tag "$old_id" "$tag" || true
-        rollback_tag=$tag
-      else
-        echo "  First pull (no previous image id); skipping rollback tag"
-      fi
-    fi
     changed=1
     updates_json=$(jq -c \
       --arg image "$image" \
       --arg old "$old_id" \
       --arg new "$new_id" \
-      --arg tag "$rollback_tag" \
       --argjson units "$(jq -c .units <<<"$entry")" \
-      '. + [{image:$image, old_id:$old, new_id:$new, rollback_tag:$tag, units:$units}]' \
+      '. + [{image:$image, old_id:$old, new_id:$new, units:$units}]' \
       <<<"$updates_json")
+    record_ledger
     while IFS=$'\t' read -r unit service; do
       restart "$unit" "$service"
     done < <(jq -r '.restarts[] | [.unit, .service] | @tsv' <<<"$entry")
@@ -124,5 +139,6 @@ while IFS= read -r entry; do
     echo "  Up to date or no change."
   fi
 done < <(jq -c '.[]' "$NEO_PLAN")
+record_ledger
 echo "Docker update check complete."
 finalize ok

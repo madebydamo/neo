@@ -8,6 +8,7 @@
 //!   `nix/modules/disko/zfs-restore.sh` (see [`data`]).
 //!
 //! Listing runs unprivileged; snapshot / set / rsync go through `sudo -n`.
+pub mod apps;
 pub mod data;
 pub mod render;
 pub mod service;

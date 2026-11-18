@@ -5,6 +5,7 @@
 pub mod backup;
 pub mod bins;
 pub mod command;
+pub mod docker_ledger;
 pub mod fsutil;
 pub mod generation;
 pub mod locks;

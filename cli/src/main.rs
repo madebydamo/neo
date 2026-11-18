@@ -129,6 +129,12 @@ enum Commands {
         #[command(subcommand)]
         action: SecretsAction,
     },
+    /// Image ledger and garbage collection of the docker updater (root).
+    #[command(hide = true)]
+    DockerLedger {
+        #[command(subcommand)]
+        action: commands::docker_ledger::DockerLedgerAction,
+    },
     /// Vulnerability scan of the system and the container images (services.security).
     Security {
         #[command(subcommand)]
@@ -246,6 +252,7 @@ fn run(cli: Cli) -> Result<()> {
     // settings nor the homeserver re-exec below.
     let command = match command {
         Commands::Security { action } => return commands::security::security(action),
+        Commands::DockerLedger { action } => return commands::docker_ledger::docker_ledger(action),
         other => other,
     };
 
@@ -374,6 +381,7 @@ fn run(cli: Cli) -> Result<()> {
         },
         // Dispatched before the settings are loaded (see above).
         Commands::Security { action } => commands::security::security(action),
+        Commands::DockerLedger { action } => commands::docker_ledger::docker_ledger(action),
         Commands::Backup { action } => match action {
             BackupAction::RotateKey => commands::backup::rotate_key(&doc, dry_run, sudo_cmd),
             BackupAction::ExtractConfig {
@@ -452,7 +460,8 @@ fn command_lock(command: &Commands) -> Option<(LockSpec, OpInfo, Option<Operatio
         | Commands::Generation { .. }
         | Commands::Restore(_)
         | Commands::Backup { .. }
-        | Commands::Security { .. } => None,
+        | Commands::Security { .. }
+        | Commands::DockerLedger { .. } => None,
     }
 }
 
