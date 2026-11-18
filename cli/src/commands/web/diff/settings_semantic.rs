@@ -24,6 +24,65 @@ pub struct ValueChange {
     pub new: Option<String>,
     /// Values were masked because the key looks like a credential.
     pub secret: bool,
+    /// Both sides are lists: the items in order, each kept, added or removed,
+    /// so the summary can show "+ item" / "− item" instead of two whole lists.
+    pub list: Option<Vec<ListItem>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemMark {
+    Kept,
+    Added,
+    Removed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListItem {
+    pub mark: ItemMark,
+    pub text: String,
+}
+
+/// Lists longer than this (product of both lengths) skip the item diff.
+const MAX_LIST_CELLS: usize = 250_000;
+
+/// Order-preserving item diff (longest common subsequence): removed items stay
+/// where they were, added ones where they land.
+pub fn list_diff(old: &[String], new: &[String]) -> Option<Vec<ListItem>> {
+    let (n, m) = (old.len(), new.len());
+    if n.saturating_mul(m) > MAX_LIST_CELLS {
+        return None;
+    }
+    // lcs[i][j] = LCS length of old[i..] and new[j..].
+    let mut lcs = vec![vec![0usize; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            lcs[i][j] = if old[i] == new[j] {
+                lcs[i + 1][j + 1] + 1
+            } else {
+                lcs[i + 1][j].max(lcs[i][j + 1])
+            };
+        }
+    }
+    let item = |mark, text: &String| ListItem {
+        mark,
+        text: shorten(text.clone()),
+    };
+    let (mut i, mut j) = (0, 0);
+    let mut out = Vec::with_capacity(n.max(m));
+    while i < n || j < m {
+        if i < n && j < m && old[i] == new[j] {
+            out.push(item(ItemMark::Kept, &old[i]));
+            i += 1;
+            j += 1;
+        } else if j < m && (i == n || lcs[i][j + 1] >= lcs[i + 1][j]) {
+            out.push(item(ItemMark::Added, &new[j]));
+            j += 1;
+        } else {
+            out.push(item(ItemMark::Removed, &old[i]));
+            i += 1;
+        }
+    }
+    Some(out)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -168,6 +227,37 @@ pub fn render_value(v: &Value) -> String {
     }
 }
 
+/// One flattened setting: its compact text, and its items when it is a list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Flat {
+    text: String,
+    items: Option<Vec<String>>,
+}
+
+impl Flat {
+    fn scalar(text: String) -> Self {
+        Flat { text, items: None }
+    }
+}
+
+fn flat_value(v: &Value) -> Flat {
+    match v {
+        Value::Array(a) => Flat {
+            text: render_value(v),
+            items: Some(a.iter().map(render_value).collect()),
+        },
+        _ => Flat::scalar(render_value(v)),
+    }
+}
+
+fn flat_tables<'a>(it: impl Iterator<Item = &'a Table>) -> Flat {
+    let items: Vec<String> = it.map(|t| render_table_like(t)).collect();
+    Flat {
+        text: format!("[{}]", items.join(", ")),
+        items: Some(items),
+    }
+}
+
 fn shorten(s: String) -> String {
     if s.chars().count() <= MAX_VALUE_LEN {
         return s;
@@ -177,7 +267,7 @@ fn shorten(s: String) -> String {
 }
 
 /// Flatten tables (and inline tables) into `dotted.path → rendered value`.
-fn flatten(prefix: &str, item: &Item, out: &mut BTreeMap<String, String>) {
+fn flatten(prefix: &str, item: &Item, out: &mut BTreeMap<String, Flat>) {
     match item {
         Item::None => {}
         Item::Table(_) | Item::Value(Value::InlineTable(_)) => {
@@ -188,15 +278,15 @@ fn flatten(prefix: &str, item: &Item, out: &mut BTreeMap<String, String>) {
             }
         }
         Item::Value(v) => {
-            out.insert(prefix.to_string(), render_value(v));
+            out.insert(prefix.to_string(), flat_value(v));
         }
         Item::ArrayOfTables(a) => {
-            out.insert(prefix.to_string(), render_array_of_tables(a.iter()));
+            out.insert(prefix.to_string(), flat_tables(a.iter()));
         }
     }
 }
 
-fn flat_of(item: Option<&Item>) -> BTreeMap<String, String> {
+fn flat_of(item: Option<&Item>) -> BTreeMap<String, Flat> {
     let mut m = BTreeMap::new();
     if let Some(i) = item {
         flatten("", i, &mut m);
@@ -205,14 +295,14 @@ fn flat_of(item: Option<&Item>) -> BTreeMap<String, String> {
 }
 
 /// Secret tree leaves below `path` as `dotted.path → comparison token`.
-fn flat_secrets(tree: &Tree, path: &[&str]) -> BTreeMap<String, String> {
-    fn walk(prefix: &str, tree: &Tree, out: &mut BTreeMap<String, String>) {
+fn flat_secrets(tree: &Tree, path: &[&str]) -> BTreeMap<String, Flat> {
+    fn walk(prefix: &str, tree: &Tree, out: &mut BTreeMap<String, Flat>) {
         for (k, n) in tree {
             let p = join_key(prefix, k);
             match n {
                 // Same rendering as a TOML string, so an inline value equals its moved copy.
                 Node::Leaf(v) => {
-                    out.insert(p, format!("{v:?}"));
+                    out.insert(p, Flat::scalar(format!("{v:?}")));
                 }
                 Node::Map(m) => walk(&p, m, out),
             }
@@ -231,7 +321,7 @@ fn flat_secrets(tree: &Tree, path: &[&str]) -> BTreeMap<String, String> {
 }
 
 /// Settings of one scope with its secrets overlaid; returns the secret keys.
-fn overlay(flat: &mut BTreeMap<String, String>, secrets: &Tree, path: &[&str]) -> BTreeSet<String> {
+fn overlay(flat: &mut BTreeMap<String, Flat>, secrets: &Tree, path: &[&str]) -> BTreeSet<String> {
     let s = flat_secrets(secrets, path);
     let keys = s.keys().cloned().collect();
     flat.extend(s);
@@ -240,8 +330,8 @@ fn overlay(flat: &mut BTreeMap<String, String>, secrets: &Tree, path: &[&str]) -
 
 /// Compare two flattened maps; `secret_keys` are masked whatever their name.
 fn diff_maps(
-    old: &BTreeMap<String, String>,
-    new: &BTreeMap<String, String>,
+    old: &BTreeMap<String, Flat>,
+    new: &BTreeMap<String, Flat>,
     scope: &str,
     skip: &[&str],
     secret_keys: &BTreeSet<String>,
@@ -262,20 +352,28 @@ fn diff_maps(
             k.clone()
         };
         let secret = secret_keys.contains(k) || is_secret_path(&path);
-        let show = |v: Option<&String>| {
-            v.map(|s| {
+        let show = |v: Option<&Flat>| {
+            v.map(|f| {
                 if secret {
                     MASK.to_string()
                 } else {
-                    shorten(s.clone())
+                    shorten(f.text.clone())
                 }
             })
+        };
+        let list = match (
+            o.and_then(|f| f.items.as_ref()),
+            n.and_then(|f| f.items.as_ref()),
+        ) {
+            (Some(a), Some(b)) if !secret => list_diff(a, b),
+            _ => None,
         };
         out.push(ValueChange {
             old: show(o),
             new: show(n),
             path,
             secret,
+            list,
         });
     }
     out
@@ -562,6 +660,33 @@ enabled = true
         let moved = tree(&[("services.dufs.users.admin", "pw")]);
         let d = diff_settings(old, new, &Tree::new(), &moved).expect("diff");
         assert!(d.is_empty(), "{d:?}");
+    }
+
+    #[test]
+    fn list_changes_are_item_diffs() {
+        let a = "[services.t.access.x]\nallow = [\"a\", \"b\", \"c\"]\n";
+        let b = "[services.t.access.x]\nallow = [\"a\", \"c\", \"d\"]\n";
+        let d = diff_settings_toml(a, b).expect("diff");
+        let c = &svc(&d, "t").changes[0];
+        let marks: Vec<(ItemMark, &str)> = c
+            .list
+            .as_ref()
+            .expect("list")
+            .iter()
+            .map(|i| (i.mark, i.text.as_str()))
+            .collect();
+        assert_eq!(
+            marks,
+            vec![
+                (ItemMark::Kept, "\"a\""),
+                (ItemMark::Removed, "\"b\""),
+                (ItemMark::Kept, "\"c\""),
+                (ItemMark::Added, "\"d\""),
+            ]
+        );
+        // A list that was not set before stays a plain value change.
+        let d = diff_settings_toml("[services.t]\nenabled = true\n", b).expect("diff");
+        assert!(svc(&d, "t").changes[0].list.is_none());
     }
 
     #[test]

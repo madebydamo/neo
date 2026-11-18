@@ -8,7 +8,7 @@ use std::fs;
 use rocket::http::Status;
 use toml_edit::{DocumentMut, Item, Table};
 
-use super::json_to_toml_value;
+use super::json_to_toml_field;
 use super::save::{
     apply_payload_to_table, finish_save, load_settings_doc, route_secrets, SaveError,
 };
@@ -220,7 +220,7 @@ fn apply_core_nested_section(
     if payload_map.len() == 1 && payload_map.contains_key(section) {
         // A single-key payload named "core" is not a scalar: no-op.
         if section != "core" {
-            if let Some(tval) = payload_map.get(section).and_then(json_to_toml_value) {
+            if let Some(tval) = payload_map.get(section).and_then(json_to_toml_field) {
                 core_table.insert(section, Item::Value(tval));
             }
         }

@@ -7,7 +7,7 @@ use rocket::response::{Responder, Response};
 use rocket::Request;
 use toml_edit::{DocumentMut, Table};
 
-use super::{insert_dotted, json_to_toml_item, json_to_toml_value};
+use super::{insert_dotted, json_to_toml_field, json_to_toml_item};
 use crate::commands::web::locks::Blocked;
 use crate::commands::web::types::AppConfig;
 use crate::commands::web::util::proc;
@@ -84,7 +84,7 @@ pub fn apply_payload_to_table(
 ) {
     for (k, v) in payload.iter() {
         if k.contains('.') {
-            if let Some(tval) = json_to_toml_value(v) {
+            if let Some(tval) = json_to_toml_field(v) {
                 insert_dotted(table, k, tval);
             }
         } else if let Some(titem) = json_to_toml_item(v) {

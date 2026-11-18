@@ -36,6 +36,34 @@ pub fn json_to_toml_value(v: &serde_json::Value) -> Option<Value> {
     }
 }
 
+/// Inline arrays longer than this many characters are written one item per line.
+const INLINE_ARRAY_MAX: usize = 60;
+
+/// Lay out a setting's list one item per line when it is long or holds inline
+/// tables, so adding or removing one item changes one line of settings.toml.
+/// Only for a key's own value: nested arrays stay inline.
+pub fn layout_value(mut v: Value) -> Value {
+    if let Value::Array(a) = &mut v {
+        let long = a.len() > 1
+            && (a.iter().any(|x| x.is_inline_table())
+                || a.to_string().trim().len() > INLINE_ARRAY_MAX);
+        if long {
+            for item in a.iter_mut() {
+                item.decor_mut().set_prefix("\n  ");
+                item.decor_mut().set_suffix("");
+            }
+            a.set_trailing_comma(true);
+            a.set_trailing("\n");
+        }
+    }
+    v
+}
+
+/// [`json_to_toml_value`] for a key's own value, laid out by [`layout_value`].
+pub fn json_to_toml_field(v: &serde_json::Value) -> Option<Value> {
+    json_to_toml_value(v).map(layout_value)
+}
+
 /// Convert JSON to a TOML item. Objects become nested tables; other values
 /// reuse [`json_to_toml_value`].
 pub fn json_to_toml_item(v: &serde_json::Value) -> Option<Item> {
@@ -50,7 +78,7 @@ pub fn json_to_toml_item(v: &serde_json::Value) -> Option<Item> {
             }
             Some(Item::Table(ttable))
         }
-        other => json_to_toml_value(other).map(Item::Value),
+        other => json_to_toml_field(other).map(Item::Value),
     }
 }
 
@@ -111,5 +139,38 @@ pub fn insert_dotted(table: &mut Table, dotted_key: &str, value: Value) {
         } else {
             return;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn written(v: serde_json::Value) -> String {
+        let mut doc = toml_edit::DocumentMut::new();
+        doc.insert("k", json_to_toml_item(&v).expect("item"));
+        doc.to_string()
+    }
+
+    #[test]
+    fn long_lists_get_one_item_per_line() {
+        assert_eq!(
+            written(json!(["local", "web"])),
+            "k = [\"local\", \"web\"]\n"
+        );
+        assert_eq!(
+            written(json!(["tmr-dashboard", "tmr-simulator", "vbsg-kpi", "bielcrawler"])),
+            "k = [\n  \"tmr-dashboard\",\n  \"tmr-simulator\",\n  \"vbsg-kpi\",\n  \"bielcrawler\",\n]\n"
+        );
+        assert_eq!(
+            written(json!([{ "a": 1 }, { "a": 2 }])),
+            "k = [\n  { a = 1 },\n  { a = 2 },\n]\n"
+        );
+        // The written text reads back as the same list.
+        let doc: toml_edit::DocumentMut = written(json!(["x".repeat(40), "y".repeat(40)]))
+            .parse()
+            .expect("parse");
+        assert_eq!(doc["k"].as_array().map(|a| a.len()), Some(2));
     }
 }

@@ -1,6 +1,6 @@
 //! The semantic settings summary and the flake input updates above the files.
 use super::super::flake_lock::InputUpdate;
-use super::super::settings_semantic::{SettingsDiff, Transition, ValueChange};
+use super::super::settings_semantic::{ItemMark, ListItem, SettingsDiff, Transition, ValueChange};
 use super::{plural, ICON_LOCK};
 use crate::commands::web::util::{core_section_ok, escape_attr, escape_html, service_name_ok};
 
@@ -36,6 +36,54 @@ fn value_cell(v: Option<&str>, class: &str, secret: bool) -> String {
     }
 }
 
+/// Unchanged items shown in full up to this many; above it, unchanged runs
+/// fold into "…" so the added and removed items stand out.
+const MAX_KEPT_SHOWN: usize = 6;
+
+/// One side of a list change, written like any other value (`[a, b]`) with
+/// only the items that side removed (old) or added (new) highlighted.
+fn list_side(items: &[ListItem], side: ItemMark, class: &str) -> String {
+    let fold = items.iter().filter(|i| i.mark == ItemMark::Kept).count() > MAX_KEPT_SHOWN;
+    let mut parts: Vec<String> = Vec::new();
+    let mut folded = 0usize;
+    let flush = |folded: &mut usize, parts: &mut Vec<String>| {
+        if *folded > 0 {
+            parts.push(format!(
+                r#"<span class="neo-sem-fold" title="{n} unchanged">…</span>"#,
+                n = *folded
+            ));
+            *folded = 0;
+        }
+    };
+    for it in items {
+        match it.mark {
+            ItemMark::Kept if fold => folded += 1,
+            ItemMark::Kept => {
+                flush(&mut folded, &mut parts);
+                parts.push(escape_html(&it.text));
+            }
+            m if m == side => {
+                flush(&mut folded, &mut parts);
+                let what = if side == ItemMark::Added {
+                    "added"
+                } else {
+                    "removed"
+                };
+                parts.push(format!(
+                    r#"<span class="neo-sem-item-{what}">{}</span><span class="sr-only"> ({what})</span>"#,
+                    escape_html(&it.text)
+                ));
+            }
+            _ => {}
+        }
+    }
+    flush(&mut folded, &mut parts);
+    format!(
+        r#"<td class="{class} neo-sem-items"><code>[{}]</code></td>"#,
+        parts.join(", ")
+    )
+}
+
 fn changes_table(changes: &[ValueChange]) -> String {
     if changes.is_empty() {
         return String::new();
@@ -49,6 +97,15 @@ fn changes_table(changes: &[ValueChange]) -> String {
             (Some(_), None) => "removed",
             _ => "changed",
         };
+        if let Some(items) = c.list.as_deref().filter(|_| !c.secret) {
+            s.push_str(&format!(
+                r#"<tr data-kind="changed"><th scope="row"><code>{path}</code></th>{old}<td class="neo-sem-arrow" aria-label="changed to">→</td>{new}</tr>"#,
+                path = escape_html(&c.path),
+                old = list_side(items, ItemMark::Removed, "neo-sem-old"),
+                new = list_side(items, ItemMark::Added, "neo-sem-new"),
+            ));
+            continue;
+        }
         s.push_str(&format!(
             r#"<tr data-kind="{kind}"><th scope="row"><code>{path}</code></th>{old}<td class="neo-sem-arrow" aria-label="changed to">→</td>{new}</tr>"#,
             path = escape_html(&c.path),
@@ -187,6 +244,7 @@ pub(super) fn render_inputs(inputs: &[InputUpdate]) -> String {
                 old: u.old.as_ref().map(|r| r.rev.clone()),
                 new: u.new.as_ref().map(|r| r.rev.clone()),
                 secret: false,
+                list: None,
             });
             let (od, nd) = (
                 u.old.as_ref().and_then(|r| r.date.clone()),
@@ -198,6 +256,7 @@ pub(super) fn render_inputs(inputs: &[InputUpdate]) -> String {
                     old: od,
                     new: nd,
                     secret: false,
+                    list: None,
                 });
             }
         }

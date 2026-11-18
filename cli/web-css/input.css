@@ -744,6 +744,27 @@ a.neo-sem-name:focus-visible {
   width: 1.25rem;
   color: var(--neo-c-muted);
 }
+/* A list change: the list as a plain value, only added / removed items marked. */
+.neo-sem-items code {
+  background-color: transparent;
+  text-decoration: none;
+}
+.neo-sem-item-removed,
+.neo-sem-item-added {
+  border-radius: 0.2rem;
+  padding: 0 0.1rem;
+}
+.neo-sem-item-removed {
+  background-color: color-mix(in oklab, var(--neo-c-del) 22%, transparent);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklab, var(--neo-c-del) 70%, transparent);
+}
+.neo-sem-item-added {
+  background-color: color-mix(in oklab, var(--neo-c-add) 26%, transparent);
+}
+.neo-sem-fold {
+  color: var(--neo-c-muted);
+}
 .neo-sem-unset {
   font-style: italic;
   color: var(--neo-c-muted);
