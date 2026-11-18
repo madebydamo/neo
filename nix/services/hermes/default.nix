@@ -159,9 +159,19 @@
       then null
       else toString (builtins.head cfg.telegramAllowedUserId);
 
+    # Positive IDs are users (allowed in private chats and groups); negative
+    # ones and the groups listed under telegramGroups ("*" only sets defaults,
+    # it opens no group) are group chats, where every member may talk to Hermes.
+    telegramIds = pred: lib.concatStringsSep "," (map toString (lib.filter pred cfg.telegramAllowedUserId));
+    telegramGroupChats = lib.concatStringsSep "," (lib.unique (
+      map toString (lib.filter (id: id < 0) cfg.telegramAllowedUserId)
+      ++ lib.filter (id: id != "*") (lib.attrNames (cfg.telegramGroups or {}))
+    ));
+
     hermesEnv =
       lib.filterAttrs (_: v: v != null && v != "") {
-        TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," (map toString cfg.telegramAllowedUserId);
+        TELEGRAM_ALLOWED_USERS = telegramIds (id: id > 0);
+        TELEGRAM_GROUP_ALLOWED_CHATS = telegramGroupChats;
         TELEGRAM_HOME_CHANNEL = telegramHomeChannel;
         GATEWAY_HEALTH_URL = "http://127.0.0.1:${toString cfg.gatewayPort}";
         API_SERVER_HOST = "127.0.0.1";
@@ -254,8 +264,6 @@
         }
       ];
 
-      # The gateway reads it via $HERMES_HOME/.env and, as before, is not
-      # restarted on a change (it may be driving the very switch).
       # The same token for neo web, which checks it on /internal/mcp.
       neo.core.secrets.templates."neo-agent-token" = lib.mkIf neoToolsOn {
         content = cfg.neoToolsToken;
@@ -282,9 +290,12 @@
         restartUnits = ["neo-web.service"];
       };
 
+      # The gateway reads it via $HERMES_HOME/.env: reloaded (drain, then
+      # restart; see hermes-agent below) since it may be driving the switch.
       neo.core.secrets.templates."hermes.env" = {
         env = hermesSecretEnv;
         restartUnits = ["hermes-dashboard.service"];
+        reloadUnits = ["hermes-agent.service"];
       };
 
       # Machine git identity (neo.core.git): SSH key, tokens, user.name/email.
@@ -378,8 +389,20 @@
         fi
       '';
 
+      # The gateway reads config.yaml and .env only at start, and both are
+      # written at activation, outside the unit. A settings change reloads it:
+      # SIGUSR1 lets running turns finish (agent.restart_drain_timeout), then
+      # the gateway exits and Restart=always brings it back. A plain restart
+      # would kill the turn that may be running this very switch.
+      systemd.services.hermes-agent.reloadTriggers = [
+        (builtins.toJSON config.services.hermes-agent.settings)
+        (builtins.toJSON config.services.hermes-agent.environment)
+        config.services.hermes-agent.environmentFiles
+      ];
+
       # Disable ALL sandboxing/hardening (full system access)
       systemd.services.hermes-agent.serviceConfig = {
+        ExecReload = "${pkgs.coreutils}/bin/kill -USR1 $MAINPID";
         ReadWritePaths = ["/"];
         NoNewPrivileges = lib.mkForce false;
         ProtectHome = lib.mkForce false;

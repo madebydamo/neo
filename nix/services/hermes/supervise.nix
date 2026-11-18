@@ -23,7 +23,9 @@
     superviseEnv = lib.filterAttrs (_: v: v != null && v != "") {
       HOME = cfg.stateDir;
       HERMES_HOME = "${cfg.stateDir}/.hermes";
-      TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," (map toString cfg.telegramAllowedUserId);
+      # Same as the gateway (default.nix): users > 0; group chats < 0 and telegramGroups.
+      TELEGRAM_ALLOWED_USERS = config.services.hermes-agent.environment.TELEGRAM_ALLOWED_USERS or null;
+      TELEGRAM_GROUP_ALLOWED_CHATS = config.services.hermes-agent.environment.TELEGRAM_GROUP_ALLOWED_CHATS or null;
       TELEGRAM_HOME_CHANNEL = telegramHomeChannel;
     };
 

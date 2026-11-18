@@ -89,7 +89,7 @@
                 type = types.listOf types.int;
                 default = [];
                 description = ''
-                  Telegram users or chats that may talk to Hermes. The first one is where Hermes sends its own messages.
+                  Telegram users and group chats that may talk to Hermes; in an allowed group, every member may. The first one is where Hermes sends its own messages.
                   Get your ID from @userinfobot in Telegram; group chat IDs start with a minus.
                 '';
                 rank = 40;
@@ -121,8 +121,8 @@
                 rank = 50;
                 default = {};
                 description = ''
-                  Settings per Telegram group chat.
-                  Add a group by its chat ID, or "*" for the default of all groups.
+                  Group chats Hermes takes part in, with their settings. Every member of a group listed here may talk to Hermes.
+                  Add a group by its chat ID (it starts with a minus); "*" sets the default for all groups without opening any.
                 '';
                 ui = lib.neo.ui.mkUi {
                   group = telegramGroup;

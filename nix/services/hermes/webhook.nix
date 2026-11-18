@@ -34,9 +34,8 @@
       services.hermes-agent.environment.WEBHOOK_ENABLED = "true";
       services.hermes-agent.environmentFiles = [envFile];
 
-      # config.yaml changes do not restart the gateway (it may be running the
-      # switch). New or changed routes are rare and need the listener rebuilt.
-      systemd.services.hermes-agent.restartTriggers = [(builtins.toJSON settings)];
+      # New or changed routes reload the gateway like any settings change
+      # (reloadTriggers in default.nix), which rebuilds the listener.
 
       system.activationScripts.hermes-webhook-secret = lib.stringAfter ["users" "groups" "hermes-reown"] ''
         d=${lib.escapeShellArg dir}
