@@ -1,0 +1,73 @@
+{{!-- Rescue portal of the backup store, start page (web/backup_store.rs).
+     Served on the store's own address and at /backup-store/portal. --}}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    {{> partials/head_meta title="Backup store" no_manifest=true}}
+    <link rel="stylesheet" href="/static/neo-ui.css" />
+  </head>
+  <body class="neo-config bg-base-300 text-base-content min-h-dvh" data-theme="light">
+    <main class="max-w-4xl mx-auto px-4 py-6 sm:py-10 space-y-6">
+      <header class="space-y-1">
+        <p class="text-xs uppercase tracking-wide text-base-content/50">Backup store{{#if store.host}} · {{store.host}}{{/if}}</p>
+        <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">Restore a lost server</h1>
+        {{#if private}}
+          <p class="text-base-content/70">If a server is lost, pick it below and choose how to restore it.</p>
+        {{/if}}
+      </header>
+
+      {{#if error}}
+        <div class="alert alert-warning text-sm">{{error}}</div>
+      {{else}}
+        {{#if private}}
+          {{#if has_clients}}
+            <section class="space-y-3" aria-label="Servers">
+              {{#each clients}}
+                <article class="card bg-base-100 shadow-sm border border-base-content/5">
+                  <div class="card-body p-4 sm:p-5 gap-2">
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <h2 class="text-lg font-semibold font-mono">{{name}}</h2>
+                      <span class="badge badge-sm gap-1.5 {{#if state_ok}}badge-success{{/if}}{{#if state_late}}badge-warning{{/if}}{{#if state_bad}}badge-error{{/if}}">
+                        {{state_label}}{{#if estimated}} (estimated){{/if}}
+                      </span>
+                      {{#unless configured}}<span class="badge badge-sm badge-ghost">Removed</span>{{/unless}}
+                    </div>
+                    <p class="text-sm text-base-content/70">
+                      {{format}}{{#if versions}} · {{versions}} versions{{/if}}{{#if size}} · {{size}}{{/if}}{{#if last_connection}} · last connection {{last_connection}}{{/if}}
+                    </p>
+                    {{#if keys}}
+                      <p class="text-xs text-base-content/60">Keys: {{#each keys}}{{#unless @first}} · {{/unless}}<span title="{{fingerprint}}">{{label}}</span>{{/each}}</p>
+                    {{/if}}
+                    {{#if configured}}
+                      <div class="card-actions mt-1">
+                        <a class="btn btn-sm btn-primary" href="/backup-store/portal/client/{{name}}">Restore {{name}}</a>
+                      </div>
+                    {{else}}
+                      <p class="text-xs text-base-content/60">Its backups stay here{{#if size}} ({{size}}){{/if}}. Add it to the store's servers again to restore it.</p>
+                    {{/if}}
+                  </div>
+                </article>
+              {{/each}}
+            </section>
+          {{else}}
+            <div class="alert text-sm">No server backs up here yet. Add one in the store's settings (Servers), then set up the backup on that server.</div>
+          {{/if}}
+          <p class="text-xs text-base-content/50">Updated {{report_age}}. Green: a backup in the last 36 hours. Orange: older. Red: none for 7 days, or never.</p>
+        {{else}}
+          <div class="alert text-sm">
+            This page shows the servers and how to restore them only with a login. Turn on Require login for the backup store, then open this page again.
+          </div>
+        {{/if}}
+
+        <section class="card bg-base-100 shadow-sm">
+          <div class="card-body p-4 sm:p-5 gap-2 text-sm text-base-content/75">
+            <h2 class="font-semibold text-base-content">About this store</h2>
+            <p>Other servers send their nightly backup here over HTTPS. Each server has its own private space, and a server can only reach its own backups.</p>
+            <p>Encrypted backups stay encrypted here: this store cannot read them. To restore one, you need an admin key of that server.</p>
+            <p>This store keeps no backup of what it holds. Keep at least one more backup of every server somewhere else.</p>
+          </div>
+        </section>
+      {{/if}}
+    </main>
+  </body>
+</html>

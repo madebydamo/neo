@@ -15,6 +15,8 @@ const ACTIVATION_STEPS: &[&str] = &[
     "Finished",
 ];
 
+const RESCUE_STEPS: &[&str] = &["Start", "Prepare", "Config repo", "Restore", "Finished"];
+
 const UPDATE_STEPS: &[&str] = &[
     "Start",
     "Reinitialize",
@@ -31,6 +33,7 @@ impl OperationKind {
             OperationKind::Update => "Update",
             OperationKind::Repair => "Nix store repair",
             OperationKind::Generation => "Generation switch",
+            OperationKind::Rescue => "Restore to a new server",
         }
     }
 
@@ -39,6 +42,7 @@ impl OperationKind {
         match self {
             OperationKind::Activation => ACTIVATION_STEPS,
             OperationKind::Update => UPDATE_STEPS,
+            OperationKind::Rescue => RESCUE_STEPS,
             OperationKind::Repair | OperationKind::Generation => &[],
         }
     }
@@ -64,6 +68,14 @@ impl OperationKind {
                 "flake update" => 3,
                 "migrate" => 4,
                 "complete" => 5,
+                _ => 0,
+            },
+            OperationKind::Rescue => match phase {
+                "triggered" | "starting" | "start" => 0,
+                "prepare" => 1,
+                "config" => 2,
+                "restore" => 3,
+                "complete" => 4,
                 _ => 0,
             },
             OperationKind::Repair | OperationKind::Generation => 0,

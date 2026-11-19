@@ -38,6 +38,8 @@ nix run github:madebydamo/neo#neo -- restore --from-backup user@backup.example.c
 
 `neo backup extract-config user@backup.example.com:myhome` only copies the repo out (push it somewhere first). For a [backup store](INSTALL.md#backup-store) the location is `https://<name in the store>@backup.example.com/<folder>`; your key must be in that server's list on the store.
 
+A server that backs up to a [backup store](INSTALL.md#backup-store) is easiest to restore from the store's own page, `https://<subdomain>.<domain>` of the store: it lists every server with its last backup, the keys that may restore it, and the filled-in command for your computer or for a NixOS installer on the new machine. Its **From this server** tab runs the restore on the store itself: you give the new machine (`root@IP`) and paste your admin key, which is deleted after that job ([design](design/backup-store-rescue.md)).
+
 The repo argument can be a git URL, a checkout on this computer (its last commit; you get a warning about uncommitted changes), a bare repo, or a saved copy of the files without `.git`, which is restored as one new commit. With `--host`, it only has to exist on the computer you run this from.
 
 With `--host`, every other option reaches the target: `--key` and `--backup-key` are copied into the installer's RAM and deleted when the restore ends (or right after `--check`), and `--disk`, `--data`, `--from-backup`, `--target`, `--config`, `--keep-hardware` and `--no-install` apply there. `--data-from` and `--target` are paths on the target. A backup disk attached to the target is reached with `--data-from`, not `--from-backup`.

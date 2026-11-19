@@ -10,6 +10,7 @@ use rocket_dyn_templates::Template;
 
 mod action_bar;
 pub(crate) mod agent;
+mod backup_store;
 pub(crate) mod chat;
 mod diff;
 mod git;
@@ -100,9 +101,12 @@ pub fn web(settings_path: PathBuf, nix_cmd: &str, config_path: &str) -> Result<(
             .manage::<chat::Host>(Arc::new(chat::NeoHost(app_config.clone())))
             .manage(app_config)
             .attach(Template::fairing())
+            // The store's own address serves only the rescue portal.
+            .attach(backup_store::PortalSite)
             .configure(rocket::Config::figment().merge(("template_dir", template_dir)))
             .mount("/", routes())
             .mount("/", chat::routes())
+            .mount("/", backup_store::routes())
             .launch()
             .await
             .map_err(|e| anyhow::anyhow!("rocket launch failed: {e}"))?;

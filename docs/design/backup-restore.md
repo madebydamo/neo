@@ -359,3 +359,8 @@ The store is a normal source: from the settings (a destination with `target = "s
 `neo restore --from-backup https://<client>@<store>/<folder>` / `neo backup extract-config` the same
 way (`user` is derived as `backup-<client>`). The admin key must be in the client's `publicKeys`.
 `websocat` is in the `neo` package's restore tools. A store itself has no backup of what it holds.
+
+The store's own address is also its **rescue portal** for browsers (WebSocket requests still go to
+the tunnel): the last backup per client, three ways to restore one, and a restore run from the store
+itself with a short-lived, read-only key (`neo-store-gate --read-only`). Design:
+[backup-store-rescue.md](backup-store-rescue.md).

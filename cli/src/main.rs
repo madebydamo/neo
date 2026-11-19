@@ -165,6 +165,12 @@ enum Commands {
         #[command(subcommand)]
         action: BackupAction,
     },
+    /// The backup store's rescue portal (services.backup-store), as root on the store.
+    #[command(hide = true)]
+    BackupStore {
+        #[command(subcommand)]
+        action: commands::backup_store::BackupStoreAction,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -277,6 +283,8 @@ fn run(cli: Cli) -> Result<()> {
     let command = match command {
         Commands::Security { action } => return commands::security::security(action),
         Commands::DockerLedger { action } => return commands::docker_ledger::docker_ledger(action),
+        // Root, from the store's units; the rescue locks its client itself.
+        Commands::BackupStore { action } => return commands::backup_store::run(action),
         // Runs in the Nix build sandbox and as any user on a server.
         Commands::Completions { shell } => {
             print_completions(shell, &mut std::io::stdout());
@@ -420,6 +428,7 @@ fn run(cli: Cli) -> Result<()> {
         // Dispatched before the settings are loaded (see above).
         Commands::Security { action } => commands::security::security(action),
         Commands::DockerLedger { action } => commands::docker_ledger::docker_ledger(action),
+        Commands::BackupStore { action } => commands::backup_store::run(action),
         Commands::Completions { shell } => {
             print_completions(shell, &mut std::io::stdout());
             Ok(())
@@ -512,6 +521,7 @@ fn command_lock(command: &Commands) -> Option<(LockSpec, OpInfo, Option<Operatio
         | Commands::Bootstrap(_)
         | Commands::Settings { .. }
         | Commands::Backup { .. }
+        | Commands::BackupStore { .. }
         | Commands::Security { .. }
         | Commands::DockerLedger { .. }
         | Commands::Completions { .. } => None,

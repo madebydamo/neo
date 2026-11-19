@@ -118,14 +118,17 @@ pub enum OperationKind {
     Generation,
     /// Nix store verify/repair (web only).
     Repair,
+    /// Restore of a backup-store client onto a new machine (neo backup-store rescue).
+    Rescue,
 }
 
 impl OperationKind {
-    const ALL: [Self; 4] = [
+    const ALL: [Self; 5] = [
         Self::Activation,
         Self::Update,
         Self::Generation,
         Self::Repair,
+        Self::Rescue,
     ];
 
     pub fn prefix(self) -> &'static str {
@@ -134,6 +137,7 @@ impl OperationKind {
             Self::Update => "update",
             Self::Generation => "genswitch",
             Self::Repair => "repair",
+            Self::Rescue => "rescue",
         }
     }
 

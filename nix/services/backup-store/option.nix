@@ -125,15 +125,13 @@
                 description = "Internal port of the store's SSH server";
               };
             }
-            # No tinyauth: SSH clients authenticate with their key inside the tunnel.
+            # The login covers the rescue portal only: WebSocket requests go to
+            # the tunnel without tinyauth, the SSH key is their login (swag.nix).
             // lib.neo.mkReverseProxyOptions {
               subdomain = "backup";
-              auth = {
-                available = false;
-                enabled = false;
-              };
             }
-            // lib.neo.mkSystemdUnits ["backup-store-setup" "backup-store-sshd" "backup-store-tunnel"]
+            // lib.neo.mkSystemdUnits ["backup-store-setup" "backup-store-sshd" "backup-store-tunnel" "backup-store-report"]
+            // lib.neo.mkSystemdTimers ["backup-store-report"]
             // lib.neo.mkServiceMeta {
               ownLogin = "Each server's backup key";
               category = "Files";
@@ -142,12 +140,13 @@
                 url = "https://github.com/madebydamo/neo/blob/master/LICENSE";
               };
               icon = ./icon.svg;
-              tagline = "Keep other servers' backups here, reachable only over HTTPS";
+              tagline = "Keep other servers' backups here, and restore them from here";
               description = ''
                 Lets your other servers, or a friend's, keep their nightly backup on this one. It works even where only web traffic gets through.
-                Each server gets its own private space and can do nothing else here.
+                Each server gets its own private space and can do nothing else here. Its web page shows every server's last backup and how to restore a lost one, even onto a new machine from right here.
               '';
               notes = ''
+                The rescue portal is at https://<subdomain>.<domain>: the last backup of every server, and three ways to restore one. Login applies to the portal only; the servers' backups always pass with their key.
                 On the other server: Backup → Back up to "A Neo backup store", the address https://<subdomain>.<domain> and the server name you used here. Its own key is under System → SSH there.
                 ZFS snapshot backups: set that server's Backup dataset to <dataset>/<server name>/neo.
                 Backups live outside the data volume, so this server's own backup does not copy them. A dataset on this server's main disk is erased when this server is restored.

@@ -59,13 +59,36 @@
         '')
         c.publicKeys;
 
+      domain = toString config.neo.services.swag.domain;
+      neoPkg = self.packages.${pkgs.stdenv.hostPlatform.system}.neo;
+
+      # The store's settings for `neo backup-store report|rescue` (the rescue
+      # portal, docs/design/backup-store-rescue.md).
+      storeJson = builtins.toJSON {
+        url = "https://${toString cfg.subdomain}.${domain}";
+        inherit (cfg) path storage dataset;
+        internet = elem "web" cfg.ingress;
+        login = cfg.auth.enabled && config.neo.services.tinyauth.enabled;
+        gate = "${gate}";
+        clients =
+          mapAttrs (client: c: {
+            inherit (c) format publicKeys;
+            gatePrefix =
+              if isDataset
+              then "${cfg.dataset}/${client}"
+              else "-";
+          })
+          cfg.clients;
+      };
+
       sshdConfig = pkgs.writeText "backup-store-sshd_config" ''
         Port ${toString cfg.sshPort}
         ListenAddress 127.0.0.1
         HostKey ${config.neo.core.secrets.identityFile}
         PidFile none
         AllowUsers ${concatMapStringsSep " " userOf (attrNames cfg.clients)}
-        AuthorizedKeysFile /etc/neo/backup-store/authorized_keys/%u
+        # The second file: a rescue's short-lived, read-only key (neo backup-store rescue).
+        AuthorizedKeysFile /etc/neo/backup-store/authorized_keys/%u /run/neo-backup-store/rescue/%u
         AuthenticationMethods publickey
         PasswordAuthentication no
         KbdInteractiveAuthentication no
@@ -157,13 +180,41 @@
             })
           cfg.clients;
 
-          environment.etc = mapAttrs' (client: c:
-            nameValuePair "neo/backup-store/authorized_keys/${userOf client}" {
-              text = keysFile client c;
-              # A real file: StrictModes refuses a symlink into /nix/store.
-              mode = "0444";
-            })
-          cfg.clients;
+          environment.etc =
+            mapAttrs' (client: c:
+              nameValuePair "neo/backup-store/authorized_keys/${userOf client}" {
+                text = keysFile client c;
+                # A real file: StrictModes refuses a symlink into /nix/store.
+                mode = "0444";
+              })
+            cfg.clients
+            // {"neo/backup-store/store.json".text = storeJson;};
+
+          systemd.tmpfiles.rules = ["d /run/neo-backup-store/rescue 0755 root root -"];
+
+          # What the store holds per client, for the rescue portal: as root
+          # (the homes are 0700), on a timer (du is slow).
+          systemd.services.backup-store-report = {
+            description = "Backup store: report of the stored backups";
+            after = ["backup-store-setup.service"];
+            wants = ["backup-store-setup.service"];
+            path = [pkgs.openssh pkgs.coreutils pkgs.systemd] ++ optional isDataset config.boot.zfs.package;
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStart = "${neoPkg}/bin/neo backup-store report";
+              StateDirectory = "neo-backup-store";
+              StateDirectoryMode = "0755";
+              Nice = 10;
+              IOSchedulingClass = "idle";
+            };
+          };
+          systemd.timers.backup-store-report = {
+            wantedBy = ["timers.target"];
+            timerConfig = {
+              OnBootSec = "2min";
+              OnUnitActiveSec = "15min";
+            };
+          };
 
           neo.core.secrets.templates."backup-store-key" = mkIf (isDataset && cfg.encrypted) {
             content = cfg.encryptionKey;

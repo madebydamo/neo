@@ -111,6 +111,10 @@
             # root fs, so a Neo data restore does not rewind them. User data goes
             # to appdata ($NEO_APPDATA).
             StateDirectory = "neo-web";
+            # /run/neo-web: hands a rescue's admin key to its job (backup-store
+            # portal), which moves it into its own folder at once.
+            RuntimeDirectory = "neo-web";
+            RuntimeDirectoryMode = "0700";
             Restart = "always";
             RestartSec = 5;
           };

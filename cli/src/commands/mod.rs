@@ -2,6 +2,7 @@
 
 pub mod activate;
 pub mod backup;
+pub mod backup_store;
 pub mod bootstrap;
 pub mod build;
 pub mod docker_ledger;

@@ -1,0 +1,157 @@
+{{!-- Rescue portal: how to restore one client (web/backup_store.rs portal_client).
+     Three ways in CSS-only tabs; each lists what you need (✓ checked here, ○ check yourself),
+     the steps and the command with this client's values. --}}
+{{#*inline "need"}}<li class="flex gap-2"><span class="shrink-0 w-4 text-center {{#if ok}}text-success{{/if}}{{#if bad}}text-error{{/if}}" aria-hidden="true">{{#if ok}}✓{{else}}{{#if bad}}✗{{else}}○{{/if}}{{/if}}</span><span>{{> @partial-block}}</span></li>{{/inline}}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    {{> partials/head_meta title=title no_manifest=true}}
+    <link rel="stylesheet" href="/static/neo-ui.css" />
+    {{> partials/vendor_scripts htmx=true}}
+    <script src="/static/neo_util.js"></script>
+    <script src="/static/op_monitor.js"></script>
+    <script src="/static/backup_store_portal.js"></script>
+  </head>
+  <body class="neo-config bg-base-300 text-base-content min-h-dvh" data-theme="light">
+    <main class="max-w-4xl mx-auto px-4 py-6 sm:py-10 space-y-5">
+      <header class="space-y-1">
+        <a href="/backup-store/portal" class="link link-hover text-xs text-base-content/60">← All servers</a>
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">Restore <span class="font-mono">{{client.name}}</span></h1>
+          <span class="badge gap-1.5 {{#if client.state_ok}}badge-success{{/if}}{{#if client.state_late}}badge-warning{{/if}}{{#if client.state_bad}}badge-error{{/if}}">{{client.state_label}}{{#if client.estimated}} (estimated){{/if}}</span>
+        </div>
+        <p class="text-sm text-base-content/70">
+          {{client.format}}{{#if client.versions}} · {{client.versions}} versions{{/if}}{{#if client.size}} · {{client.size}}{{/if}}{{#if client.last_connection}} · last connection {{client.last_connection}}{{/if}}
+        </p>
+      </header>
+
+      {{#if recent_connection}}
+        <div role="alert" class="alert alert-warning text-sm">
+          <span><strong>{{client.name}} connected {{recent_connection}}.</strong> If the old server still runs, turn it off first. Otherwise both servers back up into the same place.</span>
+        </div>
+      {{/if}}
+
+      <section class="card bg-base-100 shadow-sm">
+        <div class="card-body p-4 sm:p-5 gap-2 text-sm">
+          <h2 class="font-semibold">You need for every way</h2>
+          <ul class="space-y-1.5 text-base-content/80">
+            {{#> need}}A new machine: any Linux with root SSH (a VPS from a hoster works), or one started from the <a class="link" href="https://nixos.org/download/#nixos-iso" target="_blank" rel="noopener">NixOS installer</a>. <strong>Its disk is erased.</strong>{{/need}}
+            {{#> need}}The old server is off, or gone.{{/need}}
+            {{#if store.internet}}
+              {{#> need ok=true}}The new machine can reach this store: it is open to the internet.{{/need}}
+            {{else}}
+              {{#> need bad=true}}This store is not open to the internet (its Access has no "web"). The new machine must be in the same home network or tailnet.{{/need}}
+            {{/if}}
+            {{#> need}}An admin key of {{client.name}}: the private half of one of these keys.
+              {{#if client.keys}}
+                <ul class="mt-1 space-y-0.5">
+                  {{#each client.keys}}<li class="font-mono text-xs break-all"><span class="font-sans font-medium">{{label}}</span> {{fingerprint}}</li>{{/each}}
+                </ul>
+                <span class="block mt-1 text-xs text-base-content/60">Compare with <code>ssh-keygen -lf ~/.ssh/id_ed25519.pub</code>. The server's own key does not count: it is lost with the server.</span>
+              {{else}}
+                <span class="block text-xs text-error">No key is allowed for {{client.name}} here. Add yours to its SSH public keys in the store's settings.</span>
+              {{/if}}
+            {{/need}}
+            {{#if encrypted}}
+              {{#> need}}The same key was in System → SSH on {{client.name}} at a backup run after you added it. Only then can it open the encrypted backup.{{/need}}
+            {{/if}}
+          </ul>
+          <p class="text-xs text-base-content/60">After the restore: point {{client.name}}'s web addresses (DNS, and the edge server if you use one) to the new machine's address.</p>
+        </div>
+      </section>
+
+      <div class="tabs tabs-lift">
+        <input type="radio" name="way" class="tab" aria-label="From this server" {{#if can_rescue}}checked{{/if}} />
+        <section class="tab-content bg-base-100 border-base-300 p-4 sm:p-5 text-sm space-y-3">
+          <p class="text-base-content/75">This store does the restore: give it the new machine and your admin key.</p>
+          <h3 class="font-semibold">You need, in addition</h3>
+          <ul class="space-y-1.5 text-base-content/80">
+            {{#> need}}Root SSH to the new machine with that admin key. Most hosters ask for a public key when you create the machine.{{/need}}
+          </ul>
+          {{#if can_rescue}}
+            <form class="space-y-3" hx-post="/backup-store/portal/client/{{client.name}}/rescue" hx-target="#rescue-result" hx-swap="innerHTML" autocomplete="off">
+              <label class="form-control block">
+                <span class="label-text font-medium">New machine</span>
+                <input name="host" required class="input input-bordered w-full font-mono" placeholder="root@203.0.113.7" pattern="root@[^\s]+" />
+              </label>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <label class="form-control block">
+                  <span class="label-text font-medium">Disk <span class="text-base-content/50 font-normal">(optional)</span></span>
+                  <input name="disk" class="input input-bordered w-full font-mono" placeholder="/dev/vda" />
+                  <span class="label-text-alt text-base-content/60">Only when the new machine has another disk than the old one. The check lists the disks.</span>
+                </label>
+                {{#if many_folders}}
+                  <label class="form-control block">
+                    <span class="label-text font-medium">Backup folder</span>
+                    <select name="folder" class="select select-bordered w-full font-mono">
+                      {{#each folders}}<option>{{this}}</option>{{/each}}
+                    </select>
+                  </label>
+                {{/if}}
+              </div>
+              <label class="form-control block">
+                <span class="label-text font-medium">Admin key (private)</span>
+                <textarea name="key" required rows="5" spellcheck="false" class="textarea textarea-bordered w-full font-mono text-xs" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" data-neo-key-text></textarea>
+                <span class="label-text-alt text-base-content/60">Paste it, or <label class="link">choose the file<input type="file" class="hidden" data-neo-key-file /></label>. It is used for this restore only and deleted after it.</span>
+              </label>
+              <label class="form-control block max-w-sm">
+                <span class="label-text font-medium">Key passphrase <span class="text-base-content/50 font-normal">(if it has one)</span></span>
+                <input name="passphrase" type="password" class="input input-bordered w-full" autocomplete="off" />
+              </label>
+              <div class="flex flex-wrap items-end gap-3 pt-1">
+                <button type="submit" name="action" value="check" class="btn btn-sm">1. Check</button>
+                <label class="form-control">
+                  <span class="label-text-alt text-base-content/60">Type <span class="font-mono">{{client.name}}</span> to restore</span>
+                  <input name="confirm" class="input input-bordered input-sm font-mono w-40" />
+                </label>
+                <button type="submit" name="action" value="restore" class="btn btn-sm btn-error">2. Erase the new machine and restore</button>
+              </div>
+              <p class="text-xs text-base-content/60">The check starts the new machine into the NixOS installer and shows the plan: disks, data size, server name. It changes nothing on the disk.</p>
+            </form>
+            <div id="rescue-result" class="empty:hidden"></div>
+          {{else}}
+            <div class="alert text-sm">{{rescue_off_reason}}</div>
+          {{/if}}
+        </section>
+
+        <input type="radio" name="way" class="tab" aria-label="From your computer" {{#unless can_rescue}}checked{{/unless}} />
+        <section class="tab-content bg-base-100 border-base-300 p-4 sm:p-5 text-sm space-y-3">
+          <p class="text-base-content/75">Your computer drives the restore over SSH.</p>
+          <h3 class="font-semibold">You need, in addition</h3>
+          <ul class="space-y-1.5 text-base-content/80">
+            {{#> need}}Nix with flakes on your computer (Linux, macOS, or Windows with WSL). Install it with <code class="font-mono text-xs">sh &lt;(curl -L https://nixos.org/nix/install) --daemon</code>.{{/need}}
+            {{#> need}}Root SSH from your computer to the new machine with your admin key.{{/need}}
+            {{#if zfs}}
+              {{#> need}}The config repo of {{client.name}}: a ZFS backup cannot hand it out over the internet.{{#if git_remote}} Its remote: <code class="font-mono text-xs break-all">{{git_remote}}</code>{{/if}}{{/need}}
+            {{/if}}
+          </ul>
+          <h3 class="font-semibold">Run</h3>
+          <div class="relative">
+            <pre id="cmd-computer" class="bg-base-200 rounded-box p-3 pr-16 text-xs font-mono whitespace-pre-wrap break-all">{{cmd_computer}}</pre>
+            <button type="button" class="btn btn-xs absolute top-2 right-2" data-neo-copy="cmd-computer">Copy</button>
+          </div>
+          <p class="text-xs text-base-content/60">Replace &lt;new IP&gt;, and the key path if yours is elsewhere. It asks before it erases the disk.</p>
+        </section>
+
+        <input type="radio" name="way" class="tab" aria-label="From a NixOS machine" />
+        <section class="tab-content bg-base-100 border-base-300 p-4 sm:p-5 text-sm space-y-3">
+          <p class="text-base-content/75">The new machine restores itself. Use this when you can start it from a USB stick or the hoster's ISO console.</p>
+          <h3 class="font-semibold">You need, in addition</h3>
+          <ul class="space-y-1.5 text-base-content/80">
+            {{#> need}}The new machine started from the <a class="link" href="https://nixos.org/download/#nixos-iso" target="_blank" rel="noopener">NixOS installer</a> (or running NixOS), with internet, as root (<code class="font-mono text-xs">sudo -i</code>).{{/need}}
+            {{#> need}}Your admin key on it as <code class="font-mono text-xs">/root/admin_key</code>: copy it with <code class="font-mono text-xs">scp</code>, or paste it in the console. An SSH agent is not enough.{{/need}}
+            {{#if zfs}}
+              {{#> need}}The config repo of {{client.name}}.{{#if git_remote}} Its remote: <code class="font-mono text-xs break-all">{{git_remote}}</code>{{/if}}{{/need}}
+            {{/if}}
+          </ul>
+          <h3 class="font-semibold">Run on the new machine</h3>
+          <div class="relative">
+            <pre id="cmd-nixos" class="bg-base-200 rounded-box p-3 pr-16 text-xs font-mono whitespace-pre-wrap break-all">{{cmd_nixos}}</pre>
+            <button type="button" class="btn btn-xs absolute top-2 right-2" data-neo-copy="cmd-nixos">Copy</button>
+          </div>
+          <p class="text-xs text-base-content/60">It asks before it erases the disk, and deletes the key file when it is done.</p>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
