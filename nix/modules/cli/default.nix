@@ -172,7 +172,7 @@
         --set NEO_PACKAGE $out \
         --suffix PATH : ${pkgs.lib.makeBinPath restoreTools}
       # Tab completion under share/: NixOS (systemPackages), nix profile,
-      # home-manager and the dev shell (XDG_DATA_DIRS) pick it up.
+      # home-manager and the dev shell (XDG_DATA_DIRS, FPATH for zsh) pick it up.
       installShellCompletion --cmd neo \
         --bash <(${unwrapped}/bin/neo completions bash) \
         --zsh <(${unwrapped}/bin/neo completions zsh) \

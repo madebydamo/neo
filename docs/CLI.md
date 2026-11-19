@@ -15,7 +15,7 @@ neo --help
 Tab completes subcommands, flags and fixed choices (for example `neo activate --mode <Tab>`). The `neo` package installs the scripts for bash, zsh and fish under `share/`, so it works with no setup:
 
 - **On a Neo server**: bash, out of the box. zsh and fish load it once you turn that shell on in NixOS.
-- **In the dev shell** (`nix develop`): bash finds it through `XDG_DATA_DIRS`. The completions come from the flake build of `neo`, so after a CLI change they update when you enter the shell again.
+- **In the dev shell** (`nix develop`): bash and fish find it through `XDG_DATA_DIRS`, zsh (`nix develop --command zsh`) through `FPATH`. The completions come from the flake build of `neo`, so after a CLI change they update when you enter the shell again.
 - **On any other machine** that installs the package (`nix profile install github:madebydamo/neo#neo`, `environment.systemPackages`, home-manager `home.packages`): the same, if your shell's completion system is on.
 
 For a `neo` binary you installed another way, load the script yourself, for example in `~/.bashrc`:
