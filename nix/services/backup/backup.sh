@@ -194,10 +194,15 @@ backup_zfs() {
 #                    ssh-ed25519 key (re-encrypted on every run, so key changes
 #                    in System → SSH apply at the next backup)
 #   restic-<UTC>/    the restic repository the data key opens
+#   neo-backup.next.age  only during a key rotation: the new key, until the
+#                    full backup with it is done and it replaces neo-backup.age
 # Decrypted: lines version=1, format=restic, repository=restic-<UTC>,
-# password=<random>. Rotation makes a new key and repository, and removes the
-# old one only after the new header is in place.
+# password=<random>. A header goes up right after `restic init`, before the
+# upload, so a run that breaks off resumes in the same repository with the
+# same key (restic keeps what was already uploaded). Rotation makes a new key
+# and repository, and removes the old one only after the new header is in place.
 HEADER=neo-backup.age
+NEXT_HEADER=neo-backup.next.age
 run_dir=${RUNTIME_DIRECTORY:-/run/backup}
 
 # The backup folder, as sftp and restic see it ("." = the SSH user's home).
@@ -237,37 +242,58 @@ ensure_enc_dir() {
   printf '%s' "$cmds" | sftp_batch >/dev/null || die "cannot reach $NEO_SSH_DEST over SFTP"
 }
 
-# Download the header to $1; false when there is none.
+# Download header $2 (default $HEADER) to $1; false when there is none.
 fetch_header() {
-  local out=$1 d
+  local out=$1 name=${2:-$HEADER} d
   d=$(enc_dir)
   rm -f "$out"
   if [ "$NEO_TARGET" = disk ]; then
-    [ -f "$d/$HEADER" ] || return 1
-    cp "$d/$HEADER" "$out"
+    [ -f "$d/$name" ] || return 1
+    cp "$d/$name" "$out"
   else
-    printf -- '-get "%s/%s" "%s"\n' "$d" "$HEADER" "$out" | sftp_batch >/dev/null 2>&1 ||
+    printf -- '-get "%s/%s" "%s"\n' "$d" "$name" "$out" | sftp_batch >/dev/null 2>&1 ||
       die "cannot reach $NEO_SSH_DEST over SFTP"
     [ -s "$out" ] || return 1
   fi
 }
 
-# Upload $1 as the header: written next to it, then renamed over it.
+# Upload $1 as header $2 (default $HEADER): written next to it, then renamed over it.
 put_header() {
-  local file=$1 d
+  local file=$1 name=${2:-$HEADER} d
   d=$(enc_dir)
   if [ "$NEO_TARGET" = disk ]; then
-    cp "$file" "$d/$HEADER.tmp"
-    sync "$d/$HEADER.tmp"
-    mv -f "$d/$HEADER.tmp" "$d/$HEADER"
+    cp "$file" "$d/$name.tmp"
+    sync "$d/$name.tmp"
+    mv -f "$d/$name.tmp" "$d/$name"
     return
   fi
   printf -- '-rm "%s/%s.tmp"\nput "%s" "%s/%s.tmp"\nrename "%s/%s.tmp" "%s/%s"\n' \
-    "$d" "$HEADER" "$file" "$d" "$HEADER" "$d" "$HEADER" "$d" "$HEADER" | sftp_batch >/dev/null 2>&1 ||
+    "$d" "$name" "$file" "$d" "$name" "$d" "$name" "$d" "$name" | sftp_batch >/dev/null 2>&1 ||
     # Servers without posix-rename refuse to rename over a file.
     printf -- 'rm "%s/%s"\nrename "%s/%s.tmp" "%s/%s"\n' \
-      "$d" "$HEADER" "$d" "$HEADER" "$d" "$HEADER" | sftp_batch >/dev/null ||
-    die "cannot write $d/$HEADER at $NEO_SSH_DEST"
+      "$d" "$name" "$d" "$name" "$d" "$name" | sftp_batch >/dev/null ||
+    die "cannot write $d/$name at $NEO_SSH_DEST"
+}
+
+# Delete header $1 if it is there.
+remove_header() {
+  local d
+  d=$(enc_dir)
+  if [ "$NEO_TARGET" = disk ]; then
+    rm -f "$d/$1"
+  else
+    printf -- '-rm "%s/%s"\n' "$d" "$1" | sftp_batch >/dev/null 2>&1 || true
+  fi
+}
+
+# Decrypt downloaded header $1 (named $2 at the destination) with the host key
+# and set repo and the password file; false when the host key cannot open it.
+open_header() {
+  age -d -i "$NEO_HOST_KEY" -o "$run_dir/header" "$1" 2>/dev/null || return 1
+  repo=$(sed -n 's/^repository=//p' "$run_dir/header")
+  sed -n 's/^password=//p' "$run_dir/header" | tr -d '\n' >"$run_dir/password"
+  rm -f "$run_dir/header"
+  case "$repo" in restic-*) ;; *) die "$2 names no repository" ;; esac
 }
 
 # The repository folders at the destination.
@@ -317,6 +343,20 @@ new_key() {
   head -c 32 /dev/urandom | base64 -w0 >"$run_dir/password"
 }
 
+# Add the packs of a broken-off upload to the index ($1: why, for the log).
+index_leftovers() {
+  log "$1: adding what it uploaded to the index (restic repair index)"
+  restic_cmd repair index >>"$NEO_LOG" 2>&1 ||
+    log "restic repair index failed (see $NEO_LOG): its uploads are sent again"
+}
+
+init_repo() {
+  restic_cmd init >>"$NEO_LOG" 2>&1 || {
+    tail -n 20 "$NEO_LOG" >&2
+    die "restic init of $repo failed"
+  }
+}
+
 write_header() {
   local out=$1
   recipients >"$run_dir/recipients"
@@ -336,30 +376,32 @@ backup_encrypted() {
 
   repo=""
   if fetch_header "$run_dir/header.age"; then
-    age -d -i "$NEO_HOST_KEY" -o "$run_dir/header" "$run_dir/header.age" 2>/dev/null ||
+    open_header "$run_dir/header.age" "$HEADER" ||
       die "$(enc_dir)/$HEADER at the destination is not encrypted for this server's key: it belongs to another server or an old key. Pick another Backup folder, or delete that folder's content for a fresh backup."
-    repo=$(sed -n 's/^repository=//p' "$run_dir/header")
-    sed -n 's/^password=//p' "$run_dir/header" | tr -d '\n' >"$run_dir/password"
-    rm -f "$run_dir/header"
-    case "$repo" in restic-*) ;; *) die "$HEADER names no repository" ;; esac
   fi
 
-  local fresh=0
   if [ -z "$repo" ]; then
     log "no $HEADER at the destination: new encryption key"
     new_key
-    fresh=1
+    init_repo
+    # Up before the upload: a first run that breaks off resumes in this
+    # repository. Until its first snapshot, a restore says "no backup yet".
+    write_header "$run_dir/header.new"
+    put_header "$run_dir/header.new"
   elif [ "${NEO_ROTATE:-false}" = true ]; then
     old=$repo
-    log "rotating the encryption key: new repository, full backup, then $old is removed"
-    new_key
-    fresh=1
-  fi
-  if [ "$fresh" = 1 ]; then
-    restic_cmd init >>"$NEO_LOG" 2>&1 || {
-      tail -n 20 "$NEO_LOG" >&2
-      die "restic init of $repo failed"
-    }
+    # An interrupted rotation left its key in the pending header: go on with
+    # that repository. The real header keeps opening the old, complete backup.
+    if fetch_header "$run_dir/next.age" "$NEXT_HEADER" &&
+      open_header "$run_dir/next.age" "$NEXT_HEADER" && [ "$repo" != "$old" ]; then
+      log "resuming the key rotation in $repo, then $old is removed"
+    else
+      log "rotating the encryption key: new repository, full backup, then $old is removed"
+      new_key
+      init_repo
+      write_header "$run_dir/header.new"
+      put_header "$run_dir/header.new" "$NEXT_HEADER"
+    fi
   fi
   restic_cmd unlock >/dev/null 2>&1 || true
 
@@ -374,24 +416,48 @@ backup_encrypted() {
   done <<<"${NEO_EXCLUDES:-}"
 
   log "backing up $NEO_SOURCE_DIR to $(restic_repo "$repo") (encrypted)"
-  (cd "$src" && restic_cmd "${args[@]}" .) >"$NEO_LOG" 2>&1 || rc=$?
+  : >"$NEO_LOG"
+  # restic writes its index only now and then: packs a broken-off run uploaded
+  # after that are in the repository but unknown, and would be sent again.
+  # repair index adds them, so the next attempt sends only what is missing.
+  local marker="$state_dir/encrypted-$NEO_NAME.incomplete"
+  mkdir -p "$state_dir"
+  [ ! -e "$marker" ] || index_leftovers "the last backup here broke off"
+  touch "$marker"
+  # A dropped connection (exit 1, or 11 for a lock) is tried again.
+  local attempt=1 attempts=${NEO_ATTEMPTS:-3}
+  while :; do
+    rc=0
+    (cd "$src" && restic_cmd "${args[@]}" .) >>"$NEO_LOG" 2>&1 || rc=$?
+    case "$rc" in 0 | 3) break ;; 1 | 11) ;; *) attempt=$attempts ;; esac
+    if [ "$attempt" -ge "$attempts" ]; then
+      tail -n 40 "$NEO_LOG" >&2
+      die "restic backup failed, see $NEO_LOG"
+    fi
+    log "restic backup broke off (exit $rc, attempt $attempt of $attempts): trying again in ${NEO_RETRY_WAIT:-60} s"
+    sleep "${NEO_RETRY_WAIT:-60}"
+    restic_cmd unlock >>"$NEO_LOG" 2>&1 || true
+    index_leftovers "attempt $attempt broke off"
+    attempt=$((attempt + 1))
+  done
   # 3: some files could not be read; the snapshot exists without them.
-  if [ "$rc" = 3 ]; then
-    log "some files could not be read (see $NEO_LOG)"
-  elif [ "$rc" != 0 ]; then
-    tail -n 40 "$NEO_LOG" >&2
-    die "restic backup failed, see $NEO_LOG"
-  fi
+  [ "$rc" != 3 ] || log "some files could not be read (see $NEO_LOG)"
   tail -n 12 "$NEO_LOG"
 
-  # The header goes up after the first snapshot: a header always opens a backup.
+  # Again, encrypted to the current recipients (System → SSH changes apply
+  # now). After a rotation this switches to the new key.
+  rm -f "$marker"
   write_header "$run_dir/header.new"
   put_header "$run_dir/header.new"
+  # A pending rotation is done, or (after a normal run) abandoned: its
+  # repository goes below.
+  remove_header "$NEXT_HEADER"
 
   restic_cmd forget --tag neo --group-by "" --keep-last "$NEO_KEEP" --prune >>"$NEO_LOG" 2>&1 ||
     log "removing old backups failed (see $NEO_LOG); the new one is complete"
 
-  # Old key (rotation) and folders of runs that never got a header.
+  # Old key (rotation), abandoned rotations and leftovers of first runs from
+  # before the header went up at the start.
   local r
   for r in $(list_repos); do
     if [ "$r" != "$repo" ]; then

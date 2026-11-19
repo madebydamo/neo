@@ -27,8 +27,6 @@
         "ProxyCommand=${pkgs.writeShellScript "neo-backup-store-tunnel" ''
           exec ${getExe pkgs.websocat} --binary -E - ${escapeShellArg "wss://${storeAuthority d}/"}
         ''}"
-        "-o"
-        "ServerAliveInterval=30"
         # The store is authenticated by its TLS certificate on first contact.
         "-o"
         "StrictHostKeyChecking=accept-new"
@@ -41,6 +39,9 @@
         concatStringsSep " " (
           ["${pkgs.openssh}/bin/ssh" "-i" (escapeShellArg d.sshKey) "-o" "BatchMode=yes"]
           ++ d.extraOptions
+          # Ride out a network stall of up to 5 minutes (30 s x 10) instead of
+          # dropping a long upload; the store's sshd waits as long.
+          ++ ["-o" "ServerAliveInterval=30" "-o" "ServerAliveCountMax=10"]
           ++ optionals (d.target == "store") (storeOptions d)
         );
 

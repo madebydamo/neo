@@ -76,7 +76,10 @@
         AllowStreamLocalForwarding no
         X11Forwarding no
         PermitTunnel no
+        # Like the clients (backup ServerAlive*): a stall of up to 5 minutes
+        # does not end a long upload.
         ClientAliveInterval 30
+        ClientAliveCountMax 10
         # Every connection comes from the tunnel, so a per-source penalty would
         # lock out all clients.
         PerSourcePenalties no

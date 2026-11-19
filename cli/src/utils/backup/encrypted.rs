@@ -148,7 +148,12 @@ impl<'a> Encrypted<'a> {
                 a.iter()
                     .max_by_key(|s| s["time"].as_str().unwrap_or("").to_string())
             })
-            .with_context(|| format!("{} holds no backup yet", self.key.repository))?;
+            .with_context(|| {
+                format!(
+                    "{} holds no backup yet (the first backup to this place has not finished)",
+                    self.key.repository
+                )
+            })?;
         let time = snap["time"].as_str().unwrap_or("?");
         let time = time.split('.').next().unwrap_or(time).replace('T', " ");
         let size = snap["summary"]["total_bytes_processed"]
@@ -161,6 +166,9 @@ impl<'a> Encrypted<'a> {
     /// Restore the newest snapshot into `target`, leaving out `exclude`
     /// (relative paths), or only `include`.
     pub(super) fn restore(&self, target: &Path, exclude: &[&str], include: &[&str]) -> Result<()> {
+        // The header goes up before the first upload, so the repository of an
+        // interrupted first run may hold no snapshot yet.
+        self.latest()?;
         let mut c = self.restic()?;
         c.args(["restore", "latest", "--tag", "neo", "--target"])
             .arg(target);
@@ -176,6 +184,7 @@ impl<'a> Encrypted<'a> {
     /// Folders of the newest snapshot that look like a config repo
     /// (settings.toml next to .git), shortest first.
     pub(super) fn config_repos(&self) -> Result<Vec<String>> {
+        self.latest()?;
         let text = stdout_checked(
             self.restic()?.args(["ls", "latest", "--tag", "neo"]),
             "restic ls",

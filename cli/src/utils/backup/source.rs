@@ -265,6 +265,8 @@ fn store_location(url: &str, client: &str) -> Result<Location> {
             format!("ProxyCommand=websocat --binary -E - wss://{authority}/"),
             "-o".into(),
             "ServerAliveInterval=30".into(),
+            "-o".into(),
+            "ServerAliveCountMax=10".into(),
         ],
     })
 }

@@ -108,6 +108,7 @@ At the destination, in the backup folder (`remotePath`):
 ```
 neo-backup.age        header
 restic-<UTC>/         the repository it names
+neo-backup.next.age   only while a key rotation runs: the new key (see Key rotation)
 ```
 
 There is no key in the settings and none to escrow: the host key opens the header on every run,
@@ -119,19 +120,31 @@ decrypts the header into its private `RuntimeDirectory`.
 1. Fetch the header (sftp `get`, or a plain copy on a disk) and decrypt it with the host key.
    A header the host key can't open is refused ("belongs to another server or an old key"), it is
    never overwritten.
-2. No header: new data key, new repository `restic-<UTC>`, `restic init`.
+2. No header: new data key, new repository `restic-<UTC>`, `restic init`, and the header goes up
+   at once, before any upload. A first run that breaks off (a full upload can take hours) is
+   resumed by the next run in the same repository with the same key. restic writes its index
+   only now and then, so the packs uploaded after the last index save are unknown to it: a
+   marker `/var/lib/neo-backup/encrypted-<name>.incomplete` (set before the upload, removed after
+   it) makes the next run start with `restic repair index`, which adds them, and only the rest
+   is sent. Until the first snapshot exists, a
+   restore of this place says "holds no backup yet" and tries the next place.
 3. `restic backup .` from the ZFS snapshot folder (or the live folder without ZFS), host
    `core.hostname`, tag `neo`, `--group-by host,tags` (the snapshot path changes every run, so
    the parent is found by tag). Paths in the snapshot are relative to `/var/neo`.
    `excludedDirs` as with rsync: a path is anchored at the folder, a plain name matches anywhere.
-   Exit code 3 (some files unreadable) is logged, not fatal.
+   Exit code 3 (some files unreadable) is logged, not fatal. Exit 1 (e.g. the connection
+   dropped) or 11 (lock) is tried again after 60 s, three attempts in all, with `restic unlock`
+   and `restic repair index` in between; each attempt uploads only what is still missing. SSH keep-alives on both sides
+   (client `ServerAliveInterval=30` / `ServerAliveCountMax=10`, store sshd `ClientAlive*` the
+   same) let a stall of up to 5 minutes pass without ending the session.
 4. Write the header again, encrypted to the **current** recipients, and upload it as
-   `neo-backup.age.tmp` + rename (sftp posix-rename; plain `rm` + rename as a fallback). The
-   header goes up only after a snapshot exists, so a header always opens a backup. Adding or
-   removing a key in System → SSH applies at the next run.
+   `neo-backup.age.tmp` + rename (sftp posix-rename; plain `rm` + rename as a fallback). Adding
+   or removing a key in System → SSH applies at the next run. A leftover
+   `neo-backup.next.age` (abandoned rotation) is deleted.
 5. `restic forget --tag neo --keep-last <keep> --prune`.
 6. Every other `restic-*` folder in the backup folder is removed: the old repository after a
-   rotation, and repositories of first runs that failed before their header went up. Over SSH
+   rotation, the repository of an abandoned rotation, and leftovers of first runs from before
+   the header went up at the start. Over SSH
    this is `rm -rf` through the shell; without shell access (restricted accounts) it is logged
    to delete by hand.
 
@@ -139,10 +152,13 @@ decrypts the header into its private `RuntimeDirectory`.
 
 Starts `backup-rotate-key.service` (the same script, `NEO_ROTATE=true`; only defined when a
 destination is encrypted, and kept out of `systemdUnits`, so the service target never starts it).
-For every encrypted destination (the others are skipped): new data key, new repository, **full**
-backup into it, new header, then the old repository is deleted. Each destination has its own data
-key. Until the new header is up the old backup stays complete and usable; an interrupted
-rotation leaves a stray `restic-*` folder that the next successful run removes.
+For every encrypted destination (the others are skipped): new data key, new repository, its key
+at once in the pending header `neo-backup.next.age`, **full** backup into it, new header, then
+the pending header and the old repository are deleted. Each destination has its own data key.
+Until the new header is up the old backup stays complete and usable. An interrupted rotation is
+resumed by the next rotation from the pending header (same repository, only the rest is
+uploaded); a normal nightly run instead backs up into the old repository and removes the
+abandoned one with its pending header.
 
 Rotation replaces the repository instead of `restic key passwd` on purpose: a restic password
 only wraps the repository's master key, so someone who once had the data key and a copy of the
