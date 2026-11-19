@@ -42,6 +42,10 @@ NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) + Rust *
 
 Naming: options camelCase under `neo.services.*`; plain-string descriptions; volumes via `config.neo.core.volumes.*`.
 
+### Defaults from other settings
+
+A default that is another setting, or computed from it (server name, domain, the app's own subdomain), is a `lib.neo.mkInheritedOption { from = "core.hostname"; default = …; }`, never `nullOr` + "Empty uses …" + a null check in `default.nix`. An empty value that means "off" or "the program decides" stays `nullOr` with `ui.emptyMeans`. Check `inherited-defaults` (sentinel server name and domain). Design: [docs/design/access-and-defaults.md](docs/design/access-and-defaults.md).
+
 ### Option texts
 
 Read by non-technical users in the web UI. Rules and examples: [docs/design/descriptions-and-guides.md](docs/design/descriptions-and-guides.md).
@@ -84,6 +88,8 @@ Design (storage inline → `secrets.yaml` → `secrets.sops.yaml`, `neo secrets 
 
 - **SWAG trap:** `include /config/nginx/proxy.conf` already sets Upgrade/Connection and proxy timeouts — **do not re-set** them (426 WebSockets / `proxy_*_timeout` duplicate kills all vhosts).
 - **ingress** (`mkReverseProxyOptions`): `local` / `tailscale` / `netbird` / `web`, default all four. Omitting `web` denies that vhost on the shared rathole/PROXY-protocol listener (neo 404 page), not a per-app rathole port. Classification: `netbird` (`services.netbird.networkRange`) wins over LAN and Tailscale; the PROXY-protocol port and public IPv6 (SWAG on the IPv6-only `swag-ipv6` network) are `web` ([netbird.md](docs/design/netbird.md)).
+- **Default access** (`neo.access`, nix/modules/core/access.nix): every app's `ingress`, `auth.enabled` and `sso` (`lib.neo.mkSsoOption`) follow `defaultIngress` / `defaultLogin` / `defaultSso` until set for the app; pass `ingress` / `auth.enabled` to `mkReverseProxyOptions` only when the app must not follow. Declare the app's own accounts with `mkServiceMeta { ownLogin = "…"; }`. The Access page (Settings → Access) edits all of it.
+- **Open ports:** every firewall port and published Docker port (not on loopback) needs `neo.exposure.ports.<id> = { port; protocol; label; service; login; open; }` in the module that opens it (check `exposure-complete`).
 - **tinyauth** is the default edge auth. Health probes need `auth.publicPaths` (e.g. `^/api/v1/info/status$`); the UI stays 302 → tinyauth.
 - **OIDC:** an app that can log in with OIDC registers itself inside its `mkIf` as `neo.services.tinyauth.oidcClients.<id> = { name; redirectUris; }` and reads `.clientId` / `.clientSecret` (derived from a machine-generated key, no setting; pass it through `containerEnv`) and `tinyauth.oidcIssuer` (example: `nix/services/vaultwarden`, option `sso`). Users from OAuth providers carry their groups in the `groups` claim.
 - **Docker networks** ([docs/design/network-isolation.md](docs/design/network-isolation.md)):
@@ -164,6 +170,7 @@ Rank bands for the top level of `neo.services.<name>` (siblings only):
 | 0 | `enabled` |
 | 10–89 | service-specific |
 | 100 / 105 / 120 / 130 | `subdomain` / `ingress` / `auth` / `customDomains` (`mkReverseProxyOptions`) |
+| 125 | `sso` (`mkSsoOption`; the app's SSO extras 126–129) |
 | 110 | `vpn` (`mkVpnOptions`) |
 | 200 | `skill` (`mkSkillOptions`) |
 | 300 | `containers` (`mkContainerDefinitions`) |

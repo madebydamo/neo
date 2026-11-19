@@ -62,7 +62,7 @@
                       class="btn btn-sm {{#if on}}btn-primary{{else}}btn-outline{{/if}}"
                       aria-pressed="{{#if on}}true{{else}}false{{/if}}"
                       title="{{#if inactive}}{{label}} is not set up on this server{{else}}{{#if on}}Stop{{else}}Allow{{/if}} {{label}} for apps that follow the default{{/if}}">
-                {{label}}{{#if inactive}}<span class="text-[10px] opacity-60 font-normal">off</span>{{/if}}
+                {{label}}{{#if inactive}}<span class="text-[10px] opacity-60 font-normal">not set up</span>{{/if}}
               </button>
             {{/toggleForm}}
           {{/each}}

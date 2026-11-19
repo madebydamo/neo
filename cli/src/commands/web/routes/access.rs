@@ -514,7 +514,6 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
                     inactive: !lp.enabled,
                     path: format!("{base}.sso"),
                     value: json!(!sso_on).to_string(),
-                    ..Default::default()
                 }),
                 sso_state: Setting {
                     changed: set_sso.is_some(),
@@ -540,7 +539,7 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
             }
         })
         .collect();
-    apps.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    apps.sort_by_key(|a| a.title.to_lowercase());
 
     let login_needed = apps.iter().any(|a| a.login.as_ref().is_some_and(|t| t.on));
     if login_needed && !lp.enabled {
