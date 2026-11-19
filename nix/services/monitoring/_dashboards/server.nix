@@ -2,6 +2,30 @@
 # _grafana.nix with the panel helpers (`g`).
 {g}: let
   inherit (g) bargauge dashboard fsFilter hostVar logs lq pos pq pqInstant stat table thresholdsGreenRed timeseries;
+
+  # Memory breakdown. sum() drops the labels so that the ARC term can fall
+  # back to vector(0) on a host without ZFS. The ARC is not in Cached and not
+  # in MemAvailable, so "used" alone counted it as app memory.
+  mem = field: ''sum(node_memory_${field}_bytes{host="$host"})'';
+  arc = ''(sum(node_zfs_arc_size{host="$host"}) or vector(0))'';
+  # Page cache plus reclaimable kernel caches; Shmem (tmpfs, shared memory)
+  # sits in Cached but cannot be dropped, so it counts as apps.
+  memCache = "(${mem "Buffers"} + ${mem "Cached"} + ${mem "SReclaimable"} - ${mem "Shmem"})";
+  memColor = name: color: {
+    matcher = {
+      id = "byName";
+      options = name;
+    };
+    properties = [
+      {
+        id = "color";
+        value = {
+          mode = "fixed";
+          fixedColor = color;
+        };
+      }
+    ];
+  };
 in
   dashboard {
     uid = "neo-server";
@@ -93,13 +117,60 @@ in
       })
       (timeseries {
         title = "Memory";
+        description = "Apps: what programs and the system hold. ZFS cache: recently read disk data, given back when apps need memory. File cache: the same for other files. Free: not used at all.";
         gridPos = pos 12 4 12 8;
         targets = [
-          (pq ''node_memory_MemTotal_bytes{host="$host"} - node_memory_MemAvailable_bytes{host="$host"}'' "used")
-          (pq ''node_memory_MemTotal_bytes{host="$host"}'' "total")
+          (pq "clamp_min(${mem "MemTotal"} - ${mem "MemFree"} - ${memCache} - ${arc}, 0)" "Apps")
+          (pq arc "ZFS cache (ARC)")
+          (pq memCache "File cache")
+          (pq (mem "MemFree") "Free")
+          (pq (mem "MemTotal") "Total")
         ];
         unit = "bytes";
         min = 0;
+        custom = {
+          fillOpacity = 60;
+          stacking = {
+            mode = "normal";
+            group = "A";
+          };
+        };
+        overrides = [
+          (memColor "Apps" "orange")
+          (memColor "ZFS cache (ARC)" "purple")
+          (memColor "File cache" "blue")
+          (memColor "Free" "green")
+          {
+            matcher = {
+              id = "byName";
+              options = "Total";
+            };
+            properties = [
+              {
+                id = "custom.stacking";
+                value.mode = "none";
+              }
+              {
+                id = "custom.fillOpacity";
+                value = 0;
+              }
+              {
+                id = "custom.lineStyle";
+                value = {
+                  fill = "dash";
+                  dash = [10 10];
+                };
+              }
+              {
+                id = "color";
+                value = {
+                  mode = "fixed";
+                  fixedColor = "text";
+                };
+              }
+            ];
+          }
+        ];
       })
       (bargauge {
         title = "Disks";
