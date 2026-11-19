@@ -44,6 +44,11 @@
             };
             default = {};
           };
+          # nix/modules/core/exposure.nix (the port descriptions only).
+          options.neo.exposure.ports = lib.mkOption {
+            type = lib.types.attrsOf lib.types.anything;
+            default = {};
+          };
           options.neo.services.swag.domain = lib.mkOption {
             type = lib.types.nullOr lib.types.str;
             default = null;
