@@ -153,6 +153,13 @@ enum Commands {
         #[command(subcommand)]
         action: commands::security::SecurityAction,
     },
+    /// Print the tab completion script for a shell. The Nix package installs
+    /// them already; use this for a binary you installed another way:
+    /// `source <(neo completions bash)`.
+    Completions {
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
     /// The backup (services.backup): encryption key and reading it from elsewhere.
     Backup {
         #[command(subcommand)]
@@ -234,6 +241,10 @@ fn preserved_env() -> Vec<String> {
     out
 }
 
+fn print_completions(shell: clap_complete::Shell, out: &mut dyn std::io::Write) {
+    clap_complete::generate(shell, &mut Cli::command(), "neo", out);
+}
+
 fn main() {
     let cli = Cli::parse();
     // Rust ignores SIGPIPE, so `println!` panics once a pipe reader such as
@@ -266,6 +277,11 @@ fn run(cli: Cli) -> Result<()> {
     let command = match command {
         Commands::Security { action } => return commands::security::security(action),
         Commands::DockerLedger { action } => return commands::docker_ledger::docker_ledger(action),
+        // Runs in the Nix build sandbox and as any user on a server.
+        Commands::Completions { shell } => {
+            print_completions(shell, &mut std::io::stdout());
+            return Ok(());
+        }
         other => other,
     };
 
@@ -404,6 +420,10 @@ fn run(cli: Cli) -> Result<()> {
         // Dispatched before the settings are loaded (see above).
         Commands::Security { action } => commands::security::security(action),
         Commands::DockerLedger { action } => commands::docker_ledger::docker_ledger(action),
+        Commands::Completions { shell } => {
+            print_completions(shell, &mut std::io::stdout());
+            Ok(())
+        }
         Commands::Backup { action } => match action {
             BackupAction::RotateKey => commands::backup::rotate_key(&doc, dry_run, sudo_cmd),
             BackupAction::ExtractConfig {
@@ -493,7 +513,8 @@ fn command_lock(command: &Commands) -> Option<(LockSpec, OpInfo, Option<Operatio
         | Commands::Settings { .. }
         | Commands::Backup { .. }
         | Commands::Security { .. }
-        | Commands::DockerLedger { .. } => None,
+        | Commands::DockerLedger { .. }
+        | Commands::Completions { .. } => None,
     }
 }
 
@@ -569,6 +590,19 @@ mod tests {
             .unwrap_or_else(|e| panic!("{args:?}: {e}"))
             .command
             .unwrap_or_else(|| panic!("{args:?}: no subcommand"))
+    }
+
+    #[test]
+    fn completions_cover_subcommands() {
+        use clap_complete::Shell;
+        for shell in [Shell::Bash, Shell::Zsh, Shell::Fish] {
+            let mut out = Vec::new();
+            print_completions(shell, &mut out);
+            let script = String::from_utf8(out).expect("utf-8 script");
+            for word in ["neo", "generation", "activate", "dry-run"] {
+                assert!(script.contains(word), "{shell}: no {word}");
+            }
+        }
     }
 
     #[test]

@@ -155,7 +155,7 @@
     restoreTools = with pkgs; [git rsync openssh efibootmgr gnutar nixos-anywhere restic age websocat mkpasswd curl];
   in
     pkgs.runCommand "neo-0.1.0" {
-      nativeBuildInputs = [pkgs.makeWrapper];
+      nativeBuildInputs = [pkgs.makeWrapper pkgs.installShellFiles];
       passthru = {inherit unwrapped cargoSrc;};
       meta = {
         description = "Neo CLI - Rust implementation for homeserver bootstrap";
@@ -171,6 +171,12 @@
         --set-default SOPS_BINARY_PATH ${pkgs.sops}/bin/sops \
         --set NEO_PACKAGE $out \
         --suffix PATH : ${pkgs.lib.makeBinPath restoreTools}
+      # Tab completion under share/: NixOS (systemPackages), nix profile,
+      # home-manager and the dev shell (XDG_DATA_DIRS) pick it up.
+      installShellCompletion --cmd neo \
+        --bash <(${unwrapped}/bin/neo completions bash) \
+        --zsh <(${unwrapped}/bin/neo completions zsh) \
+        --fish <(${unwrapped}/bin/neo completions fish)
     '';
   cfgPackage = self.nixosConfigurations.homeserver.config.neo;
 in {

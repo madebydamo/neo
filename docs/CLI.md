@@ -10,6 +10,22 @@ nix run github:madebydamo/neo#neo -- --help
 neo --help
 ```
 
+## Tab completion
+
+Tab completes subcommands, flags and fixed choices (for example `neo activate --mode <Tab>`). The `neo` package installs the scripts for bash, zsh and fish under `share/`, so it works with no setup:
+
+- **On a Neo server**: bash, out of the box. zsh and fish load it once you turn that shell on in NixOS.
+- **In the dev shell** (`nix develop`): bash finds it through `XDG_DATA_DIRS`. The completions come from the flake build of `neo`, so after a CLI change they update when you enter the shell again.
+- **On any other machine** that installs the package (`nix profile install github:madebydamo/neo#neo`, `environment.systemPackages`, home-manager `home.packages`): the same, if your shell's completion system is on.
+
+For a `neo` binary you installed another way, load the script yourself, for example in `~/.bashrc`:
+
+```bash
+source <(neo completions bash)
+# zsh:  source <(neo completions zsh)
+# fish: neo completions fish | source
+```
+
 ## Global flags
 
 | Flag / env | Purpose |
@@ -70,6 +86,7 @@ SSH to a finished host as **`homeserver@…`** for `neo`. **`admin@…`** uses t
 | `neo security triage` | Review the last scan again without scanning (`--all` also re-reviews findings that have an AI verdict) |
 | `neo security show` | Print the last report (`--all` includes harmless findings) |
 | `neo security accept <id>` / `reset <id>` | Mark a finding as not relevant here (`--reason`), kept across scans and later versions of the package; or undo that / have the AI review it again at the next check. Same as the buttons on the report page (`decisions.json`) |
+| `neo completions bash\|zsh\|fish\|elvish\|powershell` | Print the tab completion script for that shell (see [Tab completion](#tab-completion)) |
 | `neo backup rotate-key` | Encrypted backup, on the server: every encrypted destination gets a new key and a new full backup, then the old one is deleted (runs as `backup-rotate-key.service`) |
 
 **Do not** `activate` a remote machine's config from your laptop. Use [nixos-anywhere](INSTALL.md#path-b--install-from-your-laptop-nixos-anywhere) for the first install, then activate **on** the server (or use Activate in the web UI there).
