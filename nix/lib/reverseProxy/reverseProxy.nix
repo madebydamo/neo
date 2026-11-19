@@ -18,6 +18,75 @@ in {
       # the SWAG domain. Null until both are set. Ignores customDomains.
       inherit publicHost;
 
+      # Whether a custom domain of a service with login answers with a redirect
+      # to <subdomain>.<domain> instead of serving the app. Tinyauth only works
+      # on the SWAG domain and below it (its cookie and its own address are
+      # there); on another domain the auth subrequest fails (nginx 500).
+      customDomainRedirects = {
+        domain,
+        customDomain,
+        authEnabled,
+      }:
+        authEnabled && customDomain != domain && !(lib.hasSuffix ".${domain}" customDomain);
+
+      # SWAG site conf (site-confs/<customDomain>.conf) for one custom domain:
+      # port 80 goes to HTTPS; HTTPS either redirects to the app's own address
+      # (307 keeps method and body, before any auth) or proxies to its vhost.
+      mkCustomDomainSiteConf = {
+        domain,
+        subdomain,
+        customDomain,
+        redirect,
+      }: let
+        host = "${subdomain}.${domain}";
+        location =
+          if redirect
+          then ''
+            # Login only works on ${domain}: send the browser to the app's own address.
+            location / {
+              return 307 https://${host}$request_uri;
+            }
+          ''
+          else ''
+            location / {
+              proxy_pass https://127.0.0.1:443;
+
+              proxy_set_header Host ${host};
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+              proxy_set_header X-Forwarded-Host $host;
+
+              proxy_ssl_server_name on;
+              proxy_ssl_name ${host};
+              proxy_ssl_verify off;
+
+              proxy_http_version 1.1;
+              proxy_set_header Connection "";
+            }
+          '';
+      in
+        ''
+          server {
+            listen 80;
+            listen [::]:80;
+            server_name ${customDomain};
+
+            return 301 https://$server_name$request_uri;
+          }
+
+          server {
+            include /config/nginx/listen-https.conf;
+            http2 on;
+            server_name ${customDomain};
+
+            include /config/nginx/ssl.conf;
+            client_max_body_size 0;
+            include /config/nginx/geo-access.conf;
+        ''
+        + lib.concatMapStrings (l: "  ${l}\n") (lib.splitString "\n" (lib.removeSuffix "\n" location))
+        + "}\n";
+
       # The same as an https:// URL, or null.
       publicUrl = config: cfg: let
         host = publicHost config cfg;
@@ -107,8 +176,10 @@ in {
             mkOption {
               type = types.listOf types.str;
               default = customDomains;
-              # Added to SWAG (certificates) and Pi-hole (local DNS).
-              description = "Extra domain names you own that should open this app (e.g. www.example.com). HTTPS is set up automatically.";
+              # Added to SWAG (certificates) and Pi-hole (local DNS). With login on,
+              # names outside the SWAG domain get a 307 to <subdomain>.<domain>
+              # (customDomainRedirects): tinyauth only works on that domain.
+              description = "Extra domain names you own that should open this app (e.g. www.example.com). HTTPS is set up automatically. With Require login on, a name outside your main domain sends visitors on to this app's own address, where they log in.";
             }
             // {
               rank = 130;

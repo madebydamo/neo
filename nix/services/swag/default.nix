@@ -87,47 +87,21 @@
             ''
             + optionalString (jail ? maxretry) "maxretry = ${toString jail.maxretry}\n")
           jailDefs)}'';
+        # A custom domain of an app with login redirects to <subdomain>.<domain>
+        # (lib.neo.customDomainRedirects); the others proxy to the app's vhost.
         customProxyConfScripts = flatten (map (
-          svc:
+          svc: let
+            authEnabled = (svc.auth.enabled or false) && config.neo.services.tinyauth.enabled;
+          in
             map (
               customDomain:
                 lib.neo.mkActivationScriptForFile config {
                   filePath = "${appdataSwag}/nginx/site-confs/${customDomain}.conf";
-                  content = ''
-                    server {
-                      listen 80;
-                      listen [::]:80;
-                      server_name ${customDomain};
-
-                      return 301 https://$server_name$request_uri;
-                    }
-
-                    server {
-                      include /config/nginx/listen-https.conf;
-                      http2 on;
-                      server_name ${customDomain};
-
-                      include /config/nginx/ssl.conf;
-                      client_max_body_size 0;
-                      include /config/nginx/geo-access.conf;
-                      location / {
-                        proxy_pass https://127.0.0.1:443;
-
-                        proxy_set_header Host ${svc.subdomain}.${domain};
-                        proxy_set_header X-Real-IP $remote_addr;
-                        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                        proxy_set_header X-Forwarded-Proto $scheme;
-                        proxy_set_header X-Forwarded-Host $host;
-
-                        proxy_ssl_server_name on;
-                        proxy_ssl_name ${svc.subdomain}.${domain};
-                        proxy_ssl_verify off;
-
-                        proxy_http_version 1.1;
-                        proxy_set_header Connection "";
-                      }
-                    }
-                  '';
+                  content = lib.neo.mkCustomDomainSiteConf {
+                    inherit domain customDomain;
+                    inherit (svc) subdomain;
+                    redirect = lib.neo.customDomainRedirects {inherit domain customDomain authEnabled;};
+                  };
                 }
             ) (svc.customDomains or [])
         ) (attrValues appServices));

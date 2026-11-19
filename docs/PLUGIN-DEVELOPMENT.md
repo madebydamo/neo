@@ -408,7 +408,7 @@ Notes:
 }
 ```
 
-SWAG writes each enabled service's `proxyConf` to `proxy-confs/<subdomain>.subdomain.conf`, gets certificates for the subdomain and `customDomains`, and Pi-hole / split DNS serve the names locally.
+SWAG writes each enabled service's `proxyConf` to `proxy-confs/<subdomain>.subdomain.conf`, gets certificates for the subdomain and `customDomains`, and Pi-hole / split DNS serve the names locally. A custom domain outside the SWAG domain of a service with login on answers with a 307 to `https://<subdomain>.<domain>` (same path) before any auth, because tinyauth only works on the SWAG domain; without login, or below the SWAG domain, it serves the app.
 
 If you need more than one `location`, write the block yourself. Keep the includes:
 
