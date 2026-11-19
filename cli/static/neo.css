@@ -102,6 +102,14 @@
   -webkit-touch-callout: none;
 }
 #sidebar img { -webkit-user-drag: none; }
+/* The rail is 4rem wide: a classic (non-overlay) scrollbar would take a quarter
+   of it and push the icons into a horizontal scrollbar too. It still scrolls by
+   wheel, touch and drag; only the bar is hidden. */
+#sidebar-scroll {
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+#sidebar-scroll::-webkit-scrollbar { display: none; }
 .svc-btn { -webkit-touch-callout: none; }
 
 /* Folder tile: 2x2 preview of the first four services. */
