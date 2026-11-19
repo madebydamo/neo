@@ -35,10 +35,11 @@
                 };
               };
 
-              name = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Name this server has on the dashboards. Empty uses its host name.";
+              name = lib.neo.mkInheritedOption {
+                type = types.str;
+                from = "core.hostname";
+                default = config.neo.core.hostname;
+                description = "Name this server has on the dashboards.";
                 rank = 30;
                 ui = lib.neo.ui.mkUi {label = "Server name";};
               };

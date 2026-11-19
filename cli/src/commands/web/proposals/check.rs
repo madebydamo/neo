@@ -11,8 +11,7 @@ use crate::commands::web::types::{AppConfig, OptionHelper, OptionSchema, OptionT
 use crate::commands::web::util::service_name_ok;
 use crate::utils::secrets_yaml::{self, Backend, Node, Tree};
 
-/// Top-level settings sections (besides services / core) with their own pane.
-const TOP_SECTIONS: &[&str] = &["neo-cli", "disko"];
+use crate::commands::web::util::TOP_SECTIONS;
 
 /// Settings the assistant may not change: they could lock the user out or
 /// rewrite the machine. The user changes them in the UI.

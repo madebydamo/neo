@@ -126,14 +126,18 @@ fn nav_attrs(url: &str) -> String {
     )
 }
 
-/// Web UI URL for an `option:` target (`pihole.localIP`, `core.volumes.appdata`).
+/// Web UI URL for an `option:` target (`pihole.localIP`, `core.volumes.appdata`)
+/// or a settings path (`services.pihole.localIP`, `access.defaultIngress`).
 pub(crate) fn option_url(target: &str) -> String {
+    let target = target.strip_prefix("services.").unwrap_or(target);
     let mut parts = target.splitn(2, '.');
     let root = parts.next().unwrap_or_default();
     let rest = parts.next().unwrap_or_default();
     if root == "core" {
         let section = rest.split('.').next().unwrap_or_default();
         format!("/configuration/core/{section}?focus={rest}")
+    } else if crate::commands::web::util::TOP_SECTIONS.contains(&root) {
+        format!("/configuration/core/{root}?focus={rest}")
     } else {
         format!("/configuration/option/{root}?focus={rest}")
     }

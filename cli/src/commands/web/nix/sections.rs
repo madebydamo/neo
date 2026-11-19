@@ -111,6 +111,12 @@ pub fn label_options(opts: &mut [OptionSchema]) {
                 .unwrap_or_default();
         let labels = o.ui.as_ref().and_then(|u| u.choice_labels.clone());
         attach_choices(&mut o.r#type, labels.as_ref());
+        if let Some(inh) = o.inherits.as_mut() {
+            if inh.label.is_empty() {
+                inh.label = humanize(inh.path.rsplit('.').next().unwrap_or(&inh.path));
+            }
+            inh.url = crate::commands::web::guides::option_url(&inh.path);
+        }
     }
 }
 

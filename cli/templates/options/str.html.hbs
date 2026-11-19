@@ -3,7 +3,7 @@
     <input {{#if secret}}:type="reveal ? 'text' : 'password'" autocomplete="off"{{else}}type="text"{{/if}} class="input input-sm w-full flex-1 font-mono"
            :class="{ 'input-error': !!patternError('{{name}}') }"
            x-model="values['{{name}}']"
-           placeholder="{{defaultDisplay}}"
+           placeholder="{{#if ui.emptyMeans}}{{ui.emptyMeans}}{{else}}{{defaultDisplay}}{{/if}}"
            aria-label="{{label}}"
            :aria-invalid="!!patternError('{{name}}')">
     {{#if secret}}

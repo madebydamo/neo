@@ -55,11 +55,7 @@
                 then ["--exit-node-allow-lan-access"]
                 else []
               )
-              ++ (
-                if cfg.hostname != null
-                then ["--hostname=${cfg.hostname}"]
-                else []
-              )
+              ++ ["--hostname=${cfg.hostname}"]
               ++ (
                 if cfg.loginServer != "https://controlplane.tailscale.com"
                 then ["--login-server=${cfg.loginServer}"]

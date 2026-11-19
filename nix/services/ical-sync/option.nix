@@ -29,10 +29,12 @@
 
               # CalDAV base URL; default is this host's RustiCal
               # (https://rustical.<domain>/caldav).
-              caldavUrl = mkOption {
+              caldavUrl = lib.neo.mkInheritedOption {
                 type = types.str;
+                from = "services.rustical.subdomain";
+                fromLabel = "RustiCal";
                 default = defaultCaldavUrl;
-                description = "Address of the calendar server the calendars are copied into. The default is your RustiCal.";
+                description = "Address of the calendar server the calendars are copied into. It follows your RustiCal.";
                 rank = 10;
                 ui = lib.neo.ui.mkUi {
                   group = lib.neo.ui.groups.advanced;

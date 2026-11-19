@@ -28,7 +28,7 @@
       base = removeSuffix "/" (lib.defaultTo "" cfg.serverUrl);
       tokenSet = cfg.token != null && cfg.token != "";
       hostName =
-        if cfg.name != null && cfg.name != ""
+        if cfg.name != ""
         then cfg.name
         else config.neo.core.hostname;
       swagLogs = "${swag.appdata}/log/nginx";

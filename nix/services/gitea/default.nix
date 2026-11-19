@@ -8,20 +8,9 @@
     with lib; let
       cfg = config.neo.services.gitea;
       appdata = cfg.appdata;
-      rootUrl =
-        if cfg.rootUrl != null && cfg.rootUrl != ""
-        then cfg.rootUrl
-        else if cfg.customDomains != []
-        then "https://${builtins.head cfg.customDomains}"
-        else lib.defaultTo "http://localhost:${toString cfg.port}" (lib.neo.publicUrl config cfg);
-      rootHost = let
-        stripped = lib.removePrefix "https://" (lib.removePrefix "http://" rootUrl);
-      in
-        builtins.head (lib.splitString "/" stripped);
-      sshDomain =
-        if cfg.ssh.domain != null && cfg.ssh.domain != ""
-        then cfg.ssh.domain
-        else rootHost;
+      inherit (cfg) rootUrl;
+      rootHost = builtins.head (lib.splitString "/" (lib.removePrefix "https://" (lib.removePrefix "http://" rootUrl)));
+      sshDomain = cfg.ssh.domain;
       # The rootful gitea/gitea image always runs its bundled OpenSSH (s6) on
       # container :22 with host keys in /data/ssh. Gitea's built-in Go SSH server
       # would also bind :22 and crash ("address already in use"), so keep it off

@@ -39,24 +39,67 @@
 #     # ui = lib.neo.ui.mkUi { choices = "authApps"; };  # optional
 #   };
 # Also valid: `mkOption { ... } // { helper = ...; ui = ...; }` (same as rank).
-{lib, ...}: {
+#
+# Default from another setting (docs/design/access-and-defaults.md):
+#   name = mkInheritedOption {
+#     type = types.str;
+#     from = "core.hostname";
+#     default = config.neo.core.hostname;
+#     description = "Name of this server in Tailscale.";
+#   };
+# A default that is not another setting but is decided later (empty = off,
+# empty = the program decides) stays nullOr with ui.emptyMeans.
+{lib, ...}: let
+  mkOption = {
+    rank ? null,
+    helper ? null,
+    ui ? null,
+    ...
+  } @ args: let
+    o = lib.mkOption (removeAttrs args ["rank" "helper" "ui"]);
+    extra =
+      (lib.optionalAttrs (rank != null) {inherit rank;})
+      // (lib.optionalAttrs (helper != null) {inherit helper;})
+      // (lib.optionalAttrs (ui != null) {inherit ui;});
+  in
+    if extra == {}
+    then o
+    else o // extra;
+in {
   libExtensions.option = {
     neo = {
-      mkOption = {
-        rank ? null,
-        helper ? null,
-        ui ? null,
+      inherit mkOption;
+
+      # An option whose default is another setting (or computed from it), e.g.
+      # a device name that follows the server name. `from` is the source's
+      # settings path ("core.hostname", "access.defaultIngress"); the web UI
+      # shows "From <label>" while the value follows it and "Use <label>" to go
+      # back. `default` is the real value (computed from the source here), so
+      # consumers read the option directly, never null. A key in
+      # settings.toml overrides; removing it follows the source again.
+      # `fromLabel` defaults to the source option's ui.label.
+      # `fromModule = true`: a module sets the value from the source with
+      # mkDefault (for options declared without `config`, like
+      # mkReverseProxyOptions); `default` is then only the fallback and the web
+      # UI reads the source value itself.
+      mkInheritedOption = {
+        from,
+        fromLabel ? null,
+        fromModule ? false,
         ...
-      } @ args: let
-        o = lib.mkOption (removeAttrs args ["rank" "helper" "ui"]);
-        extra =
-          (lib.optionalAttrs (rank != null) {inherit rank;})
-          // (lib.optionalAttrs (helper != null) {inherit helper;})
-          // (lib.optionalAttrs (ui != null) {inherit ui;});
-      in
-        if extra == {}
-        then o
-        else o // extra;
+      } @ args:
+        assert lib.assertMsg (builtins.isString from && from != "")
+        "lib.neo.mkInheritedOption: from must be a settings path such as \"core.hostname\"";
+          (mkOption (
+            {defaultText = "same as ${from}";}
+            // removeAttrs args ["from" "fromLabel" "fromModule"]
+          ))
+          // {
+            inherits =
+              {path = from;}
+              // lib.optionalAttrs (fromLabel != null) {label = fromLabel;}
+              // lib.optionalAttrs fromModule {fromModule = true;};
+          };
 
       # Like lib.mkEnableOption, but the text is the whole description (no
       # "Whether to enable …" prefix): say what the user gets. The first

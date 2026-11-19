@@ -78,8 +78,9 @@
         ui = summarized group.git;
       };
 
-      options.neo.core.git.userEmail = mkOption {
+      options.neo.core.git.userEmail = lib.neo.mkInheritedOption {
         type = types.str;
+        from = "core.hostname";
         default = "neo@${config.neo.core.hostname}";
         description = "Email address shown on changes this server saves with git.";
         rank = 10;
@@ -212,18 +213,26 @@
       options.neo.core.nix.maxJobs = mkOption {
         type = types.nullOr types.int;
         default = null;
-        description = "How many builds may run at once when the server updates itself. Empty uses the default; set 1 with 8 GB of RAM or less.";
+        description = "How many builds may run at once when the server updates itself. Empty lets Nix decide; set 1 with 8 GB of RAM or less.";
         rank = 60;
-        ui = labelled group.advanced "Parallel builds";
+        ui = ui.mkUi {
+          group = group.advanced;
+          label = "Parallel builds";
+          emptyMeans = "Nix decides";
+        };
       };
 
       # Sets nix.settings.cores (cores per Nix build job) when non-null.
       options.neo.core.nix.cores = mkOption {
         type = types.nullOr types.int;
         default = null;
-        description = "How many processor cores each build may use. Empty uses the default; set 1 with 8 GB of RAM or less.";
+        description = "How many processor cores each build may use. Empty lets Nix decide; set 1 with 8 GB of RAM or less.";
         rank = 70;
-        ui = labelled group.advanced "Cores per build";
+        ui = ui.mkUi {
+          group = group.advanced;
+          label = "Cores per build";
+          emptyMeans = "Nix decides";
+        };
       };
 
       # Remote Nix builder: heavy builds (including nixosConfigurations) are

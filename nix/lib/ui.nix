@@ -45,6 +45,10 @@
 #                  "type=entra" hides it unless the sibling equals that value,
 #                  "format=files,encrypted" unless it equals one of them.
 #                  Also applies to fields of attrsOf submodule entries.
+#   emptyMeans   — what an empty (null / "") value does, shown as the field's
+#                  placeholder instead of "Not set" ("Nix decides", "Turned off").
+#                  For a default that is another setting use
+#                  lib.neo.mkInheritedOption instead.
 #
 # ## keysFrom
 #
@@ -177,9 +181,11 @@
     summary ? null,
     choiceLabels ? null,
     visibleWhen ? null,
+    emptyMeans ? null,
   }:
     lib.filterAttrs (_: v: v != null) {
       inherit
+        emptyMeans
         group
         label
         summary

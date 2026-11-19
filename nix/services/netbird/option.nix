@@ -29,18 +29,24 @@
                 rank = 10;
                 ui = lib.neo.ui.mkUi {label = "Setup key";};
               };
-              managementUrl = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                # ManagementURL in config.json and --management-url at login.
-                description = "Address of the NetBird network to join, e.g. https://netbird.example.com. Empty uses NetBird server on this machine when it is on, otherwise NetBird's own service at netbird.io.";
+              # ManagementURL in config.json and --management-url at login.
+              managementUrl = lib.neo.mkInheritedOption {
+                type = types.str;
+                from = "services.netbird-server.enabled";
+                fromLabel = "NetBird server";
+                default =
+                  if (server.enabled or false) && lib.neo.publicUrl config server != null
+                  then lib.neo.publicUrl config server
+                  else "https://api.netbird.io:443";
+                description = "Address of the NetBird network to join, e.g. https://netbird.example.com. It follows NetBird server on this machine when it is on, otherwise NetBird's own service at netbird.io.";
                 rank = 20;
                 ui = lib.neo.ui.mkUi {label = "Network address";};
               };
-              networkRange = mkOption {
+              networkRange = lib.neo.mkInheritedOption {
                 type = ipv4Cidr;
+                from = "services.netbird-server.networkRange";
+                fromLabel = "NetBird server's range";
                 default = server.networkRange or "10.213.0.0/16";
-                defaultText = "NetBird server's range, or 10.213.0.0/16";
                 # SWAG's ingress class "netbird" and the netbird-check comparison with wt0.
                 description = "The addresses your NetBird network gives its devices, shown in its dashboard under Settings → Networks. Neo uses it to recognise your NetBird devices. The default matches a network hosted by Neo.";
                 rank = 30;
@@ -63,11 +69,12 @@
                 rank = 50;
                 ui = lib.neo.ui.mkUi {label = "App names over NetBird";};
               };
-              hostname = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                # netbird up --hostname, at the first login only.
-                description = "Name of this server in NetBird. Empty uses the server's own name. Only used when the server joins; rename it later in the dashboard.";
+              # netbird up --hostname, at the first login only.
+              hostname = lib.neo.mkInheritedOption {
+                type = types.str;
+                from = "core.hostname";
+                default = config.neo.core.hostname;
+                description = "Name of this server in NetBird. Only used when the server joins; rename it later in the dashboard.";
                 rank = 60;
                 ui = lib.neo.ui.mkUi {label = "Device name";};
               };

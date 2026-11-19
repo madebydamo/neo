@@ -8,7 +8,16 @@
     ...
   }:
     with lib;
-    with {inherit (lib.neo) mkOption mkEnableOption;}; {
+    with {inherit (lib.neo) mkOption mkEnableOption;}; let
+      g = config.neo.services.gitea;
+      # ROOT_URL: first customDomains entry as https://…, else
+      # https://<subdomain>.<swag.domain>, else localhost.
+      autoRootUrl =
+        if g.customDomains != []
+        then "https://${builtins.head g.customDomains}"
+        else lib.defaultTo "http://localhost:${toString g.port}" (lib.neo.publicUrl config g);
+      hostOf = url: builtins.head (lib.splitString "/" (lib.removePrefix "https://" (lib.removePrefix "http://" url)));
+    in {
       options.neo.services.gitea = mkOption {
         type = types.submodule {
           options =
@@ -20,13 +29,12 @@
                 internal = true;
                 description = "Internal HTTP port Gitea listens on (HTTP_PORT)";
               };
-              # ROOT_URL. Empty: first customDomains entry as https://…, else
-              # https://<subdomain>.<swag.domain>.
-              rootUrl = mkOption {
-                type = types.nullOr types.str;
-                default = null;
+              rootUrl = lib.neo.mkInheritedOption {
+                type = types.str;
+                from = "services.gitea.subdomain";
+                default = autoRootUrl;
                 rank = 10;
-                description = "The web address people use to reach Gitea, for example https://git.example.com. Leave empty to set it automatically.";
+                description = "The web address people use to reach Gitea, for example https://git.example.com. It follows the subdomain or the first custom domain.";
                 ui = lib.neo.ui.mkUi {
                   label = "Web address";
                 };
@@ -67,12 +75,13 @@
                         visibleWhen = "enable";
                       };
                     };
-                    domain = mkOption {
-                      type = types.nullOr types.str;
-                      default = null;
+                    # SSH_DOMAIN.
+                    domain = lib.neo.mkInheritedOption {
+                      type = types.str;
+                      from = "services.gitea.rootUrl";
+                      default = hostOf g.rootUrl;
                       rank = 30;
-                      # SSH_DOMAIN; empty = hostname of rootUrl.
-                      description = "Address shown in SSH clone links; leave empty to use your Gitea address.";
+                      description = "Address shown in SSH clone links.";
                       ui = lib.neo.ui.mkUi {
                         label = "SSH address";
                         visibleWhen = "enable";

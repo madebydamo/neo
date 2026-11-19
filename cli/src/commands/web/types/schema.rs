@@ -161,6 +161,33 @@ pub struct OptionUi {
     /// OAuth helper script + optional runAs / env for providerAuth.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub oauth: Option<OptionUiOauth>,
+    /// What an empty value does; the placeholder instead of "Not set".
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "emptyMeans"
+    )]
+    pub empty_means: Option<String>,
+}
+
+/// The setting an inherited default follows (`lib.neo.mkInheritedOption`).
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct OptionInherits {
+    /// Settings path of the source (`core.hostname`, `access.defaultIngress`).
+    pub path: String,
+    /// Source's display label; humanized from `path` in Rust when Nix has none.
+    #[serde(default)]
+    pub label: String,
+    /// A module sets the value from the source (the default is the source's value).
+    #[serde(
+        default,
+        rename = "fromModule",
+        skip_serializing_if = "std::ops::Not::not"
+    )]
+    pub from_module: bool,
+    /// Web UI link to the source field. Filled in Rust.
+    #[serde(default)]
+    pub url: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -246,6 +273,9 @@ pub struct OptionSchema {
         rename = "entryDefaults"
     )]
     pub entry_defaults: Option<serde_json::Value>,
+    /// lib.neo.mkInheritedOption: the setting this default comes from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inherits: Option<OptionInherits>,
     /// Display label (ui.label or humanized last path segment). Filled in Rust.
     #[serde(default)]
     pub label: String,

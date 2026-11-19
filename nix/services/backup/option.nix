@@ -56,8 +56,9 @@
                         };
                       };
 
-                      storeClient = mkOption {
+                      storeClient = lib.neo.mkInheritedOption {
                         type = types.str;
+                        from = "core.hostname";
                         default = config.neo.core.hostname;
                         rank = 6;
                         description = "The name this server has in the store's list of servers.";
@@ -88,8 +89,9 @@
                       # neo-backup.age and the restic repository. Relative paths are
                       # relative to the remote user's home directory (user@host:path); a
                       # disk needs an absolute path below its mount point.
-                      remotePath = mkOption {
+                      remotePath = lib.neo.mkInheritedOption {
                         type = types.str;
+                        from = "core.hostname";
                         default = config.neo.core.hostname;
                         description = "Folder where this homeserver's files are stored. On another computer, a name alone is a folder in that user's home; on a disk, give the full path where the disk is mounted.";
                         rank = 60;

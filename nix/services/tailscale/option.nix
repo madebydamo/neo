@@ -81,7 +81,10 @@
                 default = null;
                 description = "Send this server's internet traffic through another Tailscale device (its name or IP). Empty uses the normal connection.";
                 rank = 60;
-                ui = lib.neo.ui.mkUi {label = "Use exit node";};
+                ui = lib.neo.ui.mkUi {
+                  label = "Use exit node";
+                  emptyMeans = "Normal connection";
+                };
               };
               exitNodeAllowLanAccess = mkOption {
                 type = types.bool;
@@ -93,10 +96,11 @@
                   visibleWhen = "exitNode";
                 };
               };
-              hostname = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Name of this server in Tailscale. Empty uses the server's own name.";
+              hostname = lib.neo.mkInheritedOption {
+                type = types.str;
+                from = "core.hostname";
+                default = config.neo.core.hostname;
+                description = "Name of this server in Tailscale.";
                 rank = 80;
                 ui = lib.neo.ui.mkUi {label = "Device name";};
               };

@@ -10,8 +10,23 @@
              {{#if (eq type.kind "bool")}}for="opt-{{name}}"{{/if}}>{{label}}</label>
       {{#if readOnly}}<span class="badge badge-ghost badge-xs">read-only</span>{{/if}}
       <span x-cloak x-show="!isAtOriginal('{{name}}')" class="badge badge-warning badge-xs">unsaved</span>
-      <span x-cloak x-show="isAtOriginal('{{name}}') && sourceLabel('{{name}}') === 'modified'"
-            class="badge badge-ghost badge-xs" title="Differs from the default value">customized</span>
+      {{#if inherits}}
+        {{! mkInheritedOption: follows another setting until changed here. }}
+        <a x-cloak x-show="sourceLabel('{{name}}') === 'default'"
+           href="{{inherits.url}}" hx-get="{{inherits.url}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true"
+           class="badge badge-ghost badge-xs gap-1 hover:badge-outline"
+           data-neo-inherits="{{inherits.path}}"
+           title="Follows {{inherits.label}}. Change it there, or set a value here.">from {{inherits.label}}</a>
+        <span x-cloak x-show="isAtOriginal('{{name}}') && sourceLabel('{{name}}') === 'modified'"
+              class="badge badge-ghost badge-xs" title="Set here; does not follow {{inherits.label}}">changed here</span>
+        <button type="button" x-cloak x-show="sourceLabel('{{name}}') === 'modified'"
+                @click="resetField('{{name}}')"
+                class="btn btn-ghost btn-xs h-5 min-h-5 px-1.5 text-primary"
+                title="Remove the value set here and follow {{inherits.label}} again">Use {{inherits.label}}</button>
+      {{else}}
+        <span x-cloak x-show="isAtOriginal('{{name}}') && sourceLabel('{{name}}') === 'modified'"
+              class="badge badge-ghost badge-xs" title="Differs from the default value">customized</span>
+      {{/if}}
     </div>
     {{#if description}}
       <p class="neo-desc text-xs text-base-content/60 leading-snug mt-0.5 line-clamp-2 cursor-pointer whitespace-pre-line"

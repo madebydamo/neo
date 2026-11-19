@@ -161,9 +161,12 @@ pub const CORE_NESTED_SECTIONS: &[&str] = &[
     "core",
 ];
 
+/// Top-level settings tables besides `services` and `core`, each with its own pane.
+pub const TOP_SECTIONS: &[&str] = &["neo-cli", "disko", "access"];
+
 /// Known core / top-level settings section names accepted by save-core.
 pub fn core_section_ok(section: &str) -> bool {
-    CORE_NESTED_SECTIONS.contains(&section) || matches!(section, "neo-cli" | "disko")
+    CORE_NESTED_SECTIONS.contains(&section) || TOP_SECTIONS.contains(&section)
 }
 
 #[cfg(test)]

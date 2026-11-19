@@ -258,33 +258,40 @@
             else uiMeta.choices or null
           );
           ti = applyChoicesToType (getTypeInfo ot) choices;
-          record = {
-            name = path;
-            type = ti;
-            typeLabel = typeLabel ti;
-            default = toSafeValue (
-              if builtins.hasAttr "default" o
-              then o.default
-              else null
-            );
-            description = tryOr "" (
-              if builtins.hasAttr "description" o
-              then o.description
-              else ""
-            );
-            example = toSafeValue (
-              if builtins.hasAttr "example" o
-              then o.example
-              else null
-            );
-            internal = false;
-            readOnly = tryOr false (o.readOnly or false);
-            current = null;
-            rank = tryOr null (o.rank or null);
-            helper = toHelperMeta (o.helper or null);
-            secret = tryOr false (o.secret or false);
-            ui = uiMeta;
-          };
+          record =
+            {
+              name = path;
+              type = ti;
+              typeLabel = typeLabel ti;
+              default = toSafeValue (
+                if builtins.hasAttr "default" o
+                then o.default
+                else null
+              );
+              description = tryOr "" (
+                if builtins.hasAttr "description" o
+                then o.description
+                else ""
+              );
+              example = toSafeValue (
+                if builtins.hasAttr "example" o
+                then o.example
+                else null
+              );
+              internal = false;
+              readOnly = tryOr false (o.readOnly or false);
+              current = null;
+              rank = tryOr null (o.rank or null);
+              helper = toHelperMeta (o.helper or null);
+              secret = tryOr false (o.secret or false);
+              ui = uiMeta;
+            }
+            // (let
+              inh = inheritsMeta o;
+            in
+              if inh == null
+              then {}
+              else {inherits = removeAttrs inh ["value"];});
           childSet =
             if tn == "submodule"
             then callGetSubOptions ot pathList
@@ -662,6 +669,7 @@
         then toSafeValue c
         else null;
       visibleWhen = tryOr null (u.visibleWhen or null);
+      emptyMeans = tryOr null (u.emptyMeans or null);
       # Drop null / empty shells so the JSON seed stays small.
       cleaned =
         {}
@@ -688,6 +696,11 @@
         // (
           if visibleWhen != null && visibleWhen != ""
           then {inherit visibleWhen;}
+          else {}
+        )
+        // (
+          if builtins.isString emptyMeans && emptyMeans != ""
+          then {inherit emptyMeans;}
           else {}
         )
         // (
@@ -842,6 +855,56 @@
     then null
     else builtins.mapAttrs (_: m: tryOr {} (fieldDefaults m.configuration.options)) attrs;
 
+  # lib.neo.mkInheritedOption: the setting the default comes from. `path` is a
+  # settings path under neo ("core.hostname"); the label falls back to the
+  # source option's ui.label (Rust humanizes the path when both are missing).
+  # fromModule: a module assigns the value with mkDefault, so the declared
+  # default is only a fallback and the source's value is the real default.
+  neoOptions = tryOr {} (f.nixosConfigurations.${cfg}.options.neo or {});
+  neoConfig = tryOr {} (f.nixosConfigurations.${cfg}.config.neo or {});
+  splitPath = p: builtins.filter builtins.isString (builtins.split "\\." p);
+  optionAtPath = ps: let
+    go = node: rest:
+      if rest == []
+      then node
+      else let
+        set =
+          if isOption node
+          then callGetSubOptions (tryOr {} (node.type or {})) []
+          else node;
+      in
+        if builtins.isAttrs set && builtins.hasAttr (builtins.head rest) set
+        then go set.${builtins.head rest} (builtins.tail rest)
+        else null;
+  in
+    tryOr null (go neoOptions ps);
+  inheritsMeta = o: let
+    raw = tryOr null (o.inherits or null);
+    srcPath = tryOr "" (raw.path or "");
+    ps = splitPath srcPath;
+    src = optionAtPath ps;
+    srcLabel = tryOr null ((src.ui or {}).label or null);
+    label = tryOr null (raw.label or srcLabel);
+    fromModule = tryOr false (raw.fromModule or false);
+  in
+    if !(builtins.isAttrs raw) || srcPath == ""
+    then null
+    else
+      {path = srcPath;}
+      // (
+        if builtins.isString label && label != ""
+        then {inherit label;}
+        else {}
+      )
+      // (
+        if fromModule
+        then {
+          fromModule = true;
+          value = toSafeValue (getNested ps neoConfig);
+        }
+        else {}
+      );
+
   mkOptionRecord = group: path: o: let
     t = tryOr {} (o.type or {});
     uiOwn = toUiMeta (o.ui or null);
@@ -893,12 +956,16 @@
     # lib.neo.mkSecretOption: masked in the form (nix/lib/secrets.nix).
     secret = tryOr false (o.secret or false);
     entryDefaults = tryOr null (entryDefaultsOf ti curPath);
+    inherits = inheritsMeta o;
   in
     {
       name = path;
       type = ti;
       typeLabel = typeLabel ti;
-      default = toSafeValue defVal;
+      default =
+        if inherits != null && (inherits.fromModule or false)
+        then inherits.value
+        else toSafeValue defVal;
       description = descVal;
       example = toSafeValue exVal;
       internal = internal;
@@ -912,6 +979,11 @@
       if entryDefaults == null
       then {}
       else {inherit entryDefaults;}
+    )
+    // (
+      if inherits == null
+      then {}
+      else {inherits = removeAttrs inherits ["value"];}
     );
 
   # Walk options into a flat form list, ordered by level-dependent ranks.

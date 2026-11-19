@@ -4,7 +4,7 @@
     <input {{#if secret}}:type="reveal ? 'text' : 'password'" autocomplete="off"{{else}}type="text"{{/if}} class="input input-sm w-full flex-1 font-mono"
            :class="{ 'input-error': !!patternError('{{name}}') }"
            x-model="values['{{name}}']"
-           placeholder="Not set"
+           placeholder="{{#if ui.emptyMeans}}{{ui.emptyMeans}}{{else}}Not set{{/if}}"
            aria-label="{{label}}">
     {{#if secret}}
       {{> options/secret_toggle}}
@@ -17,14 +17,14 @@
            {{#if (eq type.elem.kind "float")}}step="any"{{/if}}
            {{#if type.elem.min}}min="{{type.elem.min}}"{{/if}}
            {{#if type.elem.max}}max="{{type.elem.max}}"{{/if}}
-           placeholder="Not set"
+           placeholder="{{#if ui.emptyMeans}}{{ui.emptyMeans}}{{else}}Not set{{/if}}"
            aria-label="{{label}}">
   {{else}}{{#if (eq type.elem.kind "enum")}}
     <select class="select select-sm w-full flex-1"
             x-model="values['{{name}}']"
             @change="if (values['{{name}}'] === '') values['{{name}}'] = null"
             aria-label="{{label}}">
-      <option value="">Not set</option>
+      <option value="">{{#if ui.emptyMeans}}{{ui.emptyMeans}}{{else}}Not set{{/if}}</option>
       {{#each type.elem.choices}}
         <option value="{{value}}">{{label}}</option>
       {{/each}}

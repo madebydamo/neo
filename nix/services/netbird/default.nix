@@ -14,17 +14,11 @@
     with lib; let
       cfg = config.neo.services.netbird;
       server = config.neo.services.netbird-server or {};
-      localServer = server.enabled or false;
       ts = config.neo.services.tailscale;
       client = config.services.netbird.clients.default;
       wg = client.interface;
 
-      managementUrl =
-        if cfg.managementUrl != null
-        then cfg.managementUrl
-        else if localServer
-        then lib.neo.publicUrl config server
-        else "https://api.netbird.io:443";
+      inherit (cfg) managementUrl;
       # url.URL as Go marshals it into config.json.
       parsedUrl = let
         m = builtins.match "(https?)://([^/]+)/?" managementUrl;
@@ -185,7 +179,7 @@
             # Read by `netbird up` (flags from NB_* variables), first login only.
             environment =
               {NB_MANAGEMENT_URL = managementUrl;}
-              // optionalAttrs (cfg.hostname != null) {NB_HOSTNAME = cfg.hostname;};
+              // {NB_HOSTNAME = cfg.hostname;};
           };
 
           # Non-blocking: compares what settings.toml says with what the
