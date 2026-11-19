@@ -28,20 +28,17 @@
                 helper = lib.neo.helpers.randomToken;
               };
               # OIDC login through tinyauth's OIDC server (tinyauth.oidcClients.vaultwarden).
-              sso = mkOption {
-                type = types.bool;
-                default = false;
-                description = "Sign in to Vaultwarden with the shared login page (tinyauth), using the same account as your other apps. You still unlock your vault with your master password.";
-                rank = 20;
-                ui = lib.neo.ui.mkUi {label = "Sign in with the login page";};
+              sso = lib.neo.mkSsoOption {
+                description = "Sign in to Vaultwarden with your login page account, the same one as for your other apps. You still unlock your vault with your master password.";
               };
               # SSO_ONLY: hides email + master password login.
               ssoOnly = mkOption {
                 type = types.bool;
                 default = false;
                 description = "Allow signing in only through the login page, not with email and master password. Existing accounts are linked by their email address on their first sign-in.";
-                rank = 21;
+                rank = 126;
                 ui = lib.neo.ui.mkUi {
+                  group = lib.neo.ui.groups.access;
                   label = "Login page only";
                   visibleWhen = "sso";
                 };

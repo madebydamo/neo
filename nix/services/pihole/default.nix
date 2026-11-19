@@ -38,6 +38,19 @@
           allowedTCPPorts = [53];
           allowedUDPPorts = [53];
         };
+        neo.exposure.ports = let
+          dns = protocol: {
+            port = 53;
+            inherit protocol;
+            label = "DNS with ad blocking for your home";
+            service = "pihole";
+            login = "None: answers every device that asks";
+            open = true;
+          };
+        in {
+          pihole-dns-tcp = dns "tcp";
+          pihole-dns-udp = dns "udp";
+        };
 
         # The web password reaches the container through an env file rendered at activation.
         neo.core.secrets.containerEnv.pihole.FTLCONF_webserver_api_password = cfg.webPassword;

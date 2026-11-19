@@ -28,6 +28,14 @@
         };
 
         networking.firewall.allowedUDPPorts = [123];
+        neo.exposure.ports.ntp = {
+          port = 123;
+          protocol = "udp";
+          label = "Time for devices on your network";
+          service = "ntp";
+          login = "None: answers every device that asks";
+          open = true;
+        };
       };
     };
 }

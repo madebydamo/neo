@@ -238,6 +238,20 @@
         ];
       in
         mkIf cfg.enabled {
+          neo.exposure.ports = {
+            swag-http = {
+              port = cfg.localHttpPort;
+              label = "Web (HTTP) for your apps, and certificate checks";
+              service = "swag";
+              login = "Each app's own settings (see Apps)";
+            };
+            swag-https = {
+              port = cfg.localHttpsPort;
+              label = "Web (HTTPS) for your apps";
+              service = "swag";
+              login = "Each app's own settings (see Apps)";
+            };
+          };
           assertions =
             mapAttrsToList (name: svc: {
               assertion = (config.neo.monitoring.apps.${name}.hidePaths or []) == [] || hasInfix "server {\n" svc.proxyConf;

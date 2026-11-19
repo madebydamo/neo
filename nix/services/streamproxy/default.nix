@@ -200,6 +200,42 @@
           };
         };
         networking.firewall.interfaces."ve-streamproxy".allowedTCPPorts = mkIf swagEnabled [swagHttpsPP];
+        neo.exposure.ports =
+          {
+            streamproxy-http = {
+              port = 80;
+              label = "Web (HTTP) for this server and the servers behind it";
+              service = "streamproxy";
+              login = "Each app's own settings (see Apps)";
+            };
+            streamproxy-https = {
+              port = 443;
+              label = "Web (HTTPS) for this server and the servers behind it";
+              service = "streamproxy";
+              login = "Each app's own settings (see Apps)";
+            };
+            streamproxy-tunnel = {
+              port = 2223;
+              label = "Tunnel for your other servers";
+              service = "streamproxy";
+              login = "Each server's tunnel token";
+            };
+            streamproxy-swag = mkIf swagEnabled {
+              port = swagHttpsPP;
+              interface = "ve-streamproxy";
+              label = "Web traffic handed from the relay to this server";
+              service = "streamproxy";
+              login = "Only the relay on this server";
+            };
+          }
+          // listToAttrs (map (port:
+            nameValuePair "streamproxy-forward-${toString port}" {
+              inherit port;
+              label = "Forwarded port ${toString port}";
+              service = "streamproxy";
+              login = "Whatever listens behind the tunnel";
+            })
+          tcpForwardPorts);
 
         containers.streamproxy = {
           autoStart = true;

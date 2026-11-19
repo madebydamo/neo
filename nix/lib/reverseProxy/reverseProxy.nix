@@ -26,17 +26,31 @@ in {
         then null
         else "https://${host}";
 
+      # ingress / auth.enabled follow Default access (neo.access, set by
+      # nix/modules/core/access.nix) unless given here: an app that must not
+      # follow passes its own value (`ingress = ["local"]`, `auth.enabled = false`).
       mkReverseProxyOptions = {
         subdomain ? null,
         auth ? null,
         customDomains ? [],
+        ingress ? null,
       } @ args: let
         authAvailable = args.auth.available or true;
+        # Login follows the default only when the app lets the user choose and
+        # does not fix its own value.
+        loginInherits = authAvailable && !((args.auth or {}) ? enabled);
         defaultAuth = {
           enabled = authAvailable;
           publicPaths = [];
         };
         auth = lib.recursiveUpdate defaultAuth (builtins.removeAttrs (args.auth or {}) ["available"]);
+        inherited = from: label: {
+          inherits = {
+            path = from;
+            inherit label;
+            fromModule = true;
+          };
+        };
       in
         with lib; {
           subdomain =
@@ -57,7 +71,10 @@ in {
           ingress =
             mkOption {
               type = types.listOf (types.enum ingressVariants);
-              default = ingressVariants;
+              default =
+                if ingress == null
+                then ingressVariants
+                else ingress;
               # Internet = public HTTPS via the rathole/streamproxy listener; unticked
               # places get the neo 404 page. Let's Encrypt HTTP-01 on port 80 is always allowed.
               description = "Where this app can be opened from. Places not ticked are blocked. Home network means devices at home, Tailscale and NetBird your own devices anywhere, Internet everyone.";
@@ -76,7 +93,8 @@ in {
                   web = "Internet";
                 };
               };
-            };
+            }
+            // lib.optionalAttrs (ingress == null) (inherited "access.defaultIngress" "Default access");
 
           proxyConf = mkOption {
             type = types.nullOr types.str;
@@ -116,7 +134,8 @@ in {
                         label = "Require login";
                         summary = true;
                       };
-                    };
+                    }
+                    // lib.optionalAttrs loginInherits (inherited "access.defaultLogin" "Default login");
                   publicPaths =
                     mkOption {
                       type = types.listOf types.str;
@@ -144,6 +163,34 @@ in {
               ui = neoUi.mkUi {group = access;};
             };
         };
+      # Sign in to the app with the login page account (OIDC through tinyauth's
+      # OIDC server, neo.services.tinyauth.oidcClients). Follows "Sign in to
+      # apps with your login page account" (neo.access.defaultSso) unless set
+      # for the app. Declare it as `sso` next to the app's other options; the
+      # app registers its OIDC client inside `mkIf cfg.sso`.
+      mkSsoOption = {
+        description ? "Sign in with your login page account, the same one as for your other apps, instead of a separate account for this app.",
+        rank ? 125,
+        label ? "Sign in with the login page",
+      }:
+        lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          inherit description;
+        }
+        // {
+          inherit rank;
+          ui = neoUi.mkUi {
+            group = access;
+            inherit label;
+          };
+          inherits = {
+            path = "access.defaultSso";
+            label = "Default sign-in";
+            fromModule = true;
+          };
+        };
+
       # Enabled services that get a SWAG subdomain (certs, DNS, proxy-conf materialization).
       # Includes swag itself for the dashboard UI at swag.<domain>.
       # Do NOT require proxyConf here — reading it while modules define it causes infinite recursion.

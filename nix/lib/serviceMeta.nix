@@ -31,6 +31,10 @@
         # No longer supported: { reason; instead; alternatives ? []; }. Hidden from the
         # services grid and the privacy map unless it is enabled.
         deprecated ? null,
+        # The app's own accounts, in plain words ("Immich accounts"); null when it
+        # has none. The Access page lists it next to the login page and SSO.
+        # A module may change it in config (e.g. off when only SSO is allowed).
+        ownLogin ? null,
       } @ args:
         with lib; {
           meta = mkOption {
@@ -43,6 +47,11 @@
                   type = types.nullOr (types.either types.str types.path);
                   default = icon;
                   description = "Icon shown in the web UI. A URL string, or a file path (for example ./icon.svg) that neo serves itself.";
+                };
+                ownLogin = mkOption {
+                  type = types.nullOr types.str;
+                  default = ownLogin;
+                  description = "The app's own accounts, in plain words (\"Immich accounts\"); null when it has none.";
                 };
                 tagline = mkOption {
                   type = types.str;

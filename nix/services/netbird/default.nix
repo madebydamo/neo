@@ -104,6 +104,35 @@
       '';
     in {
       config = mkIf cfg.enabled {
+        # The NixOS module opens the WireGuard port; NetBird's DNS forwarder
+        # ports are open only on the NetBird interface.
+        neo.exposure.ports = {
+          netbird-wireguard = {
+            inherit (cfg) port;
+            protocol = "udp";
+            label = "NetBird private network";
+            service = "netbird";
+            login = "Only devices in your NetBird network (WireGuard keys)";
+          };
+          netbird-dns = {
+            port = 22054;
+            protocol = "udp";
+            interface = wg;
+            label = "NetBird name lookups (DNS forwarder)";
+            service = "netbird";
+            login = "Only devices in your NetBird network";
+            open = true;
+          };
+          netbird-dns-old = {
+            port = 5353;
+            protocol = "udp";
+            interface = wg;
+            label = "NetBird name lookups for older clients";
+            service = "netbird";
+            login = "Only devices in your NetBird network";
+            open = true;
+          };
+        };
         assertions = [
           {
             assertion = !(ts.enabled && ts.acceptDns && cfg.acceptDns);

@@ -143,6 +143,20 @@
             allowedTCPPorts = [53];
             allowedUDPPorts = [53];
           };
+          neo.exposure.ports = let
+            dns = protocol: {
+              port = 53;
+              inherit protocol;
+              interface = iface;
+              label = "App names for Tailscale devices";
+              service = "tailscale";
+              login = "Only devices in your Tailscale network";
+              open = true;
+            };
+          in {
+            tailscale-dns-tcp = dns "tcp";
+            tailscale-dns-udp = dns "udp";
+          };
 
           # Wants, not Requires: stopping tailscale-split-dns (it BindsTo
           # tailscaled, and the Tailscale target stops tailscaled) must not

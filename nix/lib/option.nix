@@ -18,6 +18,7 @@
 #   105     ingress            (mkReverseProxyOptions)
 #   110     vpn                (mkVpnOptions group)
 #   120     auth               (mkReverseProxyOptions group)
+#   125     sso                (mkSsoOption; the app's SSO extras at 126–129)
 #   130     customDomains      (mkReverseProxyOptions)
 #   200     skill              (mkSkillOptions group)
 #   300     containers         (mkContainerDefinitions group)

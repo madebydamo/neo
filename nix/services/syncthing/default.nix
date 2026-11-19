@@ -10,6 +10,26 @@
       cfg = config.neo.services.syncthing;
     in {
       config = mkIf cfg.enabled {
+        neo.exposure.ports = let
+          sync = protocol: {
+            port = 22000;
+            inherit protocol;
+            label = "File sync between your devices";
+            service = "syncthing";
+            login = "Only devices you paired in Syncthing";
+          };
+        in {
+          syncthing-tcp = sync "tcp";
+          syncthing-udp = sync "udp";
+          syncthing-discovery = {
+            port = 21027;
+            protocol = "udp";
+            label = "Finding Syncthing devices at home";
+            service = "syncthing";
+            login = "None: only announces this device";
+            open = true;
+          };
+        };
         neo.core.containerDirs.syncthing = [
           cfg.appdata
         ];

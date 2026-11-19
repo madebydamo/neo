@@ -118,6 +118,14 @@
         };
 
         networking.firewall.allowedUDPPorts = [cfg.stunPort];
+        neo.exposure.ports.netbird-stun = {
+          port = cfg.stunPort;
+          protocol = "udp";
+          label = "NetBird connection helper (STUN)";
+          service = "netbird-server";
+          login = "None: only tells devices their own address";
+          open = true;
+        };
 
         # No hosts entry for the client on this machine: NetBird's resolver
         # serves /etc/hosts to the containers as well, and 127.0.0.1 is the
