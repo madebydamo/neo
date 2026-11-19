@@ -64,6 +64,7 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/paperless"
             // lib.neo.mkServiceMeta {
+              ownLogin = "Paperless accounts";
               category = "Files";
               license = {
                 spdx = "GPL-3.0";

@@ -112,6 +112,7 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/gitea"
             // lib.neo.mkServiceMeta {
+              ownLogin = "Gitea accounts";
               category = "Files";
               license = {
                 spdx = "MIT";

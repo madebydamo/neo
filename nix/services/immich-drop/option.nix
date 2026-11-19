@@ -39,6 +39,7 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/immich-drop"
             // lib.neo.mkServiceMeta {
+              ownLogin = "Invite links from Immich";
               category = "Media";
               license = {
                 spdx = "MIT";

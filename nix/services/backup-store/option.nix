@@ -135,6 +135,7 @@
             }
             // lib.neo.mkSystemdUnits ["backup-store-setup" "backup-store-sshd" "backup-store-tunnel"]
             // lib.neo.mkServiceMeta {
+              ownLogin = "Each server's backup key";
               category = "Files";
               license = {
                 spdx = "MIT";

@@ -102,6 +102,7 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/netbird-server"
             // lib.neo.mkServiceMeta {
+              ownLogin = "NetBird accounts";
               category = "Network";
               license = {
                 spdx = "AGPL-3.0";

@@ -72,6 +72,7 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/activepieces"
             // lib.neo.mkServiceMeta {
+              ownLogin = "Activepieces accounts";
               category = "Utilities";
               license = {
                 spdx = "MIT";

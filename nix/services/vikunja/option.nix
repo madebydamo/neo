@@ -50,6 +50,7 @@
             // lib.neo.mkSystemdUnits ["vikunja"]
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/vikunja"
             // lib.neo.mkServiceMeta {
+              ownLogin = "Vikunja accounts";
               category = "Utilities";
               license = {
                 spdx = "AGPL-3.0";

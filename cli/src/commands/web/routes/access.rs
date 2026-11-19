@@ -468,8 +468,11 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
                 None
             };
             if let Some(r) = &risk {
+                // An app without any login by design (a public pastebin) is a
+                // warning; a login someone turned off is an error.
+                let by_design = !a.auth.available || (login_fixed && set_login.is_none());
                 warnings.push(Warning {
-                    level: "error",
+                    level: if by_design { "warning" } else { "error" },
                     text: format!("{}: {r}", humanize(&a.name)),
                     link: None,
                     link_label: None,

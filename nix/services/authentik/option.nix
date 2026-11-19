@@ -164,6 +164,7 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/authentik"
             // lib.neo.mkServiceMeta {
+              ownLogin = "Authentik accounts";
               category = "Security";
               license = {
                 spdx = "MIT";

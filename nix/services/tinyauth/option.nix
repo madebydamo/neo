@@ -394,6 +394,7 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/tinyauth"
             // lib.neo.mkServiceMeta {
+              ownLogin = "It is the login page";
               category = "Security";
               license = {
                 spdx = "AGPL-3.0";

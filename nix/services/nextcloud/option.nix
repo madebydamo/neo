@@ -93,6 +93,7 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/nextcloud"
             // lib.neo.mkServiceMeta {
+              ownLogin = "Nextcloud accounts";
               category = "Files";
               license = {
                 spdx = "AGPL-3.0";

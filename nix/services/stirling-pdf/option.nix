@@ -87,6 +87,11 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/stirling-pdf"
             // lib.neo.mkServiceMeta {
+              # Access page: the app's own login, when its settings turn one on.
+              ownLogin =
+                if config.neo.services.stirling-pdf.enableLogin or false
+                then "Stirling PDF accounts"
+                else null;
               category = "Files";
               license = {
                 spdx = "MIT";

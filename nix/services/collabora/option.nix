@@ -22,6 +22,7 @@
               extraUnits = ["collabora-setup"];
             }
             // lib.neo.mkServiceMeta {
+              ownLogin = "Opens only documents shared from Nextcloud";
               category = "Files";
               license = {
                 spdx = "MPL-2.0";

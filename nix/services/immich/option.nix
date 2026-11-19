@@ -30,6 +30,7 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/immich"
             // lib.neo.mkServiceMeta {
+              ownLogin = "Immich accounts";
               category = "Media";
               license = {
                 spdx = "AGPL-3.0";

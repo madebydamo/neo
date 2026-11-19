@@ -156,6 +156,7 @@
             // lib.neo.mkSystemdTimers (optionals ssoActive ["docmost-space-admins"])
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/docmost"
             // lib.neo.mkServiceMeta {
+              ownLogin = "Docmost accounts";
               category = "Files";
               license = {
                 spdx = "AGPL-3.0";

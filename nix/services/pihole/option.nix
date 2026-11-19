@@ -54,6 +54,11 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/pihole"
             // lib.neo.mkServiceMeta {
+              # Access page: the app's own login, when its settings turn one on.
+              ownLogin =
+                if (config.neo.services.pihole.webPassword or "") != ""
+                then "Pi-hole password"
+                else null;
               category = "Network";
               license = {
                 spdx = "EUPL-1.2";

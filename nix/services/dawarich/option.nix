@@ -61,6 +61,7 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/dawarich"
             // lib.neo.mkServiceMeta {
+              ownLogin = "Dawarich accounts";
               category = "Utilities";
               license = {
                 spdx = "AGPL-3.0";

@@ -296,6 +296,7 @@
             ]
             // lib.neo.mkAppdata config.neo.services.hermes.stateDir
             // lib.neo.mkServiceMeta {
+              ownLogin = "Hermes dashboard password";
               category = "AI";
               license = {
                 spdx = "MIT";

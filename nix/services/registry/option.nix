@@ -50,6 +50,11 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/registry"
             // lib.neo.mkServiceMeta {
+              # Access page: the app's own login, when its settings turn one on.
+              ownLogin =
+                if (config.neo.services.registry.users or []) != []
+                then "Registry users"
+                else null;
               category = "Files";
               license = {
                 spdx = "Apache-2.0";

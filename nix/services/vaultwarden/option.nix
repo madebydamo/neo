@@ -58,6 +58,7 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/vaultwarden"
             // lib.neo.mkServiceMeta {
+              ownLogin = "Vaultwarden accounts";
               category = "Security";
               license = {
                 spdx = "AGPL-3.0";

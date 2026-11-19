@@ -32,6 +32,11 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/beszel"
             // lib.neo.mkServiceMeta {
+              # Access page: the app's own login, when its settings turn one on.
+              ownLogin =
+                if config.neo.services.beszel.enableSingleUserSystem or true
+                then null
+                else "Beszel accounts";
               category = "Monitoring";
               license = {
                 spdx = "MIT";

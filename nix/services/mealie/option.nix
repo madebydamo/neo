@@ -45,6 +45,7 @@
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/mealie"
             // lib.neo.mkServiceMeta {
+              ownLogin = "Mealie accounts";
               category = "Utilities";
               license = {
                 spdx = "AGPL-3.0";
