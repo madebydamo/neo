@@ -340,6 +340,7 @@ impl EvalPool {
                 QueryKey::Navigator,
                 QueryKey::Guides,
                 QueryKey::Privacy,
+                QueryKey::Access,
                 QueryKey::SecretPaths,
                 QueryKey::OptionIndex,
             ] {

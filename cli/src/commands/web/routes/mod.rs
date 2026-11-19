@@ -1,3 +1,4 @@
+pub(crate) mod access;
 mod actions;
 mod activation;
 pub(crate) mod agent_tools;
@@ -44,6 +45,8 @@ pub fn routes() -> Vec<rocket::Route> {
         guides::configuration_guides,
         guides::configuration_guide,
         privacy::configuration_privacy,
+        access::configuration_access,
+        access::access_set,
         proposals::proposals_create,
         proposals::proposal_card,
         proposals::proposal_save,

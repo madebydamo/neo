@@ -158,9 +158,9 @@ fn card_ok(spec: &KeySpec, key: &str) -> String {
     let lk = system_lock_attr(LockMode::Shared);
     format!(
         r##"<div id="ssh-pubkey-card-{id}" class="rounded-box border border-base-300 bg-base-100 p-4">
-  <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+  <div class="flex flex-wrap items-start gap-3">
     <span class="w-9 h-9 shrink-0 rounded-xl bg-base-200 text-base-content/70 flex items-center justify-center">{KEY_ICON}</span>
-    <div class="min-w-0 flex-1">
+    <div class="min-w-[12rem] flex-1">
       <div class="font-semibold text-sm">{title}</div>
       <div class="text-xs text-base-content/60">{hint} <span class="font-mono text-base-content/45 break-all">{path}</span></div>
     </div>
@@ -188,9 +188,9 @@ fn card_err(spec: &KeySpec, msg: &str) -> String {
     let lk = system_lock_attr(LockMode::Shared);
     format!(
         r##"<div id="ssh-pubkey-card-{id}" class="rounded-box border border-warning/40 bg-warning/5 p-4">
-  <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+  <div class="flex flex-wrap items-start gap-3">
     <span class="w-9 h-9 shrink-0 rounded-xl bg-warning/15 text-warning flex items-center justify-center">{KEY_ICON}</span>
-    <div class="min-w-0 flex-1">
+    <div class="min-w-[12rem] flex-1">
       <div class="font-semibold text-sm">{title}</div>
       <p class="text-xs text-base-content/70 mt-0.5">{msg}</p>
       <p class="text-xs text-base-content/50 mt-0.5">Expected at <span class="font-mono">{path}</span> after activation.</p>

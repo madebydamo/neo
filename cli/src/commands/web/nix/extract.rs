@@ -1,5 +1,5 @@
 use super::registry::{
-    NixExtractor, EXTRACT_GUIDES, EXTRACT_NEO_THEME, EXTRACT_OPTION_INDEX,
+    NixExtractor, EXTRACT_ACCESS, EXTRACT_GUIDES, EXTRACT_NEO_THEME, EXTRACT_OPTION_INDEX,
     EXTRACT_PLUGIN_INVENTORY, EXTRACT_PRIVACY, EXTRACT_PROXIED_SERVICES, EXTRACT_SECRET_PATHS,
     EXTRACT_SERVICES, EXTRACT_SERVICE_OPTIONS,
 };
@@ -292,6 +292,18 @@ impl NixEvaluator {
             for s in &mut c.services {
                 self.icons.link(&mut s.icon);
             }
+        }
+        Ok(raw)
+    }
+
+    /// Access page: apps, ports and logins (neo.exposure.report), icons published.
+    pub async fn extract_access(
+        &mut self,
+    ) -> anyhow::Result<crate::commands::web::routes::access::AccessReport> {
+        let mut raw: crate::commands::web::routes::access::AccessReport =
+            self.query_extractor(&EXTRACT_ACCESS).await?;
+        for a in &mut raw.apps {
+            self.icons.link(&mut a.icon);
         }
         Ok(raw)
     }

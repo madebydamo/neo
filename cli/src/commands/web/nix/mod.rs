@@ -4,7 +4,7 @@ mod overlay;
 mod pool;
 pub(crate) mod registry;
 mod repl;
-mod sections;
+pub(crate) mod sections;
 mod snapshot;
 
 pub(crate) use extract::{value_to_display, OptionIndex, OptionIndexEntry};

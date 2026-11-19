@@ -1,4 +1,4 @@
-{{!-- Settings tab: system-wide option sections + SSH key + settings.toml backup + power. --}}
+{{!-- Settings tab: system-wide option sections, Access + SSH keys + settings.toml backup, power. --}}
 <div id="core-grid" class="space-y-6 sm:space-y-8">
   <div>
     <h2 class="text-xl sm:text-2xl font-semibold tracking-tight">Settings</h2>
@@ -22,14 +22,22 @@
   <div class="space-y-3">
     {{> partials/section_heading title="Access & backup"}}
 
-    <div hx-get="/ssh/homeserver/public-key-card" hx-trigger="load" hx-swap="innerHTML">
-      <div class="rounded-box border border-base-300 bg-base-100 p-4 text-xs text-base-content/50 flex items-center gap-2">
-        <span class="loading loading-spinner loading-xs"></span> Loading SSH public key…
-      </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3">
+      {{#> partials/core_card url="/configuration/access" title="Access" slug="access" tone="bg-success/10 text-success" summary="Where apps open from, who logs in, open ports and SSH keys."}}
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" class="w-5 h-5" aria-hidden="true"><path d="M12 3.5l7 2.8v5.2c0 4.3-2.9 7.9-7 9-4.1-1.1-7-4.7-7-9V6.3l7-2.8z"/><path d="M9 12l2 2 4-4" stroke-linecap="round"/></svg>
+      {{/partials/core_card}}
     </div>
-    <div hx-get="/ssh/git/public-key-card" hx-trigger="load" hx-swap="innerHTML">
-      <div class="rounded-box border border-base-300 bg-base-100 p-4 text-xs text-base-content/50 flex items-center gap-2">
-        <span class="loading loading-spinner loading-xs"></span> Loading git SSH public key…
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+      <div hx-get="/ssh/homeserver/public-key-card" hx-trigger="load" hx-swap="innerHTML" class="min-w-0 [&>*]:h-full">
+        <div class="rounded-box border border-base-300 bg-base-100 p-4 text-xs text-base-content/50 flex items-center gap-2">
+          <span class="loading loading-spinner loading-xs"></span> Loading SSH public key…
+        </div>
+      </div>
+      <div hx-get="/ssh/git/public-key-card" hx-trigger="load" hx-swap="innerHTML" class="min-w-0 [&>*]:h-full">
+        <div class="rounded-box border border-base-300 bg-base-100 p-4 text-xs text-base-content/50 flex items-center gap-2">
+          <span class="loading loading-spinner loading-xs"></span> Loading git SSH public key…
+        </div>
       </div>
     </div>
     <div hx-get="/secrets/card" hx-trigger="load" hx-swap="outerHTML">

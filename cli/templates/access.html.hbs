@@ -1,0 +1,279 @@
+{{!-- Access page (routes/access.rs): every way into the server. Default access for
+     apps, each app's places / login page / SSO (clicks save a settings patch and
+     re-render this fragment), open ports and the server's own logins. --}}
+{{#*inline "toggleForm"}}
+<form hx-post="/access/set" hx-trigger="submit, change" hx-target="#access-page" hx-swap="outerHTML" class="contents">
+  <input type="hidden" name="path" value="{{path}}">
+  <input type="hidden" name="value" value="{{value}}">
+  {{> @partial-block}}
+</form>
+{{/inline}}
+{{#*inline "followBadge"}}
+  {{#if state.fixed}}<span class="badge badge-ghost badge-xs" title="This app decides this itself">set by app</span>
+  {{else}}{{#if state.changed}}<span class="badge badge-outline badge-xs" title="Set for this app; does not follow the default">changed</span>{{/if}}{{/if}}
+{{/inline}}
+<div id="access-page" class="space-y-6 sm:space-y-8"
+     data-neo-eval-keys="access" data-neo-eval-gen="{{eval.gen}}" data-neo-eval-provisional="{{eval.provisional}}" data-neo-eval-url="/configuration/access">
+  <div class="flex items-start gap-3">
+    <a href="/configuration/settings" hx-get="/configuration/settings" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true"
+       class="btn btn-ghost btn-sm btn-square mt-0.5" title="Back to Settings" aria-label="Back to Settings">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4" aria-hidden="true"><path fill-rule="evenodd" d="M12.8 5.2a.75.75 0 010 1.06L9.06 10l3.74 3.74a.75.75 0 11-1.06 1.06L7.47 10.53a.75.75 0 010-1.06l4.27-4.27a.75.75 0 011.06 0z" clip-rule="evenodd"/></svg>
+    </a>
+    <div class="min-w-0">
+      <h2 class="text-xl sm:text-2xl font-semibold tracking-tight">Access</h2>
+      <p class="text-sm text-base-content/60 mt-0.5">Who can reach this server, from where, and how they log in. Changes here are saved to your settings; apply them from the bar at the top.</p>
+    </div>
+  </div>
+
+  {{#if error}}
+    <div role="alert" class="alert alert-error alert-soft text-sm">
+      <div class="text-xs whitespace-pre-wrap break-words font-mono">{{error}}</div>
+    </div>
+  {{/if}}
+  {{#if save_error}}
+    <div role="alert" class="alert alert-error alert-soft text-sm">{{save_error}}</div>
+  {{/if}}
+
+  {{#if warnings}}
+    <ul class="space-y-2" aria-label="Things to check">
+      {{#each warnings}}
+        <li class="alert {{#if (eq level "error")}}alert-error{{else}}alert-warning{{/if}} alert-soft text-sm py-2.5">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 shrink-0" aria-hidden="true"><path fill-rule="evenodd" d="M8.49 2.86c.67-1.15 2.35-1.15 3.02 0l6.28 10.8c.67 1.16-.17 2.6-1.51 2.6H3.72c-1.34 0-2.18-1.44-1.51-2.6L8.5 2.86zM10 7a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 7zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+          <span class="flex-1">{{text}}</span>
+          {{#if link}}<a class="link text-xs shrink-0" href="{{link}}" hx-get="{{link}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true">{{link_label}}</a>{{/if}}
+        </li>
+      {{/each}}
+    </ul>
+  {{/if}}
+
+  {{!-- Defaults every app follows until it is changed for that app. --}}
+  <section class="rounded-box border border-base-300 bg-base-100 p-4 sm:p-5 space-y-4" aria-labelledby="access-defaults-title">
+    <div>
+      <h3 id="access-defaults-title" class="font-semibold">Default for all apps</h3>
+      <p class="text-xs text-base-content/60 mt-0.5">Every app follows these until you change it for that app below.</p>
+    </div>
+    <div class="grid gap-4 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div>
+        <div class="text-xs font-medium text-base-content/70 mb-1.5">Apps are reachable from</div>
+        <div class="flex flex-wrap gap-1.5">
+          {{#each defaults.places}}
+            {{#> toggleForm}}
+              <button type="submit" data-neo-lock="system:sh"
+                      class="btn btn-sm {{#if on}}btn-primary{{else}}btn-outline{{/if}}"
+                      aria-pressed="{{#if on}}true{{else}}false{{/if}}"
+                      title="{{#if inactive}}{{label}} is not set up on this server{{else}}{{#if on}}Stop{{else}}Allow{{/if}} {{label}} for apps that follow the default{{/if}}">
+                {{label}}{{#if inactive}}<span class="text-[10px] opacity-60 font-normal">off</span>{{/if}}
+              </button>
+            {{/toggleForm}}
+          {{/each}}
+        </div>
+      </div>
+      <div class="space-y-2">
+        {{#with defaults.login}}
+          {{#> toggleForm}}
+            <label class="flex items-center justify-between gap-3 cursor-pointer">
+              <span class="text-sm">Apps ask for login</span>
+              <input type="checkbox" class="toggle toggle-primary toggle-sm" {{#if on}}checked{{/if}}
+                     data-neo-lock="system:sh" aria-label="Apps ask for login">
+            </label>
+          {{/toggleForm}}
+        {{/with}}
+        {{#with defaults.sso}}
+          {{#> toggleForm}}
+            <label class="flex items-center justify-between gap-3 cursor-pointer">
+              <span class="text-sm">Sign in to apps with your login page account
+                <span class="block text-xs text-base-content/55">One account for every app that supports it, managed on the login page.</span>
+              </span>
+              <input type="checkbox" class="toggle toggle-primary toggle-sm" {{#if on}}checked{{/if}}
+                     {{#if ../defaults.sso_blocked}}disabled title="Turn on the login page (tinyauth) first"{{/if}}
+                     data-neo-lock="system:sh" aria-label="Sign in to apps with your login page account">
+            </label>
+          {{/toggleForm}}
+        {{/with}}
+      </div>
+    </div>
+  </section>
+
+  {{!-- Apps × places. --}}
+  <section class="space-y-3" aria-labelledby="access-apps-title">
+    <div class="flex items-end justify-between gap-3">
+      <div>
+        <h3 id="access-apps-title" class="font-semibold">Apps</h3>
+        <p class="text-xs text-base-content/60 mt-0.5">Click a place, the login page or sign-in to change it for one app.{{#unless relay}} Internet works only with a relay or when your router forwards ports 80 and 443 to this server.{{/unless}}</p>
+      </div>
+    </div>
+    {{#if apps}}
+    <div class="rounded-box border border-base-300 bg-base-100 overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr class="text-xs">
+            <th class="min-w-44">App</th>
+            {{#each place_headers}}<th class="text-center whitespace-nowrap{{#if inactive}} text-base-content/40{{/if}}" {{#if inactive}}title="{{label}} is not set up on this server"{{/if}}>{{label}}</th>{{/each}}
+            <th class="text-center whitespace-nowrap">Login page</th>
+            <th class="text-center whitespace-nowrap">Login page account</th>
+            <th class="min-w-40">Who gets in</th>
+            <th><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each apps}}
+            <tr class="{{#if risk}}bg-error/5{{/if}}">
+              <td>
+                <div class="flex items-center gap-2.5 min-w-0">
+                  {{#if icon}}<img src="{{icon}}" alt="" class="w-6 h-6 shrink-0 object-contain" loading="lazy" data-neo-icon-fallback>
+                  {{else}}<span class="w-6 h-6 shrink-0 rounded bg-base-200"></span>{{/if}}
+                  <div class="min-w-0">
+                    <a class="font-medium hover:underline" href="{{settings_url}}" hx-get="{{settings_url}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true">{{title}}</a>
+                    {{#if host}}<div class="text-[11px] text-base-content/50 font-mono truncate max-w-56">{{host}}</div>{{/if}}
+                    <div class="flex gap-1 mt-0.5">{{> followBadge state=places_state}}</div>
+                  </div>
+                </div>
+              </td>
+              {{#each places}}
+                <td class="text-center">
+                  {{#> toggleForm}}
+                    <button type="submit" data-neo-lock="system:sh"
+                            class="btn btn-xs btn-circle {{#if on}}{{#if inactive}}btn-ghost text-base-content/40{{else}}btn-success{{/if}}{{else}}btn-ghost text-base-content/30{{/if}}"
+                            aria-pressed="{{#if on}}true{{else}}false{{/if}}"
+                            aria-label="{{label}}: {{#if on}}allowed{{else}}blocked{{/if}}"
+                            title="{{label}}: {{#if on}}allowed{{else}}blocked{{/if}}{{#if inactive}} (not set up){{/if}}. Click to change.">
+                      {{#if on}}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 011.4-1.4L8 12.58l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>
+                      {{else}}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3" aria-hidden="true"><path d="M5 9.25h10v1.5H5z"/></svg>{{/if}}
+                    </button>
+                  {{/toggleForm}}
+                </td>
+              {{/each}}
+              <td class="text-center">
+                {{#if login}}
+                  {{#with login}}
+                    {{#> toggleForm}}
+                      <input type="checkbox" class="toggle toggle-primary toggle-xs" {{#if on}}checked{{/if}}
+                             data-neo-lock="system:sh" aria-label="{{../title}}: ask for login">
+                    {{/toggleForm}}
+                  {{/with}}
+                  <div class="flex justify-center mt-0.5">{{> followBadge state=login_state}}</div>
+                  {{#if public_paths}}<div class="text-[10px] text-base-content/50" title="Addresses of this app that open without login (share links, phone apps)">{{public_paths}} open paths</div>{{/if}}
+                {{else}}
+                  <span class="text-xs text-base-content/40" title="This app handles its own login">—</span>
+                {{/if}}
+              </td>
+              <td class="text-center">
+                {{#if sso}}
+                  {{#with sso}}
+                    {{#> toggleForm}}
+                      <input type="checkbox" class="toggle toggle-primary toggle-xs" {{#if on}}checked{{/if}}
+                             {{#if inactive}}{{#unless on}}disabled title="Turn on the login page (tinyauth) first"{{/unless}}{{/if}}
+                             data-neo-lock="system:sh" aria-label="{{../title}}: sign in with the login page account">
+                    {{/toggleForm}}
+                  {{/with}}
+                  <div class="flex justify-center mt-0.5">{{> followBadge state=sso_state}}</div>
+                {{else}}
+                  <span class="text-xs text-base-content/40" title="This app cannot sign in with the login page account yet">—</span>
+                {{/if}}
+              </td>
+              <td class="text-xs">
+                <div class="{{#if risk}}text-error font-medium{{/if}}">{{who}}</div>
+                {{#if own_login}}{{#if login.on}}<div class="text-base-content/50">then {{own_login}}</div>{{/if}}{{/if}}
+              </td>
+              <td class="text-right">
+                {{#if any_changed}}
+                  <form hx-post="/access/set" hx-target="#access-page" hx-swap="outerHTML">
+                    <input type="hidden" name="path" value="services.{{name}}">
+                    <input type="hidden" name="op" value="follow">
+                    <button type="submit" class="btn btn-ghost btn-xs whitespace-nowrap" data-neo-lock="system:sh"
+                            title="Remove what is set for this app and follow the default again">Use defaults</button>
+                  </form>
+                {{/if}}
+              </td>
+            </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}
+      <p class="rounded-box border border-dashed border-base-300 p-4 text-sm text-base-content/60">No app has a web address yet. {{#unless domain}}Set your domain in SWAG first.{{/unless}}</p>
+    {{/if}}
+  </section>
+
+  {{!-- Every port open to the outside. --}}
+  <section class="space-y-3" aria-labelledby="access-ports-title">
+    <div>
+      <h3 id="access-ports-title" class="font-semibold">Open ports</h3>
+      <p class="text-xs text-base-content/60 mt-0.5">Every door into the server, and what protects it. Web apps all share the web ports and use the settings above.</p>
+    </div>
+    <div class="rounded-box border border-base-300 bg-base-100 overflow-x-auto">
+      <table class="table table-sm">
+        <thead><tr class="text-xs"><th>Port</th><th>For</th><th>Open on</th><th>Protected by</th></tr></thead>
+        <tbody>
+          {{#each ports}}
+            <tr>
+              <td class="font-mono text-xs whitespace-nowrap">{{port}}</td>
+              <td>
+                <div class="text-sm">{{label}}</div>
+                {{#if service}}<a class="text-[11px] link link-hover text-base-content/55" href="{{service_url}}" hx-get="{{service_url}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true">{{service}}</a>{{/if}}
+              </td>
+              <td class="text-xs whitespace-nowrap">{{scope}}</td>
+              <td class="text-xs {{#unless described}}text-warning{{/unless}}">{{login}}{{#if open}} <span class="badge badge-ghost badge-xs" title="Anyone who reaches it may use it, on purpose">public by design</span>{{/if}}</td>
+            </tr>
+          {{else}}
+            <tr><td colspan="4" class="text-sm text-base-content/60">No open ports.</td></tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {{!-- The server's own logins. --}}
+  <section class="space-y-3" aria-labelledby="access-logins-title">
+    <h3 id="access-logins-title" class="font-semibold">Logins</h3>
+    <div class="grid gap-3 md:grid-cols-2">
+      <div class="rounded-box border border-base-300 bg-base-100 p-4 space-y-3">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="font-semibold text-sm">SSH</div>
+            <div class="text-xs text-base-content/60">Users {{#each ssh.users}}<span class="font-mono">{{this}}</span>{{#unless @last}} and {{/unless}}{{/each}} on port {{#each ssh.ports}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}.</div>
+          </div>
+          <a class="btn btn-ghost btn-xs" href="{{ssh_keys_url}}" hx-get="{{ssh_keys_url}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true">Manage keys</a>
+        </div>
+        <ul class="space-y-1.5">
+          {{#each ssh_keys}}
+            <li class="flex items-center gap-2 text-xs">
+              <span class="badge badge-ghost badge-xs font-mono">{{kind}}</span>
+              <span class="flex-1 min-w-0 truncate">{{#if comment}}{{comment}}{{else}}<span class="text-base-content/50">no name</span>{{/if}}</span>
+              <span class="font-mono text-base-content/45" title="Last characters of the key">…{{tail}}</span>
+            </li>
+          {{else}}
+            <li class="text-xs text-warning">No SSH key: anyone with the password can try to log in.</li>
+          {{/each}}
+        </ul>
+        <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+          <dt class="text-base-content/55">Password over SSH</dt><dd>{{#if ssh.password_login}}<span class="text-warning">On</span>{{else}}Off (keys only){{/if}}</dd>
+          <dt class="text-base-content/55">Console password</dt><dd>{{#if ssh.console_password}}Set{{else}}Not set{{/if}} · <a class="link link-hover" href="{{console_password_url}}" hx-get="{{console_password_url}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true">change</a></dd>
+          <dt class="text-base-content/55">NetBird SSH</dt><dd>{{#if ssh.netbird_ssh}}On{{else}}Off{{/if}}</dd>
+        </dl>
+      </div>
+
+      <div class="rounded-box border border-base-300 bg-base-100 p-4 space-y-3">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="font-semibold text-sm">Login page</div>
+            <div class="text-xs text-base-content/60">{{#if login_page.enabled}}One login for your apps{{#if login_page.url}} at <span class="font-mono">{{login_page.url}}</span>{{/if}}.{{else}}Off: apps that ask for login cannot open.{{/if}}</div>
+          </div>
+          <a class="btn btn-ghost btn-xs" href="{{login_page_settings_url}}" hx-get="{{login_page_settings_url}}" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true">Manage users</a>
+        </div>
+        <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+          <dt class="text-base-content/55">Users</dt>
+          <dd>{{#each login_page.users}}<span class="font-mono">{{this}}</span>{{#unless @last}}, {{/unless}}{{else}}<span class="text-base-content/50">None yet</span>{{/each}}</dd>
+          <dt class="text-base-content/55">Outside accounts</dt>
+          <dd>{{#each login_page.providers}}{{this}}{{#unless @last}}, {{/unless}}{{else}}<span class="text-base-content/50">None</span>{{/each}}</dd>
+          {{#if login_page.groups}}
+            <dt class="text-base-content/55">Allowed groups</dt>
+            <dd>{{#each login_page.groups}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}</dd>
+          {{/if}}
+          <dt class="text-base-content/55">Apps signing in with it</dt>
+          <dd>{{#each login_page.oidc_apps}}{{this}}{{#unless @last}}, {{/unless}}{{else}}<span class="text-base-content/50">None</span>{{/each}}</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+</div>

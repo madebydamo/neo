@@ -12,6 +12,7 @@ use super::super::overlay;
 use super::super::repl::NixEvaluator;
 use super::EvalPool;
 use crate::commands::web::guides::GuidesExtract;
+use crate::commands::web::routes::access::AccessReport;
 use crate::commands::web::routes::privacy::PrivacyExtract;
 use crate::commands::web::types::{
     EvalErrorUi, EvalMark, IndexContext, NavigatorContext, OptionPaneContext,
@@ -25,6 +26,7 @@ pub enum QueryKey {
     Navigator,
     Guides,
     Privacy,
+    Access,
     OptionIndex,
     SecretPaths,
     PluginOwners,
@@ -39,6 +41,7 @@ impl QueryKey {
             Self::Navigator => "navigator".into(),
             Self::Guides => "guides".into(),
             Self::Privacy => "privacy".into(),
+            Self::Access => "access".into(),
             Self::OptionIndex => "option-index".into(),
             Self::SecretPaths => "secret-paths".into(),
             Self::PluginOwners => "plugin-owners".into(),
@@ -70,6 +73,7 @@ impl QueryKey {
             Self::Navigator => "Nix error while building navigator",
             Self::Guides => "Nix error while extracting guides",
             Self::Privacy => "Nix error while building the privacy map",
+            Self::Access => "Nix error while building the access overview",
             Self::Pane { core: true, .. } => "Nix error for core section",
             Self::Pane { core: false, .. } => "Nix error for service options",
             _ => "Nix error",
@@ -86,6 +90,7 @@ pub(super) enum Cached {
     Pane(Arc<OptionPaneContext>),
     Guides(Arc<GuidesExtract>),
     Privacy(Arc<PrivacyExtract>),
+    Access(Arc<AccessReport>),
     OptionIndex(Arc<OptionIndex>),
     SecretPaths(Arc<Vec<Vec<String>>>),
     PluginOwners(Arc<HashMap<String, Vec<String>>>),
@@ -101,6 +106,7 @@ impl Cached {
             Self::Pane(x) => serde_json::to_value(&**x),
             Self::Guides(x) => serde_json::to_value(&**x),
             Self::Privacy(x) => serde_json::to_value(&**x),
+            Self::Access(x) => serde_json::to_value(&**x),
             Self::OptionIndex(x) => serde_json::to_value(&**x),
             Self::SecretPaths(x) => serde_json::to_value(&**x),
             Self::PluginOwners(x) => serde_json::to_value(&**x),
@@ -140,6 +146,7 @@ pub(super) async fn run_query(ev: &mut NixEvaluator, key: &QueryKey) -> Result<C
         QueryKey::Navigator => Cached::Navigator(Arc::new(ev.extract_proxied_services().await?)),
         QueryKey::Guides => Cached::Guides(Arc::new(ev.extract_guides().await?)),
         QueryKey::Privacy => Cached::Privacy(Arc::new(ev.extract_privacy().await?)),
+        QueryKey::Access => Cached::Access(Arc::new(ev.extract_access().await?)),
         QueryKey::OptionIndex => Cached::OptionIndex(Arc::new(ev.extract_option_index().await?)),
         QueryKey::SecretPaths => Cached::SecretPaths(Arc::new(ev.extract_secret_paths().await?)),
         QueryKey::PluginOwners => Cached::PluginOwners(Arc::new(ev.extract_plugin_owners().await?)),
@@ -222,6 +229,15 @@ impl EvalPool {
         let (r, mark) = self.get(&QueryKey::Privacy).await;
         let r = r.and_then(|c| match c {
             Cached::Privacy(p) => Ok((*p).clone()),
+            _ => Err(anyhow!("unexpected cache entry")),
+        });
+        (r, mark)
+    }
+
+    pub async fn access(&self) -> (Result<AccessReport>, EvalMark) {
+        let (r, mark) = self.get(&QueryKey::Access).await;
+        let r = r.and_then(|c| match c {
+            Cached::Access(p) => Ok((*p).clone()),
             _ => Err(anyhow!("unexpected cache entry")),
         });
         (r, mark)
