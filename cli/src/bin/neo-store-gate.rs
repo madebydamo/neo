@@ -2,8 +2,11 @@
 //! docs/design/backup-restore.md §6): runs what the backup and `neo restore`
 //! ask for over SSH and refuses everything else. Never starts a shell.
 //!
-//! Usage: neo-store-gate <files|encrypted|zfs> <dataset prefix or ->, with the
-//! request in SSH_ORIGINAL_COMMAND and sftp-server in NEO_SFTP_SERVER.
+//! Usage: neo-store-gate [--read-only] <files|encrypted|zfs> <dataset prefix or ->,
+//! with the request in SSH_ORIGINAL_COMMAND and sftp-server in NEO_SFTP_SERVER.
+//!
+//! `--read-only` is the short-lived key of a rescue from the store
+//! (docs/design/backup-store-rescue.md §4): only what `neo restore` reads.
 
 use std::env;
 use std::os::unix::process::CommandExt;
@@ -144,17 +147,61 @@ fn zfs(args: &[&str], prefix: &str) -> bool {
     }
 }
 
-fn plan(request: &str, format: &str, prefix: &str, sftp_server: &str) -> Result<Plan, String> {
+/// What a read-only key may run: the reading half of the full plan.
+fn read_only(plan: Plan, format: &str) -> Result<Plan, String> {
+    let Plan::Run(words) = plan else {
+        return Ok(plan);
+    };
+    let w: Vec<&str> = words.iter().map(String::as_str).collect();
+    let ok = match (format, w.as_slice()) {
+        // sftp-server -R refuses every write request.
+        (_, [_, "-u", "077", "-R"]) => true,
+        ("files", ["rsync", "--server", "--fake-super", rest @ ..]) => {
+            rest.contains(&"--sender") && !rest.iter().any(|a| a.starts_with("--delete"))
+        }
+        ("files", ["test", "-d", _]) => true,
+        ("zfs", ["zfs", "list" | "send" | "get", ..]) => true,
+        _ => false,
+    };
+    if ok {
+        Ok(Plan::Run(words))
+    } else {
+        Err(format!("{} with a read-only key", w[0]))
+    }
+}
+
+fn plan(
+    request: &str,
+    format: &str,
+    prefix: &str,
+    sftp_server: &str,
+    read_only_key: bool,
+) -> Result<Plan, String> {
+    let plan = full_plan(request, format, prefix, sftp_server, read_only_key)?;
+    if read_only_key {
+        read_only(plan, format)
+    } else {
+        Ok(plan)
+    }
+}
+
+fn full_plan(
+    request: &str,
+    format: &str,
+    prefix: &str,
+    sftp_server: &str,
+    read_only_key: bool,
+) -> Result<Plan, String> {
     // sshd passes a subsystem as its program path.
     if request == sftp_server {
         return if format == "zfs" {
             Err("this account holds ZFS snapshots, there are no files to read".into())
         } else {
-            Ok(Plan::Run(vec![
-                sftp_server.into(),
-                "-u".into(),
-                "077".into(),
-            ]))
+            let mut run: Vec<String> = vec![sftp_server.into(), "-u".into(), "077".into()];
+            if read_only_key {
+                run.push("-R".into());
+            }
+            Ok(Plan::Run(run))
         };
     }
     let args = split(request)?;
@@ -180,14 +227,18 @@ fn plan(request: &str, format: &str, prefix: &str, sftp_server: &str) -> Result<
 }
 
 fn main() {
-    let argv: Vec<String> = env::args().collect();
-    let (Some(format), Some(prefix)) = (argv.get(1), argv.get(2)) else {
-        eprintln!("usage: neo-store-gate <format> <dataset prefix>");
+    let mut argv: Vec<String> = env::args().skip(1).collect();
+    let read_only_key = argv.first().map(String::as_str) == Some("--read-only");
+    if read_only_key {
+        argv.remove(0);
+    }
+    let (Some(format), Some(prefix)) = (argv.first(), argv.get(1)) else {
+        eprintln!("usage: neo-store-gate [--read-only] <format> <dataset prefix>");
         exit(2);
     };
     let request = env::var("SSH_ORIGINAL_COMMAND").unwrap_or_default();
     let sftp_server = env::var("NEO_SFTP_SERVER").unwrap_or_default();
-    match plan(&request, format, prefix, &sftp_server) {
+    match plan(&request, format, prefix, &sftp_server, read_only_key) {
         Ok(Plan::Done) => {}
         Ok(Plan::Run(words)) => {
             let err = Command::new(&words[0]).args(&words[1..]).exec();
@@ -209,7 +260,11 @@ mod tests {
     const P: &str = "zroot/backup-store/home";
 
     fn run(request: &str, format: &str) -> Result<Plan, String> {
-        plan(request, format, P, SFTP)
+        plan(request, format, P, SFTP, false)
+    }
+
+    fn reads(request: &str, format: &str) -> bool {
+        plan(request, format, P, SFTP, true).is_ok()
     }
 
     fn allowed(request: &str, format: &str) -> bool {
@@ -311,5 +366,52 @@ mod tests {
         ] {
             assert!(!allowed(&bad, "zfs"), "{bad}");
         }
+    }
+
+    #[test]
+    fn read_only_key_only_reads() {
+        let d = format!("{P}/neo");
+        for (ok, format) in [
+            ("true".to_string(), "files"),
+            (SFTP.to_string(), "files"),
+            (SFTP.to_string(), "encrypted"),
+            (
+                "rsync --server --sender -logDtpr . dev/neo/".to_string(),
+                "files",
+            ),
+            ("test -d dev/neo".to_string(), "files"),
+            (
+                format!("zfs list -H -t snapshot -o name -S createtxg -d 1 {d}"),
+                "zfs",
+            ),
+            (format!("zfs send {d}@neo-backup-20261103"), "zfs"),
+            (
+                format!("zfs get -H -o value referenced {d}@neo-backup-20261103"),
+                "zfs",
+            ),
+        ] {
+            assert!(reads(&ok, format), "{ok}");
+        }
+        for (bad, format) in [
+            ("rsync --server -logDtpr . dev/neo/".to_string(), "files"),
+            (
+                "rsync --server --sender --delete -a . dev/neo/".to_string(),
+                "files",
+            ),
+            ("chmod u+w dev".to_string(), "files"),
+            ("rm -rf dev/restic-1".to_string(), "encrypted"),
+            (
+                format!("zfs recv -u -F -o canmount=noauto -o com.sun:auto-snapshot=false {d}"),
+                "zfs",
+            ),
+            (format!("zfs create -p -o canmount=off {P}"), "zfs"),
+            (format!("zfs destroy {d}@neo-backup-20261103"), "zfs"),
+        ] {
+            assert!(!reads(&bad, format), "{bad}");
+        }
+        let Ok(Plan::Run(w)) = plan(SFTP, "encrypted", P, SFTP, true) else {
+            panic!();
+        };
+        assert_eq!(w.last().map(String::as_str), Some("-R"));
     }
 }
