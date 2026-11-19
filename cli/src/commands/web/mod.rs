@@ -29,7 +29,7 @@ mod redact;
 mod resources;
 mod routes;
 mod secrets_card;
-mod settings;
+pub(crate) mod settings;
 mod ssh;
 mod trigger;
 mod types;

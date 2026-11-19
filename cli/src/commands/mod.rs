@@ -2,6 +2,7 @@
 
 pub mod activate;
 pub mod backup;
+pub mod bootstrap;
 pub mod build;
 pub mod docker_ledger;
 pub mod docker_update;
@@ -16,6 +17,7 @@ pub mod paste_settings;
 pub mod restore;
 pub mod secrets;
 pub mod security;
+pub mod settings;
 pub mod update;
 pub mod update_inputs;
 pub mod web;

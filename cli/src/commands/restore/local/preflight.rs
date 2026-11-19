@@ -61,6 +61,10 @@ impl Plan {
             );
         } else {
             println!("  disk      {} — ERASED", self.main_disk);
+            // Disko formats every disk it describes, the extra pools too.
+            for (dev, mount) in crate::commands::bootstrap::answers::additional_disks(doc) {
+                println!("  disk      {dev} → {mount} — ERASED");
+            }
         }
         println!(
             "  identity  {}",

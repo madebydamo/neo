@@ -23,7 +23,7 @@ use crate::utils::fsutil::TempDir;
 const UNIT: &str = "neo-restore";
 
 /// `root@IP:PORT` → (`root@IP`, Some(PORT)). IPv6 needs brackets: `root@[::1]:22`.
-fn split_port(host: &str) -> (String, Option<String>) {
+pub(crate) fn split_port(host: &str) -> (String, Option<String>) {
     if let Some((h, p)) = host.rsplit_once(':') {
         let bracketed = h.contains('[') && h.ends_with(']');
         if !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()) && (bracketed || !h.contains(':'))
@@ -113,7 +113,7 @@ impl RestoreArgs {
 }
 
 /// A NixOS installer: root on tmpfs (or the ISO's overlay) and nixos-install.
-const INSTALLER_TEST: &str = "test -e /etc/NIXOS && command -v nixos-install >/dev/null && case $(findmnt -no FSTYPE /) in tmpfs|overlay|rootfs) true;; *) false;; esac";
+pub(crate) const INSTALLER_TEST: &str = "test -e /etc/NIXOS && command -v nixos-install >/dev/null && case $(findmnt -no FSTYPE /) in tmpfs|overlay|rootfs) true;; *) false;; esac";
 
 /// The machine being restored and how to log in to it.
 struct Target {

@@ -149,9 +149,10 @@
       cp ${neoWebCss}/neo-ui.css $out/neo-ui.css
     '';
     unwrapped = neoUnwrapped pkgs;
-    # neo restore on a bare NixOS installer / a client laptop (after the
-    # system's own tools on PATH).
-    restoreTools = with pkgs; [git rsync openssh efibootmgr gnutar nixos-anywhere restic age websocat];
+    # neo restore on a bare NixOS installer / a client laptop, and neo
+    # bootstrap's password hashes and web check (after the system's own tools
+    # on PATH).
+    restoreTools = with pkgs; [git rsync openssh efibootmgr gnutar nixos-anywhere restic age websocat mkpasswd curl];
   in
     pkgs.runCommand "neo-0.1.0" {
       nativeBuildInputs = [pkgs.makeWrapper];

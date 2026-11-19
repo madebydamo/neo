@@ -15,6 +15,36 @@ pub fn init(
     dry_run: bool,
     nix_cmd: &str,
 ) -> Result<()> {
+    init_repo(
+        config_path,
+        config,
+        profile,
+        dry_run,
+        nix_cmd,
+        &InitSource {
+            settings: Path::new("settings.toml"),
+            hardware: true,
+        },
+    )
+}
+
+/// What `init_repo` writes besides the template.
+pub struct InitSource<'a> {
+    /// Settings file copied into the repo (the merged `config` when missing).
+    pub settings: &'a Path,
+    /// Generate hardware-configuration.nix for this machine. `neo bootstrap`
+    /// leaves it to the restore on the target.
+    pub hardware: bool,
+}
+
+pub fn init_repo(
+    config_path: &str,
+    config: &DocumentMut,
+    profile: &str,
+    dry_run: bool,
+    nix_cmd: &str,
+    source: &InitSource,
+) -> Result<()> {
     let repo_url = neo_cli_get(config, profile, "repoUrl").filter(|s| !s.is_empty());
     let template = resolve_template(config, profile);
     // Machine git identity (core.git); baked defaults always carry both keys.
@@ -78,8 +108,10 @@ pub fn init(
         &["config", "init.defaultBranch", default_branch],
     )?;
 
-    super::generate_hardware::generate_hardware(config_path, config, false)?;
-    super::paste_settings::paste_settings(config_path, Path::new("settings.toml"), config, false)?;
+    if source.hardware {
+        super::generate_hardware::generate_hardware(config_path, config, false)?;
+    }
+    super::paste_settings::paste_settings(config_path, source.settings, config, false)?;
 
     git_cmd(config_path, &["add", "."])?;
 

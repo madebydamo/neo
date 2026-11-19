@@ -65,6 +65,10 @@ struct Cli {
     #[arg(long, env = "NEO_SECTION", default_value = "", global = true)]
     section: String,
 
+    /// Config repo to work on, instead of the profile's configPath. Env: NEO_CONFIG_PATH.
+    #[arg(long, env = "NEO_CONFIG_PATH", value_name = "DIR", global = true)]
+    config_path: Option<String>,
+
     /// path to nix executable
     #[arg(long, env = "NIX_BINARY_PATH", global = true)]
     nix_path: Option<String>,
@@ -124,6 +128,15 @@ enum Commands {
     /// (docs/RESTORE.md).
     #[command(arg_required_else_help = true)]
     Restore(commands::restore::RestoreArgs),
+    /// Install Neo on a new server from this computer: a wizard writes the
+    /// config repo, sets up the streamproxy edge when needed and installs
+    /// with nixos-anywhere (docs/design/bootstrap.md).
+    Bootstrap(commands::bootstrap::BootstrapArgs),
+    /// Read or change settings.toml from a script.
+    Settings {
+        #[command(subcommand)]
+        action: commands::settings::SettingsAction,
+    },
     /// Secret settings kept outside settings.toml.
     Secrets {
         #[command(subcommand)]
@@ -299,7 +312,10 @@ fn run(cli: Cli) -> Result<()> {
         set_profile_str(&mut doc, &profile, "repoUrl", &v);
     }
 
-    let config_path = resolve_config_path(&doc, &profile);
+    let config_path = cli
+        .config_path
+        .filter(|p| !p.is_empty())
+        .unwrap_or_else(|| resolve_config_path(&doc, &profile));
 
     // The writable settings file lives under configPath (same as `neo edit` uses).
     // The original CLI --settings (or /etc/neo/settings.toml) is only the source we loaded from.
@@ -373,6 +389,12 @@ fn run(cli: Cli) -> Result<()> {
             None => generation_help(),
         },
         Commands::Restore(args) => commands::restore::restore(&args, dry_run),
+        Commands::Bootstrap(args) => {
+            commands::bootstrap::bootstrap(&args, &doc, &profile, nix_cmd, dry_run)
+        }
+        Commands::Settings { action } => {
+            commands::settings::settings(action, &config_path, nix_cmd, dry_run)
+        }
         Commands::Secrets { action } => match action {
             SecretsAction::Split => commands::secrets::split(&config_path, dry_run, nix_cmd),
             SecretsAction::Enable => commands::secrets::enable(&config_path, dry_run, nix_cmd),
@@ -441,6 +463,14 @@ fn command_lock(command: &Commands) -> Option<(LockSpec, OpInfo, Option<Operatio
         Commands::GenerateHardware => system("generate-hardware", "Hardware config generation"),
         Commands::Nuke => system("nuke", "Config removal"),
         Commands::Secrets { .. } => system("secrets", "Secret settings change"),
+        // Like a settings save in the web UI: refused while an activation commits.
+        Commands::Settings {
+            action: commands::settings::SettingsAction::Patch,
+        } => Some((
+            LockSpec::system_shared(),
+            OpInfo::new("settings", "Saving settings"),
+            None,
+        )),
         Commands::DockerUpdate { container } => {
             let unit = format!(
                 "docker-{}",
@@ -459,6 +489,8 @@ fn command_lock(command: &Commands) -> Option<(LockSpec, OpInfo, Option<Operatio
         | Commands::Lg
         | Commands::Generation { .. }
         | Commands::Restore(_)
+        | Commands::Bootstrap(_)
+        | Commands::Settings { .. }
         | Commands::Backup { .. }
         | Commands::Security { .. }
         | Commands::DockerLedger { .. } => None,
@@ -555,6 +587,7 @@ mod tests {
             "NEO_LOCK_WAIT",
             "NEO_SECTION",
             "NEO_PROFILE",
+            "NEO_CONFIG_PATH",
             "TEMPLATE_DIR",
             "STATIC_DIR",
             "DEFAULT_SETTINGS_PATH",
@@ -584,6 +617,7 @@ mod tests {
             &["secrets", "enable"],
             &["secrets", "disable"],
             &["secrets", "rekey"],
+            &["settings", "patch"],
         ];
         for args in locked {
             assert!(
@@ -599,6 +633,8 @@ mod tests {
             &["lg"],
             &["generation"],
             &["generation", "list"],
+            &["settings", "get", "core.hostname"],
+            &["bootstrap", "./new"],
         ];
         for args in unlocked {
             assert!(

@@ -14,6 +14,7 @@ neo --help
 
 | Flag / env | Purpose |
 |------------|---------|
+| `--config-path DIR` / `NEO_CONFIG_PATH` | Work on this config repo instead of the profile's `configPath`. |
 | `--settings FILE` | Path to settings. Default: `/etc/neo/settings.toml` if present, else `./settings.toml`. A path that does not exist is ignored. |
 | `--profile local \| server` | Which path profile to use. Default: `server` if `/etc/neo/settings.toml` exists, else `local`. Env: `NEO_PROFILE`. |
 | `--section …` | Alias for `--profile` (`local` or `server`). Env: `NEO_SECTION`. |
@@ -27,7 +28,7 @@ neo --help
 
 ## Operation locks
 
-Commands that change the system take Neo's **system lock** exclusively: `activate`, `update`, `update-inputs`, `generation switch|boot`, `init`, `build`, `migrate`, `paste-settings`, `generate-hardware`, `nuke`, `secrets …`. Only one of them runs at a time, and never while the web UI restores a snapshot, clears app data, repairs the Nix store, or restarts the machine. `docker-update <c>` locks only that container's unit. `web`, `edit`, `git` / `lg`, `generation list`, `restore` (it runs on an installer) and `backup …` take no lock (the backup service serialises its own runs). A conflict fails right away with the holder, e.g. `Error: Blocked: Activation in progress (started 12:03)`; pass `--lock-wait 600` to wait instead. The scheduled system updater waits up to an hour. Locks are `flock`s under `/run/neo/locks` and are released when the process exits, even after a crash.
+Commands that change the system take Neo's **system lock** exclusively: `activate`, `update`, `update-inputs`, `generation switch|boot`, `init`, `build`, `migrate`, `paste-settings`, `generate-hardware`, `nuke`, `secrets …` (`settings patch` takes it shared, like a web UI save). Only one of them runs at a time, and never while the web UI restores a snapshot, clears app data, repairs the Nix store, or restarts the machine. `docker-update <c>` locks only that container's unit. `web`, `edit`, `git` / `lg`, `generation list`, `restore` (it runs on an installer), `bootstrap` (it runs on your laptop) and `backup …` take no lock (the backup service serialises its own runs). A conflict fails right away with the holder, e.g. `Error: Blocked: Activation in progress (started 12:03)`; pass `--lock-wait 600` to wait instead. The scheduled system updater waits up to an hour. Locks are `flock`s under `/run/neo/locks` and are released when the process exits, even after a crash.
 
 ## Profiles and users
 
@@ -60,6 +61,8 @@ SSH to a finished host as **`homeserver@…`** for `neo`. **`admin@…`** uses t
 | `neo secrets enable` | Encrypt them into `secrets.sops.yaml` for this machine's SSH host key and the ssh-ed25519 `authorizedKeys`, and escrow the host key in `identity.sops.yaml`. Run on the machine |
 | `neo secrets disable` | Decrypt back into a plain `secrets.yaml` |
 | `neo secrets rekey` | Re-encrypt for the current keys (after editing `authorizedKeys` by hand) |
+| `neo bootstrap <dir>` | Install Neo on a new server from this computer: a wizard asks for the server (`root@IP`), name, domain, logins, disk and whether it has a public address (else it adds a tunnel on your streamproxy edge, `homeserver@…`, and activates it there), writes the config repo into `<dir>`, optionally opens `neo web` on it, then installs with `neo restore --data none` and waits for the web UI. Rerun with the same `<dir>` to change answers or retry. See [design/bootstrap.md](design/bootstrap.md) |
+| `neo settings get <path>` / `neo settings patch` | Print one setting as JSON, or apply `set`/`unset` changes read as JSON from stdin, like a web UI save (secrets go to the secrets file) |
 | `neo restore <repo>` | Reinstall a machine from its config repo and its backup, on a NixOS installer as root or from a laptop with `--host root@IP`. `<repo>` is a git URL, a checkout (its last commit), a bare repo, or a plain copy of the files without `.git`. Clone, restore the escrowed host key with `--key`, Disko, data, `nixos-install`. `--check`, `--data none`, `--data-from`, `--no-install`, `--config`. See [Rebuild a machine](INSTALL.md#rebuild-a-machine-from-its-config-repo) |
 | `neo restore --from-backup <backup>` | The same with the config repo taken out of the backup (`user@host:folder`, `ssh://user@host:port/folder`, or a mounted folder); an encrypted backup opens with `--key`. With a repo argument, only the data comes from that backup |
 | `neo backup extract-config <backup>` | Copy the config repo out of an encrypted or plain-files backup into `--out` (default `./neo-config`), with `--key` (and `--backup-key` for the SSH login) |

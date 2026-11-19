@@ -88,6 +88,16 @@ Power users: optional [CLI reference](CLI.md).
 
 Use this when the target is **not** Neo yet, or you want a clean install from another computer. Can **format the remote disk** automatically ([Disko](#automatic-disk-layout-disko)).
 
+**Shortcut: `neo bootstrap`.** One guided command does steps 1–4 below and waits until the web UI answers:
+
+```bash
+nix run github:madebydamo/neo#neo -- bootstrap ./myserver
+```
+
+It asks for the server (`root@IP`, any Linux with root SSH or a NixOS installer; or a user with sudo such as `homeserver@` on a machine that already runs Neo, the sudo password is asked once), its name, domain, certificate email, a web login, an optional Linux password, the disk and what the other disks are for (listed from the machine) and automatic snapshots. If the server has no public address, give your streamproxy edge (an existing Neo server, `homeserver@edge`): bootstrap adds the tunnel there, activates it and fills in rathole on the new server. Before installing it can open `neo web` on the new config repo for more settings, and it checks the domain's DNS. Run it again with the same folder to change an answer or retry after a failure; Enter keeps the earlier answers. When the server is up you can delete the folder: the server keeps its own copy of the config repo. Details: [design/bootstrap.md](design/bootstrap.md).
+
+The manual steps:
+
 ### Prerequisites
 
 **Your laptop:**

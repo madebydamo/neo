@@ -17,7 +17,7 @@ Work in a checkout of `github:madebydamo/neo` (`git clone https://github.com/mad
 | `docs/PHILOSOPHY.md` | Always, once. Why the rules exist; decide unclear cases by it |
 | `docs/ARCHITECTURE.md` | Traffic, login and update model in plain words |
 | `docs/PLUGIN-DEVELOPMENT.md`, `docs/LIB.md` | Anything touching `lib.neo` or the plugin interface (plugins are its public API) |
-| `docs/design/<topic>.md` | Before changing that area: `secrets`, `backup-restore`, `plugin-instances`, `descriptions-and-guides`, `assistant-chat`, `web-ui-options`, `eval-latency`, `operation-locks`, `restart-required`, `network-isolation`, `monitoring` |
+| `docs/design/<topic>.md` | Before changing that area: `secrets`, `backup-restore`, `plugin-instances`, `descriptions-and-guides`, `assistant-chat`, `web-ui-options`, `eval-latency`, `operation-locks`, `bootstrap`, `restart-required`, `network-isolation`, `monitoring` |
 | `nix/services/<similar>/` | Before writing a service: copy the shape of the closest existing one |
 
 ## 2. Route the task
