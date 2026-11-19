@@ -55,6 +55,8 @@
             then "ssh"
             else d.target;
           NEO_FORMAT = d.format;
+          # A store gets neo-backup.last after each good run (its rescue portal).
+          NEO_STORE = boolToString (d.target == "store");
           NEO_DEST = d.remotePath;
           NEO_DEST_DATASET = d.dataset;
           NEO_KEEP = toString d.keep;

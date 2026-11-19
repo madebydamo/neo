@@ -21,6 +21,7 @@
 #   NEO_NAME         its name in destinations.<name>
 #   NEO_TARGET       ssh | disk
 #   NEO_FORMAT       files | encrypted | zfs
+#   NEO_STORE        true: a Neo backup store (gets neo-backup.last)
 #   NEO_DEST         remotePath (files, encrypted)
 #   NEO_DEST_DATASET dataset (zfs)
 #   NEO_KEEP         backups kept at the destination (zfs, encrypted)
@@ -499,6 +500,19 @@ prune_snapshots() {
   done
 }
 
+# After a good run to a backup store: neo-backup.last in the backup folder, so
+# the store's rescue portal knows the time of the last backup
+# (docs/design/backup-store-rescue.md §2). Plain text, no secret. Its failure
+# is logged only: the backup itself is done.
+put_marker() {
+  local f="$run_dir/neo-backup.last"
+  printf 'version=1\ntime=%s\nhost=%s\nformat=%s\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${NEO_HOSTNAME:-}" "$NEO_FORMAT" >"$f"
+  [ -x "$run_dir/ssh" ] || ssh_wrapper
+  (put_header "$f" neo-backup.last) || log "could not write neo-backup.last at the store"
+  rm -f "$f"
+}
+
 # One destination, in a subshell: variables, die and the ssh command stay there.
 backup_to() {
   # shellcheck source=/dev/null
@@ -518,6 +532,10 @@ backup_to() {
   zfs) backup_zfs ;;
   *) die "unknown format $NEO_FORMAT" ;;
   esac
+  # ZFS needs no marker: the snapshot name is the time.
+  if [ "${NEO_STORE:-false}" = true ] && [ "$NEO_FORMAT" != zfs ]; then
+    put_marker
+  fi
 }
 
 # One backup at a time (the nightly run waits for a key rotation).
