@@ -475,3 +475,22 @@ test('save() omits an attrsOf whose entries all equal their entry defaults', asy
   assert.equal(posts.length, 1);
   assert.equal('testers' in posts[0].body, false);
 });
+
+test('collectSave writes nested submodule fields of an entry as tables', () => {
+  installGlobals({});
+  loadOptionForm();
+  const form = optionForm();
+  const elem = {
+    kind: 'submodule',
+    fields: [
+      { name: 'postgres.password', type: { kind: 'nullOr', elem: { kind: 'str' } }, secret: true },
+    ],
+  };
+  form.optionsByName = { datapools: { name: 'datapools', type: { kind: 'attrsOf', elem } } };
+  form.defaults = { datapools: {} };
+  form.values = { datapools: { bank: { 'postgres.password': 'secret' } } };
+  assert.deepEqual(form.collectSave(), { datapools: { bank: { postgres: { password: 'secret' } } } });
+
+  form.optionsByName.datapools.entryDefaults = { bank: {} };
+  assert.deepEqual(form.collectSave(), { datapools: { bank: { postgres: { password: 'secret' } } } });
+});

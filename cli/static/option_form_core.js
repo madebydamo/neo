@@ -85,10 +85,86 @@
     }
   }
 
+  // ── Nested submodules inside an entry ─────────────────────────────
+  // A plain submodule inside an entry comes from Nix as dotted field names
+  // (`postgres.password`). settings.toml and the evaluation hold it nested
+  // (`postgres = { password = … }`); the form edits it under the flat name.
+  // Saved flat, the key would be the literal `"postgres.password"`: a setting
+  // Nix does not know, and a secret the secrets split does not find.
+
+  /** Fields of a submodule type whose name is a dotted path. */
+  function dottedFields(type) {
+    const t = unwrapType(type);
+    if (!t || t.kind !== 'submodule') return [];
+    return (t.fields || []).filter((f) => f && typeof f.name === 'string' && f.name.includes('.'));
+  }
+
+  /** Remove the leaf at `parts` from `obj` and the tables it leaves empty. */
+  function takePath(obj, parts) {
+    const [head, ...rest] = parts;
+    if (!isPlainObject(obj) || !(head in obj)) return undefined;
+    if (!rest.length) {
+      const v = obj[head];
+      delete obj[head];
+      return v;
+    }
+    const v = takePath(obj[head], rest);
+    if (isPlainObject(obj[head]) && !Object.keys(obj[head]).length) delete obj[head];
+    return v;
+  }
+
+  /** An entry with nested values of dotted fields moved to their flat name (load). */
+  function flattenEntry(val, elemType) {
+    if (!isPlainObject(val)) return val;
+    const out = cloneValue(val);
+    dottedFields(elemType).forEach((f) => {
+      const nested = takePath(out, f.name.split('.'));
+      if (out[f.name] === undefined && nested !== undefined) out[f.name] = nested;
+    });
+    return out;
+  }
+
+  /** An entry with flat dotted field names moved into nested tables (save). */
+  function nestEntry(val, elemType) {
+    if (!isPlainObject(val)) return val;
+    const out = cloneValue(val);
+    dottedFields(elemType).forEach((f) => {
+      if (!Object.prototype.hasOwnProperty.call(out, f.name)) return;
+      const v = out[f.name];
+      delete out[f.name];
+      if (v === null || v === undefined) return;
+      const parts = f.name.split('.');
+      let cur = out;
+      parts.slice(0, -1).forEach((p) => {
+        if (!isPlainObject(cur[p])) cur[p] = {};
+        cur = cur[p];
+      });
+      cur[parts[parts.length - 1]] = v;
+    });
+    return out;
+  }
+
+  /** An option's form value as settings.toml nests it: [`nestEntry`] on each submodule entry. */
+  function nestValue(type, value) {
+    const t = unwrapType(type);
+    if (!t) return value;
+    const elem = unwrapType(t.elem);
+    if (t.kind === 'listOf' && elem && elem.kind === 'submodule' && Array.isArray(value)) {
+      return value.map((e) => nestEntry(e, elem));
+    }
+    if (t.kind === 'attrsOf' && elem && elem.kind === 'submodule' && isPlainObject(value)) {
+      const out = {};
+      Object.keys(value).forEach((k) => { out[k] = nestEntry(value[k], elem); });
+      return out;
+    }
+    if (t.kind === 'submodule') return nestEntry(value, t);
+    return value;
+  }
+
   /** A submodule value with every field it lacks filled from the type. */
   function mergeSubmoduleValue(val, elemType) {
     const base = defaultForType(elemType) || {};
-    const v = isPlainObject(val) ? cloneValue(val) : {};
+    const v = isPlainObject(val) ? flattenEntry(val, elemType) : {};
     Object.keys(base).forEach((k) => {
       if (v[k] === undefined) v[k] = base[k];
     });
@@ -328,6 +404,9 @@
     unwrapType,
     defaultForType,
     mergeSubmoduleValue,
+    flattenEntry,
+    nestEntry,
+    nestValue,
     normalizeValue,
     extractKeyFromItem,
     deriveKeys,

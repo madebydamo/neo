@@ -663,15 +663,18 @@ function optionForm() {
           }
           return;
         }
+        // Entry fields of a nested submodule (`postgres.password`) go back into
+        // their table, so the key and its secret land where Nix reads them.
+        const nest = (v) => NeoOptionFormCore.nestValue(this.optionsByName?.[k]?.type, v);
         if (this.optionsByName?.[k]?.entryDefaults) {
-          const pruned = this.pruneEntryDefaults(k, this.values[k]);
-          if (!this.deepEqual(pruned, this.pruneEntryDefaults(k, this.defaults[k]))) {
+          const pruned = this.pruneEntryDefaults(k, nest(this.values[k]));
+          if (!this.deepEqual(pruned, this.pruneEntryDefaults(k, nest(this.defaults[k])))) {
             toSave[k] = pruned;
           }
           return;
         }
         if (!this.isAtDefault(k)) {
-          toSave[k] = this.values[k];
+          toSave[k] = nest(this.values[k]);
         }
       });
       return toSave;

@@ -161,3 +161,45 @@ test('pruneEntryDefaults drops fields still at their entry default', () => {
   assert.equal(core.pruneEntryDefaults(null, 'v'), 'v');
   assert.deepEqual(core.pruneEntryDefaults(ed, ['x']), ['x']);
 });
+
+test('nested submodule fields of an entry load flat and save nested', () => {
+  // attrsOf submodule whose entry holds a plain submodule `postgres`:
+  // the fields arrive dotted, settings.toml holds them nested.
+  const elem = {
+    kind: 'submodule',
+    fields: [
+      { name: 'label', type: { kind: 'str' }, default: '' },
+      { name: 'postgres.user', type: { kind: 'str' }, default: 'kpi' },
+      { name: 'postgres.password', type: { kind: 'nullOr', elem: { kind: 'str' } }, secret: true },
+    ],
+  };
+  const opt = { type: { kind: 'attrsOf', elem } };
+  const saved = { bank: { label: 'Bank', postgres: { password: '@NEO_SECRET:x' } } };
+
+  const form = core.normalizeValue(opt, saved);
+  assert.deepEqual(form.bank, {
+    label: 'Bank',
+    'postgres.user': 'kpi',
+    'postgres.password': '@NEO_SECRET:x',
+  });
+
+  form.bank['postgres.password'] = 'typed';
+  const out = core.nestValue(opt.type, form);
+  assert.deepEqual(out, { bank: { label: 'Bank', postgres: { user: 'kpi', password: 'typed' } } });
+  assert.equal(JSON.stringify(out).includes('postgres.'), false);
+
+  // A cleared field (null) is left out; other nested keys stay.
+  const cleared = core.nestEntry({ 'postgres.password': null, postgres: { extra: 1 } }, elem);
+  assert.deepEqual(cleared, { postgres: { extra: 1 } });
+
+  // listOf entries and dotted map keys inside a field value are handled / kept.
+  const list = { kind: 'listOf', elem };
+  assert.deepEqual(core.nestValue(list, [{ 'postgres.user': 'a' }]), [{ postgres: { user: 'a' } }]);
+  const withMap = {
+    kind: 'submodule',
+    fields: [{ name: 'tokens', type: { kind: 'attrsOf', elem: { kind: 'str' } } }],
+  };
+  assert.deepEqual(core.nestEntry({ tokens: { 'github.com': 't' } }, withMap), { tokens: { 'github.com': 't' } });
+  // Not a submodule collection: unchanged.
+  assert.deepEqual(core.nestValue({ kind: 'attrsOf', elem: { kind: 'str' } }, { 'a.b': 'c' }), { 'a.b': 'c' });
+});
