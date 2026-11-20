@@ -107,7 +107,7 @@ If the machine at home has no public IP, route the traffic with [streamproxy](do
 
 Enable what you want in the web UI.
 
-- **Files.** Filebrowser, Dufs (WebDAV), Syncthing, Nextcloud, Collabora, Paperless, Docmost (wiki, with single sign-on and an MCP server for AI clients), Stirling PDF, Gitea, Docker registry, off-site backup
+- **Files.** Filebrowser, Dufs (WebDAV), Syncthing, Nextcloud, Collabora, Paperless, Docmost (wiki, with single sign-on and an MCP server for AI clients), Stirling PDF, ConvertX, Gitea, Docker registry, off-site backup
 - **Media.** Immich, Immich Drop, iSponsorBlockTV. Jellyfin, Sonarr, Radarr and the rest of the \*arr stack come from the [highsea.neo](https://github.com/madebydamo/highsea.neo) plugin
 - **Security.** Tinyauth (login in front of every app), Authentik (single sign-on), Vaultwarden (passwords)
 - **Calendar and contacts.** RustiCal (CalDAV, CardDAV), Calino, iCal subscriptions

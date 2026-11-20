@@ -514,8 +514,8 @@ from the Services and Guides tabs.
 | `photos` | Photos & videos | immich |
 | `passwords` | Passwords | vaultwarden |
 | `location` | Location history | dawarich |
-| `documents` | Letters & documents | paperless, stirling-pdf, bentopdf, nextcloud |
-| `files` | Files | nextcloud, syncthing, filebrowser, dufs |
+| `documents` | Letters & documents | paperless, stirling-pdf, bentopdf, convertx, nextcloud |
+| `files` | Files | nextcloud, syncthing, filebrowser, dufs, convertx |
 | `notes` | Notes & wiki | docmost, nextcloud |
 | `tasks` | To-dos | vikunja, rustical |
 | `bookmarks` | Bookmarks & read-later | karakeep |
