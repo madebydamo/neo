@@ -49,25 +49,37 @@
     var session = root.NeoUtil ? root.NeoUtil.store('session') : null;
     return {
       filter: 'all',
-      // Place picked in the map (phone tabs; on a wide screen it pins the paths).
+      // Place selected in the map (a phone lists only what it reaches).
       origin: null,
       init() {
-        // A phone shows one place at a time: start with the internet.
+        var phone = false;
         try {
-          if (root.matchMedia && !root.matchMedia('(min-width: 1024px)').matches) this.origin = 'web';
+          phone = !!root.matchMedia && !root.matchMedia('(min-width: 1024px)').matches;
         } catch (e) {}
+        var savedPin = session ? session.getJson('neo.accessPin', undefined) : undefined;
+        if (typeof savedPin === 'string' && savedPin.indexOf('o-') === 0) this.origin = savedPin.slice(2);
+        // A phone shows one place at a time: start with the internet.
+        else if (savedPin === undefined && phone) this.origin = 'web';
         var saved = session ? session.getJson(STORE_KEY, null) : null;
         // Drop a filter whose chip is gone.
         if (saved && this.$root.querySelector('[data-neo-filter="' + saved + '"]')) this.filter = saved;
         var self = this;
+        // Before the first paint, so the rows do not show and then vanish.
+        applyFilter(self.$root, self.filter);
         this.$nextTick(function () {
-          applyFilter(self.$root, self.filter);
-          if (root.NeoAccessMap) root.NeoAccessMap.mount(self.$root.querySelector('[data-neo-map]'));
+          if (root.NeoAccessMap) {
+            root.NeoAccessMap.mount(self.$root.querySelector('[data-neo-map]'), phone ? 'o-web' : null);
+          }
         });
         this.$watch('filter', function (f) {
           if (session) session.setJson(STORE_KEY, f);
           applyFilter(self.$root, f);
         });
+      },
+      /** The map selected a box: a place also picks what a phone lists. */
+      onPin(d) {
+        if (d && d.id && d.id.indexOf('o-') === 0) this.origin = d.id.slice(2);
+        else if (d && !d.id && d.prev && d.prev.indexOf('o-') === 0) this.origin = null;
       },
       reaches(el) {
         return reachedFrom(el.getAttribute('data-neo-from'), this.origin);
@@ -82,6 +94,22 @@
         if (lists) lists.scrollIntoView({ behavior: 'smooth', block: 'start' });
       },
     };
+  }
+
+  // A change re-renders #access-page: keep the page where it was.
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    var kept = null;
+    document.addEventListener('htmx:beforeSwap', function (e) {
+      var t = e.detail && e.detail.target;
+      kept = t && t.id === 'access-page' ? root.scrollY : null;
+    });
+    document.addEventListener('htmx:afterSettle', function (e) {
+      var t = e.detail && e.detail.target;
+      if (kept !== null && t && (t.id === 'access-page' || !t.isConnected)) {
+        root.scrollTo(0, kept);
+        kept = null;
+      }
+    });
   }
 
   var NeoAccessFilter = { tagsMatch: tagsMatch, applyFilter: applyFilter, reachedFrom: reachedFrom };

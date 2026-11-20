@@ -18,7 +18,7 @@
   {{#if state.fixed}}<span class="badge badge-ghost badge-xs" title="This app decides this itself">set by app</span>
   {{else}}{{#if state.changed}}<span class="badge badge-outline badge-xs" title="Set for this app; does not follow the default">changed</span>{{/if}}{{/if}}
 {{/inline}}
-<div id="access-page" class="space-y-6 sm:space-y-8" x-data="accessFilter()"
+<div id="access-page" class="space-y-6 sm:space-y-8" x-data="accessFilter()" @neo-map-pin="onPin($event.detail)"
      data-neo-eval-keys="access" data-neo-eval-gen="{{eval.gen}}" data-neo-eval-provisional="{{eval.provisional}}" data-neo-eval-url="/configuration/access">
   <div class="flex items-start gap-3">
     <a href="/configuration/settings" hx-get="/configuration/settings" hx-target="#config-content" hx-swap="innerHTML" hx-push-url="true"
@@ -93,13 +93,11 @@
       {{!-- 1 Where from: a column of boxes, tabs on a phone. --}}
       <div class="relative">
         <div class="lg:absolute lg:-top-8 lg:left-0 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-base-content/45 mb-2 lg:mb-0"><span class="text-base-content/70">1</span> Where from</div>
-        <div class="flex gap-2 overflow-x-auto -mx-1 px-1 pb-1 lg:flex-col lg:gap-3 lg:h-full lg:justify-around lg:overflow-visible lg:m-0 lg:p-0" role="tablist" aria-label="Where from">
+        <div class="flex gap-2 overflow-x-auto -m-2 p-2 lg:flex-col lg:gap-3 lg:h-full lg:justify-around lg:overflow-visible lg:m-0 lg:p-0" role="tablist" aria-label="Where from">
           {{#each map.origins}}
             <button type="button" data-neo-node="{{id}}" role="tab" {{#if inactive}}disabled{{/if}}
                     :aria-selected="origin === '{{place}}'"
-                    @click="origin = origin === '{{place}}' ? null : '{{place}}'"
-                    class="relative z-10 shrink-0 text-left rounded-box border bg-base-100 px-3 py-2 lg:py-2.5 flex items-center gap-2.5 transition outline-none focus-visible:ring-2 ring-primary {{#if inactive}}border-dashed border-base-300 opacity-50{{else}}border-base-300 shadow-sm hover:shadow-md cursor-pointer{{/if}}"
-                    :class="origin === '{{place}}' ? 'border-base-content! ring-2 ring-base-content/15' : ''">
+                    class="relative z-10 shrink-0 text-left rounded-box border bg-base-100 px-3 py-2 lg:py-2.5 flex items-center gap-2.5 transition outline-none focus-visible:ring-2 ring-primary {{#if inactive}}border-dashed border-base-300 opacity-50{{else}}border-base-300 shadow-sm hover:shadow-md cursor-pointer{{/if}}">
               <span class="w-8 h-8 lg:w-9 lg:h-9 shrink-0 rounded-full flex items-center justify-center {{#if (eq icon "globe")}}bg-base-content text-base-100{{else}}bg-base-200 text-base-content/70{{/if}}">
                 {{#if (eq icon "globe")}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-5 h-5" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.5 3.5 5.3 3.5 8.5s-1.1 6-3.5 8.5c-2.4-2.5-3.5-5.3-3.5-8.5s1.1-6 3.5-8.5z"/></svg>{{/if}}
                 {{#if (eq icon "home")}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" class="w-5 h-5" aria-hidden="true"><path d="M4 10.5L12 4l8 6.5V19a1 1 0 01-1 1h-4.5v-5.5h-5V20H5a1 1 0 01-1-1v-8.5z"/></svg>{{/if}}
@@ -150,7 +148,7 @@
         {{#each map.groups}}
           <div data-neo-node="{{id}}" data-neo-from="{{origins}}" tabindex="0" role="button"
                @click="pick('{{filter}}')" @keydown.enter="pick('{{filter}}')"
-               :class="(reaches($el) ? '' : 'max-lg:hidden ') + (filter === '{{filter}}' ? 'ring-4' : '')"
+               :class="reaches($el) ? '' : 'max-lg:hidden'"
                title="Click to show only these apps in the list below"
                class="relative z-10 rounded-box border-2 bg-base-100 px-3 py-2.5 cursor-pointer hover:shadow-md transition outline-none focus-visible:ring-2 ring-primary/30 {{> toneBorder}}">
             <div class="flex items-start gap-2">
@@ -259,14 +257,14 @@
               :class="filter === '{{id}}' ? '{{#if (eq id "risk")}}btn-error{{else}}btn-neutral{{/if}}' : 'btn-ghost border-base-300'"
               @click="pick('{{id}}')" :aria-pressed="filter === '{{id}}'">
         {{label}}
-        <span class="badge badge-xs font-normal {{#if (eq id "risk")}}{{#if apps}}badge-error{{else}}{{#if ports}}badge-error{{else}}badge-ghost{{/if}}{{/if}}{{else}}badge-ghost{{/if}}">{{#if apps}}{{apps}} {{#if (eq apps 1)}}app{{else}}apps{{/if}}{{#if ports}} · {{/if}}{{/if}}{{#if ports}}{{ports}} {{#if (eq ports 1)}}port{{else}}ports{{/if}}{{/if}}{{#unless apps}}{{#unless ports}}0{{/unless}}{{/unless}}</span>
+        <span class="badge badge-xs font-normal {{#if (eq id "risk")}}{{#if apps}}badge-error{{else}}{{#if ports}}badge-error{{else}}badge-ghost{{/if}}{{/if}}{{else}}{{#if (eq id "bucket-public")}}badge-info{{else}}{{#if (eq id "bucket-own")}}badge-info{{else}}badge-ghost{{/if}}{{/if}}{{/if}}">{{#if apps}}{{apps}} {{#if (eq apps 1)}}app{{else}}apps{{/if}}{{#if ports}} · {{/if}}{{/if}}{{#if ports}}{{ports}} {{#if (eq ports 1)}}port{{else}}ports{{/if}}{{/if}}{{#unless apps}}{{#unless ports}}0{{/unless}}{{/unless}}</span>
       </button>
     {{/each}}
-    {{#each map.groups}}
+    {{#each map.groups}}{{#unless (eq filter "bucket-public")}}{{#unless (eq filter "bucket-own")}}
       <button type="button" x-show="filter === '{{filter}}'" x-cloak class="btn btn-xs rounded-full btn-neutral gap-1" @click="filter = 'all'" title="Show everything again">
         {{title}} <span aria-hidden="true">×</span>
       </button>
-    {{/each}}
+    {{/unless}}{{/unless}}{{/each}}
   </nav>
 
   {{!-- Apps: where each one opens from → the login page → its account →
@@ -288,6 +286,8 @@
         <div data-neo-tags="{{tags}}" data-neo-section="apps"
              class="relative px-4 py-3 grid gap-x-4 gap-y-2 lg:grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)_minmax(9rem,13rem)_5.5rem] lg:items-center {{#if risk}}bg-error/5{{/if}}">
           {{#if risk}}<span class="absolute left-0 inset-y-0 w-1 bg-error" aria-hidden="true"></span>{{/if}}
+          {{#if (eq bucket "public")}}<span class="absolute left-0 inset-y-0 w-1 bg-info" aria-hidden="true" title="Public website, on purpose"></span>{{/if}}
+          {{#if (eq bucket "own")}}<span class="absolute left-0 inset-y-0 w-1 bg-info" aria-hidden="true" title="The app's own login guards it"></span>{{/if}}
           {{!-- App --}}
           <div class="flex items-center gap-2.5 min-w-0">
             {{#if icon}}<img src="{{icon}}" alt="" class="w-8 h-8 shrink-0 object-contain rounded-lg" loading="lazy" data-neo-icon-fallback>
@@ -305,7 +305,7 @@
                 {{#> toggleForm}}
                   <button type="submit" data-neo-lock="system:sh"
                           class="inline-flex items-center gap-1 h-6 px-2 rounded-full border text-[11px] font-medium transition-colors
-                                 {{#if on}}{{#if danger}}bg-error/15 border-error/50 text-error{{else}}{{#if inactive}}border-base-300 text-base-content/40 bg-base-200{{else}}bg-success/12 border-success/40 text-success{{/if}}{{/if}}{{else}}border-dashed border-base-300 text-base-content/35 hover:text-base-content/70{{/if}}"
+                                 {{#if on}}{{#if danger}}bg-error/15 border-error/50 text-error{{else}}{{#if info}}bg-info/12 border-info/40 text-info{{else}}{{#if inactive}}border-base-300 text-base-content/40 bg-base-200{{else}}bg-success/12 border-success/40 text-success{{/if}}{{/if}}{{/if}}{{else}}border-dashed border-base-300 text-base-content/35 hover:text-base-content/70{{/if}}"
                           aria-pressed="{{#if on}}true{{else}}false{{/if}}"
                           aria-label="{{label}}: {{#if on}}allowed{{else}}blocked{{/if}}"
                           title="{{label}}: {{#if on}}allowed{{else}}blocked{{/if}}{{#if inactive}} (not set up){{/if}}{{#if danger}}, and no login page guards it{{/if}}. Click to change.">
@@ -322,7 +322,7 @@
                   {{#> toggleForm}}
                     <button type="submit" data-neo-lock="system:sh"
                             class="inline-flex items-center gap-1 h-6 px-2 rounded-md border text-[11px] font-medium
-                                   {{#if on}}bg-base-content text-base-100 border-base-content{{else}}{{#if danger}}border-error/50 text-error bg-error/10{{else}}border-dashed border-base-300 text-base-content/45{{/if}}{{/if}}"
+                                   {{#if on}}bg-base-content text-base-100 border-base-content{{else}}{{#if danger}}border-error/50 text-error bg-error/10{{else}}{{#if info}}border-info/40 text-info bg-info/10{{else}}border-dashed border-base-300 text-base-content/45{{/if}}{{/if}}{{/if}}"
                             aria-pressed="{{#if on}}true{{else}}false{{/if}}" aria-label="{{../title}}: ask for login"
                             title="{{#if on}}The login page asks for a login first. Click to turn off.{{else}}No login page in front of this app. Click to turn on.{{/if}}">
                       <svg viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3" aria-hidden="true"><path d="M10 1.5l6.5 2.6v4.8c0 4-2.7 7.4-6.5 8.6-3.8-1.2-6.5-4.6-6.5-8.6V4.1L10 1.5z"/></svg>
@@ -332,7 +332,7 @@
                 {{/with}}
                 {{> followBadge state=login_state}}
               {{else}}
-                <span class="inline-flex items-center h-6 px-2 rounded-md border border-base-300 text-[11px] text-base-content/50" title="This app handles its own login">Own login</span>
+                <span class="inline-flex items-center h-6 px-2 rounded-md border text-[11px] {{#if (eq bucket "public")}}border-info/40 text-info bg-info/10{{else}}{{#if (eq bucket "own")}}border-info/40 text-info bg-info/10{{else}}border-base-300 text-base-content/50{{/if}}{{/if}}" title="This app handles its own login">{{#if (eq bucket "public")}}Public{{else}}Own login{{/if}}</span>
               {{/if}}
             </div>
             {{#if sso}}

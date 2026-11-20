@@ -131,7 +131,34 @@
     });
   }
 
-  /** Hover shows a node's paths; a click pins them until the next click. */
+  // Selected box: the same look in every column.
+  var SELECTED = ['border-base-content!', 'ring-2', 'ring-base-content/15'];
+  var PIN_KEY = 'neo.accessPin';
+
+  function store() {
+    return root.NeoUtil ? root.NeoUtil.store('session') : null;
+  }
+
+  /** Select `id` (null: none), show its paths, remember it, tell the page. */
+  function pin(map, id) {
+    var prev = map._neoPinned || null;
+    map._neoPinned = id || null;
+    map.querySelectorAll('[data-neo-node]').forEach(function (el) {
+      var on = el.getAttribute('data-neo-node') === map._neoPinned;
+      SELECTED.forEach(function (c) {
+        el.classList.toggle(c, on);
+      });
+      el.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    highlight(map, null);
+    var s = store();
+    if (s) s.setJson(PIN_KEY, map._neoPinned);
+    if (prev !== map._neoPinned && map.dispatchEvent && root.CustomEvent) {
+      map.dispatchEvent(new root.CustomEvent('neo-map-pin', { bubbles: true, detail: { id: map._neoPinned, prev: prev } }));
+    }
+  }
+
+  /** Hover shows a node's paths; the selected box shows them otherwise. */
   function highlight(map, id) {
     id = id || map._neoPinned || null;
     var edges = map._neoEdges;
@@ -149,12 +176,15 @@
       el.classList.toggle('opacity-15', !!on && !on.has(i));
     });
     map.querySelectorAll('[data-neo-node]').forEach(function (el) {
-      el.classList.toggle('opacity-40', !!on && !nodes.has(el.getAttribute('data-neo-node')));
+      var nid = el.getAttribute('data-neo-node');
+      // Places stay clear: they are the tabs to pick from.
+      el.classList.toggle('opacity-40', !!on && nid.indexOf('o-') !== 0 && !nodes.has(nid));
     });
   }
 
-  /** Read the edges, draw, and redraw when the map changes size. */
-  function mount(map) {
+  /** Read the edges, draw, and redraw when the map changes size.
+   *  `fallback`: box to select when none was selected before (phone: Internet). */
+  function mount(map, fallback) {
     if (!map || map._neoMounted) return;
     map._neoMounted = true;
     map._neoEdges = Array.prototype.map.call(map.querySelectorAll('[data-neo-edge]'), function (el) {
@@ -179,18 +209,21 @@
     map.querySelectorAll('[data-neo-node]').forEach(function (el) {
       el.addEventListener('click', function () {
         var id = el.getAttribute('data-neo-node');
-        map._neoPinned = map._neoPinned === id ? null : id;
-        highlight(map, null);
+        pin(map, map._neoPinned === id ? null : id);
       });
       el.addEventListener('mouseenter', function () { highlight(map, el.getAttribute('data-neo-node')); });
       el.addEventListener('mouseleave', function () { highlight(map, null); });
       el.addEventListener('focusin', function () { highlight(map, el.getAttribute('data-neo-node')); });
       el.addEventListener('focusout', function () { highlight(map, null); });
     });
+    var s = store();
+    var saved = s ? s.getJson(PIN_KEY, undefined) : undefined;
+    var start = saved === undefined ? fallback : saved;
+    if (start && map.querySelector('[data-neo-node="' + start + '"]')) pin(map, start);
     redraw();
   }
 
-  var NeoAccessMap = { anchorY: anchorY, curve: curve, pathsThrough: pathsThrough, mount: mount };
+  var NeoAccessMap = { anchorY: anchorY, curve: curve, pathsThrough: pathsThrough, mount: mount, pin: pin };
   root.NeoAccessMap = NeoAccessMap;
   if (typeof module === 'object' && module.exports) {
     module.exports = NeoAccessMap;

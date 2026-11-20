@@ -200,6 +200,8 @@ struct Toggle {
     value: String,
     /// On, and with it anyone on the internet gets in without a login.
     danger: bool,
+    /// Open on purpose: a public website, or the app's own login guards it.
+    info: bool,
 }
 
 /// One quick filter above the lists: matches rows whose tags contain `id`.
@@ -213,11 +215,21 @@ struct Filter {
 }
 
 /// Quick filters, in order (tags: `app_tags`, `access_ports::port_tags`).
-const FILTERS: [(&str, &str, &str); 7] = [
+const FILTERS: [(&str, &str, &str); 9] = [
     (
         "risk",
         "Problems",
         "Apps whose login was turned off while the internet reaches them, and ports Neo cannot explain",
+    ),
+    (
+        "bucket-public",
+        "Public websites",
+        "Open to everyone on the internet, on purpose",
+    ),
+    (
+        "bucket-own",
+        "App's own login",
+        "On the internet; the app asks for its own login instead of the login page",
     ),
     (
         "internet-nologin",
@@ -310,6 +322,8 @@ struct AppRow {
     risk: Option<String>,
     /// Without a login on purpose (public website).
     public_by_design: bool,
+    /// Exposure group on the access map (`access_map::bucket_of`).
+    bucket: &'static str,
     /// Quick-filter tags.
     tags: String,
 }
@@ -487,6 +501,7 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
                 path: "access.defaultIngress".into(),
                 value: json!(toggled(&d.places, id)).to_string(),
                 danger: false,
+                info: false,
             })
             .collect(),
         login: Toggle {
@@ -557,6 +572,7 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
             AppRow {
                 tags,
                 public_by_design,
+                bucket: "",
                 places: PLACES
                     .iter()
                     .map(|(id, label)| Toggle {
@@ -567,6 +583,7 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
                         path: format!("{base}.ingress"),
                         value: json!(toggled(&places, id)).to_string(),
                         danger: *id == "web" && internet && !login_on && !sso_on,
+                        info: false,
                     })
                     .collect(),
                 places_state: Setting {
@@ -594,6 +611,7 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
                     path: format!("{base}.sso"),
                     value: json!(!sso_on).to_string(),
                     danger: false,
+                    info: false,
                 }),
                 sso_state: Setting {
                     changed: set_sso.is_some(),
@@ -651,6 +669,18 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
     for (a, m) in apps.iter_mut().zip(&map_apps) {
         let bucket = super::access_map::bucket_of(m, &report.places);
         a.tags = format!("{} bucket-{bucket}", a.tags).trim().to_string();
+        a.bucket = bucket;
+        if bucket == "public" || bucket == "own" {
+            // Open on purpose: blue, not red.
+            for t in a.places.iter_mut().filter(|t| t.id == "web") {
+                t.info = true;
+                t.danger = false;
+            }
+            if let Some(t) = a.login.as_mut() {
+                t.info = true;
+                t.danger = false;
+            }
+        }
     }
     let map = super::access_map::build(&map_apps, &report.ports, &report.places, &report.ssh);
     let has = |tags: &str, id: &str| tags.split(' ').any(|t| t == id);
