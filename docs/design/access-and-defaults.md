@@ -116,11 +116,19 @@ nothing) → **inside** (apps, server shell, services).
    login". Each item filters the lists.
 2. Access map (`access_map.rs`, lines by `static/access_map.js`): origins →
    doors (web, SSH, every other port group, with firewall chips and the guard)
-   → behind the web door the apps grouped by exposure (`bucket_of`: open, own
-   login, behind the login page, home/VPN without login, home/VPN, nowhere).
-   Red moving lines are open entries. Hover follows a node's paths; a click on
-   a group filters the apps list. On narrow screens no lines: each node says
-   where it is reached from.
+   → behind the web door the apps grouped by exposure (`bucket_of`: open but
+   should not be, public websites, the app's own login, behind the login page,
+   home/VPN without login, home/VPN, nowhere). Only "open" is a problem: a
+   login someone turned off, with no own login. An app whose module fixes the
+   login off (`set by app`) and nobody changed it is a public website on
+   purpose. Doors are one per service (web, SSH, then by `service`), with one
+   firewall badge and one guard line; the details are in the tooltips.
+   With rathole the server has no public address: the internet reaches only
+   the web door, through the relay. A port Docker binds to one address is
+   reached from the home network. Red moving lines are open entries. Hover
+   shows a node's paths, a click pins them; a click on a group filters the
+   apps list. On a phone the places are tabs (Internet first) and only what
+   the chosen place reaches is listed.
 3. Warnings left over: apps asking for login while tinyauth is off.
 4. Default for all apps: place buttons, login and SSO toggles.
 5. Quick filters (`static/access_filter.js`): rows carry tags

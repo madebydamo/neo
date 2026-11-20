@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { tagsMatch, applyFilter } = require('./access_filter.js');
+const { tagsMatch, applyFilter, reachedFrom } = require('./access_filter.js');
 
 test('"all" and an empty filter match every row', () => {
   assert.equal(tagsMatch('', 'all'), true);
@@ -44,4 +44,11 @@ test('apps hide, ports dim, and empty notes show per section', () => {
   assert.equal(app.hidden, false);
   assert.equal(port.classList.has('opacity-15'), false);
   assert.equal(note.hidden, true);
+});
+
+test('a node is reached from the picked place, or from anywhere when none is picked', () => {
+  assert.equal(reachedFrom('local netbird', null), true);
+  assert.equal(reachedFrom('local netbird', 'netbird'), true);
+  assert.equal(reachedFrom('local netbird', 'web'), false);
+  assert.equal(reachedFrom('', 'web'), false);
 });

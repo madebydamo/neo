@@ -4,13 +4,17 @@
 //!   where from  →  door (ports through the firewall)  →  guard  →  inside
 //!
 //! Web apps share one door (the web ports), so they are grouped by how exposed
-//! they are ("anyone on the internet", "internet, behind the login page", …);
-//! the other doors (SSH, DNS, VPNs) carry their guard themselves. The lines
-//! between the nodes are drawn by static/access_map.js from `edges`.
-//! The verdict above the map says in words what is open.
+//! they are ("public websites", "internet, behind the login page", …); the
+//! other doors (SSH, DNS, VPNs), one per service, carry their guard themselves.
+//! The lines are drawn by static/access_map.js from `edges`; on a phone the
+//! origins are tabs and every node lists where it is reached from (`origins`).
+//!
+//! With the rathole relay the server has no public address: the internet
+//! reaches the web door through the relay and nothing else.
 use serde::Serialize;
 
 use super::access::{ReportPlaces, ReportPort, ReportSsh};
+use crate::commands::web::nix::sections::humanize;
 
 /// What the map needs of one app (computed in access.rs from settings + report).
 pub(super) struct MapApp {
@@ -22,12 +26,14 @@ pub(super) struct MapApp {
     pub login_on: bool,
     pub sso_on: bool,
     pub own_login: bool,
+    /// No login on purpose (a public website).
+    pub public_by_design: bool,
     pub open_paths: usize,
 }
 
 #[derive(Serialize, Debug, Default)]
 pub(super) struct Verdict {
-    /// error | warning | ok
+    /// error | warning | info | ok
     tone: &'static str,
     text: String,
     /// Quick filter a click turns on.
@@ -37,6 +43,8 @@ pub(super) struct Verdict {
 #[derive(Serialize, Debug, Default)]
 pub(super) struct Origin {
     id: String,
+    /// Place id (`web`, `local`, …) for the phone tabs.
+    place: &'static str,
     label: &'static str,
     detail: &'static str,
     icon: &'static str,
@@ -48,24 +56,24 @@ pub(super) struct Chip {
     text: String,
     /// ok | info | warning | error | muted
     tone: &'static str,
+    /// Details, one line per port (tooltip).
+    help: String,
 }
 
 #[derive(Serialize, Debug, Default)]
 pub(super) struct Door {
     id: String,
-    label: String,
+    title: String,
     ports: String,
     /// The web door leads to the app groups; the others end here.
     web: bool,
-    firewall: Vec<Chip>,
+    firewall: Chip,
     /// What stops someone at this door (not for the web door).
     guard: Option<Chip>,
-    /// Who or what is behind it ("Server shell: admin, homeserver").
-    inside: Option<String>,
-    /// Where from, in words (narrow screens draw no lines).
+    /// Place ids that reach it, space-separated (phone tabs).
+    origins: String,
+    /// Where from, in words.
     from: String,
-    /// Filter for the ports list.
-    filter: &'static str,
 }
 
 #[derive(Serialize, Debug, Default)]
@@ -80,10 +88,11 @@ pub(super) struct Group {
     id: String,
     title: &'static str,
     detail: &'static str,
-    /// error | warning | ok | muted
+    /// error | warning | info | ok | muted
     tone: &'static str,
-    /// Guard icon: none | own | login
+    /// Guard icon: none | public | own | login
     guard: &'static str,
+    origins: String,
     from: String,
     apps: Vec<GroupApp>,
     /// "1 app" / "3 apps".
@@ -107,6 +116,8 @@ pub(super) struct AccessMap {
     pub(super) ok: bool,
     /// Worst tone in the verdict: error | warning | ok.
     level: &'static str,
+    /// The internet reaches only the web door, through the relay.
+    relay: bool,
     origins: Vec<Origin>,
     doors: Vec<Door>,
     groups: Vec<Group>,
@@ -122,13 +133,20 @@ pub(super) fn bucket_of(app: &MapApp, places: &ReportPlaces) -> &'static str {
         .collect();
     let internet = active.iter().any(|p| *p == "web");
     let guarded = app.login_on || app.sso_on;
-    match (active.is_empty(), internet, guarded, app.own_login) {
-        (true, ..) => "nowhere",
-        (_, true, false, false) => "open",
-        (_, true, false, true) => "own",
-        (_, true, true, _) => "guarded",
-        (_, false, false, false) => "private-open",
-        _ => "private",
+    if active.is_empty() {
+        "nowhere"
+    } else if internet && guarded {
+        "guarded"
+    } else if internet && app.own_login {
+        "own"
+    } else if internet && app.public_by_design {
+        "public"
+    } else if internet {
+        "open"
+    } else if guarded || app.own_login {
+        "private"
+    } else {
+        "private-open"
     }
 }
 
@@ -140,19 +158,27 @@ fn place_active(id: &str, places: &ReportPlaces) -> bool {
     }
 }
 
-const GROUPS: [(&str, &str, &str, &str, &str); 6] = [
+/// (id, title, detail, tone, guard icon)
+const GROUPS: [(&str, &str, &str, &str, &str); 7] = [
     (
         "open",
-        "Anyone on the internet",
-        "No login at all",
+        "Open, but should not be",
+        "Its login was turned off: anyone on the internet gets in",
         "error",
         "none",
     ),
     (
+        "public",
+        "Public websites",
+        "Open to everyone, on purpose",
+        "info",
+        "public",
+    ),
+    (
         "own",
-        "Internet, app login only",
-        "Only the app's own login screen stands in the way",
-        "warning",
+        "Internet, the app's own login",
+        "Visitors log in to the app itself",
+        "info",
         "own",
     ),
     (
@@ -166,13 +192,13 @@ const GROUPS: [(&str, &str, &str, &str, &str); 6] = [
         "private-open",
         "Home and VPN, no login",
         "Anyone on these networks gets in",
-        "warning",
+        "muted",
         "none",
     ),
     (
         "private",
         "Home and VPN only",
-        "Not on the internet, and a login on top",
+        "Not on the internet, with a login",
         "ok",
         "login",
     ),
@@ -185,31 +211,38 @@ const GROUPS: [(&str, &str, &str, &str, &str); 6] = [
     ),
 ];
 
-const ORIGINS: [(&str, &str, &str, &str); 4] = [
-    ("web", "Internet", "Anyone in the world", "globe"),
-    ("local", "Home network", "Devices at home", "home"),
-    ("tailscale", "Tailscale", "Your Tailscale devices", "vpn"),
-    ("netbird", "NetBird", "Your NetBird devices", "vpn"),
+/// (place id, label, icon)
+const ORIGINS: [(&str, &str, &str); 4] = [
+    ("web", "Internet", "globe"),
+    ("local", "Home network", "home"),
+    ("tailscale", "Tailscale", "vpn"),
+    ("netbird", "NetBird", "vpn"),
 ];
 
 fn origin_label(id: &str) -> &'static str {
     ORIGINS.iter().find(|o| o.0 == id).map_or("", |o| o.1)
 }
 
-/// Origins (place ids) that reach a port from outside.
-fn port_origins(p: &ReportPort, places: &ReportPlaces) -> Vec<&'static str> {
+fn wildcard(address: &str) -> bool {
+    matches!(address.trim(), "" | "0.0.0.0" | "::" | "[::]")
+}
+
+/// Place ids that reach a port from outside. `public`: the server has a
+/// public address (no relay), so a port open to every network faces the
+/// internet too.
+fn port_origins(p: &ReportPort, places: &ReportPlaces, public: bool) -> Vec<&'static str> {
     if p.firewall == "blocked" {
         return Vec::new();
     }
-    let a = p.address.trim();
-    if !a.is_empty() && a != "0.0.0.0" && a != "::" && a != "[::]" {
-        return Vec::new();
+    if !wildcard(&p.address) {
+        // Docker binds it to one address of this server: the home network's.
+        return vec!["local"];
     }
     match p.interface.as_deref() {
         None => ORIGINS
             .iter()
             .map(|o| o.0)
-            .filter(|id| place_active(id, places))
+            .filter(|id| place_active(id, places) && (*id != "web" || public))
             .collect(),
         Some("wt0") => vec!["netbird"],
         Some(i) if i.starts_with("tailscale") => vec!["tailscale"],
@@ -241,58 +274,101 @@ fn join_ports(ps: &[&ReportPort]) -> String {
     v.join(" · ")
 }
 
-fn firewall_chips(ps: &[&ReportPort]) -> Vec<Chip> {
-    let of = |state: &str| -> Vec<&ReportPort> {
-        ps.iter().copied().filter(|p| p.firewall == state).collect()
-    };
-    let mut chips = Vec::new();
-    let allowed = of("allowed");
-    if !allowed.is_empty() {
-        chips.push(Chip {
-            text: format!("Firewall lets in {}", join_ports(&allowed)),
-            tone: "ok",
-        });
+fn state_words(state: &str) -> &'static str {
+    match state {
+        "allowed" => "firewall lets it in",
+        "interface" => "firewall: one network only",
+        "docker" => "skips the firewall (Docker)",
+        "blocked" => "blocked by the firewall",
+        "off" => "no firewall",
+        _ => "unknown",
     }
-    let only: Vec<&ReportPort> = of("interface");
-    let (vpn, inside): (Vec<&ReportPort>, Vec<&ReportPort>) = only.into_iter().partition(|p| {
-        p.interface
-            .as_deref()
-            .is_some_and(|i| i == "wt0" || i.starts_with("tailscale"))
+}
+
+/// One badge for what the firewall does with a door's ports (worst first).
+fn firewall_chip(ps: &[&ReportPort]) -> Chip {
+    let has = |s: &str| ps.iter().any(|p| p.firewall == s);
+    let vpn_only = ps.iter().all(|p| {
+        p.firewall == "interface"
+            && p.interface
+                .as_deref()
+                .is_some_and(|i| i == "wt0" || i.starts_with("tailscale"))
     });
-    if !vpn.is_empty() {
-        chips.push(Chip {
-            text: format!("VPN only: {}", join_ports(&vpn)),
-            tone: "info",
-        });
+    let (text, tone) = if has("off") {
+        ("No firewall", "error")
+    } else if has("docker") {
+        ("Skips the firewall", "warning")
+    } else if has("allowed") {
+        ("Firewall open", "ok")
+    } else if vpn_only {
+        ("VPN only", "info")
+    } else if has("interface") {
+        ("This server only", "muted")
+    } else if has("blocked") {
+        ("Blocked", "muted")
+    } else {
+        ("Unknown", "muted")
+    };
+    let mut help = ps
+        .iter()
+        .map(|p| {
+            format!(
+                "{} {}: {}",
+                p.port,
+                p.protocol.to_uppercase(),
+                state_words(&p.firewall)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    if has("docker") {
+        help.push_str(
+            "\nDocker publishes these ports itself, before the firewall sees the traffic.",
+        );
     }
-    if !inside.is_empty() {
-        chips.push(Chip {
-            text: format!("Inside this server only: {}", join_ports(&inside)),
-            tone: "muted",
-        });
+    Chip {
+        text: text.into(),
+        tone,
+        help,
     }
-    let docker = of("docker");
-    if !docker.is_empty() {
-        chips.push(Chip {
-            text: format!("Skips the firewall: {}", join_ports(&docker)),
-            tone: "warning",
-        });
-    }
-    let off = of("off");
-    if !off.is_empty() {
-        chips.push(Chip {
-            text: format!("No firewall: {}", join_ports(&off)),
-            tone: "error",
-        });
-    }
-    let blocked = of("blocked");
-    if !blocked.is_empty() {
-        chips.push(Chip {
-            text: format!("Blocked: {}", join_ports(&blocked)),
-            tone: "muted",
-        });
-    }
-    chips
+}
+
+/// What stops someone at a door that is not the web door.
+fn guard_chip(ps: &[&ReportPort]) -> Chip {
+    let help = ps
+        .iter()
+        .map(|p| {
+            format!(
+                "{} {} ({}): {}",
+                p.port,
+                p.protocol.to_uppercase(),
+                p.label,
+                if p.described {
+                    p.login.as_str()
+                } else {
+                    "unknown"
+                }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let guarded: Vec<&&ReportPort> = ps.iter().filter(|p| p.described && !p.open).collect();
+    let (text, tone) = if ps.iter().any(|p| !p.described) {
+        (
+            "Unknown: Neo does not know what uses it".to_string(),
+            "error",
+        )
+    } else if guarded.is_empty() {
+        ("Answers anyone, on purpose".to_string(), "info")
+    } else if guarded.len() < ps.len() {
+        (
+            format!("{} · some ports answer anyone", guarded[0].login),
+            "ok",
+        )
+    } else {
+        (guarded[0].login.clone(), "ok")
+    };
+    Chip { text, tone, help }
 }
 
 fn plural(n: usize, one: &str, many: &str) -> String {
@@ -303,19 +379,50 @@ fn plural(n: usize, one: &str, many: &str) -> String {
     }
 }
 
+fn words(origins: &[&str]) -> String {
+    if origins.is_empty() {
+        "Only from inside this server".into()
+    } else {
+        origins
+            .iter()
+            .map(|o| origin_label(o))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}
+
+/// A door before layout: id, title, ports, web door, guard, risky for the internet.
+type DoorSpec<'a> = (
+    String,
+    String,
+    Vec<&'a ReportPort>,
+    bool,
+    Option<Chip>,
+    bool,
+);
+
 pub(super) fn build(
     apps: &[MapApp],
     ports: &[ReportPort],
     places: &ReportPlaces,
     ssh: &ReportSsh,
 ) -> AccessMap {
+    let public = !places.relay;
     let mut map = AccessMap {
+        relay: places.relay,
         origins: ORIGINS
             .iter()
-            .map(|(id, label, detail, icon)| Origin {
+            .map(|(id, label, icon)| Origin {
                 id: format!("o-{id}"),
+                place: id,
                 label,
-                detail,
+                detail: match *id {
+                    "web" if places.relay => "Through your relay, to the web door only",
+                    "web" => "Anyone in the world",
+                    "local" => "Devices at home",
+                    "tailscale" => "Your Tailscale devices",
+                    _ => "Your NetBird devices",
+                },
                 icon,
                 inactive: !place_active(id, places),
             })
@@ -329,24 +436,25 @@ pub(super) fn build(
         if members.is_empty() {
             continue;
         }
-        let mut from: Vec<&str> = Vec::new();
-        for (oid, ..) in ORIGINS {
-            if members.iter().any(|a| a.places.iter().any(|p| p == oid))
-                && place_active(oid, places)
-            {
-                from.push(origin_label(oid));
-            }
-        }
+        let from: Vec<&str> = ORIGINS
+            .iter()
+            .map(|o| o.0)
+            .filter(|oid| {
+                place_active(oid, places)
+                    && members.iter().any(|a| a.places.iter().any(|p| p == oid))
+            })
+            .collect();
         map.groups.push(Group {
             id: format!("g-{id}"),
             title,
             detail,
             tone,
             guard,
+            origins: from.join(" "),
             from: if from.is_empty() {
-                "Nowhere".into()
+                "nowhere".into()
             } else {
-                from.join(", ")
+                words(&from)
             },
             apps: members
                 .iter()
@@ -360,13 +468,17 @@ pub(super) fn build(
             filter: format!("bucket-{id}"),
         });
     }
-    let open_apps = map
-        .groups
-        .iter()
-        .find(|g| g.id == "g-open")
-        .map_or(0, |g| g.apps.len());
+    let count_of = |id: &str| {
+        let gid = format!("g-{id}");
+        map.groups
+            .iter()
+            .find(|g| g.id == gid)
+            .map_or(0, |g| g.apps.len())
+    };
+    let open_apps = count_of("open");
+    let public_apps = count_of("public");
 
-    // --- Doors ---
+    // --- Doors: web, SSH, then one per service ---
     let web: Vec<&ReportPort> = ports.iter().filter(|p| is_web_port(p)).collect();
     let ssh_ports: Vec<&ReportPort> = ports
         .iter()
@@ -377,152 +489,107 @@ pub(super) fn build(
         .iter()
         .filter(|p| !is_web_port(p) && p.id.as_deref() != Some("ssh"))
     {
-        let key = format!("{}|{}", p.service.as_deref().unwrap_or(""), p.label);
+        let key = p.service.clone().unwrap_or_else(|| p.label.clone());
         match others.iter_mut().find(|(k, _)| *k == key) {
             Some((_, v)) => v.push(p),
             None => others.push((key, vec![p])),
         }
     }
 
-    let add_door = |map: &mut AccessMap,
-                    id: String,
-                    label: String,
-                    ps: &[&ReportPort],
-                    web: bool,
-                    guard: Option<Chip>,
-                    inside: Option<String>,
-                    filter: &'static str,
-                    risky: bool| {
-        let mut from: Vec<&'static str> = Vec::new();
-        for p in ps {
-            for o in port_origins(p, places) {
-                if !from.contains(&o) {
-                    from.push(o);
-                }
-            }
-        }
-        for o in &from {
-            let skips = ps.iter().any(|p| {
-                (p.firewall == "docker" || p.firewall == "off")
-                    && port_origins(p, places).contains(o)
-            });
-            let tone = if *o == "web" && risky {
-                "error"
-            } else if skips {
-                "warning"
-            } else if *o == "web" {
-                "ok"
-            } else {
-                "muted"
-            };
-            map.edges.push(Edge {
-                from: format!("o-{o}"),
-                to: id.clone(),
-                tone,
-                dashed: skips,
-            });
-        }
-        let from_text = if from.is_empty() {
-            "Only from inside this server".to_string()
-        } else {
-            from.iter()
-                .map(|o| origin_label(o))
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
-        map.doors.push(Door {
-            id,
-            label,
-            ports: join_ports(ps),
-            web,
-            firewall: firewall_chips(ps),
-            guard,
-            inside,
-            from: from_text,
-            filter,
-        });
-    };
-
+    let mut doors: Vec<DoorSpec> = Vec::new();
     if !web.is_empty() {
-        add_door(
-            &mut map,
-            "d-web".into(),
-            "Web".into(),
-            &web,
-            true,
-            None,
-            Some("Your apps".into()),
-            "internet",
-            open_apps > 0,
-        );
-        for g in &map.groups {
-            map.edges.push(Edge {
-                from: "d-web".into(),
-                to: g.id.clone(),
-                tone: g.tone,
-                dashed: false,
-            });
-        }
+        doors.push(("d-web".into(), "Web".into(), web, true, None, open_apps > 0));
     }
     if !ssh_ports.is_empty() {
         let guard = if ssh.password_login {
             Chip {
                 text: "Password: no SSH key set".into(),
                 tone: "error",
+                help: String::new(),
             }
         } else {
             Chip {
                 text: format!("Only {}", plural(ssh.keys.len(), "SSH key", "SSH keys")),
                 tone: "ok",
+                help: format!("Server shell for {}", ssh.users.join(", ")),
             }
         };
-        add_door(
-            &mut map,
+        doors.push((
             "d-ssh".into(),
             "SSH".into(),
-            &ssh_ports,
+            ssh_ports.clone(),
             false,
             Some(guard),
-            Some(format!("Server shell: {}", ssh.users.join(", "))),
-            "",
             ssh.password_login,
-        );
+        ));
     }
-    for (i, (_, ps)) in others.iter().enumerate() {
-        let p = ps[0];
-        let guard = if !p.described {
-            Chip {
-                text: "Unknown: Neo does not know what uses it".into(),
-                tone: "error",
-            }
-        } else if p.open {
-            Chip {
-                text: format!("Answers anyone, on purpose ({})", p.login),
-                tone: "info",
-            }
+    for (i, (key, ps)) in others.into_iter().enumerate() {
+        let title = if ps.iter().all(|p| p.label == ps[0].label) && ps[0].described {
+            ps[0].label.clone()
+        } else if ps[0].service.is_some() {
+            humanize(&key)
         } else {
-            Chip {
-                text: p.login.clone(),
-                tone: "ok",
-            }
+            "Unknown port".into()
         };
-        add_door(
-            &mut map,
-            format!("d-{i}"),
-            if p.described {
-                p.label.clone()
+        let guard = guard_chip(&ps);
+        let risky = guard.tone == "error";
+        doors.push((format!("d-{i}"), title, ps, false, Some(guard), risky));
+    }
+
+    for (id, title, ps, is_web, guard, risky) in doors {
+        let mut from: Vec<&'static str> = Vec::new();
+        for p in &ps {
+            for o in port_origins(p, places, public) {
+                if !from.contains(&o) {
+                    from.push(o);
+                }
+            }
+        }
+        // The relay brings the internet to the web door, whatever the firewall.
+        if is_web && !public && !from.contains(&"web") {
+            from.insert(0, "web");
+        }
+        for o in &from {
+            let skips = ps.iter().any(|p| {
+                (p.firewall == "docker" || p.firewall == "off")
+                    && port_origins(p, places, public).contains(o)
+            });
+            let (tone, dashed) = if *o == "web" && risky {
+                ("error", true)
+            } else if *o == "web" {
+                ("ok", false)
+            } else if skips {
+                ("warning", true)
             } else {
-                "Unknown port".into()
-            },
-            ps,
-            false,
-            Some(guard),
-            p.service
-                .as_ref()
-                .map(|s| crate::commands::web::nix::sections::humanize(s)),
-            "",
-            !p.described,
-        );
+                ("muted", false)
+            };
+            map.edges.push(Edge {
+                from: format!("o-{o}"),
+                to: id.clone(),
+                tone,
+                dashed,
+            });
+        }
+        if is_web {
+            for g in &map.groups {
+                map.edges.push(Edge {
+                    from: id.clone(),
+                    to: g.id.clone(),
+                    tone: g.tone,
+                    dashed: g.tone == "error",
+                });
+            }
+        }
+        map.doors.push(Door {
+            id,
+            title,
+            ports: join_ports(&ps),
+            web: is_web,
+            firewall: firewall_chip(&ps),
+            guard,
+            origins: from.join(" "),
+            from: words(&from),
+        });
     }
 
     // --- Verdict ---
@@ -538,8 +605,9 @@ pub(super) fn build(
         v.push(Verdict {
             tone: "error",
             text: format!(
-                "{} open to anyone on the internet, without any login.",
-                plural(open_apps, "app is", "apps are")
+                "{} on the internet without any login, although {} should have one.",
+                plural(open_apps, "app is", "apps are"),
+                if open_apps == 1 { "it" } else { "they" }
             ),
             filter: Some("bucket-open".into()),
         });
@@ -566,16 +634,6 @@ pub(super) fn build(
             filter: None,
         });
     }
-    if let Some(g) = map.groups.iter().find(|g| g.id == "g-own") {
-        v.push(Verdict {
-            tone: "warning",
-            text: format!(
-                "{} on the internet only behind the app's own login.",
-                plural(g.apps.len(), "app is", "apps are")
-            ),
-            filter: Some("bucket-own".into()),
-        });
-    }
     let paths = apps
         .iter()
         .filter(|a| bucket_of(a, places) == "guarded" && a.login_on && a.open_paths > 0)
@@ -584,38 +642,49 @@ pub(super) fn build(
         v.push(Verdict {
             tone: "warning",
             text: format!(
-                "{} on the internet {} addresses that skip the login page.",
+                "{} on the internet {} addresses that skip the login page (share links, phone apps).",
                 plural(paths, "app", "apps"),
                 if paths == 1 { "has" } else { "have" }
             ),
             filter: Some("openpaths".into()),
         });
     }
-    let skip: Vec<&ReportPort> = ports.iter().filter(|p| p.firewall == "docker").collect();
-    if !skip.is_empty() {
-        v.push(Verdict {
-            tone: "warning",
-            text: format!(
-                "Port {} {} the firewall: Docker publishes {} to every network.",
-                join_ports(&skip).replace(" · ", ", "),
-                if skip.len() == 1 { "skips" } else { "skip" },
-                if skip.len() == 1 { "it" } else { "them" }
-            ),
-            filter: Some("skipsfw".into()),
-        });
-    }
-    map.ok = v.is_empty();
+    let problems = v.iter().any(|x| x.tone == "error" || x.tone == "warning");
     map.level = if v.iter().any(|x| x.tone == "error") {
         "error"
-    } else if v.is_empty() {
-        "ok"
-    } else {
+    } else if problems {
         "warning"
+    } else {
+        "ok"
     };
+    map.ok = !problems;
     if map.ok {
+        v.insert(
+            0,
+            Verdict {
+                tone: "ok",
+                text: "Nothing opens to the internet without a login, except what you publish on purpose."
+                    .into(),
+                filter: None,
+            },
+        );
+    }
+    if public_apps > 0 {
         v.push(Verdict {
-            tone: "ok",
-            text: "Nothing opens to the internet without a login.".into(),
+            tone: "info",
+            text: format!(
+                "{} open to everyone on purpose.",
+                plural(public_apps, "public website is", "public websites are")
+            ),
+            filter: Some("bucket-public".into()),
+        });
+    }
+    if places.relay {
+        v.push(Verdict {
+            tone: "info",
+            text:
+                "The internet reaches this server only through your relay, and only its web door."
+                    .into(),
             filter: None,
         });
     }
@@ -636,11 +705,18 @@ mod tests {
             login_on: login,
             sso_on: false,
             own_login: own,
+            public_by_design: false,
             open_paths: 0,
         }
     }
 
-    fn port(id: &str, port: u32, iface: Option<&str>, firewall: &str) -> ReportPort {
+    fn port(
+        id: &str,
+        service: Option<&str>,
+        port: u32,
+        iface: Option<&str>,
+        firewall: &str,
+    ) -> ReportPort {
         ReportPort {
             id: Some(id.into()),
             protocol: "tcp".into(),
@@ -648,6 +724,7 @@ mod tests {
             interface: iface.map(str::to_string),
             described: true,
             label: id.into(),
+            service: service.map(str::to_string),
             login: "x".into(),
             firewall: firewall.into(),
             ..Default::default()
@@ -661,6 +738,9 @@ mod tests {
             bucket_of(&app("a", &["web", "local"], false, false), &p),
             "open"
         );
+        let mut site = app("a", &["web"], false, false);
+        site.public_by_design = true;
+        assert_eq!(bucket_of(&site, &p), "public");
         assert_eq!(bucket_of(&app("a", &["web"], false, true), &p), "own");
         assert_eq!(bucket_of(&app("a", &["web"], true, false), &p), "guarded");
         assert_eq!(
@@ -676,67 +756,96 @@ mod tests {
     }
 
     #[test]
-    fn map_shows_doors_edges_and_verdict() {
+    fn behind_a_relay_the_internet_reaches_only_the_web_door() {
         let places = ReportPlaces {
+            relay: true,
             netbird: true,
             ..Default::default()
         };
+        let mut dns = port("pihole-dns-tcp", Some("pihole"), 53, None, "allowed");
+        dns.address = "192.168.1.5".into();
+        dns.open = true;
         let ports = vec![
-            port("ssh", 22, None, "allowed"),
-            port("streamproxy-https", 443, None, "allowed"),
-            port("swag-http", 9980, None, "docker"),
-            port("netbird-dns", 5353, Some("wt0"), "interface"),
+            port("ssh", None, 22, None, "allowed"),
+            port("swag-https", Some("swag"), 443, None, "docker"),
+            dns,
+            port("pihole-dns-udp", Some("pihole"), 53, None, "allowed"),
+            port("netbird-wg", Some("netbird"), 51820, None, "allowed"),
+            port(
+                "netbird-dns",
+                Some("netbird"),
+                5353,
+                Some("wt0"),
+                "interface",
+            ),
         ];
         let ssh = ReportSsh {
             keys: vec!["k".into()],
-            users: vec!["admin".into()],
             ..Default::default()
         };
+        let m = build(
+            &[app("immich", &["web", "local"], true, false)],
+            &ports,
+            &places,
+            &ssh,
+        );
+        let titles: Vec<&str> = m.doors.iter().map(|d| d.title.as_str()).collect();
+        assert_eq!(titles, ["Web", "SSH", "Pihole", "Netbird"]);
+        let web_edges: Vec<&str> = m
+            .edges
+            .iter()
+            .filter(|e| e.from == "o-web")
+            .map(|e| e.to.as_str())
+            .collect();
+        assert_eq!(web_edges, ["d-web"]);
+        // DNS bound to the home address: the home network reaches it.
+        assert!(m.edges.iter().any(|e| e.from == "o-local" && e.to == "d-0"));
+        assert_eq!(m.doors[2].origins, "local netbird");
+        assert_eq!(
+            m.doors[2].guard.as_ref().unwrap().text,
+            "x · some ports answer anyone"
+        );
+        assert_eq!(m.doors[3].firewall.text, "Firewall open");
+        assert_eq!(m.doors[0].firewall.text, "Skips the firewall");
+        assert!(m.ok);
+    }
+
+    #[test]
+    fn a_login_turned_off_is_the_only_red() {
+        let ssh = ReportSsh {
+            keys: vec!["k".into()],
+            ..Default::default()
+        };
+        let mut site = app("shop", &["web"], false, false);
+        site.public_by_design = true;
         let apps = vec![
+            site,
             app("pastebin", &["web"], false, false),
-            app("immich", &["web"], true, false),
+            app("filebrowser", &["web"], false, true),
         ];
-        let m = build(&apps, &ports, &places, &ssh);
-        let doors: Vec<&str> = m.doors.iter().map(|d| d.label.as_str()).collect();
-        assert_eq!(doors, ["Web", "SSH", "netbird-dns"]);
-        assert_eq!(m.doors[0].ports, "443 · 9980");
-        // The internet reaches the web door, which leads to an open app.
+        let m = build(
+            &apps,
+            &[port("swag-https", Some("swag"), 443, None, "allowed")],
+            &ReportPlaces::default(),
+            &ssh,
+        );
+        assert!(!m.ok);
+        assert_eq!(m.level, "error");
+        assert_eq!(
+            m.verdict[0].text,
+            "1 app is on the internet without any login, although it should have one."
+        );
+        assert!(m
+            .verdict
+            .iter()
+            .any(|v| v.text == "1 public website is open to everyone on purpose."));
         assert!(m.edges.contains(&Edge {
             from: "o-web".into(),
             to: "d-web".into(),
             tone: "error",
             dashed: true,
         }));
-        assert!(m
-            .edges
-            .iter()
-            .any(|e| e.from == "o-netbird" && e.to == "d-0"));
-        assert!(!m.edges.iter().any(|e| e.from == "o-web" && e.to == "d-0"));
-        assert_eq!(m.groups.len(), 2);
-        assert!(!m.ok);
-        assert_eq!(
-            m.verdict[0].text,
-            "1 app is open to anyone on the internet, without any login."
-        );
-        assert!(m
-            .verdict
-            .iter()
-            .any(|v| v.text.starts_with("Port 9980 skips the firewall")));
-    }
-
-    #[test]
-    fn a_clean_server_says_so() {
-        let ssh = ReportSsh {
-            keys: vec!["k".into()],
-            ..Default::default()
-        };
-        let m = build(
-            &[app("immich", &["web"], true, false)],
-            &[port("ssh", 22, None, "allowed")],
-            &ReportPlaces::default(),
-            &ssh,
-        );
-        assert!(m.ok);
-        assert_eq!(m.verdict[0].tone, "ok");
+        let groups: Vec<&str> = m.groups.iter().map(|g| g.id.as_str()).collect();
+        assert_eq!(groups, ["g-open", "g-public", "g-own"]);
     }
 }

@@ -15,6 +15,14 @@
       .indexOf(filter) !== -1;
   }
 
+  /** True when `from` (space-separated place ids) contains `origin` (none: all). */
+  function reachedFrom(from, origin) {
+    if (!origin) return true;
+    return String(from || '')
+      .split(/\s+/)
+      .indexOf(origin) !== -1;
+  }
+
   /** Show, hide or dim every tagged element under `el`; returns matches per section. */
   function applyFilter(el, filter) {
     var found = {};
@@ -41,7 +49,13 @@
     var session = root.NeoUtil ? root.NeoUtil.store('session') : null;
     return {
       filter: 'all',
+      // Place picked in the map (phone tabs; on a wide screen it pins the paths).
+      origin: null,
       init() {
+        // A phone shows one place at a time: start with the internet.
+        try {
+          if (root.matchMedia && !root.matchMedia('(min-width: 1024px)').matches) this.origin = 'web';
+        } catch (e) {}
         var saved = session ? session.getJson(STORE_KEY, null) : null;
         // Drop a filter whose chip is gone.
         if (saved && this.$root.querySelector('[data-neo-filter="' + saved + '"]')) this.filter = saved;
@@ -55,6 +69,9 @@
           applyFilter(self.$root, f);
         });
       },
+      reaches(el) {
+        return reachedFrom(el.getAttribute('data-neo-from'), this.origin);
+      },
       pick(f) {
         this.filter = this.filter === f ? 'all' : f;
       },
@@ -67,7 +84,7 @@
     };
   }
 
-  var NeoAccessFilter = { tagsMatch: tagsMatch, applyFilter: applyFilter };
+  var NeoAccessFilter = { tagsMatch: tagsMatch, applyFilter: applyFilter, reachedFrom: reachedFrom };
   root.NeoAccessFilter = NeoAccessFilter;
   root.accessFilter = accessFilter;
   if (typeof module === 'object' && module.exports) {

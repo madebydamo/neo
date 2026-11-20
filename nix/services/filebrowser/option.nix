@@ -40,6 +40,8 @@
                 url = "https://github.com/filebrowser/filebrowser/blob/master/LICENSE";
               };
               icon = ./icon.png;
+              # Filebrowser always asks for its own login (no noauth mode here).
+              ownLogin = "Filebrowser accounts";
               tagline = "Manage the files on your server from the browser";
               description = ''
                 Browse, upload, rename, preview and edit the files on your server, such as photos, documents and app data, from any browser.

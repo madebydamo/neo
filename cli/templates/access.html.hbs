@@ -44,119 +44,129 @@
        lists below to it. --}}
   {{#*inline "toneText"}}{{#if (eq tone "error")}}text-error{{/if}}{{#if (eq tone "warning")}}text-warning{{/if}}{{#if (eq tone "ok")}}text-success{{/if}}{{#if (eq tone "info")}}text-info{{/if}}{{#if (eq tone "muted")}}text-base-content/50{{/if}}{{/inline}}
   {{#*inline "toneChip"}}{{#if (eq tone "error")}}bg-error/12 text-error border-error/30{{/if}}{{#if (eq tone "warning")}}bg-warning/15 text-base-content border-warning/50{{/if}}{{#if (eq tone "ok")}}bg-success/10 text-success border-success/30{{/if}}{{#if (eq tone "info")}}bg-info/10 text-info border-info/30{{/if}}{{#if (eq tone "muted")}}bg-base-200 text-base-content/60 border-base-300{{/if}}{{/inline}}
-  {{#*inline "toneBorder"}}{{#if (eq tone "error")}}border-error ring-2 ring-error/20{{/if}}{{#if (eq tone "warning")}}border-warning{{/if}}{{#if (eq tone "ok")}}border-success/50{{/if}}{{#if (eq tone "muted")}}border-base-300 border-dashed{{/if}}{{/inline}}
+  {{#*inline "toneBorder"}}{{#if (eq tone "error")}}border-error ring-2 ring-error/20{{/if}}{{#if (eq tone "warning")}}border-warning{{/if}}{{#if (eq tone "ok")}}border-success/50{{/if}}{{#if (eq tone "info")}}border-info/50{{/if}}{{#if (eq tone "muted")}}border-base-300 border-dashed{{/if}}{{/inline}}
+  {{#*inline "toneDot"}}{{#if (eq tone "ok")}}bg-success text-success-content{{/if}}{{#if (eq tone "error")}}bg-error text-error-content{{/if}}{{#if (eq tone "warning")}}bg-warning text-warning-content{{/if}}{{#if (eq tone "info")}}bg-info text-info-content{{/if}}{{#if (eq tone "muted")}}bg-base-300 text-base-content/60{{/if}}{{/inline}}
   <section aria-labelledby="access-verdict-title"
            class="rounded-box border p-4 sm:p-5 {{#if (eq map.level "ok")}}border-success/40 bg-success/5{{/if}}{{#if (eq map.level "warning")}}border-warning/60 bg-warning/10{{/if}}{{#if (eq map.level "error")}}border-error/40 bg-error/5{{/if}}">
     <h3 id="access-verdict-title" class="sr-only">What is open</h3>
     <ul class="space-y-2">
       {{#each map.verdict}}
         <li class="flex items-start gap-2.5">
-          <span class="mt-0.5 w-5 h-5 shrink-0 rounded-full flex items-center justify-center {{#if (eq tone "ok")}}bg-success text-success-content{{/if}}{{#if (eq tone "error")}}bg-error text-error-content{{/if}}{{#if (eq tone "warning")}}bg-warning text-warning-content{{/if}}">
-            {{#if (eq tone "ok")}}<svg viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 011.4-1.4L8 12.58l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>{{else}}<span class="text-xs font-bold leading-none">!</span>{{/if}}
+          <span class="mt-0.5 w-5 h-5 shrink-0 rounded-full flex items-center justify-center {{> toneDot}}">
+            {{#if (eq tone "ok")}}<svg viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 011.4-1.4L8 12.58l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>{{/if}}
+            {{#if (eq tone "info")}}<span class="text-xs font-bold leading-none font-serif">i</span>{{/if}}
+            {{#if (eq tone "warning")}}<span class="text-xs font-bold leading-none">!</span>{{/if}}
+            {{#if (eq tone "error")}}<span class="text-xs font-bold leading-none">!</span>{{/if}}
           </span>
-          <span class="flex-1 {{#if (eq tone "ok")}}font-medium{{else}}text-sm sm:text-base{{/if}} {{#if (eq tone "error")}}font-medium{{/if}}">{{text}}</span>
+          <span class="flex-1 {{#if (eq tone "info")}}text-sm text-base-content/75{{else}}font-medium{{/if}}">{{text}}</span>
           {{#if filter}}<button type="button" class="btn btn-ghost btn-xs shrink-0" @click="show('{{filter}}')">Show</button>{{/if}}
         </li>
       {{/each}}
     </ul>
   </section>
 
-  {{!-- The access map: where from → doors through the firewall → who gets in.
-       Lines: static/access_map.js from the [data-neo-edge] list. Hover a box
-       to follow its paths; click a group to see its apps below. --}}
+  {{!-- The access map: where from → doors in the firewall → who gets in.
+       Lines: static/access_map.js from the [data-neo-edge] list; a click pins
+       a box's paths. On a phone the places are tabs and only what the chosen
+       place reaches is listed (data-neo-from). --}}
   <section aria-labelledby="access-map-title" class="rounded-box border border-base-300 bg-base-100 p-4 sm:p-6">
-    <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 mb-5">
+    <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 mb-4 lg:mb-5">
       <div>
         <h3 id="access-map-title" class="font-semibold">How people get in</h3>
-        <p class="text-xs text-base-content/60 mt-0.5">Follow a line from where someone is, through a door in the firewall, to what stands in their way. Hover a box to follow its paths.</p>
+        <p class="text-xs text-base-content/60 mt-0.5"><span class="hidden lg:inline">Follow a line from where someone is, through a door in the firewall, to what stands in their way. Click a box to follow its paths.</span><span class="lg:hidden">Pick where someone is, and see every way in from there.</span></p>
       </div>
-      <ul class="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-base-content/65" aria-label="Legend">
-        <li class="flex items-center gap-1.5"><svg class="w-7 h-2 text-error" viewBox="0 0 28 4" aria-hidden="true"><path d="M1 2h26" stroke="currentColor" stroke-width="2.5" stroke-dasharray="7 5" stroke-linecap="round"/></svg>Open to anyone</li>
+      <ul class="hidden lg:flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-base-content/65" aria-label="Legend">
+        <li class="flex items-center gap-1.5"><svg class="w-7 h-2 text-error" viewBox="0 0 28 4" aria-hidden="true"><path d="M1 2h26" stroke="currentColor" stroke-width="2.5" stroke-dasharray="7 5" stroke-linecap="round"/></svg>Open, but should not be</li>
+        <li class="flex items-center gap-1.5"><svg class="w-7 h-2 text-success" viewBox="0 0 28 4" aria-hidden="true"><path d="M1 2h26" stroke="currentColor" stroke-width="2"/></svg>Internet, guarded</li>
+        <li class="flex items-center gap-1.5"><svg class="w-7 h-2 text-info" viewBox="0 0 28 4" aria-hidden="true"><path d="M1 2h26" stroke="currentColor" stroke-width="2"/></svg>Public or own login</li>
         <li class="flex items-center gap-1.5"><svg class="w-7 h-2 text-warning" viewBox="0 0 28 4" aria-hidden="true"><path d="M1 2h26" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4"/></svg>Skips the firewall</li>
-        <li class="flex items-center gap-1.5"><svg class="w-7 h-2 text-success" viewBox="0 0 28 4" aria-hidden="true"><path d="M1 2h26" stroke="currentColor" stroke-width="2"/></svg>Guarded</li>
-        <li class="flex items-center gap-1.5"><svg class="w-7 h-2 text-base-content/30" viewBox="0 0 28 4" aria-hidden="true"><path d="M1 2h26" stroke="currentColor" stroke-width="2"/></svg>Private network</li>
+        <li class="flex items-center gap-1.5"><svg class="w-7 h-2 text-base-content/30" viewBox="0 0 28 4" aria-hidden="true"><path d="M1 2h26" stroke="currentColor" stroke-width="2"/></svg>Home or VPN</li>
       </ul>
     </div>
 
-    <div data-neo-map class="relative grid gap-6 lg:gap-0 lg:mt-10 lg:grid-cols-[minmax(9rem,11rem)_minmax(2rem,1fr)_minmax(14rem,18rem)_minmax(2rem,1fr)_minmax(16rem,28rem)]">
+    <div data-neo-map class="relative grid grid-cols-[minmax(0,1fr)] gap-5 lg:gap-0 lg:mt-10 lg:grid-cols-[minmax(9rem,11rem)_minmax(2rem,1fr)_minmax(13rem,16rem)_minmax(2rem,1fr)_minmax(16rem,28rem)]">
       <svg data-neo-map-canvas class="hidden lg:block absolute inset-0 w-full h-full pointer-events-none overflow-visible" aria-hidden="true"></svg>
       <div hidden>
         {{#each map.edges}}<i data-neo-edge data-from="{{from}}" data-to="{{to}}" data-tone="{{tone}}" data-dashed="{{dashed}}"></i>{{/each}}
       </div>
 
-      {{!-- 1 Where from --}}
-      <div class="relative flex flex-col gap-3 lg:justify-around">
-        <div class="lg:absolute lg:-top-8 lg:left-0 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-base-content/45"><span class="text-base-content/70">1</span> Where from</div>
-        {{#each map.origins}}
-          <div data-neo-node="{{id}}" tabindex="0"
-               class="relative z-10 rounded-box border bg-base-100 px-3 py-2.5 flex items-center gap-2.5 transition-opacity outline-none focus-visible:ring-2 ring-primary {{#if inactive}}border-dashed border-base-300 opacity-50{{else}}border-base-300 shadow-sm{{/if}}">
-            <span class="w-9 h-9 shrink-0 rounded-full flex items-center justify-center {{#if (eq icon "globe")}}bg-base-content text-base-100{{else}}bg-base-200 text-base-content/70{{/if}}">
-              {{#if (eq icon "globe")}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-5 h-5" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.5 3.5 5.3 3.5 8.5s-1.1 6-3.5 8.5c-2.4-2.5-3.5-5.3-3.5-8.5s1.1-6 3.5-8.5z"/></svg>{{/if}}
-              {{#if (eq icon "home")}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" class="w-5 h-5" aria-hidden="true"><path d="M4 10.5L12 4l8 6.5V19a1 1 0 01-1 1h-4.5v-5.5h-5V20H5a1 1 0 01-1-1v-8.5z"/></svg>{{/if}}
-              {{#if (eq icon "vpn")}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="w-5 h-5" aria-hidden="true"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/><path d="M8 7.2l2.8 8.6M16 7.2l-2.8 8.6M8.2 6h7.6"/></svg>{{/if}}
-            </span>
-            <div class="min-w-0">
-              <div class="text-sm font-semibold leading-tight">{{label}}</div>
-              <div class="text-[11px] text-base-content/55 leading-tight">{{#if inactive}}Not set up{{else}}{{detail}}{{/if}}</div>
-            </div>
-          </div>
-        {{/each}}
-      </div>
-      <div class="hidden lg:block"></div>
-
-      {{!-- 2 Doors through the firewall --}}
-      <div class="relative flex flex-col gap-3 lg:justify-around">
-        <div class="lg:absolute lg:-top-8 lg:left-0 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-base-content/45"><span class="text-base-content/70">2</span> Doors in the firewall</div>
-        <div class="hidden lg:block absolute top-7 bottom-0 left-1/2 -translate-x-1/2 w-3 rounded-full bg-[repeating-linear-gradient(0deg,var(--color-base-300)_0_10px,var(--color-base-200)_10px_12px)]" aria-hidden="true"></div>
-        {{#each map.doors}}
-          <div data-neo-node="{{id}}" tabindex="0"
-               class="relative z-10 rounded-box border border-base-300 bg-base-100 shadow-sm px-3 py-2.5 transition-opacity outline-none focus-visible:ring-2 ring-primary">
-            <div class="flex items-center gap-2">
-              <span class="w-7 h-7 shrink-0 rounded-lg bg-base-200 flex items-center justify-center text-base-content/70">
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M5 17.5V3.5a1 1 0 011-1h8a1 1 0 011 1v14M3 17.5h14"/><path d="M12 10h.01" stroke-linecap="round" stroke-width="2.4"/></svg>
+      {{!-- 1 Where from: a column of boxes, tabs on a phone. --}}
+      <div class="relative">
+        <div class="lg:absolute lg:-top-8 lg:left-0 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-base-content/45 mb-2 lg:mb-0"><span class="text-base-content/70">1</span> Where from</div>
+        <div class="flex gap-2 overflow-x-auto -mx-1 px-1 pb-1 lg:flex-col lg:gap-3 lg:h-full lg:justify-around lg:overflow-visible lg:m-0 lg:p-0" role="tablist" aria-label="Where from">
+          {{#each map.origins}}
+            <button type="button" data-neo-node="{{id}}" role="tab" {{#if inactive}}disabled{{/if}}
+                    :aria-selected="origin === '{{place}}'"
+                    @click="origin = origin === '{{place}}' ? null : '{{place}}'"
+                    class="relative z-10 shrink-0 text-left rounded-box border bg-base-100 px-3 py-2 lg:py-2.5 flex items-center gap-2.5 transition outline-none focus-visible:ring-2 ring-primary {{#if inactive}}border-dashed border-base-300 opacity-50{{else}}border-base-300 shadow-sm hover:shadow-md cursor-pointer{{/if}}"
+                    :class="origin === '{{place}}' ? 'border-base-content! ring-2 ring-base-content/15' : ''">
+              <span class="w-8 h-8 lg:w-9 lg:h-9 shrink-0 rounded-full flex items-center justify-center {{#if (eq icon "globe")}}bg-base-content text-base-100{{else}}bg-base-200 text-base-content/70{{/if}}">
+                {{#if (eq icon "globe")}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-5 h-5" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.5 3.5 5.3 3.5 8.5s-1.1 6-3.5 8.5c-2.4-2.5-3.5-5.3-3.5-8.5s1.1-6 3.5-8.5z"/></svg>{{/if}}
+                {{#if (eq icon "home")}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" class="w-5 h-5" aria-hidden="true"><path d="M4 10.5L12 4l8 6.5V19a1 1 0 01-1 1h-4.5v-5.5h-5V20H5a1 1 0 01-1-1v-8.5z"/></svg>{{/if}}
+                {{#if (eq icon "vpn")}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="w-5 h-5" aria-hidden="true"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/><path d="M8 7.2l2.8 8.6M16 7.2l-2.8 8.6M8.2 6h7.6"/></svg>{{/if}}
               </span>
-              <div class="min-w-0 flex-1">
-                <div class="text-sm font-semibold leading-tight truncate" title="{{label}}">{{label}}</div>
-                <div class="text-[11px] font-mono text-base-content/55 leading-tight">port {{ports}}</div>
-              </div>
+              <span class="min-w-0">
+                <span class="block text-sm font-semibold leading-tight whitespace-nowrap">{{label}}</span>
+                <span class="hidden lg:block text-[11px] text-base-content/55 leading-tight">{{#if inactive}}Not set up{{else}}{{detail}}{{/if}}</span>
+              </span>
+            </button>
+          {{/each}}
+        </div>
+      </div>
+      <div class="hidden lg:block"></div>
+
+      {{!-- 2 Doors in the firewall, one per service. --}}
+      <div class="relative flex flex-col gap-2 lg:gap-2.5 lg:justify-around">
+        <div class="lg:absolute lg:-top-8 lg:left-0 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-base-content/45"><span class="text-base-content/70">2</span> Doors in the firewall</div>
+        <div class="hidden lg:block absolute inset-y-0 left-1/2 -translate-x-1/2 w-3 rounded-full bg-[repeating-linear-gradient(0deg,var(--color-base-300)_0_10px,var(--color-base-200)_10px_12px)]" aria-hidden="true"></div>
+        {{#each map.doors}}
+          <div data-neo-node="{{id}}" data-neo-from="{{origins}}" tabindex="0" role="button"
+               :class="reaches($el) ? '' : 'max-lg:hidden'"
+               class="relative z-10 rounded-box border border-base-300 bg-base-100 shadow-sm px-3 py-2 cursor-pointer hover:shadow-md transition outline-none focus-visible:ring-2 ring-primary">
+            <div class="flex items-center gap-2 min-w-0">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" class="w-4 h-4 shrink-0 text-base-content/55" aria-hidden="true"><path d="M5 17.5V3.5a1 1 0 011-1h8a1 1 0 011 1v14M3 17.5h14"/><path d="M12 10h.01" stroke-linecap="round" stroke-width="2.4"/></svg>
+              <span class="text-sm font-semibold leading-tight truncate flex-1" title="{{title}}">{{title}}</span>
             </div>
-            <div class="flex flex-wrap gap-1 mt-2">
-              {{#each firewall}}<span class="inline-flex items-center px-1.5 h-5 rounded border text-[10px] font-medium {{> toneChip}}">{{text}}</span>{{/each}}
+            <div class="font-mono text-[11px] text-base-content/50 truncate mt-0.5 pl-6" title="Ports {{ports}}">{{ports}}</div>
+            <div class="flex items-center gap-1.5 mt-1 pl-6 min-w-0">
+              {{#with firewall}}<span class="shrink-0 inline-flex items-center px-1.5 h-5 rounded border text-[10px] font-medium {{> toneChip}}" title="{{help}}">{{text}}</span>{{/with}}
+              {{#if guard}}{{#with guard}}
+                <span class="min-w-0 inline-flex items-center gap-1 text-[11px] {{> toneText}}" title="{{help}}">
+                  <svg viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3 shrink-0" aria-hidden="true"><path d="M10 1.5l6.5 2.6v4.8c0 4-2.7 7.4-6.5 8.6-3.8-1.2-6.5-4.6-6.5-8.6V4.1L10 1.5z"/></svg>
+                  <span class="truncate">{{text}}</span>
+                </span>
+              {{/with}}{{/if}}
+              {{#if web}}<span class="text-[11px] text-base-content/55 truncate">Leads to your apps →</span>{{/if}}
             </div>
-            {{#if guard}}
-              {{#with guard}}
-                <div class="flex items-center gap-1.5 mt-2 text-xs {{> toneText}}">
-                  <svg viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5 shrink-0" aria-hidden="true"><path d="M10 1.5l6.5 2.6v4.8c0 4-2.7 7.4-6.5 8.6-3.8-1.2-6.5-4.6-6.5-8.6V4.1L10 1.5z"/></svg>
-                  <span class="font-medium">{{text}}</span>
-                </div>
-              {{/with}}
-            {{/if}}
-            {{#if inside}}{{#unless web}}<div class="text-[11px] text-base-content/55 mt-1">→ {{inside}}</div>{{/unless}}{{/if}}
-            <div class="lg:hidden text-[11px] text-base-content/55 mt-1">From: {{from}}</div>
+            <div class="lg:hidden text-[11px] text-base-content/50 mt-1 pl-6">From {{from}}</div>
           </div>
         {{/each}}
       </div>
       <div class="hidden lg:block"></div>
 
-      {{!-- 3 Who gets in, to which apps --}}
-      <div class="relative flex flex-col gap-3 lg:justify-around">
+      {{!-- 3 Behind the web door: apps grouped by exposure. --}}
+      <div class="relative flex flex-col gap-2 lg:gap-3 lg:justify-around">
         <div class="lg:absolute lg:-top-8 lg:left-0 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-base-content/45"><span class="text-base-content/70">3</span> Behind the web door</div>
         {{#each map.groups}}
-          <div data-neo-node="{{id}}" tabindex="0" role="button" @click="show('{{filter}}')" @keydown.enter="show('{{filter}}')"
-               title="Show these apps in the list below"
-               class="relative z-10 rounded-box border-2 bg-base-100 px-3 py-2.5 cursor-pointer hover:shadow-md transition outline-none focus-visible:ring-2 ring-primary {{> toneBorder}}">
+          <div data-neo-node="{{id}}" data-neo-from="{{origins}}" tabindex="0" role="button"
+               @click="pick('{{filter}}')" @keydown.enter="pick('{{filter}}')"
+               :class="(reaches($el) ? '' : 'max-lg:hidden ') + (filter === '{{filter}}' ? 'ring-4' : '')"
+               title="Click to show only these apps in the list below"
+               class="relative z-10 rounded-box border-2 bg-base-100 px-3 py-2.5 cursor-pointer hover:shadow-md transition outline-none focus-visible:ring-2 ring-primary/30 {{> toneBorder}}">
             <div class="flex items-start gap-2">
-              <span class="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center {{#if (eq tone "error")}}bg-error text-error-content{{/if}}{{#if (eq tone "warning")}}bg-warning text-warning-content{{/if}}{{#if (eq tone "ok")}}bg-success/15 text-success{{/if}}{{#if (eq tone "muted")}}bg-base-200 text-base-content/50{{/if}}">
+              <span class="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center {{> toneDot}}">
                 {{#if (eq guard "login")}}<svg viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4" aria-hidden="true"><path d="M10 1.5l6.5 2.6v4.8c0 4-2.7 7.4-6.5 8.6-3.8-1.2-6.5-4.6-6.5-8.6V4.1L10 1.5z"/></svg>{{/if}}
                 {{#if (eq guard "own")}}<svg viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4" aria-hidden="true"><path fill-rule="evenodd" d="M12.5 2a5.5 5.5 0 00-5.3 7L2.3 13.9a1 1 0 00-.3.7V17a1 1 0 001 1h2.5a1 1 0 001-1v-1h1a1 1 0 001-1v-1h1l1-1a5.5 5.5 0 102.3-11zm1 3a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" clip-rule="evenodd"/></svg>{{/if}}
+                {{#if (eq guard "public")}}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.5 3.5 5.3 3.5 8.5s-1.1 6-3.5 8.5c-2.4-2.5-3.5-5.3-3.5-8.5s1.1-6 3.5-8.5z"/></svg>{{/if}}
                 {{#if (eq guard "none")}}<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M5 17.5V3.5a1 1 0 011-1h8a1 1 0 011 1v14M3 17.5h14"/><path d="M9 3l5 1.5v13L9 17.5z" fill="currentColor" fill-opacity=".25"/></svg>{{/if}}
               </span>
               <div class="min-w-0 flex-1">
                 <div class="flex items-baseline justify-between gap-2">
-                  <div class="text-sm font-semibold leading-tight {{#if (eq tone "error")}}text-error{{/if}}">{{title}}</div>
+                  <span class="text-sm font-semibold leading-tight {{#if (eq tone "error")}}text-error{{/if}}">{{title}}</span>
                   <span class="text-[11px] text-base-content/50 shrink-0">{{count}}</span>
                 </div>
-                <div class="text-[11px] text-base-content/60 leading-tight">{{detail}} · from {{from}}</div>
+                <div class="text-[11px] text-base-content/60 leading-tight">{{detail}}</div>
+                <div class="text-[11px] text-base-content/45 leading-tight">From {{from}}</div>
               </div>
             </div>
             <div class="flex flex-wrap gap-1 mt-2">
@@ -167,10 +177,12 @@
                 </span>
               {{/each}}
             </div>
+            <button type="button" class="mt-2 text-[11px] link link-hover text-base-content/60" @click.stop="show('{{filter}}')">Show in the list ↓</button>
           </div>
         {{else}}
           <p class="text-xs text-base-content/55">No app has a web address yet.</p>
         {{/each}}
+        <p class="lg:hidden text-xs text-base-content/55" x-show="origin && !Array.prototype.some.call($el.parentElement.querySelectorAll('[data-neo-node^=g-]'), function (e) { return reaches(e); })" x-cloak>No app opens from here.</p>
       </div>
     </div>
   </section>

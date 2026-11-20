@@ -131,7 +131,9 @@
     });
   }
 
+  /** Hover shows a node's paths; a click pins them until the next click. */
   function highlight(map, id) {
+    id = id || map._neoPinned || null;
     var edges = map._neoEdges;
     var on = id ? pathsThrough(edges, id) : null;
     var nodes = new Set();
@@ -175,6 +177,11 @@
     if (root.ResizeObserver) new root.ResizeObserver(redraw).observe(map);
     map.addEventListener('load', redraw, true);
     map.querySelectorAll('[data-neo-node]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        var id = el.getAttribute('data-neo-node');
+        map._neoPinned = map._neoPinned === id ? null : id;
+        highlight(map, null);
+      });
       el.addEventListener('mouseenter', function () { highlight(map, el.getAttribute('data-neo-node')); });
       el.addEventListener('mouseleave', function () { highlight(map, null); });
       el.addEventListener('focusin', function () { highlight(map, el.getAttribute('data-neo-node')); });

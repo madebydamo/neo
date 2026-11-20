@@ -217,7 +217,7 @@ const FILTERS: [(&str, &str, &str); 7] = [
     (
         "risk",
         "Problems",
-        "Apps anyone on the internet opens without logging in, and ports Neo cannot explain",
+        "Apps whose login was turned off while the internet reaches them, and ports Neo cannot explain",
     ),
     (
         "internet-nologin",
@@ -308,6 +308,8 @@ struct AppRow {
     /// Some value is set for this app: show "Use defaults".
     any_changed: bool,
     risk: Option<String>,
+    /// Without a login on purpose (public website).
+    public_by_design: bool,
     /// Quick-filter tags.
     tags: String,
 }
@@ -531,10 +533,15 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
                 set_sso.unwrap_or(if s.from.is_none() { s.enabled } else { d.sso })
             });
 
+            // No login on purpose: the app has none, or its module fixes it
+            // off and nobody changed that (a public website). Not a problem.
+            let public_by_design =
+                !a.auth.available || (login_fixed && set_login.is_none() && !login_on);
             let risk = if places.iter().any(|p| p == "web")
                 && !login_on
                 && !sso_on
                 && a.own_login.is_none()
+                && !public_by_design
             {
                 Some("Anyone on the internet can open it without logging in.".to_string())
             } else {
@@ -549,6 +556,7 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
             let tags = app_tags(internet, login_on, open_paths, risk.is_some(), any_changed);
             AppRow {
                 tags,
+                public_by_design,
                 places: PLACES
                     .iter()
                     .map(|(id, label)| Toggle {
@@ -636,6 +644,7 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
             login_on: a.login.as_ref().is_some_and(|t| t.on),
             sso_on: a.sso.as_ref().is_some_and(|t| t.on),
             own_login: a.own_login.is_some(),
+            public_by_design: a.public_by_design,
             open_paths: a.public_paths,
         })
         .collect();
