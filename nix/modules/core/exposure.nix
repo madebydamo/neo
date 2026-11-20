@@ -24,9 +24,16 @@
 
     # --- Discovered ports -------------------------------------------------
     expand = proto: iface: ports: ranges:
-      map (port: {inherit proto port iface;}) ports
+      map (port: {
+        inherit proto port iface;
+        firewall = true;
+      })
+      ports
       ++ lib.concatMap (r:
-        map (port: {inherit proto port iface;}) (lib.range r.from r.to))
+        map (port: {
+          inherit proto port iface;
+          firewall = true;
+        }) (lib.range r.from r.to))
       ranges;
     firewallPorts =
       expand "tcp" null fw.allowedTCPPorts fw.allowedTCPPortRanges
@@ -61,6 +68,7 @@
           inherit proto container address;
           port = lib.toInt hostPort;
           iface = null;
+          firewall = false;
         }
       ];
     loopback = a: lib.hasPrefix "127." a || a == "::1" || a == "[::1]" || a == "localhost";
@@ -69,15 +77,43 @@
       )
       config.virtualisation.oci-containers.containers));
 
-    # Same port twice (firewall and Docker) shows once.
+    # Same port twice (firewall and Docker) shows once; the firewall rule wins.
     discovered = let
       key = p: "${p.proto}/${toString p.port}/${toString p.iface}";
       byKey = lib.foldl' (acc: p:
         if acc ? ${key p}
-        then acc // {${key p} = acc.${key p} // lib.optionalAttrs (p ? container) {inherit (p) container;};}
+        then
+          acc
+          // {
+            ${key p} =
+              acc.${key p}
+              // lib.optionalAttrs (p ? container) {inherit (p) container address;}
+              // {firewall = acc.${key p}.firewall || p.firewall;};
+          }
         else acc // {${key p} = p;}) {} (firewallPorts ++ dockerPorts);
     in
       lib.attrValues byKey;
+
+    # What the host firewall does with a port, for the Access page:
+    #   allowed    a firewall rule lets every network in
+    #   interface  a firewall rule lets one network in (the others are dropped)
+    #   docker     no rule, but Docker publishes it: its forwarding rules come
+    #              before the firewall, so every network reaches it anyway
+    #   blocked    no rule and nothing goes around the firewall
+    #   off        the firewall is switched off
+    dockerSkipsFirewall =
+      (config.virtualisation.docker.daemon.settings.iptables or true)
+      && !(fw.filterForward or false);
+    firewallState = p:
+      if !fw.enable
+      then "off"
+      else if p.iface != null
+      then "interface"
+      else if p.firewall
+      then "allowed"
+      else if dockerSkipsFirewall
+      then "docker"
+      else "blocked";
 
     declared = lib.attrValues (lib.mapAttrs (id: d: d // {inherit id;}) neo.exposure.ports);
     describe = p:
@@ -90,6 +126,9 @@
         inherit (p) port;
         interface = p.iface;
         container = p.container or null;
+        # Docker binds the port to this address only ("" = every address).
+        address = p.address or "";
+        firewall = firewallState p;
         described = d != null;
         id =
           if d == null

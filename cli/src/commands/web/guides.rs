@@ -134,8 +134,9 @@ pub(crate) fn option_url(target: &str) -> String {
     let root = parts.next().unwrap_or_default();
     let rest = parts.next().unwrap_or_default();
     if root == "core" {
-        let section = rest.split('.').next().unwrap_or_default();
-        format!("/configuration/core/{section}?focus={rest}")
+        // Every `core.*` option is on the System pane (Settings → System),
+        // under its dotted name (`ssh.authorizedKeys`).
+        format!("/configuration/core/core?focus={rest}")
     } else if crate::commands::web::util::TOP_SECTIONS.contains(&root) {
         format!("/configuration/core/{root}?focus={rest}")
     } else {
@@ -415,7 +416,7 @@ mod tests {
         assert!(html.contains(r#"src="/service-icons/p.svg""#));
         assert!(html.contains(r#"/configuration/option/pihole?focus=localIP"#));
         assert!(html.contains(r#"/configuration/guides/x"#));
-        assert!(html.contains(r#"/configuration/core/timeZone?focus=timeZone"#));
+        assert!(html.contains(r#"/configuration/core/core?focus=timeZone"#));
     }
 
     #[test]

@@ -87,6 +87,11 @@ Dawarich, Grafana (Monitoring), RustiCal, Beszel.
   bound to loopback, each matched to its description, SSH (keys, password
   login, console password, NetBird SSH) and the login page (users, providers,
   groups, OIDC apps).
+- Each port carries `firewall`, what the host firewall does with it:
+  `allowed` (a rule opens it to every network), `interface` (a rule for one
+  network only), `docker` (no rule, but Docker publishes it: its forwarding
+  rules come before the firewall, so every network reaches it), `blocked`, or
+  `off` (firewall switched off). `address` is the Docker bind address.
 - `mkServiceMeta { ownLogin = "Immich accounts"; }`: the app's own accounts. Computed
   from the app's settings in `option.nix` when it depends on them (Pi-hole
   password, registry users). Never set `meta` from `default.nix` under
@@ -99,15 +104,36 @@ Dawarich, Grafana (Monitoring), RustiCal, Beszel.
 `/configuration/access` (`routes/access.rs`, `templates/access.html.hbs`),
 eval query `QueryKey::Access` (`extract_access.nix`).
 
-1. Warnings: app on the internet with no login (error when a login was turned
-   off, warning when the app has none by design), apps asking for login while
-   tinyauth is off, SSH password login, undescribed ports.
-2. Default for all apps: place buttons, login and SSO toggles.
-3. Apps: a row per app, a toggle per place, login page and SSO; badges
+The page first explains, then lets you change. The model it shows:
+**where from** (Internet, home network, Tailscale, NetBird) → **door** (ports
+through the firewall) → **guard** (login page, the app's own login, SSH keys,
+nothing) → **inside** (apps, server shell, services).
+
+1. Verdict (`routes/access_map.rs`): what is open, in words. Apps open to
+   anyone on the internet, apps only behind their own login, apps with paths
+   that skip the login page, ports that skip the firewall, unknown ports, SSH
+   password login, firewall off; or "Nothing opens to the internet without a
+   login". Each item filters the lists.
+2. Access map (`access_map.rs`, lines by `static/access_map.js`): origins →
+   doors (web, SSH, every other port group, with firewall chips and the guard)
+   → behind the web door the apps grouped by exposure (`bucket_of`: open, own
+   login, behind the login page, home/VPN without login, home/VPN, nowhere).
+   Red moving lines are open entries. Hover follows a node's paths; a click on
+   a group filters the apps list. On narrow screens no lines: each node says
+   where it is reached from.
+3. Warnings left over: apps asking for login while tinyauth is off.
+4. Default for all apps: place buttons, login and SSO toggles.
+5. Quick filters (`static/access_filter.js`): rows carry tags
+   (`app_tags`, `access_ports::port_tags`, `bucket-<group>`); apps that do not
+   match hide, ports dim. The choice survives re-renders (sessionStorage).
+6. Apps: a row per app, places → login page → account → who gets in; a place
+   is red when the internet reaches the app without a login. Badges
    "changed" / "set by app"; **Use defaults** removes the app's values.
-4. Open ports: port, what it is for, where it is open, what protects it.
-5. Logins: SSH keys (type, name, last characters), password login, console
+7. All ports in detail (closed; `access_ports.rs`): every port from its scope
+   through the firewall, with its protection.
+8. Logins: SSH keys (type, name, last characters), password login, console
    password, NetBird SSH; login page users, providers, groups, OIDC apps.
+   The links open the System pane (`/configuration/core/core?focus=…`).
 
 Each click posts `path` + JSON `value` to `/access/set`, which builds a patch
 for `apply_edit` (settings lock, secrets routing, like the form). Only the

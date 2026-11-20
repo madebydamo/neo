@@ -645,7 +645,7 @@ mod tests {
         let sub = &items[3];
         assert_eq!(sub.url, "/configuration/option/beta?focus=subdomain");
         assert_eq!(sub.hint, "beta");
-        assert_eq!(items[4].url, "/configuration/core/timeZone?focus=timeZone");
+        assert_eq!(items[4].url, "/configuration/core/core?focus=timeZone");
         assert_eq!(items[0].hint, "beta tagline");
     }
 }

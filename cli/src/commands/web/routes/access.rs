@@ -52,7 +52,7 @@ pub struct AccessReport {
     pub places: ReportPlaces,
     #[serde(default)]
     pub ssh: ReportSsh,
-    #[serde(default, rename = "loginPage")]
+    #[serde(default, alias = "loginPage")]
     pub login_page: ReportLoginPage,
     #[serde(default)]
     pub domain: Option<String>,
@@ -72,13 +72,13 @@ pub struct ReportApp {
     #[serde(default)]
     pub ingress: Vec<String>,
     /// Settings path the places follow (`access.defaultIngress`); None = fixed by the app.
-    #[serde(default, rename = "ingressFrom")]
+    #[serde(default, alias = "ingressFrom")]
     pub ingress_from: Option<String>,
     #[serde(default)]
     pub auth: ReportAuth,
     #[serde(default)]
     pub sso: Option<ReportSso>,
-    #[serde(default, rename = "ownLogin")]
+    #[serde(default, alias = "ownLogin")]
     pub own_login: Option<String>,
     #[serde(default)]
     pub who: ReportWho,
@@ -92,7 +92,7 @@ pub struct ReportAuth {
     pub enabled: bool,
     #[serde(default)]
     pub from: Option<String>,
-    #[serde(default, rename = "publicPaths")]
+    #[serde(default, alias = "publicPaths")]
     pub public_paths: Vec<String>,
 }
 
@@ -114,6 +114,9 @@ pub struct ReportWho {
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct ReportPort {
+    /// Id in neo.exposure.ports (None for a port nobody describes).
+    #[serde(default)]
+    pub id: Option<String>,
     pub protocol: String,
     pub port: u32,
     #[serde(default)]
@@ -130,6 +133,12 @@ pub struct ReportPort {
     pub login: String,
     #[serde(default)]
     pub open: bool,
+    /// Docker binds the port to this address only ("" = every address).
+    #[serde(default)]
+    pub address: String,
+    /// What the host firewall does with it: allowed | interface | docker | blocked | off.
+    #[serde(default)]
+    pub firewall: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -152,11 +161,11 @@ pub struct ReportSsh {
     pub users: Vec<String>,
     #[serde(default)]
     pub keys: Vec<String>,
-    #[serde(default, rename = "passwordLogin")]
+    #[serde(default, alias = "passwordLogin")]
     pub password_login: bool,
-    #[serde(default, rename = "consolePassword")]
+    #[serde(default, alias = "consolePassword")]
     pub console_password: bool,
-    #[serde(default, rename = "netbirdSsh")]
+    #[serde(default, alias = "netbirdSsh")]
     pub netbird_ssh: bool,
 }
 
@@ -172,7 +181,7 @@ pub struct ReportLoginPage {
     pub providers: Vec<String>,
     #[serde(default)]
     pub groups: Vec<String>,
-    #[serde(default, rename = "oidcApps")]
+    #[serde(default, alias = "oidcApps")]
     pub oidc_apps: Vec<String>,
 }
 
@@ -189,6 +198,77 @@ struct Toggle {
     path: String,
     /// JSON value a click writes.
     value: String,
+    /// On, and with it anyone on the internet gets in without a login.
+    danger: bool,
+}
+
+/// One quick filter above the lists: matches rows whose tags contain `id`.
+#[derive(Serialize, Default, Debug)]
+struct Filter {
+    id: &'static str,
+    label: &'static str,
+    help: &'static str,
+    apps: usize,
+    ports: usize,
+}
+
+/// Quick filters, in order (tags: `app_tags`, `access_ports::port_tags`).
+const FILTERS: [(&str, &str, &str); 7] = [
+    (
+        "risk",
+        "Problems",
+        "Apps anyone on the internet opens without logging in, and ports Neo cannot explain",
+    ),
+    (
+        "internet-nologin",
+        "Internet without login page",
+        "Reachable from the internet and the login page does not guard it",
+    ),
+    ("internet", "On the internet", "Reachable from the internet"),
+    (
+        "nologin",
+        "No login page",
+        "The login page does not guard it (the app may still have its own login)",
+    ),
+    (
+        "openpaths",
+        "Open paths",
+        "Some addresses of the app skip the login page (share links, phone apps)",
+    ),
+    (
+        "skipsfw",
+        "Skips the firewall",
+        "Docker publishes the port before the firewall sees it",
+    ),
+    (
+        "changed",
+        "Changed for an app",
+        "Set for this app instead of following the defaults",
+    ),
+];
+
+/// Quick-filter tags of an app, space-separated.
+fn app_tags(internet: bool, login_on: bool, open_paths: bool, risk: bool, changed: bool) -> String {
+    let mut t = Vec::new();
+    if internet {
+        t.push("internet");
+    }
+    if !login_on {
+        t.push("nologin");
+    }
+    if internet && !login_on {
+        t.push("internet-nologin");
+    }
+    if open_paths {
+        t.push("openpaths");
+    }
+    if risk {
+        t.push("risk");
+    }
+    if changed {
+        t.push("changed");
+    }
+    t.join(" ")
 }
 
 #[derive(Serialize, Default)]
@@ -228,18 +308,8 @@ struct AppRow {
     /// Some value is set for this app: show "Use defaults".
     any_changed: bool,
     risk: Option<String>,
-}
-
-#[derive(Serialize, Default)]
-struct PortRow {
-    port: String,
-    label: String,
-    login: String,
-    open: bool,
-    described: bool,
-    scope: String,
-    service: Option<String>,
-    service_url: Option<String>,
+    /// Quick-filter tags.
+    tags: String,
 }
 
 #[derive(Serialize, Default)]
@@ -262,7 +332,9 @@ struct AccessContext {
     defaults: Defaults,
     apps: Vec<AppRow>,
     place_headers: Vec<Toggle>,
-    ports: Vec<PortRow>,
+    ports: super::access_ports::PortsFlow,
+    filters: Vec<Filter>,
+    map: super::access_map::AccessMap,
     ssh: ReportSsh,
     ssh_keys: Vec<KeyRow>,
     ssh_keys_url: String,
@@ -412,6 +484,7 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
                 inactive: !places_on(id),
                 path: "access.defaultIngress".into(),
                 value: json!(toggled(&d.places, id)).to_string(),
+                danger: false,
             })
             .collect(),
         login: Toggle {
@@ -467,19 +540,15 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
             } else {
                 None
             };
-            if let Some(r) = &risk {
-                // An app without any login by design (a public pastebin) is a
-                // warning; a login someone turned off is an error.
-                let by_design = !a.auth.available || (login_fixed && set_login.is_none());
-                warnings.push(Warning {
-                    level: if by_design { "warning" } else { "error" },
-                    text: format!("{}: {r}", humanize(&a.name)),
-                    link: None,
-                    link_label: None,
-                });
-            }
             let title = humanize(&a.name);
+            let internet = places.iter().any(|p| p == "web");
+            let any_changed = (set_places.is_some() && !places_fixed)
+                || (set_login.is_some() && !login_fixed)
+                || (set_sso.is_some() && a.sso.as_ref().is_some_and(|s| s.from.is_some()));
+            let open_paths = login_on && !a.auth.public_paths.is_empty();
+            let tags = app_tags(internet, login_on, open_paths, risk.is_some(), any_changed);
             AppRow {
+                tags,
                 places: PLACES
                     .iter()
                     .map(|(id, label)| Toggle {
@@ -489,6 +558,7 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
                         inactive: !places_on(id),
                         path: format!("{base}.ingress"),
                         value: json!(toggled(&places, id)).to_string(),
+                        danger: *id == "web" && internet && !login_on && !sso_on,
                     })
                     .collect(),
                 places_state: Setting {
@@ -501,6 +571,7 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
                     on: login_on,
                     path: format!("{base}.auth.enabled"),
                     value: json!(!login_on).to_string(),
+                    danger: internet && !login_on && !sso_on,
                     ..Default::default()
                 }),
                 login_state: Setting {
@@ -514,14 +585,13 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
                     inactive: !lp.enabled,
                     path: format!("{base}.sso"),
                     value: json!(!sso_on).to_string(),
+                    danger: false,
                 }),
                 sso_state: Setting {
                     changed: set_sso.is_some(),
                     fixed: a.sso.as_ref().is_some_and(|s| s.from.is_none()),
                 },
-                any_changed: (set_places.is_some() && !places_fixed)
-                    || (set_login.is_some() && !login_fixed)
-                    || (set_sso.is_some() && a.sso.as_ref().is_some_and(|s| s.from.is_some())),
+                any_changed,
                 own_login: a.own_login.clone(),
                 public_paths: if login_on {
                     a.auth.public_paths.len()
@@ -550,48 +620,39 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
             link_label: Some("Login page settings".into()),
         });
     }
-    if report.ssh.password_login {
-        warnings.push(Warning {
-            level: "warning",
-            text: "SSH accepts passwords, because no SSH key is set. Add your key so only it can log in.".into(),
-            link: Some(option_url("core.ssh.authorizedKeys")),
-            link_label: Some("Add an SSH key".into()),
-        });
-    }
-    for p in &report.undescribed {
-        warnings.push(Warning {
-            level: "warning",
-            text: format!("Port {p} is open, but Neo does not know what uses it."),
-            link: None,
-            link_label: None,
-        });
-    }
-
-    let ports = report
-        .ports
+    let ports = super::access_ports::build(&report.ports, &report.places);
+    let map_apps: Vec<super::access_map::MapApp> = apps
         .iter()
-        .map(|p| PortRow {
-            port: format!("{} {}", p.port, p.protocol.to_uppercase()),
-            label: p.label.clone(),
-            login: if p.described {
-                p.login.clone()
-            } else {
-                "Unknown".into()
-            },
-            open: p.open,
-            described: p.described,
-            scope: match (&p.interface, &p.container) {
-                (Some(i), _) if i == "wt0" => "NetBird only".into(),
-                (Some(i), _) if i.starts_with("tailscale") => "Tailscale only".into(),
-                (Some(i), _) if i.starts_with("ve-") => "This server only".into(),
-                (Some(i), _) => format!("Only on {i}"),
-                (None, _) => "Every network".into(),
-            },
-            service_url: p
-                .service
-                .as_ref()
-                .map(|s| format!("/configuration/option/{s}")),
-            service: p.service.as_ref().map(|s| humanize(s)),
+        .map(|a| super::access_map::MapApp {
+            name: a.name.clone(),
+            title: a.title.clone(),
+            icon: a.icon.clone(),
+            places: a
+                .places
+                .iter()
+                .filter(|t| t.on)
+                .map(|t| t.id.clone())
+                .collect(),
+            login_on: a.login.as_ref().is_some_and(|t| t.on),
+            sso_on: a.sso.as_ref().is_some_and(|t| t.on),
+            own_login: a.own_login.is_some(),
+            open_paths: a.public_paths,
+        })
+        .collect();
+    for (a, m) in apps.iter_mut().zip(&map_apps) {
+        let bucket = super::access_map::bucket_of(m, &report.places);
+        a.tags = format!("{} bucket-{bucket}", a.tags).trim().to_string();
+    }
+    let map = super::access_map::build(&map_apps, &report.ports, &report.places, &report.ssh);
+    let has = |tags: &str, id: &str| tags.split(' ').any(|t| t == id);
+    let filters = FILTERS
+        .iter()
+        .map(|(id, label, help)| Filter {
+            id,
+            label,
+            help,
+            apps: apps.iter().filter(|a| has(&a.tags, id)).count(),
+            ports: ports.ports.iter().filter(|p| has(&p.tags, id)).count(),
         })
         .collect();
 
@@ -608,12 +669,14 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
             .collect(),
         apps,
         ports,
+        filters,
+        map,
         ssh_keys: report.ssh.keys.iter().map(|k| key_row(k)).collect(),
         ssh: report.ssh.clone(),
         ssh_keys_url: option_url("core.ssh.authorizedKeys"),
         console_password_url: option_url("core.hashedLinuxPassword"),
         login_page: lp.clone(),
-        login_page_settings_url: "/configuration/option/tinyauth".into(),
+        login_page_settings_url: option_url("tinyauth.users"),
         warnings,
         domain: report.domain.clone(),
         relay: report.places.relay,
@@ -946,7 +1009,56 @@ mod tests {
             .unwrap()
             .risk
             .is_some());
-        assert!(ctx.warnings.iter().any(|w| w.text.starts_with("Immich")));
+        // The verdict above the map says it (no second warning).
+        assert!(!ctx.map.ok);
+        assert!(ctx.apps.iter().any(|a| a.tags.contains("bucket-open")));
+    }
+
+    /// The page renders, and reads the server logins under the names the
+    /// template uses (the report's camelCase keys are only read).
+    #[test]
+    fn page_renders_logins_and_port_flow() {
+        use rocket_dyn_templates::handlebars::Handlebars;
+        let src = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/templates/access.html.hbs"
+        ))
+        .unwrap();
+        let mut hb = Handlebars::new();
+        hb.set_strict_mode(false);
+        hb.register_template_string("access", src).unwrap();
+        let mut r = report();
+        r.ssh = serde_json::from_value(json!({
+            "consolePassword": true, "passwordLogin": false, "netbirdSsh": true,
+            "ports": [22], "users": ["admin"], "keys": []
+        }))
+        .unwrap();
+        r.login_page.oidc_apps = vec!["vaultwarden".into()];
+        for (port, iface, fw) in [
+            (22, None, "allowed"),
+            (9980, None, "docker"),
+            (9982, Some("ve-streamproxy"), "interface"),
+            (8080, None, "blocked"),
+        ] {
+            r.ports.push(ReportPort {
+                protocol: "tcp".into(),
+                port,
+                interface: iface.map(str::to_string),
+                described: true,
+                label: format!("Port {port}"),
+                login: "x".into(),
+                firewall: fw.into(),
+                ..Default::default()
+            });
+        }
+        let ctx = build(&r, &DocumentMut::new());
+        let html = hb.render("access", &ctx).unwrap();
+        assert!(html.contains("Console password</dt><dd>Set"));
+        assert!(html.contains("NetBird SSH</dt><dd>On"));
+        assert!(html.contains("vaultwarden"));
+        assert!(html.contains("Skips the firewall"));
+        assert!(html.contains("Blocked by the firewall"));
+        assert!(html.contains("/configuration/core/core?focus"));
     }
 
     #[test]
