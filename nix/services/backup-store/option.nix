@@ -98,7 +98,7 @@
                       type = types.listOf types.str;
                       default = [];
                       rank = 10;
-                      description = "SSH public keys allowed in: that server's own key (System → SSH there), and your own if you want to restore with it.";
+                      description = "SSH public keys allowed in: that server's own key (System → SSH there). For encrypted backups that is all: the keys in System → SSH on that server can read and restore them here after its next backup. For other formats, add your own key to restore with it.";
                       ui = lib.neo.ui.mkUi {label = "SSH public keys";};
                     };
                   };

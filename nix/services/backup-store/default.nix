@@ -87,8 +87,10 @@
         HostKey ${config.neo.core.secrets.identityFile}
         PidFile none
         AllowUsers ${concatMapStringsSep " " userOf (attrNames cfg.clients)}
-        # The second file: a rescue's short-lived, read-only key (neo backup-store rescue).
-        AuthorizedKeysFile /etc/neo/backup-store/authorized_keys/%u /run/neo-backup-store/rescue/%u
+        # Second: a rescue's short-lived, read-only key (neo backup-store rescue).
+        # Third: the admin keys an encrypted client's backup is encrypted to,
+        # read-only (neo backup-store report, from neo-backup.recipients).
+        AuthorizedKeysFile /etc/neo/backup-store/authorized_keys/%u /run/neo-backup-store/rescue/%u /run/neo-backup-store/recipients/%u
         AuthenticationMethods publickey
         PasswordAuthentication no
         KbdInteractiveAuthentication no
@@ -190,10 +192,14 @@
             cfg.clients
             // {"neo/backup-store/store.json".text = storeJson;};
 
-          systemd.tmpfiles.rules = ["d /run/neo-backup-store/rescue 0755 root root -"];
+          systemd.tmpfiles.rules = [
+            "d /run/neo-backup-store/rescue 0755 root root -"
+            "d /run/neo-backup-store/recipients 0755 root root -"
+          ];
 
-          # What the store holds per client, for the rescue portal: as root
-          # (the homes are 0700), on a timer (du is slow).
+          # What the store holds per client, for the rescue portal, and the
+          # restore keys of encrypted clients: as root (the homes are 0700), on
+          # a timer (du is slow).
           systemd.services.backup-store-report = {
             description = "Backup store: report of the stored backups";
             after = ["backup-store-setup.service"];

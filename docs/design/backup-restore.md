@@ -311,6 +311,31 @@ The client's first contact is authenticated by the store's TLS certificate, then
 `clients.<name> = { format; publicKeys; }` makes one account `backup-<name>`, home
 `<path>/<name>` (0700). Every key is `restrict,command="neo-store-gate <format> <dataset>"`.
 
+### Restore keys
+
+For an encrypted client, the keys that can open the backup are the keys that may read it, and
+no others: `publicKeys` holds only the client's host key, and the admin keys come from the
+client itself.
+
+1. Each time `backup.sh` uploads `neo-backup.age` to a store, `neo-backup.recipients` follows
+   it: public keys only, `server <host key>` and one `admin <key>` per ed25519 key in
+   `core.ssh.authorizedKeys`, with their comments. A failed upload is only logged.
+2. `neo backup-store report` (root, every 15 minutes, `cli/src/commands/backup_store/recipients.rs`)
+   reads it in every backup folder of the client and keeps a line only when `neo-backup.age`
+   has an `ssh-ed25519` stanza with that key's tag (first 4 bytes of SHA-256 of the key, as
+   age computes it). A list that claims more keys than the header holds gains nothing.
+3. The admin keys go into `/run/neo-backup-store/recipients/backup-<client>`, the store sshd's
+   third `AuthorizedKeysFile`, as `restrict,command="neo-store-gate --read-only encrypted -"`.
+   A key also in `publicKeys` keeps that line instead.
+
+So a key added in System → SSH on the client can restore from the store within 15 minutes of
+the client's next backup run, and a removed key loses access the same way (rotate the data key
+too, see Key rotation). The client can only grant read access to its own account, which it
+controls anyway. `neo restore` runs restic with `--no-lock`, since a read-only key cannot write
+restic's lock files. The portal shows per client the keys that can unlock and restore, the
+server's own key, and keys in `publicKeys` that can connect but not unlock (a warning).
+Clients from before this list show the plain `publicKeys` until their next run.
+
 - **`neo-store-gate`** (`cli/src/bin/neo-store-gate.rs`) splits `SSH_ORIGINAL_COMMAND` without a
   shell and only runs what `backup.sh` and `neo restore` send: per format, an allowlist of commands,
   flags and paths inside the home or the account's datasets.
@@ -357,7 +382,9 @@ Removing a client removes its account and keeps its data.
 
 The store is a normal source: from the settings (a destination with `target = "store"`), or
 `neo restore --from-backup https://<client>@<store>/<folder>` / `neo backup extract-config` the same
-way (`user` is derived as `backup-<client>`). The admin key must be in the client's `publicKeys`.
+way (`user` is derived as `backup-<client>`). The admin key must be in System → SSH on the
+client at its last backup run (encrypted, see Restore keys) or in the client's `publicKeys`
+(files, zfs).
 `websocat` is in the `neo` package's restore tools. A store itself has no backup of what it holds.
 
 The store's own address is also its **rescue portal** for browsers (WebSocket requests still go to

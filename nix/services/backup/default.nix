@@ -90,11 +90,12 @@
         filter (d: count (p: p == place d) places > 1) destinations;
 
       # Admin keys that open neo-backup.age (encrypted format), with the host
-      # key: the same recipients as secrets.sops.yaml.
+      # key: the same recipients as secrets.sops.yaml. The comment stays (age
+      # reads authorized_keys lines): a backup store shows it as the key's name.
       adminKeys = concatMap (k: let
-        p = filter (x: x != "") (splitString " " k);
+        p = filter (x: x != "") (splitString " " (replaceStrings ["\t" "\n" "\r"] [" " " " " "] k));
       in
-        optional (length p >= 2 && head p == "ssh-ed25519") "ssh-ed25519 ${elemAt p 1}")
+        optional (length p >= 2 && head p == "ssh-ed25519") (concatStringsSep " " p))
       (unique config.neo.core.ssh.authorizedKeys);
 
       backup = pkgs.writeShellApplication {

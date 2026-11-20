@@ -35,8 +35,17 @@
                     <p class="text-sm text-base-content/70">
                       {{format}}{{#if versions}} · {{versions}} versions{{/if}}{{#if size}} · {{size}}{{/if}}{{#if last_connection}} · last connection {{last_connection}}{{/if}}
                     </p>
-                    {{#if keys}}
-                      <p class="text-xs text-base-content/60">Keys: {{#each keys}}{{#unless @first}} · {{/unless}}<span title="{{fingerprint}}">{{label}}</span>{{/each}}</p>
+                    {{#if roles_known}}
+                      <p class="text-xs text-base-content/60">
+                        Can unlock and restore: {{#each unlock_keys}}{{#unless @first}} · {{/unless}}<span title="{{fingerprint}}">{{label}}</span>{{else}}<span class="text-error">no admin key</span>{{/each}}{{#if server_keys}} · server key: {{#each server_keys}}{{#unless @first}}, {{/unless}}<span title="{{fingerprint}}">{{label}}</span>{{/each}}{{/if}}
+                      </p>
+                      {{#if access_keys}}
+                        <p class="text-xs text-warning">Can connect but cannot unlock: {{#each access_keys}}{{#unless @first}} · {{/unless}}<span title="{{fingerprint}}">{{label}}</span>{{/each}}</p>
+                      {{/if}}
+                    {{else}}
+                      {{#if keys}}
+                        <p class="text-xs text-base-content/60">Keys: {{#each keys}}{{#unless @first}} · {{/unless}}<span title="{{fingerprint}}">{{label}}</span>{{/each}}</p>
+                      {{/if}}
                     {{/if}}
                     {{#if configured}}
                       <div class="card-actions mt-1">

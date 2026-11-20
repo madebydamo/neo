@@ -77,7 +77,10 @@ Also from the store's own data:
 
 - **Last connection**: `Accepted publickey for backup-<client>` in the journal of
   `backup-store-sshd`. A connection without a new backup means the run failed on the client.
-- **Keys**: comment, type and SHA256 fingerprint of each of the client's `publicKeys`.
+- **Keys**: comment, type and SHA256 fingerprint of each of the client's `publicKeys`; for an
+  encrypted client also the admin keys of its `neo-backup.recipients`, each with its role
+  (`server`, `unlock`, or `access` = can connect but cannot open the backup). See
+  [backup-restore.md](backup-restore.md), Restore keys.
 - **Backup folders**: in the home, each folder that holds `neo-backup.age` (encrypted) or
   `neo/DATA` / `DATA` (files). This is the `<folder>` of a `--from-backup` URL. One client can
   have more than one (two destinations to the same store).

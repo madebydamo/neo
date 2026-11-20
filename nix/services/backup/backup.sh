@@ -13,7 +13,7 @@
 #   NEO_EXCLUDES     newline-separated excludes below NEO_SOURCE_DIR (files, encrypted)
 #   NEO_HOSTNAME     restic snapshot host (encrypted)
 #   NEO_HOST_KEY     SSH host key: opens neo-backup.age, and a recipient of it (encrypted)
-#   NEO_RECIPIENTS   newline-separated admin ssh-ed25519 keys, recipients of neo-backup.age (encrypted)
+#   NEO_RECIPIENTS   newline-separated admin ssh-ed25519 keys (with comment), recipients of neo-backup.age (encrypted)
 #   NEO_ROTATE       true: new data key and repository for every encrypted
 #                    destination, the others are skipped (backup-rotate-key.service)
 #
@@ -21,7 +21,8 @@
 #   NEO_NAME         its name in destinations.<name>
 #   NEO_TARGET       ssh | disk
 #   NEO_FORMAT       files | encrypted | zfs
-#   NEO_STORE        true: a Neo backup store (gets neo-backup.last)
+#   NEO_STORE        true: a Neo backup store (gets neo-backup.last, and
+#                    neo-backup.recipients next to an encrypted backup)
 #   NEO_DEST         remotePath (files, encrypted)
 #   NEO_DEST_DATASET dataset (zfs)
 #   NEO_KEEP         backups kept at the destination (zfs, encrypted)
@@ -204,6 +205,9 @@ backup_zfs() {
 # and repository, and removes the old one only after the new header is in place.
 HEADER=neo-backup.age
 NEXT_HEADER=neo-backup.next.age
+# Public keys the header is encrypted to, for a backup store: its admin keys
+# get read access there (docs/design/backup-restore.md §6, Restore keys).
+RECIPIENTS_FILE=neo-backup.recipients
 run_dir=${RUNTIME_DIRECTORY:-/run/backup}
 
 # The backup folder, as sftp and restic see it ("." = the SSH user's home).
@@ -358,6 +362,29 @@ init_repo() {
   }
 }
 
+# neo-backup.recipients: "server <key>" (this host) and "admin <key>" lines,
+# public keys only. The store checks each against the header it sits next to.
+recipients_list() {
+  echo "# neo-backup.recipients version=1: the keys $HEADER is encrypted to"
+  printf 'server %s\n' "$(head -n 1 "$NEO_HOST_KEY.pub")"
+  local k
+  while IFS= read -r k; do
+    [ -z "$k" ] || printf 'admin %s\n' "$k"
+  done <<<"${NEO_RECIPIENTS:-}"
+}
+
+# Upload header $1 as $HEADER; at a backup store, neo-backup.recipients
+# follows it (its failure is only logged: the backup is unaffected, the store
+# keeps the admin keys of the last list it got).
+put_main_header() {
+  put_header "$1"
+  [ "${NEO_STORE:-false}" = true ] || return 0
+  recipients_list >"$run_dir/recipients.list"
+  (put_header "$run_dir/recipients.list" "$RECIPIENTS_FILE") ||
+    log "could not write $RECIPIENTS_FILE at the store"
+  rm -f "$run_dir/recipients.list"
+}
+
 write_header() {
   local out=$1
   recipients >"$run_dir/recipients"
@@ -388,7 +415,7 @@ backup_encrypted() {
     # Up before the upload: a first run that breaks off resumes in this
     # repository. Until its first snapshot, a restore says "no backup yet".
     write_header "$run_dir/header.new"
-    put_header "$run_dir/header.new"
+    put_main_header "$run_dir/header.new"
   elif [ "${NEO_ROTATE:-false}" = true ]; then
     old=$repo
     # An interrupted rotation left its key in the pending header: go on with
@@ -449,7 +476,7 @@ backup_encrypted() {
   # now). After a rotation this switches to the new key.
   rm -f "$marker"
   write_header "$run_dir/header.new"
-  put_header "$run_dir/header.new"
+  put_main_header "$run_dir/header.new"
   # A pending rotation is done, or (after a normal run) abandoned: its
   # repository goes below.
   remove_header "$NEXT_HEADER"

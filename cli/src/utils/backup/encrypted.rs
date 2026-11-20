@@ -117,7 +117,10 @@ impl<'a> Encrypted<'a> {
         write_private(&pw, self.key.password.as_bytes())?;
         let dir = join_remote(&self.source.remote_path, &self.key.repository);
         let mut c = Command::new("restic");
-        c.env("RESTIC_PASSWORD_FILE", &pw).arg("--no-cache");
+        // Only reads (snapshots, ls, restore). Without a lock: a backup store
+        // gives restore keys read-only access, where restic cannot write one.
+        c.env("RESTIC_PASSWORD_FILE", &pw)
+            .args(["--no-cache", "--no-lock"]);
         match &self.source.location {
             Location::Disk => {
                 c.arg("-r").arg(&dir);

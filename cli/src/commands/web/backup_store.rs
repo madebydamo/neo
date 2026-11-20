@@ -31,7 +31,7 @@ use super::ops::monitor::monitor_fragment;
 use super::ops::store::{append_log, log_path};
 use super::util::{self, alert_html, AlertKind};
 use crate::commands::backup_store::{
-    client_name_ok, now, rescue, ClientReport, Report, StoreConfig, CURRENT_SECS,
+    client_name_ok, now, rescue, ClientReport, KeyInfo, Report, StoreConfig, CURRENT_SECS,
     RECENT_CONNECTION_SECS, STALE_SECS,
 };
 use crate::utils::command::{get_timestamp, output_checked, sudo_command};
@@ -250,8 +250,17 @@ fn client_card(c: &ClientReport, t: i64) -> Value {
         "size": c.size_bytes.map(size),
         "last_connection": c.last_connection.map(|l| ago(t - l)),
         "keys": c.keys,
+        // Encrypted clients: what each key may do (recipients.rs).
+        "roles_known": c.keys.iter().any(|k| !k.role.is_empty()),
+        "unlock_keys": keys_with(c, "unlock"),
+        "server_keys": keys_with(c, "server"),
+        "access_keys": keys_with(c, "access"),
         "host": c.host,
     })
+}
+
+fn keys_with<'a>(c: &'a ClientReport, role: &str) -> Vec<&'a KeyInfo> {
+    c.keys.iter().filter(|k| k.role == role).collect()
 }
 
 fn command_computer(c: &ClientReport, url: &str) -> String {
@@ -632,6 +641,7 @@ mod tests {
             keys: vec![crate::commands::backup_store::KeyInfo {
                 label: "damian@laptop".into(),
                 fingerprint: "SHA256:abc".into(),
+                role: String::new(),
             }],
             last_backup: Some(1000),
             versions: Some(14),

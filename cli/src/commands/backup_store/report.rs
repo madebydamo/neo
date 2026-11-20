@@ -1,7 +1,8 @@
 //! `neo backup-store report`: what the store holds per client, for the rescue
 //! portal (docs/design/backup-store-rescue.md §2). Runs as root from
 //! backup-store-report.service: the client homes are 0700 per account, and
-//! `du` is too slow for a page request.
+//! `du` is too slow for a page request. First it updates the restore keys of
+//! the encrypted clients ([`super::recipients`]).
 
 use anyhow::Result;
 use std::collections::BTreeMap;
@@ -10,6 +11,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use super::recipients::{self, Role, Unlock};
 use super::{now, parse_utc, ClientReport, KeyInfo, Report, StoreConfig, StoreSummary};
 use crate::utils::fsutil::write_atomic;
 use crate::utils::profile::DEFAULT_CONFIG_REL;
@@ -24,7 +26,9 @@ const MAX_DEPTH: usize = 3;
 
 pub fn run(out: &Path) -> Result<()> {
     let store = StoreConfig::load()?;
-    let report = build(&store, &last_connections());
+    // Before du: a key added on a client gets access within one run.
+    let unlocks = restore_keys(&store)?;
+    let report = build(&store, &last_connections(), &unlocks);
     let body = serde_json::to_vec_pretty(&report)?;
     if let Some(dir) = out.parent() {
         fs::create_dir_all(dir)?;
@@ -38,14 +42,77 @@ pub fn run(out: &Path) -> Result<()> {
     Ok(())
 }
 
-fn build(store: &StoreConfig, connections: &BTreeMap<String, i64>) -> Report {
+/// What opens each encrypted client's backups, and the read-only keys file
+/// of its account.
+fn restore_keys(store: &StoreConfig) -> Result<BTreeMap<String, Unlock>> {
+    let mut unlocks = BTreeMap::new();
+    let mut files = BTreeMap::new();
+    for (name, c) in &store.clients {
+        if c.format != "encrypted" {
+            continue;
+        }
+        let home = store.home(name);
+        let u = recipients::collect(&home, &backup_folders(&home, "encrypted"));
+        files.insert(
+            name.clone(),
+            recipients::keys_file(store, &c.format, &c.gate_prefix, &u, &c.public_keys),
+        );
+        unlocks.insert(name.clone(), u);
+    }
+    recipients::write_all(&files)?;
+    Ok(unlocks)
+}
+
+/// The keys shown for a client: those of the settings and, for an encrypted
+/// one, the admin keys its backup is encrypted to.
+fn client_keys(public_keys: &[String], unlock: Option<&Unlock>) -> Vec<KeyInfo> {
+    let mut keys: Vec<KeyInfo> = public_keys
+        .iter()
+        .filter_map(|line| {
+            let mut k = key_info(line)?;
+            if let Some(u) = unlock.filter(|u| u.known || !u.tags.is_empty()) {
+                k.role = match u.role_of(line) {
+                    Some(Role::Server) => "server",
+                    Some(Role::Admin) => "unlock",
+                    None => "access",
+                }
+                .into();
+            }
+            Some(k)
+        })
+        .collect();
+    if let Some(u) = unlock {
+        for r in &u.keys {
+            let fingerprint = r.fingerprint();
+            if keys.iter().any(|k| k.fingerprint == fingerprint) {
+                continue;
+            }
+            keys.push(KeyInfo {
+                label: r.label(),
+                fingerprint,
+                role: match r.role {
+                    Role::Server => "server",
+                    Role::Admin => "unlock",
+                }
+                .into(),
+            });
+        }
+    }
+    keys
+}
+
+fn build(
+    store: &StoreConfig,
+    connections: &BTreeMap<String, i64>,
+    unlocks: &BTreeMap<String, Unlock>,
+) -> Report {
     let mut clients: Vec<ClientReport> = store
         .clients
         .iter()
         .map(|(name, c)| {
             let mut r = client(store, name, &c.format);
             r.configured = true;
-            r.keys = c.public_keys.iter().filter_map(|k| key_info(k)).collect();
+            r.keys = client_keys(&c.public_keys, unlocks.get(name));
             r.last_connection = connections.get(name).copied();
             r
         })
@@ -323,6 +390,7 @@ fn key_info(line: &str) -> Option<KeyInfo> {
     Some(KeyInfo {
         label: key_label(line),
         fingerprint,
+        role: String::new(),
     })
 }
 

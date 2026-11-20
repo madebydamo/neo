@@ -1,7 +1,8 @@
 //! `neo backup-store`: the store's rescue portal on the store's machine
 //! (nix/services/backup-store, docs/design/backup-store-rescue.md).
 //!
-//! - `report`: what the store holds per client → [`REPORT_FILE`] (root, timer).
+//! - `report`: what the store holds per client → [`REPORT_FILE`] (root, timer),
+//!   and the restore keys of encrypted clients → [`RECIPIENT_KEYS_DIR`].
 //! - `rescue`: restore a client onto a new machine from here (root, started by
 //!   the web UI through systemd-run).
 //!
@@ -13,6 +14,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub mod recipients;
 pub mod report;
 pub mod rescue;
 
@@ -22,6 +24,9 @@ pub const STORE_FILE: &str = "/etc/neo/backup-store/store.json";
 pub const REPORT_FILE: &str = "/var/lib/neo-backup-store/report.json";
 /// Second AuthorizedKeysFile folder of the store's sshd: a rescue's short-lived key.
 pub const RESCUE_KEYS_DIR: &str = "/run/neo-backup-store/rescue";
+/// Third AuthorizedKeysFile folder: the admin keys an encrypted client's
+/// backup is encrypted to, read-only ([`recipients`]).
+pub const RECIPIENT_KEYS_DIR: &str = "/run/neo-backup-store/recipients";
 
 /// A client with a backup newer than this is "current" (green).
 pub const CURRENT_SECS: i64 = 36 * 3600;
@@ -102,6 +107,11 @@ pub struct KeyInfo {
     pub label: String,
     /// `SHA256:…` as `ssh-keygen -l` prints it.
     pub fingerprint: String,
+    /// What the key may do (encrypted clients; "" when unknown):
+    /// `server` the client's own key, `unlock` an admin key that opens the
+    /// backup and may read it, `access` may connect but cannot open it.
+    #[serde(default)]
+    pub role: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

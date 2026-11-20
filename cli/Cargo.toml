@@ -20,3 +20,5 @@ pulldown-cmark = { version = "0.13.5", default-features = false, features = ["ht
 reqwest = { version = "0.13.5", default-features = false, features = ["json"] }
 csv = "1"
 clap_complete = "4.5"
+sha2 = "0.10"
+base64 = "0.23"

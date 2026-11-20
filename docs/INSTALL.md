@@ -490,7 +490,7 @@ remotePath = "/mnt/disk2/myhome"
 
 The **backup-store** service lets another server keep its backups on this one, reachable only over HTTPS (SSH inside a WebSocket, through SWAG). All three formats work, and `neo restore` reads from it too.
 
-On the store, list each server. The key is that server's own (**System → SSH** there); add yours as well if you want to restore without the server:
+On the store, list each server. The key is that server's own (**System → SSH** there). For an **encrypted** backup that is all: the keys in System → SSH on that server, the ones that can open its backup, may also read it from the store after its next backup run. For the other formats, add your own key as well if you want to restore without the server:
 
 ```toml
 [services.backup-store]

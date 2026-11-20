@@ -24,7 +24,7 @@
         - Client side: a destination in services.backup.destinations with target = "store", storeUrl, storeClient
 
         ## Credentials
-        - Settings: `services.backup-store.clients.<client>.publicKeys`: the client's host key (System → SSH there), plus an admin key to restore with
+        - Settings: `services.backup-store.clients.<client>.publicKeys`: the client's host key (System → SSH there). Encrypted clients need nothing else: the keys in System → SSH on the client get read-only access here after its next backup run (it uploads `neo-backup.recipients`). Other formats: add an admin key to restore with
         - Settings: `services.backup-store.encryptionKey` when the dataset is encrypted
 
         ## Procedures

@@ -42,18 +42,34 @@
             {{else}}
               {{#> need bad=true}}This store is not open to the internet (its Access has no "web"). The new machine must be in the same home network or tailnet.{{/need}}
             {{/if}}
-            {{#> need}}An admin key of {{client.name}}: the private half of one of these keys.
-              {{#if client.keys}}
-                <ul class="mt-1 space-y-0.5">
-                  {{#each client.keys}}<li class="font-mono text-xs break-all"><span class="font-sans font-medium">{{label}}</span> {{fingerprint}}</li>{{/each}}
-                </ul>
-                <span class="block mt-1 text-xs text-base-content/60">Compare with <code>ssh-keygen -lf ~/.ssh/id_ed25519.pub</code>. The server's own key does not count: it is lost with the server.</span>
-              {{else}}
-                <span class="block text-xs text-error">No key is allowed for {{client.name}} here. Add yours to its SSH public keys in the store's settings.</span>
+            {{#if client.roles_known}}
+              {{#> need}}An admin key of {{client.name}}: the private half of one of these keys. They open the encrypted backup, and this store lets them read it.
+                {{#if client.unlock_keys}}
+                  <ul class="mt-1 space-y-0.5">
+                    {{#each client.unlock_keys}}<li class="font-mono text-xs break-all"><span class="font-sans font-medium">{{label}}</span> {{fingerprint}}</li>{{/each}}
+                  </ul>
+                  <span class="block mt-1 text-xs text-base-content/60">Compare with <code>ssh-keygen -lf ~/.ssh/id_ed25519.pub</code>. These are the keys in System → SSH on {{client.name}} at its last backup run. The server's own key does not count: it is lost with the server.</span>
+                {{else}}
+                  <span class="block text-xs text-error">The backup opens only with {{client.name}}'s own key. Add your key to System → SSH on {{client.name}}; after its next backup run it can restore.</span>
+                {{/if}}
+                {{#if client.access_keys}}
+                  <span class="block mt-1 text-xs text-warning">Can connect but cannot unlock: {{#each client.access_keys}}{{#unless @first}}, {{/unless}}{{label}}{{/each}}. Remove them from the store's settings, or add them to System → SSH on {{client.name}}.</span>
+                {{/if}}
+              {{/need}}
+            {{else}}
+              {{#> need}}An admin key of {{client.name}}: the private half of one of these keys.
+                {{#if client.keys}}
+                  <ul class="mt-1 space-y-0.5">
+                    {{#each client.keys}}<li class="font-mono text-xs break-all"><span class="font-sans font-medium">{{label}}</span> {{fingerprint}}</li>{{/each}}
+                  </ul>
+                  <span class="block mt-1 text-xs text-base-content/60">Compare with <code>ssh-keygen -lf ~/.ssh/id_ed25519.pub</code>. The server's own key does not count: it is lost with the server.</span>
+                {{else}}
+                  <span class="block text-xs text-error">No key is allowed for {{client.name}} here. Add yours to its SSH public keys in the store's settings.</span>
+                {{/if}}
+              {{/need}}
+              {{#if encrypted}}
+                {{#> need}}The same key was in System → SSH on {{client.name}} at a backup run after you added it. Only then can it open the encrypted backup.{{/need}}
               {{/if}}
-            {{/need}}
-            {{#if encrypted}}
-              {{#> need}}The same key was in System → SSH on {{client.name}} at a backup run after you added it. Only then can it open the encrypted backup.{{/need}}
             {{/if}}
           </ul>
           <p class="text-xs text-base-content/60">After the restore: point {{client.name}}'s web addresses (DNS, and the edge server if you use one) to the new machine's address.</p>
