@@ -249,6 +249,12 @@
             defaultText = "a 64-hex token derived from this machine's generated metrics key";
             description = "Secret token for this app's metrics, one per app, generated on the machine. Give it to the app (containerEnv, secrets templates), never to environment or the store.";
           };
+          uptimePath = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            example = "/api/health";
+            description = "Path the uptime check calls instead of /, answered by the app itself without a login (it must be in auth.publicPaths when the app is behind the login). Only a 2xx answer counts as up. Null checks /, where a login redirect also counts as up, so the check only sees the login page.";
+          };
           hidePaths = mkOption {
             type = types.listOf types.str;
             default = [];

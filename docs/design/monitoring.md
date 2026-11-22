@@ -52,7 +52,7 @@ Every series and stream carries `host` (`services.monitoring-agent.name`, defaul
 
 `neo_service_unit` is generated from every enabled service's `systemdUnits`, so dashboards and alerts group units by app without hardcoding names (`kind=container` for `docker-*`).
 
-Uptime checks target `https://<subdomain>.<domain>/` of every app on the machine whose `ingress` includes `web`, plus `extraUptimeTargets`. They go out through public DNS, so on a rathole setup they take the same path as a visitor. 2xx, 3xx, 401 and 403 count as up (tinyauth answers 302). For a view from outside the machine's own network, list the apps of server A in `extraUptimeTargets` of server B.
+Uptime checks target `https://<subdomain>.<domain>/` of every app on the machine whose `ingress` includes `web`, plus `extraUptimeTargets`. They go out through public DNS, so on a rathole setup they take the same path as a visitor. 2xx, 3xx, 401 and 403 count as up (tinyauth answers 302). Behind the login that 302 comes from SWAG and tinyauth even when the app is down, so an app with `neo.monitoring.apps.<service>.uptimePath` (a health path it answers itself, listed in `auth.publicPaths`) is checked at that path, and only 2xx counts as up there. A crash loop also raises "Service keeps restarting" (more than 3 automatic restarts in 15 minutes, `node_systemd_service_restart_total`): such a unit is "activating" most of the time and "failed" only for moments, which "Service failed" alone misses (issue #31). For a view from outside the machine's own network, list the apps of server A in `extraUptimeTargets` of server B.
 
 ## Dashboards and alerts: provided and user
 
@@ -67,7 +67,7 @@ Datasources and the `Assistant` contact point are provided too. The notification
 
 App alert rules (`neo.monitoring.apps.*.alerts`) are provided too, in folder **Apps**, but through Grafana's provisioning API instead of files (see below), with provenance `api`: equally read-only.
 
-Alert rules (folder Neo): app does not answer (5 min), server stopped reporting, disk over 90 %, systemd unit failed, many failed sign-ins (10 in 15 min), more than 20 % server errors, certificate expires in less than 10 days. ISO 27001: clock not synchronised, backup overdue (26 h), logs dropped, no logs from a server.
+Alert rules (folder Neo): app does not answer (5 min), server stopped reporting, disk over 90 %, systemd unit failed, systemd unit keeps restarting (more than 3 in 15 min), many failed sign-ins (10 in 15 min), more than 20 % server errors, certificate expires in less than 10 days. ISO 27001: clock not synchronised, backup overdue (26 h), logs dropped, no logs from a server.
 
 ## App metrics and dashboards
 

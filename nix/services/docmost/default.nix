@@ -57,6 +57,10 @@
       '';
     in {
       config = mkIf cfg.enabled (mkMerge [
+        {
+          # Uptime check: a path the app answers itself without a login (auth.publicPaths).
+          neo.monitoring.apps.docmost.uptimePath = "/api/health";
+        }
         (lib.neo.mkPostgresSidecar config {
           name = "docmost-db";
           image = cfg.containers."docmost-db";

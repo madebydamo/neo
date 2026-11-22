@@ -11,7 +11,7 @@ Order of work: **logs first** (errors become visible without code), then the **s
 | Container output | Loki `{job="journal", unit="docker-<container>.service"}` |
 | Web requests through SWAG | `neo_http_requests_total{service, status_class}`, `neo_http_request_duration_seconds`; Loki `{job="swag", service="<svc>"}` with structured metadata `path`, `status`, `ip`, `method` |
 | Container CPU/memory | `container_*{name="<container>"}` |
-| Uptime, 5xx share, tinyauth sign-ins | Neo's own alerts (`App does not answer`, `App answers with errors`, `Many failed sign-ins`): do not repeat them per app |
+| Uptime, 5xx share, tinyauth sign-ins | Neo's own alerts (`App does not answer`, `Service keeps restarting`, `App answers with errors`, `Many failed sign-ins`): do not repeat them per app. Behind the login, set `neo.monitoring.apps.<service>.uptimePath` to a health path in `auth.publicPaths`, so the uptime check reaches the app and not only the login page |
 
 ## Logs
 

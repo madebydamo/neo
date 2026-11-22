@@ -11,6 +11,8 @@
       appdata = cfg.appdata;
     in {
       config = mkIf cfg.enabled {
+        # Uptime check: a path the app answers itself without a login (auth.publicPaths).
+        neo.monitoring.apps.stirling-pdf.uptimePath = "/api/v1/info/status";
         neo.core.containerDirs.stirling-pdf = [
           appdata
           "${appdata}/tessdata"

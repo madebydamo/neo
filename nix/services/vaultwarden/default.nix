@@ -18,6 +18,8 @@
       client = tinyauth.oidcClients.vaultwarden;
     in {
       config = mkIf cfg.enabled {
+        # Uptime check: a path the app answers itself without a login (auth.publicPaths).
+        neo.monitoring.apps.vaultwarden.uptimePath = "/api/alive";
         assertions = [
           {
             assertion = !sso || tinyauth.enabled;

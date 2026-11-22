@@ -50,6 +50,8 @@
       };
 
       neo.monitoring.apps.gitea = {
+        # Uptime check: a path the app answers itself without a login (auth.publicPaths).
+        uptimePath = "/api/healthz";
         hidePaths = ["/metrics"];
 
         metrics.main = {

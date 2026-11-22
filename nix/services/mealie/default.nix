@@ -13,6 +13,8 @@
       publicHost = lib.defaultTo "" (lib.neo.publicHost config cfg);
     in {
       config = mkIf cfg.enabled {
+        # Uptime check: a path the app answers itself without a login (auth.publicPaths).
+        neo.monitoring.apps.mealie.uptimePath = "/api/app/about";
         assertions = [
           {
             assertion = publicHost != "";

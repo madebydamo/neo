@@ -15,6 +15,8 @@
       webdavAuth = lib.neo.isSet cfg.password;
     in {
       config = mkIf cfg.enabled {
+        # Uptime check: a path the app answers itself without a login (auth.publicPaths).
+        neo.monitoring.apps.dufs.uptimePath = "/__dufs__/health";
         neo.core.containerDirs.dufs = [
           appdata
           dataDir

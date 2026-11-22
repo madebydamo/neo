@@ -31,6 +31,8 @@
       };
 
       neo.monitoring.apps.immich = {
+        # Uptime check: a path the app answers itself without a login (auth.publicPaths).
+        uptimePath = "/api/server/ping";
         metrics = {
           api = {
             container = "immich-server";

@@ -55,6 +55,8 @@
       })
       {
         neo.monitoring.apps.vikunja = {
+          # Uptime check: a path the app answers itself without a login (auth.publicPaths).
+          uptimePath = "/health";
           hidePaths = ["/api/v1/metrics"];
 
           metrics.api = {

@@ -54,9 +54,22 @@
         }) (attrNames (swag.proxyPass or {}));
 
       # Apps reachable from the Internet, checked at their public address.
-      appTargets = optionals (domain != null && domain != "") (mapAttrsToList (name: svc: {
+      # Behind the login, / answers with the redirect to the login page even
+      # when the app is down (issue #31): an app with an uptimePath (a path it
+      # answers itself, in auth.publicPaths) is checked there, 2xx only.
+      appTargets = optionals (domain != null && domain != "") (mapAttrsToList (name: svc: let
+          path = config.neo.monitoring.apps.${name}.uptimePath or null;
+        in {
           inherit name;
-          address = "https://${svc.subdomain}.${domain}/";
+          address = "https://${svc.subdomain}.${domain}${
+            if path == null
+            then "/"
+            else path
+          }";
+          module =
+            if path == null
+            then "http_app"
+            else "http_health";
         })
         (filterAttrs (_: svc: elem "web" (svc.ingress or [])) proxied));
       extraTargets =

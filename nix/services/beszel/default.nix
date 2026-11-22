@@ -9,6 +9,8 @@
       cfg = config.neo.services.beszel;
     in {
       config = mkIf cfg.enabled {
+        # Uptime check: a path the app answers itself without a login (auth.publicPaths).
+        neo.monitoring.apps.beszel.uptimePath = "/api/health";
         neo.core.containerDirs.beszel = [
           cfg.appdata
         ];

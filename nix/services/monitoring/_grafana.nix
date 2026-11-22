@@ -73,6 +73,18 @@
         summary = "{{ $labels.name }} on {{ $labels.host }} has failed.";
       })
       (rule {
+        uid = "neo-unit-restarting";
+        title = "Service keeps restarting";
+        # A crash loop is "activating" most of the time and "failed" only for
+        # moments, so "Service failed" alone misses it (issue #31). Counts
+        # automatic restarts only (NRestarts): a switch or a manual restart
+        # does not add to it.
+        expr = "increase(node_systemd_service_restart_total[15m])";
+        above = 3;
+        for = "5m";
+        summary = "{{ $labels.name }} on {{ $labels.host }} restarted {{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}many{{ end }} times in 15 minutes: it starts and crashes again.";
+      })
+      (rule {
         uid = "neo-failed-logins";
         title = "Many failed sign-ins";
         expr = ''sum by (host, provider) (increase(neo_auth_events_total{event="login",result="failure"}[15m]))'';

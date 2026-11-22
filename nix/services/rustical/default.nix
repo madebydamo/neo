@@ -31,6 +31,8 @@
       passwordFile = config.neo.core.secrets.templates."rustical-sso-password".path;
     in {
       config = mkIf cfg.enabled {
+        # Uptime check: a path the app answers itself without a login (auth.publicPaths).
+        neo.monitoring.apps.rustical.uptimePath = "/ping";
         neo.core.containerDirs.rustical = [appdata];
 
         virtualisation.oci-containers.containers.rustical = {

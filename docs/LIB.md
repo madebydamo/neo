@@ -236,6 +236,7 @@ Every scraped series gets `service`, `scrape` (the endpoint's name), `host` and 
 | `neo.monitoring.apps.<service>` field | Meaning |
 |---|---|
 | `scrapeToken` | Read-only. A 64-hex secret per app, derived (`lib.neo.secrets.sha256`) from one key the machine generates itself (`neo.core.secrets.generated.metrics`); the operator never sets it. Give it to the app through `neo.core.secrets.containerEnv` or a secrets template, gated on `collecting`; the scrape uses it by default |
+| `uptimePath` | Path the uptime check calls instead of `/` (null: `/`). A health path the app answers itself; behind the login it must be in `auth.publicPaths`. Only 2xx counts as up there |
 | `hidePaths` | Paths SWAG answers with 404 on the app's sites: exact (`"/metrics"` → `location = /metrics`) or a prefix (`"^~ /admin/"`). For metrics served on the public port. Always applies, also without an agent |
 
 `lib.neo.monitoring`: `nameToLabels regex labels name` (relabel rules that turn parts of a metric name into labels, see Immich), `dropOtelScope` (drops `otel_scope_*` labels and `target_info`), `hidePathLocations paths` (the nginx lines `hidePaths` produces).

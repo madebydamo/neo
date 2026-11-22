@@ -44,6 +44,8 @@
       };
 
       neo.monitoring.apps.dawarich = {
+        # Uptime check: a path the app answers itself without a login (auth.publicPaths).
+        uptimePath = "/api/v1/health";
         # The web app serves /metrics on its public site while the exporter is on.
         hidePaths = ["/metrics"];
         metrics.sidekiq = {

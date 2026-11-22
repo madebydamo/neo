@@ -57,6 +57,8 @@
         };
 
         neo.monitoring.apps.karakeep = {
+          # Uptime check: a path the app answers itself without a login (auth.publicPaths).
+          uptimePath = "/api/health";
           hidePaths = ["/api/metrics"];
 
           metrics = {
