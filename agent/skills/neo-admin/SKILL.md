@@ -1,6 +1,6 @@
 ---
 name: neo-admin
-description: Operate a running Neo homeserver (github:madebydamo/neo) over SSH as homeserver@<host>. Use when asked to check, debug, fix, configure, update, roll back or restart a Neo server or one of its apps, to read its logs, units, containers, update runs, backups, settings, ZFS pools or snapshots, or to look up a `neo` CLI command or flag (activate, update, generation, settings get/patch, docker-update, secrets, backup, restore, bootstrap, security) or an on-server helper (neo-restart-required, neo-docker-rollback). To change Neo's own source use neo-core; to write a plugin use neo-plugin.
+description: Operate a running Neo homeserver (github:madebydamo/neo) over SSH as homeserver@<host>. Use when asked to check, debug, fix, configure, update, roll back or restart a Neo server or one of its apps, to read its logs, units, containers, update runs, backups, settings, ZFS pools, snapshots or the Hermes service skills (neo-<service>), or to look up a `neo` CLI command or flag (activate, update, generation, settings get/patch, docker-update, secrets, backup, restore, bootstrap, security) or an on-server helper (neo-restart-required, neo-docker-rollback). To change Neo's own source use neo-core; to write a plugin use neo-plugin.
 ---
 
 # Operating a Neo server
@@ -72,6 +72,26 @@ ssh homeserver@HOST '
 | `neo-docker-network` | Creates the Docker networks |
 | `neo-<service>.target` | Groups every unit of one service: `systemctl list-dependencies neo-immich.target` |
 | `docker-<container>` | One container |
+
+### Service skills (read them before you work on a service)
+
+When Hermes is on, the server keeps one skill for each enabled service: `neo-<service>`. Plugin services have their own names, and each guide has `neo-guide-<id>`. `neo-homeserver` describes the whole machine. These skills are rendered for this server: its volume paths, domain, git identity, plugins and Neo version. Prefer them over the source in a Neo checkout.
+
+They are in one directory in the Nix store. Every user can read it, and it holds no secret values (the Credentials sections name settings keys only). Find it through the running system. `ls /nix/store | grep` can return a stale copy from an old generation.
+
+```bash
+# Read one skill
+ssh homeserver@HOST 'cat "$(nix-store -qR /run/current-system | grep -- "-neo-hermes-skills$")"/neo-immich/SKILL.md'
+
+# List them all
+ssh homeserver@HOST 'ls "$(nix-store -qR /run/current-system | grep -- "-neo-hermes-skills$")"'
+
+# Copy them all to this computer (one folder with a SKILL.md for each skill)
+mkdir -p skills-HOST && ssh homeserver@HOST \
+  'tar -C "$(nix-store -qR /run/current-system | grep -- "-neo-hermes-skills$")" -chf - .' | tar -C skills-HOST -xf -
+```
+
+No output from the lookup means Hermes is off on that server, so no skills exist there. The skills describe how the service runs. They do not replace this skill's rules: a change still goes through settings and `neo activate`.
 
 ## 4. Settings: two files
 
