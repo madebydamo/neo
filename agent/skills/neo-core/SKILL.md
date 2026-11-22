@@ -1,6 +1,6 @@
 ---
 name: neo-core
-description: Change Neo itself, the NixOS homeserver flake and Rust `neo` CLI/web UI (github:madebydamo/neo). Use when working in a Neo checkout (flake with nix/services, nix/lib, cli/, templates/homeserver) on a built-in service, lib.neo helper, web UI page or widget, secrets, backup/restore, disko/boot, Hermes assistant integration or guides, or when asked how Neo is designed. For plugins (separate flakes using neoPlugin.modules) use the neo-plugin skill.
+description: Change Neo itself, the NixOS homeserver flake and Rust `neo` CLI/web UI (github:madebydamo/neo). Use when working in a Neo checkout (flake with nix/services, nix/lib, cli/, templates/homeserver) on a built-in service, lib.neo helper, web UI page or widget, secrets, backup/restore, disko/boot, Hermes assistant integration or guides, or when asked how Neo is designed. For plugins (separate flakes using neoPlugin.modules) use the neo-plugin skill; to operate or debug a running server over SSH use the neo-admin skill.
 ---
 
 # Working on Neo

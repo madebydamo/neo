@@ -64,21 +64,21 @@ SSH to a finished host as **`homeserver@…`** for `neo`. **`admin@…`** uses t
 | `neo update-inputs` | Regenerate `flake.nix` from settings (plugins, inputs) without updating the lock file |
 | `neo generation list` | List system generations; the running one is marked `(current)` |
 | `neo generation switch N` | Switch the running system to generation N |
-| `neo generation boot N` | Make generation N the boot default (live after the next reboot) |
+| `neo generation boot N` | Make generation N the boot default (live after the next reboot). Neither command reverts the config repo: the next activation or update builds its settings again |
 | `neo generate-hardware` | Write `hardware-configuration.nix` (adds `--no-filesystems` by itself when Disko is on) |
-| `neo paste-settings` | Copy the loaded settings file into `configPath/settings.toml` |
+| `neo paste-settings` | Copy the loaded settings file into `configPath/settings.toml`. On a server the source is `/etc/neo/settings.toml` (the running settings), so it drops saved changes that are not activated yet |
 | `neo nuke` | Delete everything except dotfiles (`.git`, …) in `configPath`, plus the `.neo-template` record so the next `init` writes all template files again (destructive; try `--dry-run` first) |
 | `neo edit` | Open `configPath/settings.toml` in `vim` |
 | `neo git` / `neo lg` | Open `lazygit` in the config repo |
 | `neo migrate` | Apply settings migrations from older layouts (`update` runs it for you) |
-| `neo docker-update <container>` | Pull the container's current image again and restart its `docker-<container>` unit |
+| `neo docker-update <container>` | Pull the container's current image again and restart its `docker-<container>` unit (a `docker-` prefix in the name is dropped) |
 | `neo docker-ledger reconcile\|gc\|select` | Internal (root, hidden): the docker updater's image ledger and image cleanup, driven by `neo-docker-updater` and `neo-docker-rollback` ([docker-image-retention](design/docker-image-retention.md)). Use `sudo neo-docker-rollback --previous\|--at TIME [--image REF]` to go back to an earlier app version |
 | `neo secrets split` | Move secret settings from `settings.toml` into `secrets.yaml` (still plain text) |
 | `neo secrets enable` | Encrypt them into `secrets.sops.yaml` for this machine's SSH host key and the ssh-ed25519 `authorizedKeys`, and escrow the host key in `identity.sops.yaml`. Run on the machine |
 | `neo secrets disable` | Decrypt back into a plain `secrets.yaml` |
 | `neo secrets rekey` | Re-encrypt for the current keys (after editing `authorizedKeys` by hand) |
 | `neo bootstrap <dir>` | Install Neo on a new server from this computer: a wizard asks for the server (`root@IP`), name, domain, logins, disk and whether it has a public address (else it adds a tunnel on your streamproxy edge, `homeserver@…`, and activates it there), writes the config repo into `<dir>`, optionally opens `neo web` on it, then installs with `neo restore --data none` and waits for the web UI. Rerun with the same `<dir>` to change answers or retry. See [design/bootstrap.md](design/bootstrap.md) |
-| `neo settings get <path>` / `neo settings patch` | Print one setting as JSON, or apply `set`/`unset` changes read as JSON from stdin, like a web UI save (secrets go to the secrets file) |
+| `neo settings get <path>` / `neo settings patch` | Print one setting of `configPath/settings.toml` as JSON (`null` when unset), or apply changes read as JSON from stdin, like a web UI save (secrets go to the secrets file): `[{"set": {"path": ["services","x","enabled"], "value": true}}, {"unset": {"path": [...], "secret": false}}]` (`secret` is required). `--dry-run` prints the changes only. They apply at the next `neo activate` |
 | `neo restore <repo>` | Reinstall a machine from its config repo and its backup, on a NixOS installer as root or from a laptop with `--host root@IP`. `<repo>` is a git URL, a checkout (its last commit), a bare repo, or a plain copy of the files without `.git`. Clone, restore the escrowed host key with `--key`, Disko, data, `nixos-install`. `--check`, `--data none`, `--data-from`, `--no-install`, `--config`. See [Rebuild a machine](INSTALL.md#rebuild-a-machine-from-its-config-repo) |
 | `neo restore --from-backup <backup>` | The same with the config repo taken out of the backup (`user@host:folder`, `ssh://user@host:port/folder`, or a mounted folder); an encrypted backup opens with `--key`. With a repo argument, only the data comes from that backup |
 | `neo backup extract-config <backup>` | Copy the config repo out of an encrypted or plain-files backup into `--out` (default `./neo-config`), with `--key` (and `--backup-key` for the SSH login) |
@@ -117,5 +117,7 @@ The web UI does the same under **Versioning**: switch to a generation, or **Boot
 Scheduled system-updater uses `services.system-updater.activationMode` (`switch` or `boot`). With `activationMode = "boot"`, `rebootAfterBoot` (default true) schedules a delayed host restart after a successful run that advanced the system profile, so the new generation becomes live; set it false to leave the reboot to you. Interactive `neo activate` and web Activate stay on live switch unless you pass `--mode` / `NEO_ACTIVATION_MODE`, and never restart the host because of this option.
 
 Some updates take full effect only after a restart: a new Linux kernel or kernel boot options, Docker still running with older settings, or a service or plugin that asked for one. `neo-restart-required` lists the reasons (exit 0 when a restart is due, `--json` for scripts); `neo activate` prints them and **Settings → Power** shows them next to the Restart button. In `switch` mode the scheduled updater restarts the server for them about a minute after the update when `rebootWhenRequired` is on (default), at most once per version and reasons.
+
+Operating a server from another computer (SSH as `homeserver@…`, logs, units, update runs, rollbacks): the `neo-admin` agent skill, [../agent/skills/neo-admin/SKILL.md](../agent/skills/neo-admin/SKILL.md), with the full command reference in [references/cli.md](../agent/skills/neo-admin/references/cli.md).
 
 Developers building Neo itself: [AGENTS.md](../AGENTS.md).

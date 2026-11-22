@@ -118,7 +118,7 @@ A change that only a server restart applies raises its component's own trigger i
 
 ## Agent skills
 
-`agent/` is a Claude Code plugin (marketplace `.claude-plugin/marketplace.json`) with the skills `neo-plugin` and `neo-core` (`agent/skills/*/SKILL.md`). They repeat the rules that matter most and point at the docs: when you change a rule, helper signature, check or error message they mention, update them in the same commit. `templates/plugin/AGENTS.md` is the short version shipped into every new plugin.
+`agent/` is a Claude Code plugin (marketplace `.claude-plugin/marketplace.json`) with the skills `neo-plugin`, `neo-core` and `neo-admin` (`agent/skills/*/SKILL.md`; `neo-admin` operates a running server over SSH, its CLI reference is `agent/skills/neo-admin/references/cli.md`). They repeat the rules that matter most and point at the docs: when you change a rule, helper signature, check or error message they mention, update them in the same commit. `templates/plugin/AGENTS.md` is the short version shipped into every new plugin.
 
 ## Plugins
 

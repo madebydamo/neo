@@ -11,7 +11,7 @@
     {
       "name": "neo",
       "source": "./agent",
-      "description": "Write Neo plugins (neo-plugin) and change Neo itself (neo-core).",
+      "description": "Run and debug Neo servers over SSH (neo-admin), write Neo plugins (neo-plugin) and change Neo itself (neo-core).",
       "category": "development"
     }
   ]
