@@ -88,13 +88,30 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// Write configPath/hardware-configuration.nix for this machine
+    /// (nixos-generate-config; --no-filesystems when Disko is on).
     GenerateHardware,
+    /// Copy the loaded settings file (--settings, on a server
+    /// /etc/neo/settings.toml) over configPath/settings.toml. On a server
+    /// this drops saved changes that are not activated yet.
     PasteSettings,
+    /// Create the config repo at configPath from the template, write the
+    /// hardware config and the settings, and commit. Safe to run again.
     Init,
+    /// Regenerate configPath/flake.nix from the settings (plugins, inputs)
+    /// without updating flake.lock.
     UpdateInputs,
+    /// Apply settings migrations from older layouts to
+    /// configPath/settings.toml (`update` runs it for you).
     Migrate,
+    /// Build the system and the test VM without switching, then commit
+    /// the config repo.
     Build,
+    /// Build this machine's config and apply it: commit the config repo,
+    /// then nixos-rebuild switch (or boot with --mode boot).
     Activate {
+        /// Name of the operation (activation_<SUFFIX>: its log, state file
+        /// and git branch). Default: the current time.
         #[arg(long, env = "NEO_ACTIVATION_SUFFIX")]
         activation_suffix: Option<String>,
         /// How to apply the new generation: live switch (default) or boot-only (next reboot).
@@ -106,16 +123,29 @@ enum Commands {
         )]
         mode: GenerationMode,
     },
+    /// Refresh the template files, regenerate flake.nix, run nix flake
+    /// update, then the migrations. Does not apply: run `activate` next.
     Update {
+        /// Name of the operation (update_<SUFFIX>: its log and state file).
+        /// Default: the current time.
         #[arg(long, env = "NEO_UPDATE_SUFFIX")]
         update_suffix: Option<String>,
     },
+    /// Delete everything in configPath except dotfiles (.git, …), so the
+    /// next `init` writes every template file again. Destructive.
     Nuke,
+    /// Start the web UI against configPath (ROCKET_ADDRESS / ROCKET_PORT).
     Web,
+    /// Open configPath/settings.toml in vim.
     Edit,
+    /// Open lazygit in the config repo.
     Git,
+    /// Open lazygit in the config repo (same as `git`).
     Lg,
+    /// Pull the container's current image again and restart its
+    /// docker-<CONTAINER> unit.
     DockerUpdate {
+        /// Container name (e.g. immich-server); a docker- prefix is dropped.
         container: String,
     },
     /// List / switch / boot NixOS system generations.
@@ -213,9 +243,15 @@ enum GenerationAction {
     /// List system profile generations.
     List,
     /// Switch the running system to generation N.
-    Switch { n: u64 },
+    Switch {
+        /// Generation number, from `neo generation list`.
+        n: u64,
+    },
     /// Set boot default to generation N (next reboot).
-    Boot { n: u64 },
+    Boot {
+        /// Generation number, from `neo generation list`.
+        n: u64,
+    },
 }
 
 /// Variables the CLI reads outside clap that the `sudo -u homeserver`

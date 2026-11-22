@@ -64,13 +64,17 @@ pub enum SecurityAction {
     },
     /// Mark a finding (id from `show` or the page) as not relevant on this server.
     Accept {
+        /// Finding id, from `neo security show` or the report page.
         id: String,
         /// Why, shown on the page.
         #[arg(long, default_value = "Accepted by the operator.")]
         reason: String,
     },
     /// Forget a finding's verdict so the next review looks at it again.
-    Reset { id: String },
+    Reset {
+        /// Finding id, from `neo security show` or the report page.
+        id: String,
+    },
     /// Serve the report page (ROCKET_ADDRESS / ROCKET_PORT).
     Serve,
 }
