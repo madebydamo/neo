@@ -127,12 +127,20 @@
       virtualisation.oci-containers.containers = lib.mkMerge [
         # Every container of a service is on the service's network unless a
         # module names its networks (any priority above this default wins:
-        # explicit lists, mkLink, mkHostAccess, VPN routing, vpn.networks).
-        # A container with a link or host access lists its service network
-        # itself (docker-network-isolation checks it).
+        # explicit lists, VPN routing, vpn.networks).
         (lib.mapAttrs (_: service: {
           networks = lib.mkOverride docker.serviceNetworkPriority [(docker.serviceNetwork service)];
         }) (docker.unitContainers config))
+        # A link (mkLink) or host access (mkHostAccess) adds a network at
+        # normal priority, which would replace the default above: the
+        # container would lose its service network and the other containers
+        # of its service (issue #30, a plugin's link to immich-server). So the
+        # service network comes with them, first. A module that names it too
+        # is fine: oci-containers passes each network once.
+        (lib.mapAttrs (_: service: {
+            networks = lib.mkBefore [(docker.serviceNetwork service)];
+          }) (lib.filterAttrs (c: _: !(lib.elem c routed) && lib.elem c (lib.concatLists (lib.attrValues cfg.links) ++ cfg.hostAccess))
+            (docker.unitContainers config)))
         (lib.genAttrs (lib.filter (c: !(lib.elem c routed)) (lib.unique cfg.hostAccess)) (_: {
           networks = lib.mkAfter [docker.hostNetwork];
           extraOptions = [docker.hostAlias];

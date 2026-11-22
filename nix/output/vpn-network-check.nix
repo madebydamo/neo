@@ -148,6 +148,10 @@
     ++ lib.optional (!has docker.hostNetwork) "gluetun is not on ${docker.hostNetwork} for the routed host access"
     ++ lib.optional (!(lib.elem docker.hostAlias (cOn.vpn.extraOptions or []))) "gluetun lacks host.docker.internal"
     ++ lib.optional (!(lib.elem (docker.linkNetwork "oldplug-paste") (docker.containerNetworks cOn.pastebin))) "pastebin is not on its link"
+    # A plugin's link must not take a core container off its service network (issue #30).
+    ++ lib.optional (lib.head (cOn.pastebin.networks or [""]) != docker.serviceNetwork "pastebin") "pastebin should be on ${docker.serviceNetwork "pastebin"} first, is on ${toString (cOn.pastebin.networks or [])}"
+    ++ lib.optional (lib.head (cOff.pastebin.networks or [""]) != docker.serviceNetwork "pastebin") "VPN off: pastebin should be on ${docker.serviceNetwork "pastebin"} first, is on ${toString (cOff.pastebin.networks or [])}"
+    ++ lib.optional (!(lib.elem (docker.serviceNetwork "oldplug") (docker.containerNetworks cOff.oldplug))) "VPN off: oldplug with a link and host access lost ${docker.serviceNetwork "oldplug"}"
     ++ map (m: "VPN on: ${m}") (failedAssertions on)
     ++ lib.optional ((target.container or null) != "vpn" || (target.network or null) != "app-oldplug") "routed metrics should be scraped from vpn on app-oldplug, got ${target.container or "-"} on ${target.network or "-"}"
     # VPN off: everything joins its networks itself.

@@ -192,7 +192,7 @@ Work through every item. Each one exists because it is easy to forget.
 
 - [ ] Everything inside `config = lib.mkIf cfg.enabled { … }`.
 - [ ] Appdata directories created with `neo.core.containerDirs.${name} = [ … ];` (or tmpfiles for native units).
-- [ ] Containers: `image = cfg.containers.<c>`, each listed in `mkContainerDefinitions` (sidecars too): that puts it on the service network. Set `networks = [(lib.neo.docker.serviceNetwork name)]` only on a container that also has a link or host access.
+- [ ] Containers: `image = cfg.containers.<c>`, each listed in `mkContainerDefinitions` (sidecars too): that puts it on the service network, also with a link or host access. A link to a core container (`mkLink { containers = ["x" "immich-server"]; }`) keeps that container on its own network; do not set its `networks`.
 - [ ] `environment = lib.neo.linuxserverEnv config // { … }` (`PUID`, `PGID`, `TZ`) if the image supports them; never a literal time zone.
 - [ ] All state under `${config.neo.core.volumes.appdata}/<name>`. Media and documents from `config.neo.core.volumes.media` / `.documents`.
 - [ ] No host ports for web UIs; SWAG reaches containers over the service network. Only publish non-HTTP protocol ports.

@@ -99,9 +99,17 @@ Every container of an enabled service (its `docker-<container>` unit in
 `systemdUnits`) is on `lib.neo.docker.serviceNetwork "<service>"` by default
 (`nix/modules/core/docker-network.nix`, priority between `mkOptionDefault`
 and `mkDefault`), so any `networks` a module sets win: plugin containers on
-`internal`, links and host access (those containers name their service
-network too), VPN routing. Only a plugin container without any network
+`internal`, VPN routing. Only a plugin container without any network
 (Docker's default bridge before) moves to its service network.
+
+Links and host access are the exception. They add a network at normal
+priority, which would replace the default: a plugin's link to
+`immich-server` left Immich on the link only, without its database (it
+crash-looped, issue #30), and a plugin cannot safely name a network for a
+container it does not own. So `docker-network.nix` adds the service network
+of every non-routed link or host-access member at normal priority, first
+(`mkBefore`). A module that names it too is fine: oci-containers passes each
+network once (`lib.lists.unique`), and the isolation check counts it once.
 `mkPostgresSidecar` and `mkRedisSidecar` take `network`; without it (since
 2026-11; before, the default was `internal`) the sidecar is on its service
 network like any other container of the service.

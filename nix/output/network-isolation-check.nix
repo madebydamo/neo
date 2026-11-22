@@ -92,9 +92,11 @@
       && !(usesHost containers.${c})
       && !(lib.elem (docker.serviceNetwork owner.${c}) (docker.containerNetworks containers.${c})))
     (lib.attrNames containers))
-    # Docker refuses a network listed twice.
+    # Docker refuses a network listed twice. oci-containers drops repeated
+    # entries itself; the same network named two ways ("app-x" and
+    # "name=app-x,alias=y", or `networks` and --network=) stays.
     ++ lib.concatMap (c: let
-      nets = docker.containerNetworks containers.${c};
+      nets = docker.containerNetworks (containers.${c} // {networks = lib.unique (containers.${c}.networks or []);});
     in
       lib.optional (lib.length nets != lib.length (lib.unique nets)) "container ${c} names a network twice: ${lib.concatStringsSep " " nets}")
     (lib.attrNames containers)

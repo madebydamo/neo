@@ -35,7 +35,7 @@ NixOS homeserver flake (**flake-parts** + **import-tree** over `./nix`) + Rust *
 ## Add a service
 
 1. `option.nix` — `enabled`, `// lib.neo.mkReverseProxyOptions`, `mkContainerDefinitions`, `mkAppdata`, `mkServiceMeta`, `mkSkillOptions`
-2. `default.nix` — `mkIf`, appdata dirs (`neo.core.containerDirs.<container>`), `oci-containers` (each container of the service is on `app-<name>` by default; name `networks` only for a link or host access)
+2. `default.nix` — `mkIf`, appdata dirs (`neo.core.containerDirs.<container>`), `oci-containers` (each container of the service is on `app-<name>` by default, also with a link or host access)
 3. `swag.nix` if public; `skills.nix` for Hermes (`mkServiceSkill`); `monitoring.nix` for metrics and a Grafana dashboard (`neo.monitoring.apps.<name>`, `lib.neo.grafana`, see Monitoring)
 4. Enable in **`settings.toml`**: `[services.<name>] enabled = true`
 5. `git add` → **`just launch`** → smoke test below → `just format && just check`
@@ -94,7 +94,7 @@ Design (storage inline → `secrets.yaml` → `secrets.sops.yaml`, `neo secrets 
 - **OIDC:** an app that can log in with OIDC registers itself inside its `mkIf` as `neo.services.tinyauth.oidcClients.<id> = { name; redirectUris; }` and reads `.clientId` / `.clientSecret` (derived from a machine-generated key, no setting; pass it through `containerEnv`) and `tinyauth.oidcIssuer` (example: `nix/services/vaultwarden`, option `sso`). Users from OAuth providers carry their groups in the `groups` claim.
 - **Docker networks** ([docs/design/network-isolation.md](docs/design/network-isolation.md)):
   - Each service has its own network `app-<service>` (`lib.neo.docker.serviceNetwork`), the default for every container in its `systemdUnits`. Containers of different services cannot reach each other (flake check `docker-network-isolation`).
-  - A service that must call another one inside Docker declares a link (`lib.neo.docker.mkLink { name; containers; }`, e.g. Nextcloud ↔ Collabora); otherwise it uses the other app's public URL. A container with a link or `mkHostAccess` names its service network in `networks` itself.
+  - A service that must call another one inside Docker declares a link (`lib.neo.docker.mkLink { name; containers; }`, e.g. Nextcloud ↔ Collabora); otherwise it uses the other app's public URL. A container with a link or `mkHostAccess` stays on its service network (Neo adds it first, also for a link a plugin adds to a core container).
   - Host services (neo web, Hermes, Vikunja) are reachable only from the `neo-host` bridge: SWAG, and containers with `lib.neo.docker.mkHostAccess`.
   - SWAG joins every proxied service's network; gluetun stands in for VPN-routed containers on all their networks, aliases included (check `vpn-networks`). `internal` stays for plugins only; `neo-docker-network` creates every named network and removes empty undeclared ones.
 
