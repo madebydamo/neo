@@ -54,6 +54,13 @@
 
         location ~ ^/(api|oauth2)/ {
           include /config/nginx/geo-access.conf;
+          # proxy.conf rewrites http:// redirects to https://. After a login
+          # through an external identity provider, the embedded IdP redirects
+          # to the client's plain-HTTP callback (http://localhost:<port>/), so
+          # keep loopback redirects as they are. The first matching mapping
+          # wins; "off" cannot be combined with proxy.conf's mapping.
+          # https://github.com/netbirdio/netbird/discussions/7364
+          proxy_redirect ~^(http://(localhost|127\.0\.0\.1|\[::1\])([:/?].*)?)$ $1;
         ${lib.neo.swagUpstream {
           app = server;
           port = 80;
