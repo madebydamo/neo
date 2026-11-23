@@ -69,6 +69,12 @@ in {
             proxy_set_header X-Original-Method $request_method;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Real-IP $remote_addr;
+            # nginx copies the request headers into the subrequest. With
+            # forward-auth headers next to X-Original-URL, tinyauth denies it
+            # ("conflicting auth module headers", 400 → nginx 500). An empty
+            # value is not sent.
+            proxy_set_header X-Forwarded-Host "";
+            proxy_set_header X-Forwarded-Uri "";
         }
       '';
 

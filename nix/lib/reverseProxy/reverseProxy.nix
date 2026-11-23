@@ -19,15 +19,21 @@ in {
       inherit publicHost;
 
       # Whether a custom domain of a service with login answers with a redirect
-      # to <subdomain>.<domain> instead of serving the app. Tinyauth only works
-      # on the SWAG domain and below it (its cookie and its own address are
-      # there); on another domain the auth subrequest fails (nginx 500).
+      # to <subdomain>.<domain> instead of serving the app: always with login.
+      # Outside the tinyauth cookie domain the login cannot work at all. Below
+      # it (biel.dev.example.com under example.com) tinyauth only sees the
+      # app's own address of the hairpin and sends the browser there after the
+      # login, so the custom name never stays. Before the X-Forwarded-Host fix
+      # in tinyauth-server.conf the hairpin even got tinyauth's 400 ("conflicting
+      # auth module headers", nginx 500; meilen 2026-11-23). Temporary 307 on
+      # purpose: old names may come back, and it keeps method and body.
+      # domain / customDomain stay as arguments for callers (plugins).
       customDomainRedirects = {
         domain,
         customDomain,
         authEnabled,
       }:
-        authEnabled && customDomain != domain && !(lib.hasSuffix ".${domain}" customDomain);
+        authEnabled;
 
       # SWAG site conf (site-confs/<customDomain>.conf) for one custom domain:
       # port 80 goes to HTTPS; HTTPS either redirects to the app's own address
@@ -42,7 +48,7 @@ in {
         location =
           if redirect
           then ''
-            # Login only works on ${domain}: send the browser to the app's own address.
+            # Login only works on the app's own address: send the browser there.
             location / {
               return 307 https://${host}$request_uri;
             }
@@ -177,9 +183,9 @@ in {
               type = types.listOf types.str;
               default = customDomains;
               # Added to SWAG (certificates) and Pi-hole (local DNS). With login on,
-              # names outside the SWAG domain get a 307 to <subdomain>.<domain>
-              # (customDomainRedirects): tinyauth only works on that domain.
-              description = "Extra domain names you own that should open this app (e.g. www.example.com). HTTPS is set up automatically. With Require login on, a name outside your main domain sends visitors on to this app's own address, where they log in.";
+              # every name gets a 307 to <subdomain>.<domain> (customDomainRedirects):
+              # the login only works on the app's own address.
+              description = "Extra domain names you own that should open this app (e.g. www.example.com or an old address). HTTPS is set up automatically. With Require login on, they send visitors on to this app's own address, where they log in.";
             }
             // {
               rank = 130;

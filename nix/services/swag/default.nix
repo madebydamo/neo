@@ -88,7 +88,7 @@
             + optionalString (jail ? maxretry) "maxretry = ${toString jail.maxretry}\n")
           jailDefs)}'';
         # A custom domain of an app with login redirects to <subdomain>.<domain>
-        # (lib.neo.customDomainRedirects); the others proxy to the app's vhost.
+        # (lib.neo.customDomainRedirects, 307); without login it proxies to the app's vhost.
         customProxyConfScripts = flatten (map (
           svc: let
             authEnabled = (svc.auth.enabled or false) && config.neo.services.tinyauth.enabled;

@@ -1,5 +1,8 @@
-# Custom domains of an app with login redirect to the app's own address
-# before any auth (tinyauth only works on the SWAG domain); the others proxy.
+# Custom domains of an app with login redirect (307) to the app's own address
+# before any auth, also below the SWAG domain (biel.dev.example.com under
+# example.com: meilen 2026-11-23, tinyauth 400 → nginx 500); without login they
+# proxy. The tinyauth subrequest drops forward-auth headers, which tinyauth
+# refuses next to X-Original-URL.
 {...}: {
   perSystem = {
     pkgs,
@@ -7,6 +10,8 @@
     ...
   }: let
     rp = (import ./reverseProxy.nix {inherit lib;}).libExtensions.reverseProxy.neo;
+    authz = (import ./authorization.nix {inherit lib;}).libExtensions.authorization.neo;
+    tinyauthServerConf = authz.mkTinyauthServerConf {neo.services.tinyauth.port = 3000;};
 
     domain = "dev1.example.com";
     redirects = customDomain: authEnabled: rp.customDomainRedirects {inherit domain customDomain authEnabled;};
@@ -30,9 +35,13 @@
       (expectTrue "login-foreign-domain-redirects" (redirects "kpi.dev.example.com" true))
       (expectTrue "login-other-domain-redirects" (redirects "www.example.org" true))
       (expectTrue "no-login-proxies" (!redirects "www.example.org" false))
-      (expectTrue "below-swag-domain-proxies" (!redirects "kpi-old.dev1.example.com" true))
-      (expectTrue "swag-domain-itself-proxies" (!redirects "dev1.example.com" true))
+      (expectTrue "below-swag-domain-redirects" (redirects "kpi-old.dev1.example.com" true))
+      (expectTrue "two-below-swag-domain-redirects" (redirects "kpi.old.dev1.example.com" true))
+      (expectTrue "swag-domain-itself-redirects" (redirects "dev1.example.com" true))
       (expectTrue "suffix-without-dot-redirects" (redirects "xdev1.example.com" true))
+      (expectTrue "below-swag-domain-no-login-proxies" (!redirects "kpi-old.dev1.example.com" false))
+      (expectTrue "auth-subrequest-drops-forwarded-host" (lib.hasInfix ''proxy_set_header X-Forwarded-Host "";'' tinyauthServerConf))
+      (expectTrue "auth-subrequest-drops-forwarded-uri" (lib.hasInfix ''proxy_set_header X-Forwarded-Uri "";'' tinyauthServerConf))
       (expectTrue "redirect-is-307-to-own-address" (lib.hasInfix "return 307 https://kpi.dev1.example.com$request_uri;" redirectConf))
       (expectTrue "redirect-no-auth" (!lib.hasInfix "tinyauth" redirectConf && !lib.hasInfix "proxy_pass" redirectConf))
       (expectTrue "redirect-keeps-geo" (lib.hasInfix "geo-access.conf" redirectConf))
