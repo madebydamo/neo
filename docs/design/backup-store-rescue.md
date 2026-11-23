@@ -146,11 +146,40 @@ through that login: `ssh -N -L 8091:127.0.0.1:8091 <login>`, then
 
 ### Restore page of a client
 
-`Restore brugg` opens a page with four tabs, one per way. The first is **Over SSH to this
-server** ([backup-store-ssh.md](backup-store-ssh.md) §3), then the three ways below. Each tab has the same parts:
-**You need** (a checklist), **Steps**, and the **command** with every value filled in (store
-address, client name, folder, format). A check mark means the store verified it; a hollow
-circle means you must check it yourself.
+`Restore brugg` opens a **wizard** (`static/backup_store_wizard.js`, data from
+`wizard_data` in `web/backup_store.rs`): one question per step, the answers fill in the test
+commands and the final command. A step list on top shows where you are; earlier steps are links,
+**Back** works everywhere, and the answers stay in `sessionStorage` per client (a reload keeps
+them). **Next** stays off, with the reason beside it, until the step is answered. Everything runs
+in the browser; the only server input is whether `backup-store-tunnel` runs.
+
+1. **Where do you restore?** *From your computer* (default), *This server does it* (the form of
+   way 1 below; off with its reason without the portal's login), or *On the new machine itself*
+   (NixOS installer).
+2. **How is the backup read?** Checked automatically: the tunnel runs on this server, and the
+   browser reaches the store's address (`fetch` with `no-cors`, 8 s). Both ✓: *over the web
+   address* is chosen; one ✗: *over SSH to this server*. The operator may choose the other one
+   (with a warning). *This server does it* reads over the web address only: with SSH chosen, Next
+   is off and a link switches to *From your computer*.
+3. **Your SSH login** (SSH only): a field with suggestions `homeserver@<name>` from this server's
+   names (hostname, global addresses without Docker bridges, Tailscale name), the test
+   `ssh <login> neo backup-store list` (on your computer, or on the new machine for the installer
+   way), what it should print, "It did not work" hints per ssh error, and the box "It worked"
+   that Next needs. A changed login clears the box.
+4. **Your key**: the keys that can restore (the unlock keys of an encrypted client, else the
+   client's keys) and an optional field for your *public* key or the `ssh-keygen -lf` line. The
+   page computes the fingerprint (WebCrypto) and says: opens it, logs in but cannot open it, the
+   server's own key, not accepted, or "this is a private key". From your computer: the path of the
+   private key (default `~/.ssh/id_ed25519`).
+5. **New machine**: `root@IP` and disk, with the test `ssh -i <key> root@<IP> true && echo OK`.
+   Installer way: how to start it, and the copy command for the key (`/root/admin_key`, or
+   `/root/.ssh/id_ed25519` for the SSH way, so the login works from there). Several backup folders:
+   a folder choice. *This server does it*: the rescue form instead of this step and the next.
+6. **Run it**: the one command, Copy, and "What happens now" (asks the store and matches keys for
+   the SSH way, kexec, the plan before erasing, the relay note, DNS afterwards).
+
+Below the wizard, a closed **Show all commands** keeps the plain commands of every way and the
+"If this address is down" line. The ways and their commands:
 
 **Common to all three ways**
 

@@ -164,6 +164,24 @@ fn portal_client(name: &str, site: OnStoreSite) -> Option<Template> {
         .as_ref()
         .map(|s| s.backup_url(&c.name, &folder))
         .unwrap_or_default();
+    let names = server_names();
+    let tunnel_down = tunnel_down();
+    let rescue_off_reason = if !c.configured {
+        "This server is no longer in the store's settings."
+    } else if !rescue_allowed(&site, &report) {
+        "Turn on the login of this page (Backup store → Require login) to restore from here."
+    } else {
+        ""
+    };
+    let wizard = wizard_data(
+        c,
+        store.as_ref(),
+        &report,
+        &names,
+        tunnel_down,
+        can_rescue,
+        rescue_off_reason,
+    );
     let recent = c
         .last_connection
         .filter(|l| t - l < RECENT_CONNECTION_SECS)
@@ -182,19 +200,58 @@ fn portal_client(name: &str, site: OnStoreSite) -> Option<Template> {
             "git_remote": c.git_remote,
             "recent_connection": recent,
             "can_rescue": can_rescue,
-            "rescue_off_reason": if !c.configured {
-                "This server is no longer in the store's settings."
-            } else if !rescue_allowed(&site, &report) {
-                "Turn on the login of this page (Backup store → Require login) to restore from here."
-            } else { "" },
+            "rescue_off_reason": rescue_off_reason,
             "cmd_computer": command_computer(c, &url),
             "cmd_nixos": command_nixos(c, &url),
             "cmd_ssh": command_ssh(c),
-            "server_names": server_names(),
+            "server_names": names,
+            "login_suggestions": names.iter().map(|n| format!("homeserver@{n}")).collect::<Vec<_>>(),
             "web_port": web_port(),
-            "tunnel_down": tunnel_down(),
+            "tunnel_down": tunnel_down,
+            "wizard_json": wizard,
         }),
     ))
+}
+
+/// What the restore wizard (static/backup_store_wizard.js) works with, as JSON
+/// safe inside a `<script>` element.
+fn wizard_data(
+    c: &ClientReport,
+    store: Option<&StoreConfig>,
+    report: &Report,
+    names: &[String],
+    tunnel_down: bool,
+    can_rescue: bool,
+    rescue_off_reason: &str,
+) -> String {
+    let folders: Vec<String> = if c.folders.is_empty() {
+        vec![".".into()]
+    } else {
+        c.folders.clone()
+    };
+    let urls: serde_json::Map<String, Value> = folders
+        .iter()
+        .map(|f| {
+            let url = store.map(|s| s.backup_url(&c.name, f)).unwrap_or_default();
+            (f.clone(), Value::String(url))
+        })
+        .collect();
+    let data = json!({
+        "client": c.name,
+        "format": c.format,
+        "url": urls.get(&folders[0]).cloned().unwrap_or(Value::Null),
+        "urls": urls,
+        "storeUrl": report.store.url,
+        "folders": if c.format == "zfs" { Vec::new() } else { folders },
+        "gitRemote": c.git_remote,
+        "keys": c.keys,
+        "tunnelDown": tunnel_down,
+        "internet": report.store.internet,
+        "canRescue": can_rescue,
+        "rescueOffReason": rescue_off_reason,
+        "loginExample": names.first().map(|n| format!("homeserver@{n}")),
+    });
+    data.to_string().replace("</", "<\\/")
 }
 
 /// The way in over this server's normal SSH (docs/design/backup-store-ssh.md §3).
@@ -733,13 +790,19 @@ mod tests {
     }
 
     #[test]
-    fn client_page_has_three_ways() {
+    fn client_page_is_a_wizard() {
         let c = report();
         let url = "https://brugg@backup.example.com/backups";
+        let r: Report = serde_json::from_value(json!({
+            "generated": 1000,
+            "store": {"url": "https://backup.example.com", "internet": true, "login": true},
+            "clients": [],
+        }))
+        .unwrap();
         let ctx = |can: bool, internet: bool| {
             json!({
                 "title": "Restore brugg",
-                "store": {"host": "backup.example.com", "internet": internet, "login": true},
+                "store": {"url": "https://backup.example.com", "host": "backup.example.com", "internet": internet, "login": true},
                 "client": client_card(&c, 1000 + 3600),
                 "encrypted": true,
                 "backup_url": url,
@@ -751,17 +814,27 @@ mod tests {
                 "cmd_nixos": command_nixos(&c, url),
                 "cmd_ssh": command_ssh(&c),
                 "server_names": ["brugg", "192.168.1.20"],
+                "login_suggestions": ["homeserver@brugg"],
                 "web_port": "8091",
                 "tunnel_down": !internet,
+                "wizard_json": wizard_data(&c, None, &r, &["brugg".into()], !internet, can, ""),
             })
         };
         let html = render("backup_store/client", &ctx(true, true));
         for want in [
             "<title>Restore brugg</title>",
-            "From this server",
+            "data-neo-wiz",
+            r#"id="neo-wizard-data">{"#,
+            "/static/backup_store_wizard.js",
+            r#"data-neo-wiz-step="where""#,
+            r#"data-neo-wiz-step="login""#,
+            r#"data-neo-wiz-step="rescue""#,
             "From your computer",
-            "From a NixOS machine",
+            "This server does it",
+            "On the new machine itself",
             "Over SSH to this server",
+            r#"<option value="homeserver@brugg">"#,
+            "Show all commands",
             "--from-store &lt;your login to this server&gt; --client brugg",
             "brugg, 192.168.1.20",
             "ssh -N -L 8091:127.0.0.1:8091",
@@ -769,17 +842,28 @@ mod tests {
             "SHA256:abc",
             "connected 5 minutes ago",
             "System → SSH on brugg",
-            "open to the internet",
             "--from-backup https://brugg@backup.example.com/backups",
         ] {
             assert!(html.contains(want), "{want}");
         }
         let html = render("backup_store/client", &ctx(false, false));
-        assert!(!html.contains("/rescue\""));
         assert!(!html.contains(r#"hx-post="#));
         assert!(html.contains("Turn on the login"));
         assert!(html.contains("not open to the internet"));
         assert!(html.contains("web address of this store is down"));
+    }
+
+    #[test]
+    fn wizard_data_is_safe_in_a_script_element() {
+        let mut c = report();
+        c.name = "x</script><b>".into();
+        let r = Report::default();
+        let text = wizard_data(&c, None, &r, &[], true, false, "off");
+        assert!(!text.contains("</"), "{text}");
+        let v: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(v["client"], "x</script><b>");
+        assert_eq!(v["tunnelDown"], true);
+        assert_eq!(v["canRescue"], false);
     }
 
     #[test]

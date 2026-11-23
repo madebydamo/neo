@@ -1,7 +1,14 @@
 {{!-- Rescue portal: how to restore one client (web/backup_store.rs portal_client).
-     Three ways in CSS-only tabs; each lists what you need (✓ checked here, ○ check yourself),
-     the steps and the command with this client's values. --}}
-{{#*inline "need"}}<li class="flex gap-2"><span class="shrink-0 w-4 text-center {{#if ok}}text-success{{/if}}{{#if bad}}text-error{{/if}}" aria-hidden="true">{{#if ok}}✓{{else}}{{#if bad}}✗{{else}}○{{/if}}{{/if}}</span><span>{{> @partial-block}}</span></li>{{/inline}}
+     A wizard (static/backup_store_wizard.js): one question per step, the answers fill in
+     the test commands and the final command. Every step is rendered here and hidden;
+     the script shows the current one. "Show all commands" keeps the plain commands. --}}
+{{#*inline "cmd"}}<div class="relative"><pre id="{{id}}" class="bg-base-200 rounded-box p-3 pr-16 text-xs font-mono whitespace-pre-wrap break-all"{{#if fill}} data-neo-wiz-fill="{{fill}}"{{/if}}>{{text}}</pre><button type="button" class="btn btn-xs absolute top-2 right-2" data-neo-copy="{{id}}">Copy</button></div>{{/inline}}
+{{#*inline "nav"}}<div class="flex flex-wrap items-center gap-3 pt-2 border-t border-base-content/10">
+  {{#unless first}}<button type="button" class="btn btn-sm btn-ghost" data-neo-wiz-back>← Back</button>{{/unless}}
+  {{#unless last}}<button type="button" class="btn btn-sm btn-primary" data-neo-wiz-next>Next →</button>{{/unless}}
+  <span class="text-xs text-base-content/60" data-neo-wiz-why hidden></span>
+</div>{{/inline}}
+{{#*inline "keylist"}}<ul class="space-y-0.5">{{#each keys}}<li class="font-mono text-xs break-all"><span class="font-sans font-medium">{{label}}</span> {{fingerprint}}</li>{{/each}}</ul>{{/inline}}
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -11,8 +18,10 @@
     <script src="/static/neo_util.js"></script>
     <script src="/static/op_monitor.js"></script>
     <script src="/static/backup_store_portal.js"></script>
+    <script src="/static/backup_store_wizard.js" defer></script>
   </head>
   <body class="neo-config bg-base-300 text-base-content min-h-dvh" data-theme="light">
+    <script type="application/json" id="neo-wizard-data">{{{wizard_json}}}</script>
     <main class="max-w-4xl mx-auto px-4 py-6 sm:py-10 space-y-5">
       <header class="space-y-1">
         <a href="/backup-store/portal" class="link link-hover text-xs text-base-content/60">← All servers</a>
@@ -31,171 +40,277 @@
         </div>
       {{/if}}
 
-      <section class="card bg-base-100 shadow-sm">
-        <div class="card-body p-4 sm:p-5 gap-2 text-sm">
-          <h2 class="font-semibold">You need for every way</h2>
-          <ul class="space-y-1.5 text-base-content/80">
-            {{#> need}}A new machine: any Linux with root SSH (a VPS from a hoster works), or one started from the <a class="link" href="https://nixos.org/download/#nixos-iso" target="_blank" rel="noopener">NixOS installer</a>. <strong>Its disk is erased.</strong>{{/need}}
-            {{#> need}}The old server is off, or gone.{{/need}}
-            {{#if store.internet}}
-              {{#> need ok=true}}The new machine can reach this store: it is open to the internet.{{/need}}
-            {{else}}
-              {{#> need bad=true}}This store is not open to the internet (its Access has no "web"). The new machine must be in the same home network or tailnet.{{/need}}
-            {{/if}}
-            {{#if client.roles_known}}
-              {{#> need}}An admin key of {{client.name}}: the private half of one of these keys. They open the encrypted backup, and this store lets them read it.
-                {{#if client.unlock_keys}}
-                  <ul class="mt-1 space-y-0.5">
-                    {{#each client.unlock_keys}}<li class="font-mono text-xs break-all"><span class="font-sans font-medium">{{label}}</span> {{fingerprint}}</li>{{/each}}
-                  </ul>
-                  <span class="block mt-1 text-xs text-base-content/60">Compare with <code>ssh-keygen -lf ~/.ssh/id_ed25519.pub</code>. These are the keys in System → SSH on {{client.name}} at its last backup run. The server's own key does not count: it is lost with the server.</span>
-                {{else}}
-                  <span class="block text-xs text-error">The backup opens only with {{client.name}}'s own key. Add your key to System → SSH on {{client.name}}; after its next backup run it can restore.</span>
-                {{/if}}
-                {{#if client.access_keys}}
-                  <span class="block mt-1 text-xs text-warning">Can connect but cannot unlock: {{#each client.access_keys}}{{#unless @first}}, {{/unless}}{{label}}{{/each}}. Remove them from the store's settings, or add them to System → SSH on {{client.name}}.</span>
-                {{/if}}
-              {{/need}}
-            {{else}}
-              {{#> need}}An admin key of {{client.name}}: the private half of one of these keys.
-                {{#if client.keys}}
-                  <ul class="mt-1 space-y-0.5">
-                    {{#each client.keys}}<li class="font-mono text-xs break-all"><span class="font-sans font-medium">{{label}}</span> {{fingerprint}}</li>{{/each}}
-                  </ul>
-                  <span class="block mt-1 text-xs text-base-content/60">Compare with <code>ssh-keygen -lf ~/.ssh/id_ed25519.pub</code>. The server's own key does not count: it is lost with the server.</span>
-                {{else}}
-                  <span class="block text-xs text-error">No key is allowed for {{client.name}} here. Add yours to its SSH public keys in the store's settings.</span>
-                {{/if}}
-              {{/need}}
-              {{#if encrypted}}
-                {{#> need}}The same key was in System → SSH on {{client.name}} at a backup run after you added it. Only then can it open the encrypted backup.{{/need}}
-              {{/if}}
-            {{/if}}
-          </ul>
-          <p class="text-xs text-base-content/60">After the restore: point {{client.name}}'s web addresses (DNS, and the edge server if you use one) to the new machine's address.</p>
-          <p class="text-xs text-base-content/60">If this address is down: open this page through your SSH login to this server, with <code class="font-mono">ssh -N -L {{web_port}}:127.0.0.1:{{web_port}} homeserver@…</code>, then <code class="font-mono">http://127.0.0.1:{{web_port}}/backup-store/portal</code>.</p>
-        </div>
-      </section>
-
       {{#if tunnel_down}}
         <div role="alert" class="alert alert-warning text-sm">
-          <span><strong>The web address of this store is down</strong> (its tunnel does not run). New machines cannot read backups over it: use "Over SSH to this server".</span>
+          <span><strong>The web address of this store is down</strong> (its tunnel does not run). New machines cannot read backups over it: the restore goes over SSH to this server.</span>
         </div>
       {{/if}}
 
-      <div class="tabs tabs-lift">
-        <input type="radio" name="way" class="tab" aria-label="Over SSH to this server" {{#if tunnel_down}}checked{{/if}} />
-        <section class="tab-content bg-base-100 border-base-300 p-4 sm:p-5 text-sm space-y-3">
-          <p class="text-base-content/75">Your computer logs in to this server the way you always do, and reads the backup through that login. This works when the store's web address is down, for example when it runs through the server you restore.</p>
-          <h3 class="font-semibold">You need, in addition</h3>
-          <ul class="space-y-1.5 text-base-content/80">
-            {{#> need}}Nix with flakes on your computer.{{/need}}
-            {{#> need}}Your normal SSH login to this server works from your computer (<code class="font-mono text-xs">ssh homeserver@…</code>, an alias, Tailscale, your home network).{{/need}}
-            {{#> need}}Root SSH from your computer to the new machine with your admin key.{{/need}}
-          </ul>
-          <h3 class="font-semibold">Run</h3>
-          <div class="relative">
-            <pre id="cmd-ssh" class="bg-base-200 rounded-box p-3 pr-16 text-xs font-mono whitespace-pre-wrap break-all">{{cmd_ssh}}</pre>
-            <button type="button" class="btn btn-xs absolute top-2 right-2" data-neo-copy="cmd-ssh">Copy</button>
-          </div>
-          <p class="text-xs text-base-content/60">Your login to this server is how you normally reach it, for example <span class="font-mono">homeserver@{{#each server_names}}{{#if @first}}{{this}}{{/if}}{{/each}}</span>.{{#if server_names}} This server's names: <span class="font-mono">{{#each server_names}}{{#unless @first}}, {{/unless}}{{this}}{{/each}}</span>.{{/if}} It lists what this store holds, says which of your keys opens it, and asks before it erases the disk. The store's own keys still decide what you can read.</p>
-          <p class="text-xs text-base-content/60">The new machine first tries to reach this server itself with your SSH agent; if it cannot, the data goes through your computer (keep it connected until the copy is done).</p>
-        </section>
+      <section class="card bg-base-100 shadow-sm" data-neo-wiz>
+        <div class="card-body p-4 sm:p-6 gap-4 text-sm">
+          <ul class="steps steps-horizontal w-full text-xs" data-neo-wiz-steps aria-label="Steps"></ul>
+          <noscript><div class="alert text-sm">This guide needs JavaScript. The plain commands are under "Show all commands" below.</div></noscript>
 
-        <input type="radio" name="way" class="tab" aria-label="From this server" {{#if can_rescue}}{{#unless tunnel_down}}checked{{/unless}}{{/if}} />
-        <section class="tab-content bg-base-100 border-base-300 p-4 sm:p-5 text-sm space-y-3">
-          <p class="text-base-content/75">This store does the restore: give it the new machine and your admin key.</p>
-          {{#if tunnel_down}}
-            <div class="alert alert-warning text-xs">The new machine reads the backup over this store's web address, which is down now. Use "Over SSH to this server" instead.</div>
-          {{/if}}
-          <h3 class="font-semibold">You need, in addition</h3>
-          <ul class="space-y-1.5 text-base-content/80">
-            {{#> need}}Root SSH to the new machine with that admin key. Most hosters ask for a public key when you create the machine.{{/need}}
-          </ul>
-          {{#if can_rescue}}
-            <form class="space-y-3" hx-post="/backup-store/portal/client/{{client.name}}/rescue" hx-target="#rescue-result" hx-swap="innerHTML" autocomplete="off">
-              <label class="form-control block">
-                <span class="label-text font-medium">New machine</span>
-                <input name="host" required class="input input-bordered w-full font-mono" placeholder="root@203.0.113.7" pattern="root@[^\s]+" />
+          {{!-- 1. Where --}}
+          <div class="space-y-3" data-neo-wiz-step="where">
+            <h2 class="text-lg font-semibold">Where do you want to run the restore?</h2>
+            <p class="text-base-content/70">The new machine's disk is erased. It can be any Linux with root SSH (a VPS works), or one started from the <a class="link" href="https://nixos.org/download/#nixos-iso" target="_blank" rel="noopener">NixOS installer</a>. Turn the old server off first, if it still runs.</p>
+            <div class="grid gap-2">
+              <label class="flex gap-3 items-start p-3 rounded-box border border-base-content/15 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                <input type="radio" name="wiz-where" class="radio radio-primary radio-sm mt-0.5" value="computer" data-neo-wiz-field="where" />
+                <span><span class="font-medium">From your computer</span> <span class="badge badge-sm badge-ghost">recommended</span><br><span class="text-base-content/70">Your computer drives the restore over SSH. Needs Nix on your computer (Linux, macOS, or Windows with WSL).</span></span>
               </label>
+              <label class="flex gap-3 items-start p-3 rounded-box border border-base-content/15 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:disabled]:opacity-60 has-[:disabled]:cursor-not-allowed">
+                <input type="radio" name="wiz-where" class="radio radio-primary radio-sm mt-0.5" value="server" data-neo-wiz-field="where" data-neo-wiz-disabled-when="canRescue=no" />
+                <span><span class="font-medium">This server does it</span><br><span class="text-base-content/70">You give the new machine and paste your admin key here; this store runs the restore.</span>
+                  {{#unless can_rescue}}<br><span class="text-xs text-warning">{{rescue_off_reason}}</span>{{/unless}}</span>
+              </label>
+              <label class="flex gap-3 items-start p-3 rounded-box border border-base-content/15 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                <input type="radio" name="wiz-where" class="radio radio-primary radio-sm mt-0.5" value="nixos" data-neo-wiz-field="where" />
+                <span><span class="font-medium">On the new machine itself</span><br><span class="text-base-content/70">You start it from the NixOS installer (USB stick or the hoster's ISO console) and run one command there.</span></span>
+              </label>
+            </div>
+            {{> nav first=true}}
+          </div>
+
+          {{!-- 2. Reach --}}
+          <div class="space-y-3" data-neo-wiz-step="reach" hidden>
+            <h2 class="text-lg font-semibold">How is the backup read?</h2>
+            <ul class="space-y-1.5">
+              <li class="flex gap-2">
+                <span class="w-4 text-center text-success" data-neo-wiz-show="server=up">✓</span><span class="w-4 text-center text-error" data-neo-wiz-show="server=down">✗</span>
+                <span><span data-neo-wiz-show="server=up">The store's web address runs on this server.</span><span data-neo-wiz-show="server=down">The store's web address does not run on this server (its tunnel is stopped).</span></span>
+              </li>
+              <li class="flex gap-2" data-neo-wiz-show="server=up">
+                <span class="w-4 text-center" data-neo-wiz-show="browser=checking"><span class="loading loading-spinner loading-xs"></span></span>
+                <span class="w-4 text-center text-success" data-neo-wiz-show="browser=up">✓</span>
+                <span class="w-4 text-center text-error" data-neo-wiz-show="browser=down">✗</span>
+                <span><span data-neo-wiz-show="browser=checking">Checking whether your browser reaches <span class="font-mono">{{store.url}}</span> …</span><span data-neo-wiz-show="browser=up">Your browser reaches <span class="font-mono">{{store.url}}</span>.</span><span data-neo-wiz-show="browser=down">Your browser does not reach <span class="font-mono">{{store.url}}</span>.</span></span>
+              </li>
+            </ul>
+            <div class="grid gap-2">
+              <label class="flex gap-3 items-start p-3 rounded-box border border-base-content/15 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                <input type="radio" name="wiz-reach" class="radio radio-primary radio-sm mt-0.5" value="https" data-neo-wiz-field="reach" />
+                <span><span class="font-medium">Over the web address</span> <span class="badge badge-sm badge-success" data-neo-wiz-show="auto=up">works</span><br><span class="text-base-content/70">The new machine reads the backup at <span class="font-mono">{{store.url}}</span>.{{#unless store.internet}} This store is not open to the internet: the new machine must be in the same home network or tailnet.{{/unless}}</span></span>
+              </label>
+              <label class="flex gap-3 items-start p-3 rounded-box border border-base-content/15 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                <input type="radio" name="wiz-reach" class="radio radio-primary radio-sm mt-0.5" value="ssh" data-neo-wiz-field="reach" />
+                <span><span class="font-medium">Over SSH to this server</span> <span class="badge badge-sm badge-warning" data-neo-wiz-show="auto=down">use this</span><br><span class="text-base-content/70">Your normal SSH login to this server carries the backup. Works when the web address is down, for example when it runs through the server you restore. The store's own keys still decide what you can read.</span></span>
+              </label>
+            </div>
+            <div class="alert alert-warning text-xs" data-neo-wiz-show="reach=https & auto=down">
+              <span>The check above says the web address does not work. Use it only if you know the new machine reaches it anyway (for example from inside your network).</span>
+            </div>
+            <div class="alert alert-warning text-xs" data-neo-wiz-show="where=server & reach=ssh">
+              <span>This server restores over its web address only. <button type="button" class="link" data-neo-wiz-set="where=computer">Restore from your computer instead</button>.</span>
+            </div>
+            {{> nav}}
+          </div>
+
+          {{!-- 3. Login (SSH) --}}
+          <div class="space-y-3" data-neo-wiz-step="login" hidden>
+            <h2 class="text-lg font-semibold">How do you log in to this server with SSH?</h2>
+            <p class="text-base-content/70">The way you always reach it: <span class="font-mono">user@host</span>, <span class="font-mono">ssh://user@host:port</span> or an alias from your SSH config. Neo uses your SSH as it is (Tailscale, home network, a jump host).
+              <span data-neo-wiz-show="where=nixos"> It must work <strong>from the new machine</strong>, with your admin key at <span class="font-mono">/root/.ssh/id_ed25519</span> there.</span></p>
+            <label class="form-control block max-w-md">
+              <span class="label-text font-medium">Your login to this server</span>
+              <input class="input input-bordered w-full font-mono" list="wiz-login-names" placeholder="{{#each login_suggestions}}{{#if @first}}{{this}}{{/if}}{{/each}}" autocomplete="off" spellcheck="false" data-neo-wiz-field="login" />
+              <datalist id="wiz-login-names">{{#each login_suggestions}}<option value="{{this}}"></option>{{/each}}</datalist>
+              {{#if server_names}}<span class="label-text-alt text-base-content/60">This server's names: <span class="font-mono">{{#each server_names}}{{#unless @first}}, {{/unless}}{{this}}{{/each}}</span></span>{{/if}}
+            </label>
+            <h3 class="font-semibold">Test it <span data-neo-wiz-show="where=computer">on your computer</span><span data-neo-wiz-show="where=nixos">on the new machine</span></h3>
+            {{> cmd id="wiz-login-test" fill="loginTest" text="ssh <your login> neo backup-store list"}}
+            <p class="text-xs text-base-content/70">It should print "Backup store on …" and list <span class="font-mono">{{client.name}}</span>.</p>
+            <details class="text-xs text-base-content/70">
+              <summary class="cursor-pointer">It did not work</summary>
+              <ul class="list-disc pl-5 mt-1 space-y-1">
+                <li><em>Could not resolve hostname</em>: use an address from this server's names above, or its Tailscale name.</li>
+                <li><em>Connection timed out</em> or <em>refused</em>: the server is not reachable from there. Use the network it is in (home network, Tailscale, VPN), or a jump host in your SSH config.</li>
+                <li><em>Permission denied (publickey)</em>: your key is not an admin key of this server (System → SSH), or not loaded (<span class="font-mono">ssh-add</span>).</li>
+                <li><em>neo: command not found</em> or <em>unrecognized subcommand</em>: this server runs an older Neo. Update it, or use the web address.</li>
+                <li><em>Host key verification failed</em>: this server's key changed since your last login. Check why before you go on.</li>
+              </ul>
+            </details>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" class="checkbox checkbox-sm checkbox-primary" data-neo-wiz-field="loginOk" />
+              <span>It worked: it listed {{client.name}}</span>
+            </label>
+            {{> nav}}
+          </div>
+
+          {{!-- 4. Key --}}
+          <div class="space-y-3" data-neo-wiz-step="key" hidden>
+            <h2 class="text-lg font-semibold">Which key do you restore with?</h2>
+            {{#if client.roles_known}}
+              {{#if client.unlock_keys}}
+                <p class="text-base-content/70">These admin keys open {{client.name}}'s encrypted backup. You need the private half of one of them:</p>
+                {{> keylist keys=client.unlock_keys}}
+              {{else}}
+                <div class="alert alert-error text-xs"><span>The backup opens only with {{client.name}}'s own key, which is lost with the server. Add your key to System → SSH on {{client.name}}; it counts after its next backup.</span></div>
+              {{/if}}
+            {{else}}
+              {{#if client.keys}}
+                <p class="text-base-content/70">These keys may read {{client.name}}'s backup here. You need the private half of one of them (the server's own key does not count: it is lost with the server):</p>
+                {{> keylist keys=client.keys}}
+              {{else}}
+                <div class="alert alert-error text-xs"><span>No key is allowed for {{client.name}} here. Add yours to its SSH public keys in the store's settings.</span></div>
+              {{/if}}
+            {{/if}}
+            <label class="form-control block">
+              <span class="label-text font-medium">Check your key <span class="font-normal text-base-content/60">(optional)</span></span>
+              <textarea rows="2" spellcheck="false" class="textarea textarea-bordered w-full font-mono text-xs" placeholder="ssh-ed25519 AAAA… you@example.com   (the .pub file, or the line from ssh-keygen -lf)" data-neo-wiz-field="keyText"></textarea>
+              <span class="label-text-alt text-base-content/60">Paste the <strong>public</strong> key: <span class="font-mono">cat ~/.ssh/id_ed25519.pub</span>. It is checked in this page and sent nowhere.</span>
+            </label>
+            <div class="text-sm">
+              <p class="text-success" data-neo-wiz-show="key=yes">✓ This key opens {{client.name}}'s backup (<span class="font-mono text-xs" data-neo-wiz-fill="fingerprint"></span>).</p>
+              <p class="text-warning" data-neo-wiz-show="key=login">! This key may log in here but cannot open the encrypted backup. Add it to System → SSH on {{client.name}}; it counts after its next backup.</p>
+              <p class="text-error" data-neo-wiz-show="key=server">✗ This is {{client.name}}'s own server key. It is lost with the server; use an admin key.</p>
+              <p class="text-error" data-neo-wiz-show="key=no">✗ This key is not accepted (<span class="font-mono text-xs" data-neo-wiz-fill="fingerprint"></span>). Use one of the keys above.</p>
+              <p class="text-error" data-neo-wiz-show="key=private">✗ That is a private key. Paste the public key (the .pub file) here; never paste a private key into a web page unless this server runs the restore.</p>
+              <p class="text-error" data-neo-wiz-show="key=invalid">✗ That is not a public key or a fingerprint.</p>
+              <p class="text-base-content/60" data-neo-wiz-show="key=nocrypto">This browser cannot compute the fingerprint here (it needs HTTPS). Paste the line from <span class="font-mono">ssh-keygen -lf ~/.ssh/id_ed25519.pub</span> instead.</p>
+            </div>
+            <label class="form-control block max-w-md" data-neo-wiz-show="where=computer">
+              <span class="label-text font-medium">Where is the private key on your computer?</span>
+              <input class="input input-bordered w-full font-mono" spellcheck="false" data-neo-wiz-field="keyPath" />
+            </label>
+            {{> nav}}
+          </div>
+
+          {{!-- 5a. New machine (computer, installer) --}}
+          <div class="space-y-3" data-neo-wiz-step="machine" hidden>
+            <div class="space-y-3" data-neo-wiz-show="where=computer">
+              <h2 class="text-lg font-semibold">Which machine do you restore onto?</h2>
+              <p class="text-base-content/70">Root must be able to log in with your admin key. Most hosters ask for a public key when you create the machine. <strong>Its disk is erased.</strong></p>
               <div class="grid gap-3 sm:grid-cols-2">
                 <label class="form-control block">
-                  <span class="label-text font-medium">Disk <span class="text-base-content/50 font-normal">(optional)</span></span>
-                  <input name="disk" class="input input-bordered w-full font-mono" placeholder="/dev/vda" />
-                  <span class="label-text-alt text-base-content/60">Only when the new machine has another disk than the old one. The check lists the disks.</span>
+                  <span class="label-text font-medium">New machine</span>
+                  <input class="input input-bordered w-full font-mono" placeholder="root@203.0.113.7" spellcheck="false" data-neo-wiz-field="host" />
                 </label>
-                {{#if many_folders}}
+                <label class="form-control block">
+                  <span class="label-text font-medium">Disk <span class="font-normal text-base-content/60">(optional)</span></span>
+                  <input class="input input-bordered w-full font-mono" placeholder="/dev/vda" spellcheck="false" data-neo-wiz-field="disk" />
+                  <span class="label-text-alt text-base-content/60">Only when it has another disk than the old server. The check lists the disks.</span>
+                </label>
+              </div>
+              <h3 class="font-semibold">Test it on your computer</h3>
+              {{> cmd id="wiz-machine-test" fill="machineTest" text="ssh root@<new IP> true"}}
+              <p class="text-xs text-base-content/70">It should print <span class="font-mono">OK</span>. A password prompt means the key is not on the new machine.</p>
+            </div>
+            <div class="space-y-3" data-neo-wiz-show="where=nixos">
+              <h2 class="text-lg font-semibold">Start the new machine</h2>
+              <ol class="list-decimal pl-5 space-y-1.5 text-base-content/80">
+                <li>Start it from the <a class="link" href="https://nixos.org/download/#nixos-iso" target="_blank" rel="noopener">NixOS installer</a>, with internet. Become root: <span class="font-mono">sudo -i</span>. <strong>Its disk is erased.</strong></li>
+                <li>Put your admin key on it. Set a root password there (<span class="font-mono">passwd</span>) and copy it from your computer, or paste it in the console.</li>
+              </ol>
+              <label class="form-control block max-w-md">
+                <span class="label-text font-medium">The installer's address <span class="font-normal text-base-content/60">(for the copy command)</span></span>
+                <input class="input input-bordered w-full font-mono" placeholder="root@192.168.1.50" spellcheck="false" data-neo-wiz-field="host" />
+              </label>
+              {{> cmd id="wiz-key-copy" fill="keyCopy" text="scp ~/.ssh/id_ed25519 root@<installer IP>:/root/admin_key"}}
+              <label class="form-control block max-w-md">
+                <span class="label-text font-medium">Disk <span class="font-normal text-base-content/60">(optional)</span></span>
+                <input class="input input-bordered w-full font-mono" placeholder="/dev/vda" spellcheck="false" data-neo-wiz-field="disk" />
+              </label>
+            </div>
+            <label class="form-control block max-w-md" data-neo-wiz-show="many=yes & format!=zfs">
+              <span class="label-text font-medium">Backup folder</span>
+              <select class="select select-bordered w-full font-mono" data-neo-wiz-field="folder">
+                {{#each folders}}<option>{{this}}</option>{{/each}}
+              </select>
+            </label>
+            {{> nav}}
+          </div>
+
+          {{!-- 5b. Restore from here (the rescue form) --}}
+          <div class="space-y-3" data-neo-wiz-step="rescue" hidden>
+            <h2 class="text-lg font-semibold">Restore from this server</h2>
+            {{#if can_rescue}}
+              <p class="text-base-content/70">Root on the new machine must accept your admin key. Most hosters ask for a public key when you create the machine.</p>
+              <form class="space-y-3" hx-post="/backup-store/portal/client/{{client.name}}/rescue" hx-target="#rescue-result" hx-swap="innerHTML" autocomplete="off">
+                <label class="form-control block">
+                  <span class="label-text font-medium">New machine</span>
+                  <input name="host" required class="input input-bordered w-full font-mono" placeholder="root@203.0.113.7" pattern="root@[^\s]+" />
+                </label>
+                <div class="grid gap-3 sm:grid-cols-2">
                   <label class="form-control block">
-                    <span class="label-text font-medium">Backup folder</span>
-                    <select name="folder" class="select select-bordered w-full font-mono">
-                      {{#each folders}}<option>{{this}}</option>{{/each}}
-                    </select>
+                    <span class="label-text font-medium">Disk <span class="text-base-content/50 font-normal">(optional)</span></span>
+                    <input name="disk" class="input input-bordered w-full font-mono" placeholder="/dev/vda" />
+                    <span class="label-text-alt text-base-content/60">Only when the new machine has another disk than the old one. The check lists the disks.</span>
                   </label>
-                {{/if}}
-              </div>
-              <label class="form-control block">
-                <span class="label-text font-medium">Admin key (private)</span>
-                <textarea name="key" required rows="5" spellcheck="false" class="textarea textarea-bordered w-full font-mono text-xs" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" data-neo-key-text></textarea>
-                <span class="label-text-alt text-base-content/60">Paste it, or <label class="link">choose the file<input type="file" class="hidden" data-neo-key-file /></label>. It is used for this restore only and deleted after it.</span>
-              </label>
-              <label class="form-control block max-w-sm">
-                <span class="label-text font-medium">Key passphrase <span class="text-base-content/50 font-normal">(if it has one)</span></span>
-                <input name="passphrase" type="password" class="input input-bordered w-full" autocomplete="off" />
-              </label>
-              <div class="flex flex-wrap items-end gap-3 pt-1">
-                <button type="submit" name="action" value="check" class="btn btn-sm">1. Check</button>
-                <label class="form-control">
-                  <span class="label-text-alt text-base-content/60">Type <span class="font-mono">{{client.name}}</span> to restore</span>
-                  <input name="confirm" class="input input-bordered input-sm font-mono w-40" />
+                  {{#if many_folders}}
+                    <label class="form-control block">
+                      <span class="label-text font-medium">Backup folder</span>
+                      <select name="folder" class="select select-bordered w-full font-mono">
+                        {{#each folders}}<option>{{this}}</option>{{/each}}
+                      </select>
+                    </label>
+                  {{/if}}
+                </div>
+                <label class="form-control block">
+                  <span class="label-text font-medium">Admin key (private)</span>
+                  <textarea name="key" required rows="5" spellcheck="false" class="textarea textarea-bordered w-full font-mono text-xs" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" data-neo-key-text></textarea>
+                  <span class="label-text-alt text-base-content/60">Paste it, or <label class="link">choose the file<input type="file" class="hidden" data-neo-key-file /></label>. It is used for this restore only and deleted after it.</span>
                 </label>
-                <button type="submit" name="action" value="restore" class="btn btn-sm btn-error">2. Erase the new machine and restore</button>
-              </div>
-              <p class="text-xs text-base-content/60">The check starts the new machine into the NixOS installer and shows the plan: disks, data size, server name. It changes nothing on the disk.</p>
-            </form>
-            <div id="rescue-result" class="empty:hidden"></div>
-          {{else}}
-            <div class="alert text-sm">{{rescue_off_reason}}</div>
-          {{/if}}
-        </section>
-
-        <input type="radio" name="way" class="tab" aria-label="From your computer" {{#unless can_rescue}}{{#unless tunnel_down}}checked{{/unless}}{{/unless}} />
-        <section class="tab-content bg-base-100 border-base-300 p-4 sm:p-5 text-sm space-y-3">
-          <p class="text-base-content/75">Your computer drives the restore over SSH.</p>
-          <h3 class="font-semibold">You need, in addition</h3>
-          <ul class="space-y-1.5 text-base-content/80">
-            {{#> need}}Nix with flakes on your computer (Linux, macOS, or Windows with WSL). Install it with <code class="font-mono text-xs">sh &lt;(curl -L https://nixos.org/nix/install) --daemon</code>.{{/need}}
-            {{#> need}}Root SSH from your computer to the new machine with your admin key.{{/need}}
-            {{#if zfs}}
-              {{#> need}}The config repo of {{client.name}}: a ZFS backup cannot hand it out over the internet.{{#if git_remote}} Its remote: <code class="font-mono text-xs break-all">{{git_remote}}</code>{{/if}}{{/need}}
+                <label class="form-control block max-w-sm">
+                  <span class="label-text font-medium">Key passphrase <span class="text-base-content/50 font-normal">(if it has one)</span></span>
+                  <input name="passphrase" type="password" class="input input-bordered w-full" autocomplete="off" />
+                </label>
+                <div class="flex flex-wrap items-end gap-3 pt-1">
+                  <button type="submit" name="action" value="check" class="btn btn-sm">1. Check</button>
+                  <label class="form-control">
+                    <span class="label-text-alt text-base-content/60">Type <span class="font-mono">{{client.name}}</span> to restore</span>
+                    <input name="confirm" class="input input-bordered input-sm font-mono w-40" />
+                  </label>
+                  <button type="submit" name="action" value="restore" class="btn btn-sm btn-error">2. Erase the new machine and restore</button>
+                </div>
+                <p class="text-xs text-base-content/60">The check starts the new machine into the NixOS installer and shows the plan: disks, data size, server name. It changes nothing on the disk.</p>
+              </form>
+              <div id="rescue-result" class="empty:hidden"></div>
+            {{else}}
+              <div class="alert text-sm">{{rescue_off_reason}}</div>
             {{/if}}
-          </ul>
-          <h3 class="font-semibold">Run</h3>
-          <div class="relative">
-            <pre id="cmd-computer" class="bg-base-200 rounded-box p-3 pr-16 text-xs font-mono whitespace-pre-wrap break-all">{{cmd_computer}}</pre>
-            <button type="button" class="btn btn-xs absolute top-2 right-2" data-neo-copy="cmd-computer">Copy</button>
+            {{> nav last=true}}
           </div>
-          <p class="text-xs text-base-content/60">Replace &lt;new IP&gt;, and the key path if yours is elsewhere. It asks before it erases the disk.</p>
-        </section>
 
-        <input type="radio" name="way" class="tab" aria-label="From a NixOS machine" />
-        <section class="tab-content bg-base-100 border-base-300 p-4 sm:p-5 text-sm space-y-3">
-          <p class="text-base-content/75">The new machine restores itself. Use this when you can start it from a USB stick or the hoster's ISO console.</p>
-          <h3 class="font-semibold">You need, in addition</h3>
-          <ul class="space-y-1.5 text-base-content/80">
-            {{#> need}}The new machine started from the <a class="link" href="https://nixos.org/download/#nixos-iso" target="_blank" rel="noopener">NixOS installer</a> (or running NixOS), with internet, as root (<code class="font-mono text-xs">sudo -i</code>).{{/need}}
-            {{#> need}}Your admin key on it as <code class="font-mono text-xs">/root/admin_key</code>: copy it with <code class="font-mono text-xs">scp</code>, or paste it in the console. An SSH agent is not enough.{{/need}}
-            {{#if zfs}}
-              {{#> need}}The config repo of {{client.name}}.{{#if git_remote}} Its remote: <code class="font-mono text-xs break-all">{{git_remote}}</code>{{/if}}{{/need}}
-            {{/if}}
-          </ul>
-          <h3 class="font-semibold">Run on the new machine</h3>
-          <div class="relative">
-            <pre id="cmd-nixos" class="bg-base-200 rounded-box p-3 pr-16 text-xs font-mono whitespace-pre-wrap break-all">{{cmd_nixos}}</pre>
-            <button type="button" class="btn btn-xs absolute top-2 right-2" data-neo-copy="cmd-nixos">Copy</button>
+          {{!-- 6. Result --}}
+          <div class="space-y-3" data-neo-wiz-step="result" hidden>
+            <h2 class="text-lg font-semibold">Run this <span data-neo-wiz-show="where=computer">on your computer</span><span data-neo-wiz-show="where=nixos">on the new machine</span></h2>
+            {{> cmd id="wiz-command" fill="command" text=cmd_computer}}
+            {{#if zfs}}<p class="text-xs text-base-content/70">A ZFS backup cannot hand out its config repo: the command names it.{{#unless git_remote}} Replace &lt;your config repo&gt; with its address or a local copy.{{/unless}}</p>{{/if}}
+            <h3 class="font-semibold">What happens now</h3>
+            <ol class="list-decimal pl-5 space-y-1.5 text-base-content/80">
+              <li data-neo-wiz-show="reach=ssh">It asks this server (<span class="font-mono" data-neo-wiz-fill="login"></span>) what the store holds and which of your keys opens {{client.name}}.</li>
+              <li data-neo-wiz-show="where=computer">It boots <span class="font-mono" data-neo-wiz-fill="host"></span> into the NixOS installer when it runs another system.</li>
+              <li>It checks everything and shows the plan: disk, data, server name. <strong>It asks before it erases the disk.</strong></li>
+              <li data-neo-wiz-show="where=computer & reach=ssh">The new machine first tries to reach this server itself, with your SSH agent. If it cannot, the data goes through your computer: <strong>keep the terminal open until the data is copied.</strong></li>
+              <li>It copies the data and installs. This takes a while for a large backup.</li>
+              <li>After the restore: point {{client.name}}'s web addresses (DNS, and the edge server if you use one) to the new machine.</li>
+            </ol>
+            {{> nav last=true}}
           </div>
-          <p class="text-xs text-base-content/60">It asks before it erases the disk, and deletes the key file when it is done.</p>
-        </section>
-      </div>
+        </div>
+      </section>
+
+      <details class="card bg-base-100 shadow-sm">
+        <summary class="card-body p-4 sm:p-5 cursor-pointer text-sm font-semibold">Show all commands</summary>
+        <div class="px-4 sm:px-5 pb-5 space-y-4 text-sm">
+          <div class="space-y-2">
+            <h3 class="font-semibold">From your computer, over the web address</h3>
+            {{> cmd id="cmd-computer" text=cmd_computer}}
+          </div>
+          <div class="space-y-2">
+            <h3 class="font-semibold">From your computer, over SSH to this server</h3>
+            {{> cmd id="cmd-ssh" text=cmd_ssh}}
+            <p class="text-xs text-base-content/60">Your login to this server is how you normally reach it.{{#if server_names}} This server's names: <span class="font-mono">{{#each server_names}}{{#unless @first}}, {{/unless}}{{this}}{{/each}}</span>.{{/if}}</p>
+          </div>
+          <div class="space-y-2">
+            <h3 class="font-semibold">On the new machine (NixOS installer), with the key at /root/admin_key</h3>
+            {{> cmd id="cmd-nixos" text=cmd_nixos}}
+          </div>
+          <p class="text-xs text-base-content/60">If this address is down: open this page through your SSH login to this server, with <code class="font-mono">ssh -N -L {{web_port}}:127.0.0.1:{{web_port}} homeserver@…</code>, then <code class="font-mono">http://127.0.0.1:{{web_port}}/backup-store/portal</code>.</p>
+        </div>
+      </details>
     </main>
   </body>
 </html>
