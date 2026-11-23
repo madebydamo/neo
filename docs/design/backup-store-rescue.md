@@ -95,8 +95,9 @@ request.
 
 Not built yet: metrics `neo_backup_store_last_backup_timestamp_seconds{client}` and
 `neo_backup_store_size_bytes{client}`, and an alert when a client has no new backup for 36 hours.
-The agent's textfile folder is a fixed Nix store path today, so this needs a writable textfile
-folder in `monitoring-agent` first. The client already alerts on its own failed runs.
+The agent's textfile folder is writable now (`neo.monitoring.textfileDir`, see
+[monitoring.md](monitoring.md)). The client already alerts on its own failed runs and on the
+time since its last success per destination (`neo_backup_*`).
 
 ### Client change: a backup marker
 

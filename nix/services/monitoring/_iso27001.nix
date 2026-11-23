@@ -81,10 +81,22 @@ in {
     (isoRule {
       uid = "neo-iso-backup-overdue";
       title = "Backup overdue";
-      expr = timerAgeHours "backup.timer";
+      # Hours since the last successful backup, per server and destination
+      # (neo_backup_* from backup.sh). Servers whose backup does not report
+      # that yet: hours since the backup timer last started.
+      expr = ''(time() - max by (host, destination) (neo_backup_last_success_timestamp_seconds)) / 3600 or (max by (host) ${timerAgeHours "backup.timer"} unless on (host) group by (host) (neo_backup_last_success_timestamp_seconds))'';
       above = 26;
       for = "0s";
-      summary = "The last backup on {{ $labels.host }} started {{ with $values.B }}{{ printf \"%.0f\" .Value }} hours ago{{ else }}too long ago (no data){{ end }} (A.8.13).";
+      summary = "The last successful backup of {{ $labels.host }}{{ with $labels.destination }} to {{ . }}{{ end }} was {{ with $values.B }}{{ printf \"%.0f\" .Value }} hours ago{{ else }}too long ago (no data){{ end }} (A.8.13).";
+    })
+    (isoRule {
+      uid = "neo-iso-backup-failed";
+      title = "Backup failed";
+      # 1 while the last run to that destination failed; the next good run clears it.
+      expr = "max by (host, destination) (neo_backup_last_run_failed)";
+      for = "0s";
+      severity = "critical";
+      summary = "The last backup of {{ $labels.host }} to {{ $labels.destination }} failed; see the log of backup.service on {{ $labels.host }} (A.8.13).";
     })
     (isoRule {
       uid = "neo-iso-logs-dropped";

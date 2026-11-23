@@ -436,6 +436,20 @@ in {
       data ? {},
     }: let
       s = alertSelector service;
+      # How long a job's (or data source's) metric may be missing on every
+      # server before `*-missing` fires: its own limit, at least 6 hours, so
+      # a restart or a move to another server never trips it.
+      # A PromQL duration that also reads well in the summary (6h, 2d, 90m).
+      missingWindow = maxAge: let
+        sec = lib.max maxAge 21600;
+      in
+        if lib.mod sec 86400 == 0
+        then "${toString (sec / 86400)}d"
+        else if lib.mod sec 3600 == 0
+        then "${toString (sec / 3600)}h"
+        else if lib.mod sec 60 == 0
+        then "${toString (sec / 60)}m"
+        else "${toString sec}s";
     in
       lib.optionalAttrs (errorThreshold != null && (containers != [] || units != [])) {
         errors = {
@@ -479,25 +493,49 @@ in {
           summary = "{{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}Many{{ end }} failed sign-ins to ${label} in the last 15 minutes.";
         };
       }
-      // lib.mapAttrs' (job: maxAge:
-        lib.nameValuePair "job-${job}" {
+      // lib.concatMapAttrs (job: maxAge: let
+        sel = ''neo_app_job_last_success_timestamp_seconds{${s}, job="${job}"}'';
+      in {
+        # A restart, a deploy or a move to another server leaves no series
+        # for a while (the app reports again after its next run): no data
+        # is OK here, and the age must stay too high for 15 minutes.
+        "job-${job}" = {
           title = "${label}: ${job} did not succeed";
-          expr = ''max by (host) (time() - neo_app_job_last_success_timestamp_seconds{${s}, job="${job}"})'';
+          expr = "max by (host) (time() - ${sel})";
           above = maxAge;
-          for = "0s";
-          noData = "alerting";
-          summary = "${label}: ${job} {{ with $values.B }}last succeeded {{ humanizeDuration .Value }} ago{{ else }}never reported a success (no data){{ end }}.";
-        })
+          for = "15m";
+          summary = "${label}: ${job} on {{ $labels.host }} {{ with $values.B }}last succeeded {{ humanizeDuration .Value }} ago{{ else }}is late{{ end }}.";
+        };
+        # The job reported no success on any server for a long time (never
+        # ran, its metric is gone): the rule above sees no data then.
+        "job-${job}-missing" = {
+          title = "${label}: ${job} reports nothing";
+          expr = "absent_over_time(${sel}[${missingWindow maxAge}])";
+          above = 0;
+          for = "15m";
+          summary = "${label}: ${job} has reported no success on any server for ${missingWindow maxAge} (it never ran, or its numbers no longer arrive).";
+        };
+      })
       jobs
-      // lib.mapAttrs' (source: maxAge:
-        lib.nameValuePair "data-${source}" {
+      // lib.concatMapAttrs (source: maxAge: let
+        sel = ''neo_app_data_updated_timestamp_seconds{${s}, source="${source}"}'';
+      in {
+        # Same as the jobs: no data right after a restart is OK.
+        "data-${source}" = {
           title = "${label}: ${source} data is old";
-          expr = ''max by (host) (time() - neo_app_data_updated_timestamp_seconds{${s}, source="${source}"})'';
+          expr = "max by (host) (time() - ${sel})";
           above = maxAge;
-          for = "0s";
-          noData = "alerting";
-          summary = "${label}: ${source} {{ with $values.B }}was last updated {{ humanizeDuration .Value }} ago{{ else }}never reported an update (no data){{ end }}.";
-        })
+          for = "15m";
+          summary = "${label}: ${source} on {{ $labels.host }} {{ with $values.B }}was last updated {{ humanizeDuration .Value }} ago{{ else }}is late{{ end }}.";
+        };
+        "data-${source}-missing" = {
+          title = "${label}: ${source} data reports nothing";
+          expr = "absent_over_time(${sel}[${missingWindow maxAge}])";
+          above = 0;
+          for = "15m";
+          summary = "${label}: ${source} has reported no update on any server for ${missingWindow maxAge} (it never ran, or its numbers no longer arrive).";
+        };
+      })
       data;
   };
 }

@@ -44,10 +44,15 @@
       (rule {
         uid = "neo-server-silent";
         title = "Server stopped reporting";
-        expr = "group by (host) (max_over_time(node_boot_time_seconds[1d])) unless group by (host) (node_boot_time_seconds)";
+        # Expected: every machine whose agent sent its list to this server
+        # (neo_monitoring_expected_host, monitoring-expected-hosts in
+        # default.nix), so a machine that is down stays alerting until it
+        # reports again or its file in agents/ is deleted. Agents from before
+        # that list: machines seen in the last day.
+        expr = ''(group by (host) (label_replace(neo_monitoring_expected_host, "host", "$1", "expected_host", "(.+)")) or group by (host) (max_over_time(node_boot_time_seconds[1d]))) unless group by (host) (node_boot_time_seconds)'';
         for = "5m";
         severity = "critical";
-        summary = "{{ $labels.host }} has sent no numbers for over 5 minutes: it is off, offline or its monitoring agent stopped.";
+        summary = "{{ $labels.host }} has sent no numbers for over 5 minutes: it is off, offline or its monitoring agent stopped. The alert stays until it reports again.";
       })
       (rule {
         uid = "neo-cert-expiry";

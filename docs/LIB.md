@@ -193,7 +193,7 @@ Dashboard sections and alert rules over the standard `neo_app_*` metrics and JSO
 | `grafana.app.llm` | `service` | Uncached / cached / output tokens, cache hit rate, cost, failures, latency, tokens by feature |
 | `grafana.app.jobs` | `service` | Last success per job, runs by status |
 | `grafana.app.errors` | `service`, `containers`, `units ? []` (host units, e.g. a timer's service), `filter ? null`, `metrics ? true` | Error log lines (JSON `level`, or `filter`), `neo_app_errors_total`, the lines |
-| `monitoring.appAlerts` | `service`, `label`, `containers ? []`, `units ? []`, `errorFilter ? null`, `errorThreshold ? 10`, `llm ? false`, `logins ? false`, `jobs ? {}`, `data ? {}` | Attrset for `neo.monitoring.apps.<svc>.alerts`: `errors`, `llm-failing`, `llm-auth`, `login-failures`, `job-<name>`, `data-<source>` |
+| `monitoring.appAlerts` | `service`, `label`, `containers ? []`, `units ? []`, `errorFilter ? null`, `errorThreshold ? 10`, `llm ? false`, `logins ? false`, `jobs ? {}`, `data ? {}` | Attrset for `neo.monitoring.apps.<svc>.alerts`: `errors`, `llm-failing`, `llm-auth`, `login-failures`, `job-<name>` and `job-<name>-missing`, `data-<source>` and `data-<source>-missing` (too old for 15 min; no success on any server for the limit, at least 6 h) |
 
 Each section is a list of panels starting with a row: `panels = with lib.neo.grafana.app; features {service = name;} ++ llm {service = name;} ++ errors {service = name; containers = [name];};`
 
@@ -250,7 +250,7 @@ Every scraped series gets `service`, `scrape` (the endpoint's name), `host` and 
 | `for` | `"5m"` | How long the condition holds before it fires (`"0s"` at once) |
 | `severity` | `"warning"` | `info`, `warning`, `critical` |
 | `summary` | | Plain message for the owner; Go template with `{{ $labels.host }}`, `{{ $values.B.Value }}` |
-| `noData` | `"ok"` | `"alerting"` when silence is the problem (a feed that stopped), or `"nodata"` |
+| `noData` | `"ok"` | `"alerting"` or `"nodata"`. Prefer `"ok"`: a restart or a move to another server leaves no data for a while. When silence is the problem (a feed that stopped), add a second rule with `absent_over_time(<metric>{…}[6h])`, like `appAlerts` does |
 | `labels` | `{}` | Extra labels; `service` and `severity` are set |
 
 App alert rules land read-only in the **Apps** folder, one rule group per app (uid `app-<service>-<id>`), and go through the same notification policy as Neo's own (the assistant, when Monitoring alerts are on). Like dashboards, the agent of the machine running the app sends them to the server, so the server needs neither app nor plugin.

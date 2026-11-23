@@ -516,7 +516,7 @@ With Monitoring on, every machine runs an agent that already collects the app's 
 ```
 
 - Standard telemetry: log JSON lines with `level`, export the standard `neo_app_*` metrics (AI tokens, sign-ins, features, jobs, data freshness) with the copied helper (`$NEO/templates/plugin/telemetry/`), and build the dashboard and alerts from `lib.neo.grafana.app.*` and `lib.neo.monitoring.appAlerts`: see [APP-TELEMETRY.md](APP-TELEMETRY.md).
-- Alerts: `alerts.<id> = { title; expr; above or below; for; severity; summary; }` (PromQL, or `datasource = "loki"` with a LogQL metric query; `noData = "alerting"` when silence is the problem). They land read-only in Grafana's Apps folder and go to the assistant like Neo's own alerts. Example:
+- Alerts: `alerts.<id> = { title; expr; above or below; for; severity; summary; }` (PromQL, or `datasource = "loki"` with a LogQL metric query; when silence is the problem, a second rule with `absent_over_time(…[6h])`, not `noData = "alerting"`, which fires on every restart). They land read-only in Grafana's Apps folder and go to the assistant like Neo's own alerts. Example:
 
   ```nix
   alerts.stale = {

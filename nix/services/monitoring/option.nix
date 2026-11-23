@@ -90,7 +90,7 @@
               grafana = "grafana/grafana:latest";
               prometheus = "prom/prometheus:v3";
               loki = "grafana/loki:3";
-              extraUnits = ["grafana-seed" "grafana-app-alerts"];
+              extraUnits = ["grafana-seed" "grafana-app-alerts" "monitoring-expected-hosts"];
             }
             // lib.neo.mkAppdata "${config.neo.core.volumes.appdata}/monitoring"
             // lib.neo.mkServiceMeta {

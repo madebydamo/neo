@@ -13,6 +13,9 @@
   appTargets ? [],
   # target → env var holding its scrape credential (default.nix sets it in containerEnv.alloy)
   scrapeEnv,
+  # The Monitoring server runs here: also check the addresses of the other
+  # machines' agents (their files in /etc/neo-agents, monitoring/default.nix).
+  central ? false,
 }: let
   inherit (lib) concatMapStrings concatStringsSep optionalString;
   str = builtins.toJSON;
@@ -522,7 +525,7 @@ in ''
           name    = ${str (targetName t.name)}
           address = ${str t.address}
           module  = ${str (t.module or "http_app")}
-          labels  = { app = ${str t.name} }
+          labels  = { app = ${str t.name}, app_host = ${str hostName}, probe_from = ${str hostName} }
         }
       '')
       uptimeTargets}
@@ -543,6 +546,76 @@ in ''
     prometheus.scrape "uptime" {
       targets         = discovery.relabel.uptime.output
       job_name        = "uptime"
+      scrape_interval = "30s"
+      scrape_timeout  = "15s"
+      forward_to      = [prometheus.remote_write.neo.receiver]
+    }
+  ''}
+
+  ${optionalString central ''
+    // ── Uptime checks of the other machines' apps ──────────────────────────
+    // Each agent sends its checked addresses (agents/<source>.json, file_sd
+    // format). Checked from here as well, so the apps of a machine that is
+    // down still alert. Only http(s) addresses and Neo's own modules.
+
+    discovery.file "agents" {
+      files            = ["/etc/neo-agents/*.json"]
+      refresh_interval = "1m"
+    }
+
+    discovery.relabel "agents" {
+      targets = discovery.file.agents.targets
+      rule {
+        source_labels = ["__address__"]
+        target_label  = "address"
+      }
+      rule {
+        source_labels = ["address"]
+        regex         = "https?://.+"
+        action        = "keep"
+      }
+      rule {
+        source_labels = ["module"]
+        regex         = "http_app|http_health"
+        action        = "keep"
+      }
+      rule {
+        source_labels = ["app_host"]
+        regex         = ".+"
+        action        = "keep"
+      }
+      // This machine checks its own apps already.
+      rule {
+        source_labels = ["app_host"]
+        regex         = ${str (lib.escapeRegex hostName)}
+        action        = "drop"
+      }
+      rule {
+        replacement  = ${str hostName}
+        target_label = "probe_from"
+      }
+    }
+
+    prometheus.exporter.blackbox "central" {
+      config  = ${str blackboxConfig}
+      targets = discovery.relabel.agents.output
+    }
+
+    discovery.relabel "central" {
+      targets = prometheus.exporter.blackbox.central.targets
+      rule {
+        source_labels = ["__param_target"]
+        target_label  = "target"
+      }
+      rule {
+        replacement  = "uptime"
+        target_label = "job"
+      }
+    }
+
+    prometheus.scrape "central" {
+      targets         = discovery.relabel.central.output
+      job_name        = "uptime-central"
       scrape_interval = "30s"
       scrape_timeout  = "15s"
       forward_to      = [prometheus.remote_write.neo.receiver]

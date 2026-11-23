@@ -105,6 +105,34 @@
         '')
         serviceUnits);
 
+      # What this agent reports about itself to the Monitoring server
+      # (agents/<source>.json there, file_sd format): its host label, and the
+      # public addresses of its apps, which the Monitoring server checks as
+      # well (probe_from = that server), so the apps of a machine that is
+      # down still alert. Not extraUptimeTargets: those may be LAN addresses
+      # (a router) that only this machine reaches. The first entry names the
+      # machine even without checks.
+      textfileDir = config.neo.monitoring.textfileDir;
+      agentFile = pkgs.writeText "neo-agent.json" (builtins.toJSON ([
+          {
+            targets = [];
+            labels.app_host = hostName;
+          }
+        ]
+        ++ map (t: {
+          targets = [t.address];
+          labels = {
+            # Unique on the server (like _alloy.nix's target names: letters, digits, _).
+            name = lib.strings.sanitizeDerivationName (replaceStrings ["://" "/" ":" "." "-"] ["_" "_" "_" "_" "_"] "${source}_${t.name}");
+            app = t.name;
+            module = t.module or "http_app";
+            app_host = hostName;
+          };
+        })
+        (optionals cfg.uptimeChecks appTargets)));
+      # The Monitoring server runs here: check the other machines' addresses too.
+      central = server.enabled && cfg.uptimeChecks;
+
       # Checked at build time: a syntax error (e.g. from an app's strings)
       # would otherwise stop the whole agent. Argument errors still only show
       # when Alloy starts.
@@ -119,7 +147,7 @@
         ident = s: toUpper (replaceStrings ["-" "."] ["_" "_"] s);
       in "NEO_SCRAPE_${ident t.service}_${ident t.scrape}";
       alloyText = import ./_alloy.nix {
-        inherit lib hostName vhosts uptimeTargets swagLogsOn scrapeEnv;
+        inherit lib hostName vhosts uptimeTargets swagLogsOn scrapeEnv central;
         appTargets = config.neo.monitoring.scrapeTargets;
         tokenSet = remote && tokenSet;
         lokiUrl =
@@ -178,6 +206,14 @@
             404) echo "the Monitoring server does not take app alerts yet (update it)" >&2 ;;
             *) echo "sending alert rules failed: HTTP $code" >&2; exit 1 ;;
           esac
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X PUT --data-binary @${agentFile} -H "Authorization: Bearer $token" \
+            ${base}/ingest/agents/${source}.json)
+          case "$code" in
+            2*) ;;
+            # A Monitoring server from before agent files: it falls back to the last day.
+            404) echo "the Monitoring server does not take the list of checked addresses yet (update it)" >&2 ;;
+            *) echo "sending the list of checked addresses failed: HTTP $code" >&2; exit 1 ;;
+          esac
         ''
         else ''
           dest=${server.appdata}/apps/${source}
@@ -192,6 +228,9 @@
           alerts=${server.appdata}/alerts
           install -d -o ${toString config.neo.core.uid} -g ${toString config.neo.core.gid} "$alerts"
           cmp -s ${alertsFile} "$alerts/${source}.json" || install -m 0644 -o ${toString config.neo.core.uid} -g ${toString config.neo.core.gid} ${alertsFile} "$alerts/${source}.json"
+          agents=${server.appdata}/agents
+          install -d -o ${toString config.neo.core.uid} -g ${toString config.neo.core.gid} "$agents"
+          cmp -s ${agentFile} "$agents/${source}.json" || install -m 0644 -o ${toString config.neo.core.uid} -g ${toString config.neo.core.gid} ${agentFile} "$agents/${source}.json"
         '';
 
       accessLogConf = ''
@@ -238,7 +277,8 @@
               [
                 "${cfg.appdata}:/var/lib/alloy/data"
                 "${alloyConfig}:/etc/alloy/config.alloy:ro"
-                "${textfile}:/etc/neo-textfile:ro"
+                # neo.prom (copied in preStart) and what other units write there.
+                "${textfileDir}:/etc/neo-textfile:ro"
                 "/var/log/journal:/var/log/journal:ro"
                 "/run/log/journal:/run/log/journal:ro"
                 "/etc/machine-id:/etc/machine-id:ro"
@@ -251,11 +291,22 @@
                 "/run/docker/containerd/containerd.sock:/run/containerd/containerd.sock:ro"
                 "/run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro"
               ]
-              ++ optional swagLogsOn "${swagLogs}:/var/log/swag:ro";
+              ++ optional swagLogsOn "${swagLogs}:/var/log/swag:ro"
+              # Other machines' agent files: their addresses are checked from here too.
+              ++ optional central "${server.appdata}/agents:/etc/neo-agents:ro";
             environment.TZ = config.neo.core.timeZone;
             networks = ["host"];
             extraOptions = ["--pid=host" "--cgroupns=host"];
           };
+
+          # neo.prom changes with the configuration: this script changes with it,
+          # so a switch restarts the agent as before.
+          systemd.services.docker-alloy.preStart = mkAfter (''
+              mkdir -p ${textfileDir}
+              install -m 0644 ${textfile}/neo.prom ${textfileDir}/neo.prom.tmp
+              mv -f ${textfileDir}/neo.prom.tmp ${textfileDir}/neo.prom
+            ''
+            + optionalString central (lib.neo.mkEnsureDirs config [server.appdata "${server.appdata}/agents"]));
 
           neo.core.secrets.templates."monitoring-agent-token" = mkIf (remote && tokenSet) {
             content = cfg.token;

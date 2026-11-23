@@ -98,6 +98,22 @@
         text = builtins.readFile ./alert-sync.sh;
       });
 
+      # What every monitoring agent sends about itself (monitoring-agent/default.nix):
+      # agents/<source>.json, file_sd format, its host label and the addresses it
+      # checks. The local agent probes those addresses too (central uptime
+      # checks), and monitoring-expected-hosts turns the files into
+      # neo_monitoring_expected_host for "Server stopped reporting".
+      agentsDir = "${cfg.appdata}/agents";
+      expectedHostsScript = getExe (pkgs.writeShellApplication {
+        name = "monitoring-expected-hosts";
+        runtimeInputs = [pkgs.jq pkgs.coreutils];
+        runtimeEnv = {
+          NEO_AGENTS_DIR = agentsDir;
+          NEO_METRICS_OUT = "${config.neo.monitoring.textfileDir}/neo-monitoring-hosts.prom";
+        };
+        text = builtins.readFile ./expected-hosts.sh;
+      });
+
       dashboardDirs = pkgs.runCommand "neo-grafana-dashboards" {} (''
           mkdir $out
         ''
@@ -429,6 +445,28 @@
               if ${alertSyncScript}; then wait=3600; else wait=60; fi
               # A change in alerts/ (an agent sent rules) or the timeout.
               inotifywait -qq -t "$wait" -e close_write,moved_to,delete ${alertsDir} || true
+              sleep 2
+            done
+          '';
+        };
+
+        # Machines that must keep reporting (see expectedHostsScript): again
+        # whenever a file in agents/ changes, and every hour.
+        systemd.services.monitoring-expected-hosts = {
+          description = "List the machines Monitoring expects to hear from";
+          wantedBy = ["multi-user.target"];
+          after = ["local-fs.target" "systemd-tmpfiles-setup.service"];
+          path = [pkgs.coreutils pkgs.inotify-tools];
+          serviceConfig = {
+            Type = "simple";
+            Restart = "always";
+            RestartSec = 30;
+          };
+          script = ''
+            ${lib.neo.mkEnsureDirs config [cfg.appdata agentsDir]}
+            while true; do
+              if ${expectedHostsScript}; then wait=3600; else wait=60; fi
+              inotifywait -qq -t "$wait" -e close_write,moved_to,delete ${agentsDir} || true
               sleep 2
             done
           '';

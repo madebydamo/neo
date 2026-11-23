@@ -44,8 +44,9 @@ in
       (stat {
         title = "Apps down";
         gridPos = pos 8 0 4 4;
-        description = "Uptime checks that fail right now.";
-        targets = [(pq "count(probe_success == 0) or vector(0)" "")];
+        # An app is checked from its own server and from the Monitoring server: count it once.
+        description = "Apps whose uptime check fails right now.";
+        targets = [(pq "count(group by (target) (probe_success == 0)) or vector(0)" "")];
         thresholds = thresholdsGreenRed [
           {
             color = "red";
@@ -224,7 +225,7 @@ in
       (timeseries {
         title = "Response time";
         gridPos = pos 12 22 12 8;
-        targets = [(pq "probe_duration_seconds" "{{target}}")];
+        targets = [(pq "probe_duration_seconds" "{{target}} from {{host}}")];
         unit = "s";
       })
 

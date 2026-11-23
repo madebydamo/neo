@@ -23,7 +23,10 @@
           (401 = wrong token, 403 = no token set on the server, 404 at SWAG = the vhost's Reachable from does not include this server).
         - Sources: journal (docker container output via docker-<c>.service), SWAG `log/nginx/neo-access.log` (JSON, written while the agent runs),
           tinyauth audit (JSON logging on while the agent runs) and sshd sign-ins, node exporter + systemd + textfile `neo_service_unit`,
-          cAdvisor, blackbox checks of apps reachable from the Internet plus `extraUptimeTargets`.
+          cAdvisor, blackbox checks of apps reachable from the Internet plus `extraUptimeTargets` (labels `app_host`, `probe_from`).
+        - Textfile folder `/var/lib/neo/textfile` (`*.prom`, read-only in Alloy): `neo.prom`, `neo-backup.prom` (backup.sh), on the Monitoring server `neo-monitoring-hosts.prom`.
+        - `monitoring-agent-publish` also sends `agents/<source>.json` (this machine's host label and public app addresses) to the Monitoring server,
+          which checks those addresses too and expects this machine to keep reporting.
 
         ## Credentials
         - `services.monitoring-agent.serverUrl` and `token` (the server's `services.monitoring.ingestToken`).

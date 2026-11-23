@@ -159,9 +159,9 @@ This is optional and could be a separate phase.
 Do these after phase 1, using the same pattern.
 
 - **Our own jobs, as textfile metrics.**
-  - `/etc/neo-textfile` is a read-only store dir today. Make it `/var/lib/neo/textfile`: tmpfiles `d`, 0775 root:homeserver, copy `neo.prom` in during `docker-alloy.preStart`, mount it read-only.
+  - Done: `/var/lib/neo/textfile` (`neo.monitoring.textfileDir`): tmpfiles `d`, 0775 root:homeserver, `neo.prom` copied in during `docker-alloy.preStart`, mounted read-only.
   - Writers write `x.prom.$$` and then `mv`.
-  - backup (per destination, written after `prune_snapshots`): `neo_backup_last_success_timestamp_seconds{destination,target,format}`, `_last_status`, `_duration_seconds`, `_bytes_added`, `_unreadable_files`.
+  - backup (per destination): done for `neo_backup_last_success_timestamp_seconds{destination}`, `neo_backup_last_run_timestamp_seconds`, `neo_backup_last_run_failed` (alerts Backup overdue, Backup failed). Open: `target`/`format` labels, `_duration_seconds`, `_bytes_added`, `_unreadable_files`.
   - docker-updater and system-updater (in `finalize()`): last run, last success, duration, images updated or changed, failures, reboot pending.
   - Feeds the ISO backup dashboard with real success times instead of timer age.
 - **Databases.**

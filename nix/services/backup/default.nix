@@ -131,6 +131,8 @@
           NEO_HOST_KEY = config.neo.core.secrets.identityFile;
           NEO_RECIPIENTS = concatStringsSep "\n" adminKeys;
           NEO_ROTATE = boolToString (name == "backup-rotate-key");
+          # neo-backup.prom: last run and success per destination (monitoring).
+          NEO_METRICS_DIR = config.neo.monitoring.textfileDir;
         };
         serviceConfig = {
           Type = "oneshot";

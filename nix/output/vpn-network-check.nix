@@ -136,6 +136,7 @@
   failedAssertions = cfg: map (a: a.message) (lib.filter (a: !a.assertion) cfg.assertions);
   target = lib.findFirst (t: t.service == "oldplug") {} on.neo.monitoring.scrapeTargets;
   group = on.neo.monitoring.alertGroups.oldplug or {};
+  ruleById = id: lib.findFirst (r: r.uid == "app-oldplug-${id}") {} (group.rules or []);
 
   problems =
     lib.optional (cOn.oldplug.networks != ["container:vpn"]) "routed oldplug should only be in container:vpn, is ${toString cOn.oldplug.networks}"
@@ -161,7 +162,12 @@
     ++ lib.optional (!(lib.elem docker.hostAlias (cOff.oldplug.extraOptions or []))) "VPN off: oldplug lacks host.docker.internal"
     ++ map (m: "VPN off: ${m}") (failedAssertions off)
     # App alert rules.
-    ++ lib.optional ((group.folderUid or null) != "neo-apps" || lib.length (group.rules or []) != 7) "alert group oldplug should have 7 rules (1 own + 6 standard): ${builtins.toJSON group}"
+    ++ lib.optional ((group.folderUid or null) != "neo-apps" || lib.length (group.rules or []) != 9) "alert group oldplug should have 9 rules (1 own + 8 standard): ${builtins.toJSON group}"
+    # Freshness rules: no data (restart, move) is OK and only 15 minutes count;
+    # silence has its own absent_over_time rule.
+    ++ lib.optional ((ruleById "job-sync").noDataState or null != "OK" || (ruleById "job-sync").for or null != "15m") "job-sync should have noData OK and for 15m: ${builtins.toJSON (ruleById "job-sync")}"
+    ++ lib.optional (!(lib.hasInfix "absent_over_time" (builtins.toJSON (ruleById "job-sync-missing")))) "job-sync-missing should use absent_over_time: ${builtins.toJSON (ruleById "job-sync-missing")}"
+    ++ lib.optional (!(lib.hasInfix "[6h]" (builtins.toJSON (ruleById "data-feed-missing")))) "data-feed-missing should look back at least 6h: ${builtins.toJSON (ruleById "data-feed-missing")}"
     # Standard sections render to JSON (forces every panel and query string).
     ++ lib.optional (builtins.stringLength (builtins.toJSON on.neo.monitoring.apps.oldplug.dashboards) < 1000) "standard dashboard sections did not render"
     ++ lib.optional (!(lib.hasInfix "docker-oldplug[.]service|oldplug-sync[.]service" (builtins.toJSON group))) "errors alert should cover containers and host units"

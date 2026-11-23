@@ -16,6 +16,8 @@
 #   NEO_RECIPIENTS   newline-separated admin ssh-ed25519 keys (with comment), recipients of neo-backup.age (encrypted)
 #   NEO_ROTATE       true: new data key and repository for every encrypted
 #                    destination, the others are skipped (backup-rotate-key.service)
+#   NEO_METRICS_DIR  node exporter textfile folder: neo-backup.prom there holds
+#                    the last run and last success per destination (monitoring)
 #
 # Per destination:
 #   NEO_NAME         its name in destinations.<name>
@@ -565,6 +567,64 @@ backup_to() {
   fi
 }
 
+# Status per destination for monitoring: status-<name> in the state folder
+# keeps the times across runs; neo-backup.prom lists the current destinations.
+#   neo_backup_last_run_timestamp_seconds{destination}      end of the last run
+#   neo_backup_last_success_timestamp_seconds{destination}  end of the last good run
+#   neo_backup_last_run_failed{destination}                 1 when the last run failed
+# A failure to write it is logged only: it never fails the backup.
+record_result() {
+  local name=$1 ok=$2 now last_success=""
+  now=$(date +%s)
+  if [ -r "$state_dir/status-$name" ]; then
+    last_success=$(sed -n 's/^last_success=\([0-9]*\)$/\1/p' "$state_dir/status-$name")
+  fi
+  [ "$ok" = 1 ] && last_success=$now
+  mkdir -p "$state_dir"
+  printf 'last_run=%s\nlast_success=%s\nfailed=%s\n' "$now" "$last_success" "$((1 - ok))" >"$state_dir/status-$name"
+}
+
+write_metrics() {
+  [ -n "${NEO_METRICS_DIR:-}" ] || return 0
+  local out key metric help entry name value
+  out="$NEO_METRICS_DIR/neo-backup.prom"
+  mkdir -p "$NEO_METRICS_DIR" || return 0
+  # One block per metric (the text format wants each metric's lines together).
+  {
+    for key in last_run last_success failed; do
+      case "$key" in
+      last_run)
+        metric=neo_backup_last_run_timestamp_seconds
+        help="End of the last backup run to this destination."
+        ;;
+      last_success)
+        metric=neo_backup_last_success_timestamp_seconds
+        help="End of the last successful backup to this destination."
+        ;;
+      failed)
+        metric=neo_backup_last_run_failed
+        help="1 when the last backup run to this destination failed."
+        ;;
+      esac
+      echo "# HELP $metric $help"
+      echo "# TYPE $metric gauge"
+      for entry in "${destinations[@]}"; do
+        [ -n "$entry" ] || continue
+        name=${entry%%=*}
+        [ -r "$state_dir/status-$name" ] || continue
+        value=$(sed -n "s/^$key=\([0-9][0-9]*\)\$/\1/p" "$state_dir/status-$name")
+        name=${name//\\/\\\\}
+        name=${name//\"/\\\"}
+        [ -z "$value" ] || echo "$metric{destination=\"$name\"} $value"
+      done
+    done
+  } >"$out.tmp" || {
+    log "could not write $out"
+    return 0
+  }
+  mv -f "$out.tmp" "$out" || log "could not write $out"
+}
+
 # One backup at a time (the nightly run waits for a key rotation).
 exec 9>/run/neo-backup.lock
 flock 9
@@ -593,10 +653,13 @@ for entry in "${destinations[@]}"; do
   set -e
   if [ "$rc" = 0 ]; then
     done_count=$((done_count + 1))
+    record_result "$name" 1 || true
   else
     log "backup to $name failed, going on with the next destination"
     failed+=("$name")
+    record_result "$name" 0 || true
   fi
+  write_metrics || true
 done
 prune_snapshots
 

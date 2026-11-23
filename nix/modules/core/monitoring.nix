@@ -325,6 +325,19 @@
           description = "Metrics endpoints and Grafana dashboards per app (service name).";
         };
 
+        # Node exporter textfile directory: *.prom files any unit writes here
+        # (backup status, the Monitoring server's list of machines) are sent
+        # by the agent with the other numbers. Outside the store, so a unit
+        # can update it at run time; outside appdata, because it describes
+        # this machine, not app data (a restore must not bring back old values).
+        textfileDir = mkOption {
+          type = types.str;
+          readOnly = true;
+          internal = true;
+          default = "/var/lib/neo/textfile";
+          description = "Folder of extra numbers the monitoring agent reports.";
+        };
+
         collecting = mkOption {
           type = types.bool;
           readOnly = true;
@@ -418,6 +431,10 @@
       };
 
       config.neo.core.secrets.generated.metrics = {};
+
+      # Writers (backup, monitoring-expected-hosts as root; units of the neo
+      # user) write x.prom.tmp, then mv. The agent mounts it read-only.
+      config.systemd.tmpfiles.rules = ["d ${config.neo.monitoring.textfileDir} 0775 root ${toString config.neo.core.gid} -"];
 
       config.assertions =
         concatLists (mapAttrsToList (service: app:

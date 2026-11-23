@@ -7,6 +7,7 @@
 #   /ingest/prometheus/api/v1/write → prometheus:9090/api/v1/write
 #   /ingest/dashboards/<source>/<uid>.json (PUT, DELETE) → apps/<source>/ (Grafana "Apps")
 #   /ingest/alerts/<source>.json (PUT, DELETE) → alerts/ (grafana-app-alerts puts them into Grafana)
+#   /ingest/agents/<source>.json (PUT, DELETE) → agents/ (expected machines, central uptime checks)
 #
 # The check is an `if … return` in the rewrite phase of each exact location;
 # no tinyauth include there, so nothing else runs before it. The path rewrite
@@ -47,12 +48,13 @@
     # appdata). Guard on both: a definition under containers.swag would create
     # the container even with SWAG off.
     config.systemd.services = lib.mkIf (cfg.enabled && config.neo.services.swag.enabled) {
-      docker-swag.preStart = lib.mkAfter (lib.neo.mkEnsureDirs config [cfg.appdata "${cfg.appdata}/apps" "${cfg.appdata}/alerts"]);
+      docker-swag.preStart = lib.mkAfter (lib.neo.mkEnsureDirs config [cfg.appdata "${cfg.appdata}/apps" "${cfg.appdata}/alerts" "${cfg.appdata}/agents"]);
     };
     config.virtualisation.oci-containers.containers = lib.mkIf (cfg.enabled && config.neo.services.swag.enabled) {
       swag.volumes = [
         "${cfg.appdata}/apps:/neo-app-dashboards"
         "${cfg.appdata}/alerts:/neo-app-alerts"
+        "${cfg.appdata}/agents:/neo-agents"
       ];
     };
 
@@ -83,6 +85,18 @@
           }
           client_max_body_size 4m;
           alias /neo-app-alerts/$neo_alert_src.json;
+          dav_methods PUT DELETE;
+          dav_access user:rw group:r all:r;
+        }
+        # What each agent reports about itself: its host label and the
+        # addresses it checks (agents/<source>.json, monitoring/default.nix).
+        location ~ "^/ingest/agents/(?<neo_agent_src>[a-z0-9][a-z0-9-]{0,62})\.json$" {
+          ${guard}
+          limit_except PUT DELETE {
+            deny all;
+          }
+          client_max_body_size 1m;
+          alias /neo-agents/$neo_agent_src.json;
           dav_methods PUT DELETE;
           dav_access user:rw group:r all:r;
         }
