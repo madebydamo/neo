@@ -18,87 +18,33 @@
       swagDomain = swagCfg.domain;
       streamproxyIp = "192.168.100.11";
       localIp = "192.168.100.10";
-      httpServerBlock = serverName: proxyPass: ''
-        server {
-          listen 80;
-          server_name ${serverName};
-
-          location / {
-            proxy_pass http://${proxyPass};
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-          }
-        }
-      '';
-      entryDomains = name: entry:
-        (optional (entry.includeTopLevel) entry.url)
-        ++ (optional (entry.wildcard) "*.${entry.url}")
-        ++ (entry.customDomains);
-
+      # Names are exact or `*.` wildcards, never regexes, and tunnels win over the
+      # local SWAG: see _routes.nix.
+      routes = import ./_routes.nix {inherit lib;};
       customDomains = concatLists (catAttrs "customDomains" (attrValues appServices));
-      allSwagDomains = customDomains ++ [swagDomain "*.${swagDomain}"];
-
-      httpSwagBlock = flatten (optional swagEnabled (map (domain: "${httpServerBlock domain "${localIp}:${toString swagHttp}"}") allSwagDomains));
-      httpConfigBlock = flatten (mapAttrsToList (
-          name: entry: let
-            domains = entryDomains name entry;
-            port = cfg.ports.${name}.http;
-          in
-            map (domain: (httpServerBlock domain "127.0.0.1:${toString port}")) domains
-        )
-        cfg.entries);
-
-      httpBlock = concatStringsSep "\n" (
-        httpSwagBlock ++ httpConfigBlock
-      );
-
-      domainLabelCount = domain:
-        length (filter (part: part != "") (splitString "." domain));
-      moreSpecificFirst = a: b: let
-        labelsA = domainLabelCount a.domain;
-        labelsB = domainLabelCount b.domain;
-        lenA = stringLength a.domain;
-        lenB = stringLength b.domain;
-      in
-        if labelsA != labelsB
-        then labelsA > labelsB
-        else if lenA != lenB
-        then lenA > lenB
-        else if a.isWildcard != b.isWildcard
-        then !a.isWildcard && b.isWildcard
-        else a.domain < b.domain;
-      mkStreamMapEntry = domain: isWildcard: line: {
-        inherit domain isWildcard line;
+      # Local SWAG: PROXY-protocol listener for HTTPS (real client IP for access
+      # logs / GoAccess). Rathole backends: TCP is transparent, so PROXY protocol
+      # bytes reach remote SWAG :8443/9982. Remote rathole clients must bind HTTPS
+      # to SWAG localHttpsProxyProtocolPort (not plain 443).
+      rendered = routes.render {
+        tunnels =
+          mapAttrsToList (name: entry: {
+            domains = routes.entryDomains entry;
+            https = "127.0.0.1:${toString cfg.ports.${name}.https}";
+            http = "127.0.0.1:${toString cfg.ports.${name}.http}";
+          })
+          cfg.entries;
+        swag =
+          if swagEnabled
+          then {
+            domains = customDomains ++ [swagDomain "*.${swagDomain}"];
+            https = "${localIp}:${toString swagHttpsPP}";
+            http = "${localIp}:${toString swagHttp}";
+          }
+          else null;
       };
-      streamSwagEntries = flatten (optional swagEnabled (map (
-          domain: let
-            isWildcard = hasPrefix "*." domain;
-            bare =
-              if isWildcard
-              then removePrefix "*." domain
-              else domain;
-          in
-            # Local SWAG PROXY-protocol listener (real client IP for access logs / GoAccess).
-            mkStreamMapEntry bare isWildcard "${domain} ${localIp}:${toString swagHttpsPP};"
-        )
-        allSwagDomains));
-      # Rathole backends: TCP is transparent, so PROXY protocol bytes reach remote SWAG :8443/9982.
-      # Remote rathole clients must bind HTTPS to SWAG localHttpsProxyProtocolPort (not plain 443).
-      streamConfigEntries = flatten (mapAttrsToList (
-          name: entry: let
-            httpsPort = cfg.ports.${name}.https;
-            backend = "127.0.0.1:${toString httpsPort}";
-          in
-            (optional entry.wildcard (mkStreamMapEntry entry.url true "~^(?<sub>.+\\.)${escapeRegex entry.url}$ ${backend};"))
-            ++ (optional entry.includeTopLevel (mkStreamMapEntry entry.url false "${entry.url} ${backend};"))
-            ++ (map (domain: mkStreamMapEntry domain false "${domain} ${backend};") entry.customDomains)
-        )
-        cfg.entries);
-      streamMap = concatStringsSep "\n" (
-        map (e: e.line) (sort moreSpecificFirst (streamSwagEntries ++ streamConfigEntries))
-      );
+      httpBlock = rendered.httpBlock;
+      streamMap = rendered.streamMap;
 
       nonSwagEntries = filterAttrs (n: _: n != "swag-local") cfg.entries;
       tcpForwardList = attrValues cfg.tcpForwards;

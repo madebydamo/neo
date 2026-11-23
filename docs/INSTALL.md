@@ -404,6 +404,8 @@ remoteAddr = "edge.example.com"
 name = "home"
 ```
 
+A tunnel's domain can sit below the edge's own domain (edge `example.com`, tunnel `home.example.com` with `wildcard = true`): the tunnel gets `home.example.com` and every name below it, the edge keeps the rest. The more specific name always wins.
+
 `port` defaults to 2223, the streamproxy tunnel port. Change it only if your edge uses another port. `name` is the streamproxy entry name (`home` above).
 
 One public IP and one homeserver? Run SWAG on that IP and leave streamproxy off.
