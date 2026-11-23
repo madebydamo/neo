@@ -208,11 +208,30 @@ enum BackupAction {
     /// Encrypted backup: make a new encryption key and a new full backup with
     /// it, then delete the old one. Runs on the server, in the background.
     RotateKey,
+    /// What backup stores hold, reached over your normal SSH login to their
+    /// server, and which of your keys opens each server's backup.
+    List {
+        /// Your SSH login to the store's server (user@host, ssh://user@host:port
+        /// or an ssh_config alias). Repeat it for several stores.
+        #[arg(long, value_name = "LOGIN", required = true)]
+        from_store: Vec<String>,
+        /// Another key to compare (default: ~/.ssh/*.pub and your agent).
+        #[arg(long)]
+        key: Option<PathBuf>,
+    },
     /// Copy the config repository out of a backup (encrypted or plain files),
     /// e.g. when the server and its repo are gone.
     ExtractConfig {
-        /// user@host:folder, ssh://user@host:port/folder, https://name@store/folder, or a local folder.
-        backup: String,
+        /// user@host:folder, ssh://user@host:port/folder, https://name@store/folder,
+        /// ssh+store://name@<login>/folder, or a local folder.
+        #[arg(required_unless_present = "from_store")]
+        backup: Option<String>,
+        /// Read it from a backup store over your SSH login to its server.
+        #[arg(long, value_name = "LOGIN", conflicts_with = "backup")]
+        from_store: Option<String>,
+        /// With --from-store: the server whose config to take.
+        #[arg(long, requires = "from_store")]
+        client: Option<String>,
         /// Where to put the repository.
         #[arg(long, default_value = "neo-config")]
         out: PathBuf,
@@ -471,12 +490,22 @@ fn run(cli: Cli) -> Result<()> {
         }
         Commands::Backup { action } => match action {
             BackupAction::RotateKey => commands::backup::rotate_key(&doc, dry_run, sudo_cmd),
+            BackupAction::List { from_store, key } => commands::backup::list(&from_store, key),
             BackupAction::ExtractConfig {
                 backup,
+                from_store,
+                client,
                 out,
                 key,
                 backup_key,
-            } => commands::backup::extract_config(&backup, &out, key, backup_key, dry_run),
+            } => {
+                let from = match (backup, from_store) {
+                    (Some(b), _) => commands::backup::ConfigFrom::Backup(b),
+                    (None, Some(login)) => commands::backup::ConfigFrom::Store { login, client },
+                    (None, None) => anyhow::bail!("give the backup, or --from-store <login>"),
+                };
+                commands::backup::extract_config(&from, &out, key, backup_key, dry_run)
+            }
         },
     }
 }

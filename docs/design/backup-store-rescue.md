@@ -139,11 +139,15 @@ A client in the settings without data shows "No backup yet". A home folder of a 
 shows "Removed: keeps <size>" without actions.
 
 Below the list, a short section "About this store": what it is, that it only holds what the
-servers send, and that it has no backup of its own data.
+servers send, and that it has no backup of its own data. Its part "If this address is down"
+names `neo restore --from-store <your SSH login to this server>` and how to open the portal
+through that login: `ssh -N -L 8091:127.0.0.1:8091 <login>`, then
+`http://127.0.0.1:8091/backup-store/portal`. The client page repeats that line.
 
 ### Restore page of a client
 
-`Restore brugg` opens a page with three tabs, one per way. Each tab has the same parts:
+`Restore brugg` opens a page with four tabs, one per way. The first is **Over SSH to this
+server** ([backup-store-ssh.md](backup-store-ssh.md) §3), then the three ways below. Each tab has the same parts:
 **You need** (a checklist), **Steps**, and the **command** with every value filled in (store
 address, client name, folder, format). A check mark means the store verified it; a hollow
 circle means you must check it yourself.
@@ -160,6 +164,22 @@ circle means you must check it yourself.
   `encrypted`: the key was also in System → SSH on brugg at a backup run after it was added.
 - After the restore: point brugg's DNS names (and the streamproxy edge, if any) to the new IP.
 
+**0. Over SSH to this server** (works when the store's HTTPS address is down)
+
+You need, in addition: Nix with flakes, your normal SSH login to this server from your computer,
+and root SSH to the new machine with your admin key.
+
+```
+nix run github:madebydamo/neo -- restore \
+  --from-store <your login to this server> --client brugg \
+  --host root@<new IP>
+```
+
+`zfs`: with the config repo in front, as in way 2. Below the command: this server's names (its
+hostname, its global addresses without Docker bridges, its Tailscale name), so the reader can
+build the login (`homeserver@<name>`). When `backup-store-tunnel` is not active, the page shows
+an alert "The web address of this store is down" and this tab is the one open.
+
 **1. From this server** (the form only with the portal's login)
 
 You need, in addition:
@@ -167,7 +187,8 @@ You need, in addition:
   create the machine). The store logs in to it with that key, not with a key of its own.
 
 A form: new machine `root@IP[:port]`, admin key (paste or file, passphrase field), then
-**Check** and **Restore** (§4).
+**Check** and **Restore** (§4). The new machine reads the backup over the store's HTTPS address;
+while the tunnel is down, the tab says so and points at way 0.
 
 **2. From your computer**
 
@@ -202,7 +223,7 @@ nix --extra-experimental-features 'nix-command flakes' run github:madebydamo/neo
 
 Then: delete `/root/admin_key` if the restore did not (`--shred-key`).
 
-The text of the three tabs comes from one template. The portal fills it with live values; the
+The text of the tabs comes from one template. The portal fills it with live values; the
 `neo-backup-store` Hermes skill gets the same text with placeholders, so the assistant can guide
 someone through it. The assistant never sees a key.
 
@@ -216,6 +237,10 @@ someone through it. The assistant never sees a key.
 2. **Restore** asks to type the client name (in-page dialog, never `window.confirm`), then
    starts. Progress shows in the operation monitor (new `OperationKind::Rescue`; steps Check,
    Boot installer, Copy, Erase disk, Data, Install, Finished), fed from the job's journal.
+
+The new machine reads the backup over the store's HTTPS address (`--from-backup https://…`). The
+job itself never uses the tunnel: it takes the config repo from the local copy. So when the HTTPS
+address is down, this way does not work; the page says so and points at the SSH way (§3).
 
 ### The job
 

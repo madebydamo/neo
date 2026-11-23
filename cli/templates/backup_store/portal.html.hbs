@@ -74,6 +74,12 @@
             <p>Other servers send their nightly backup here over HTTPS. Each server has its own private space, and a server can only reach its own backups.</p>
             <p>Encrypted backups stay encrypted here: this store cannot read them. To restore one, you need an admin key of that server.</p>
             <p>This store keeps no backup of what it holds. Keep at least one more backup of every server somewhere else.</p>
+            <h2 class="font-semibold text-base-content pt-2">If this address is down</h2>
+            <p>For example when it runs through the server you need to restore. Your normal SSH login to this server is the way in, and the store's own keys still decide what you can read:</p>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>Restore from your computer: <code class="font-mono text-xs">neo restore --from-store &lt;your SSH login to this server&gt;</code>. It lists the servers here and which of your keys opens them.</li>
+              <li>Open this page: <code class="font-mono text-xs">ssh -N -L {{web_port}}:127.0.0.1:{{web_port}} &lt;your SSH login to this server&gt;</code>, then <code class="font-mono text-xs">http://127.0.0.1:{{web_port}}/backup-store/portal</code>.</li>
+            </ul>
           </div>
         </section>
       {{/if}}

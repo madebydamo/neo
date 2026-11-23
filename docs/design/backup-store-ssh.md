@@ -1,6 +1,6 @@
 # Backup store: restore over the server's normal SSH
 
-Status: design, not built. Extends [backup-restore.md](backup-restore.md) §4 and §6 and
+Status: built (2026-11-23); differences from this design in "As built" at the end. Extends [backup-restore.md](backup-restore.md) §4 and §6 and
 [backup-store-rescue.md](backup-store-rescue.md).
 
 ## 1. Problem
@@ -301,3 +301,41 @@ the portal templates, `cli/src/utils/backup/{source,access,restore}.rs`,
 `cli/src/commands/restore/{mod,remote}.rs` and `local/`, `cli/src/commands/backup*`,
 `docs/design/backup-restore.md` §4 and §6, `backup-store-rescue.md` §3–4, `docs/RESTORE.md`,
 `docs/CLI.md`, `agent/skills/neo-admin` (+ `references/cli.md`), `nix/services/backup*/skills.nix`.
+
+## As built
+
+Differences from the text above:
+
+- **Host key.** `store.json` gets `sshPort` and `hostKeyFile` (the path of
+  `core.secrets.identityFile` + `.pub`), not the `hostKey` line: the key is made at install, after
+  the evaluation. `neo backup-store list` reads it at run time.
+- **report.json** was already 0644 in a 0755 folder: no permission change.
+- **Option order.** `Access` puts the destination's own ssh options before its defaults (ssh takes
+  the first value), so the pinned key (`HostKeyAlias` = the store's HTTPS host,
+  `StrictHostKeyChecking=yes`, `known_hosts.store` in the work folder) wins over `accept-new`.
+- **Matching.** A store destination matches when its `storeUrl` equals the store's `url`, a
+  trailing `/` ignored. A picked backup that no destination names goes first.
+- **`ssh+store://` with `--host`.** It becomes a route like `--from-store`, so on the new machine
+  the settings' destinations follow it as fallbacks (without `--host` it stays the only source,
+  like any `--from-backup`). A login written `user@host:port` becomes `ssh://user@host:port`.
+- **The new machine's routes** go to `/root/neo-restore/store-routes.json`, read by the hidden
+  `--store-routes`. Direct: `/root/neo-restore/store-<i>/ssh_config` with the hops as
+  `neo-hop-<i>` (your known_hosts lines renamed, `@revoked` / `@cert-authority` lines dropped), one
+  master `<client>.sock` per client, 40 s for the master and 20 s for the probe; a login reached
+  through a ProxyCommand cannot be carried and goes to the relay. Relay: the new machine's port is
+  random in 30000–59999, three tries. The masters close with `-O exit` after the restore.
+- **§5 rescue: no code change.** The rescue never used the tunnel itself (it takes the config
+  repo from the local copy); only the new machine reads over HTTPS. The portal's client page says
+  so while `backup-store-tunnel` is not active, opens the "Over SSH to this server" tab and shows
+  an alert.
+- **§6 plan check.** Plugin URLs and `flake.lock` inputs (git, tarball, file, mercurial URLs;
+  github, gitlab, sourcehut with a `host`) whose host does not resolve or answer on its port
+  (5 s TCP connect) are a warning, not an error. Neo has no Nix cache setting yet, so caches are
+  not checked.
+- **A dropped relay** does not continue where it stopped: step 6 first tries the next
+  destination (for example the store's HTTPS way), and a rerun of the command runs Disko again
+  and copies from the start. The message says "run the same command again (it starts the copy
+  over)".
+- **Not tested end to end yet:** `--host` with `--store-via direct` and `relay` (§8 "Real"). The
+  VM test covered `neo backup-store list`, `neo backup list --from-store`, `extract-config` over
+  SSH with `backup-store-tunnel` stopped, a wrong host key and a key that is no restore key.

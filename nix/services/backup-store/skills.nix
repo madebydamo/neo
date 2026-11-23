@@ -8,7 +8,7 @@
     config.neo.services.backup-store.skill.conf = lib.neo.mkServiceSkill {
       service = "backup-store";
       inherit config;
-      description = "Stores other Neo servers' backups, reachable only over HTTPS: plain files, encrypted (restic) or ZFS snapshots";
+      description = "Stores other Neo servers' backups, sent over HTTPS, restorable over HTTPS or this server's normal SSH: plain files, encrypted (restic) or ZFS snapshots";
       tags = ["neo" "backup"];
       body = ''
         ## When to Use
@@ -22,6 +22,8 @@
         - Storage is outside the Neo data volume, so this server's own backup never includes it
         - Dataset storage: <dataset>/<client>; ZFS backups go to <dataset>/<client>/<name>
         - Client side: a destination in services.backup.destinations with target = "store", storeUrl, storeClient
+        - Second way in, for restores only: the admin's normal SSH login to this server, ProxyJump to backup-store-sshd on 127.0.0.1 (sshPort). The store's keys and the gate decide as over HTTPS
+        - `neo backup-store list [--json]` (any user): what the store holds, who can restore it, the store's SSH port and host key
 
         ## Credentials
         - Settings: `services.backup-store.clients.<client>.publicKeys`: the client's host key (System → SSH there). Encrypted clients need nothing else: the keys in System → SSH on the client get read-only access here after its next backup run (it uploads `neo-backup.recipients`). Other formats: add an admin key to restore with
@@ -32,6 +34,7 @@
         2. Run a backup on the client: `systemctl start backup`, read `journalctl -u backup`
         3. Here: `journalctl -u backup-store-sshd` for logins and refused commands, `journalctl -u backup-store-setup` for storage
         4. Restore a lost client: send the user to the portal https://<subdomain>.<domain>, page of that client. It lists what they need and the command. "From this server" needs their admin private key, which they paste there themselves: never ask for it or handle it
+        5. The HTTPS address is down (for example it runs through the server being restored): the user runs `neo restore --from-store <their SSH login to this server> --client <client> --host root@<new machine>` on their computer; `neo backup list --from-store <login>` only looks
 
         ## Pitfalls
         - A dataset on the main pool is erased by neo restore of this server

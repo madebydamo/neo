@@ -199,6 +199,7 @@ Rules for ZFS:
 | A container update broke an app | `/var/neo/DATA/AppData/updater/docker/last.json` and `.log`; then roll back (section 5) |
 | "Restart required" in the UI | `neo-restart-required --json`: `system`, `kernel`, `docker` or `trigger:<id>` |
 | Backup failed | `systemctl status backup`; `journalctl -u backup -b --no-pager` (lines tagged with the destination); `/var/log/backup-<destination>.log` |
+| What a backup store holds | On the store's server, as homeserver: `neo backup-store list` (servers, last backup, who can restore). From your computer: `neo backup list --from-store homeserver@HOST`. When the store's web address is down, restore with `neo restore --from-store homeserver@HOST` (`docs/RESTORE.md`) |
 | Disk full | `df -h / /nix /var/neo`; `du -xsh /var/neo/DATA/AppData/* \| sort -h \| tail`. Old generations: `sudo nix-collect-garbage --delete-older-than 30d` (ask first). On ZFS, `df` hides what snapshots hold: `zfs list -o name,used,usedbysnapshots,avail` and the largest snapshots with `zfs list -t snapshot -o name,used -s used \| tail` (section 6; delete them in the web UI) |
 | Pool degraded or errors | `zpool status -v`; report it to the user at once (disk failing). Do not try to repair |
 | Command says `Blocked` | Section 5, the lock paragraph |
@@ -211,4 +212,4 @@ Start with reading. Change one thing, then check again. Report what you saw, wit
 - Never edit `/nix/store`, SWAG proxy-confs or containers by hand for a lasting fix: the next activation writes them again. A lasting fix is a setting, or a change to Neo or the plugin (skills neo-core, neo-plugin).
 - Never print secrets: do not `cat` `settings.toml`, `secrets.yaml` or `*.sops.yaml`, do not `docker inspect` or `env` a container that holds secrets, and do not run `neo-secrets-root` or `neo-git-ssh-key` (they decrypt secrets and keys).
 - Plugin services behave like built-in ones. Helper scripts a plugin installs (other `neo-*` names) are documented by that plugin.
-- Design background, when a recipe is not enough: in a Neo checkout, `docs/ARCHITECTURE.md`, `docs/RESTORE.md` and `docs/design/` (`restart-required`, `backup-restore`, `secrets`, `operation-locks`, `network-isolation`).
+- Design background, when a recipe is not enough: in a Neo checkout, `docs/ARCHITECTURE.md`, `docs/RESTORE.md` and `docs/design/` (`restart-required`, `backup-restore`, `backup-store-ssh`, `secrets`, `operation-locks`, `network-isolation`).

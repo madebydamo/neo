@@ -70,6 +70,10 @@
         internet = elem "web" cfg.ingress;
         login = cfg.auth.enabled && config.neo.services.tinyauth.enabled;
         gate = "${gate}";
+        # `neo backup-store list`: the way in over the server's normal SSH
+        # (docs/design/backup-store-ssh.md). The host key is read at run time.
+        inherit (cfg) sshPort;
+        hostKeyFile = "${config.neo.core.secrets.identityFile}.pub";
         clients =
           mapAttrs (client: c: {
             inherit (c) format publicKeys;

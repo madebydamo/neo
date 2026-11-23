@@ -42,6 +42,24 @@ pub struct Source {
     pub dataset: String,
     /// sshKey from the settings (the host key by default).
     pub ssh_key: String,
+    /// A backup store destination: which store and which of its clients.
+    pub store: Option<StoreRef>,
+}
+
+/// A destination in a backup store (`target = "store"`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct StoreRef {
+    /// The store's address, `https://host[:port]` without a trailing `/`.
+    pub url: String,
+    pub client: String,
+    /// Reached over the store server's normal SSH, not over `url`
+    /// (docs/design/backup-store-ssh.md §4.3).
+    pub over_ssh: bool,
+}
+
+/// A store address as both sides write it: no trailing `/`.
+pub fn normalize_store_url(url: &str) -> String {
+    url.trim().trim_end_matches('/').to_string()
 }
 
 /// neo.core.volumes.root (default /var/neo).
@@ -121,6 +139,7 @@ impl Source {
             "zfs" => Format::Zfs,
             other => bail!("{at}.format = {other:?} is not files, encrypted or zfs"),
         };
+        let mut store = None;
         let location = match get("target").as_deref().unwrap_or("ssh") {
             "ssh" => {
                 let host = get("host")
@@ -147,7 +166,13 @@ impl Source {
                     .filter(|u| !u.is_empty())
                     .with_context(|| format!("{at}.storeUrl is not set"))?;
                 let client = get("storeClient").unwrap_or_else(|| hostname(doc));
-                store_location(&url, &client)?
+                let location = store_location(&url, &client)?;
+                store = Some(StoreRef {
+                    url: normalize_store_url(&url),
+                    client,
+                    over_ssh: false,
+                });
+                location
             }
             other => bail!("{at}.target = {other:?} is not ssh, disk or store"),
         };
@@ -169,6 +194,7 @@ impl Source {
             folder,
             dataset: get("dataset").unwrap_or_default(),
             ssh_key: get("sshKey").unwrap_or_else(|| "/etc/ssh/ssh_host_ed25519_key".into()),
+            store,
         })
     }
 
@@ -177,15 +203,22 @@ impl Source {
     /// `https://client@store[:port]/folder` (a backup store), or a local
     /// folder. The format is found with [`detect`].
     pub fn from_location(spec: &str) -> Result<Source> {
+        let mut store = None;
         let (location, remote_path) = if let Some(rest) = spec.strip_prefix("https://") {
             let (auth, path) = rest.split_once('/').unwrap_or((rest, ""));
             let (client, host) = auth.split_once('@').with_context(|| {
                 format!("{spec}: name the server in the store: https://<name>@store/folder")
             })?;
-            (
-                store_location(&format!("https://{host}"), client)?,
-                path.to_string(),
-            )
+            let url = format!("https://{host}");
+            let location = store_location(&url, client)?;
+            store = Some(StoreRef {
+                url,
+                client: client.to_string(),
+                over_ssh: false,
+            });
+            (location, path.to_string())
+        } else if spec.starts_with("ssh+store://") {
+            bail!("{spec}: a store over SSH is read with `neo restore --from-store`, or through Source::from_spec");
         } else if spec.starts_with("http://") {
             bail!("{spec}: a backup store is only reachable over https://");
         } else if let Some(rest) = spec.strip_prefix("ssh://") {
@@ -223,13 +256,19 @@ impl Source {
             folder: "neo".into(),
             dataset: String::new(),
             ssh_key: String::new(),
+            store,
         })
     }
 
     pub fn describe(&self) -> String {
-        let at = match &self.location {
-            Location::Ssh { dest, .. } => dest.clone(),
-            Location::Disk => "a disk on this machine".into(),
+        let at = match (&self.location, &self.store) {
+            (_, Some(s)) if s.over_ssh => format!(
+                "the store {} over SSH (account backup-{})",
+                s.url.trim_start_matches("https://"),
+                s.client
+            ),
+            (Location::Ssh { dest, .. }, _) => dest.clone(),
+            (Location::Disk, _) => "a disk on this machine".into(),
         };
         let what = match self.format {
             Format::Files => format!("files in {}/{} on {at}", self.remote_path, self.folder),
@@ -245,6 +284,26 @@ impl Source {
             format!("{} ({what})", self.name)
         }
     }
+}
+
+/// Each store destination reachable over SSH as well (`--from-store`) gets
+/// that way in front of its HTTPS way; the order of the others stays
+/// (docs/design/backup-store-ssh.md §4.2). `over_ssh(store, client)` builds
+/// the SSH way of a store destination, or None for a store it does not know.
+pub fn with_store_ssh(
+    sources: Vec<Source>,
+    mut over_ssh: impl FnMut(&Source, &StoreRef) -> Result<Option<Source>>,
+) -> Result<Vec<Source>> {
+    let mut out = Vec::with_capacity(sources.len());
+    for s in sources {
+        if let Some(r) = s.store.clone().filter(|r| !r.over_ssh) {
+            if let Some(ssh) = over_ssh(&s, &r)? {
+                out.push(ssh);
+            }
+        }
+        out.push(s);
+    }
+    Ok(out)
 }
 
 /// A backup store: SSH to the client's account, inside a WebSocket on `url`

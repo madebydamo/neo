@@ -8,6 +8,7 @@ use toml_edit::DocumentMut;
 
 use super::super::{DataSource, RestoreArgs};
 use super::{Dirs, FromBackup, Staged, Unlocked};
+use crate::utils::backup::store_ssh::{apply_routes, StoreRoute};
 use crate::utils::backup::{self, Access, Format, Source};
 use crate::utils::command::stdout_checked;
 use crate::utils::profile::{resolve_config_path, PROFILE_SERVER};
@@ -106,13 +107,104 @@ fn missing_local_plugins(doc: &DocumentMut) -> Vec<String> {
         .collect()
 }
 
+/// What the config fetches from another host: the plugins and the locked
+/// flake inputs, as (what, host, port).
+fn input_hosts(doc: &DocumentMut, lock: &str) -> Vec<(String, String, u16)> {
+    let mut found: Vec<(String, String, u16)> = Vec::new();
+    let mut add = |what: String, url: &str| {
+        if let Some((h, p)) = url_host(url) {
+            if !found.iter().any(|(_, fh, fp)| *fh == h && *fp == p) {
+                found.push((what, h, p));
+            }
+        }
+    };
+    for p in crate::utils::plugins::plugins_from_doc(doc) {
+        add(
+            format!("plugin {} (core.plugins.{}.url)", p.id, p.id),
+            &p.url,
+        );
+    }
+    let v: serde_json::Value = serde_json::from_str(lock).unwrap_or_default();
+    if let Some(nodes) = v["nodes"].as_object() {
+        for (name, n) in nodes {
+            let l = &n["locked"];
+            let url = match l["type"].as_str() {
+                Some("git" | "tarball" | "file" | "mercurial") => {
+                    l["url"].as_str().map(str::to_string)
+                }
+                Some("github" | "gitlab" | "sourcehut") => {
+                    l["host"].as_str().map(|h| format!("https://{h}/"))
+                }
+                _ => None,
+            };
+            if let Some(u) = url {
+                add(format!("flake input {name}"), &u);
+            }
+        }
+    }
+    found
+}
+
+/// `scheme://[user@]host[:port]/…` → (host, port); None for local paths and
+/// shorthands such as `github:owner/repo`.
+fn url_host(url: &str) -> Option<(String, u16)> {
+    let (scheme, rest) = url.split_once("://")?;
+    let scheme = scheme.rsplit('+').next().unwrap_or(scheme);
+    let default = match scheme {
+        "https" => 443,
+        "http" => 80,
+        "ssh" => 22,
+        _ => return None,
+    };
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let hostport = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    let (host, port) = match hostport.rsplit_once(':') {
+        Some((h, p)) if !h.ends_with(']') || hostport.starts_with('[') => match p.parse() {
+            Ok(p) => (h, p),
+            Err(_) => (hostport, default),
+        },
+        _ => (hostport, default),
+    };
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    (!host.is_empty()).then(|| (host.to_string(), port))
+}
+
+/// Inputs on a host that does not answer from here: they may run on the
+/// machine being restored (an edge's own Git server or cache). Said, not
+/// routed around (docs/design/backup-store-ssh.md §6).
+fn unreachable_inputs(doc: &DocumentMut, staging: &Path) -> Vec<String> {
+    use std::net::{TcpStream, ToSocketAddrs};
+    use std::time::Duration;
+    let lock = std::fs::read_to_string(staging.join("flake.lock")).unwrap_or_default();
+    let handles: Vec<_> = input_hosts(doc, &lock)
+        .into_iter()
+        .map(|(what, host, port)| {
+            std::thread::spawn(move || {
+                let addrs: Vec<_> = match (host.as_str(), port).to_socket_addrs() {
+                    Ok(a) => a.collect(),
+                    Err(_) => return Some(format!("{what}: {host} does not resolve")),
+                };
+                let ok = addrs
+                    .iter()
+                    .any(|a| TcpStream::connect_timeout(a, Duration::from_secs(5)).is_ok());
+                (!ok).then(|| format!("{what}: {host}:{port} does not answer"))
+            })
+        })
+        .collect();
+    handles
+        .into_iter()
+        .filter_map(|h| h.join().ok().flatten())
+        .collect()
+}
+
 pub(super) fn preflight(
     args: &RestoreArgs,
     dirs: &Dirs,
     staged: &Staged,
     unlocked: &Unlocked,
     from_backup: Option<&FromBackup>,
-    admin_key: Option<&PathBuf>,
+    admin_keys: &[PathBuf],
+    routes: &[StoreRoute],
 ) -> Result<Plan> {
     let doc = &staged.doc;
     let (mounted, disko_on) = (staged.mounted, staged.disko_on);
@@ -122,6 +214,13 @@ pub(super) fn preflight(
             "local plugins are not on this machine: {}. Put them into git, or copy them to the same path here first",
             missing.join(", ")
         );
+    }
+    let unreachable = unreachable_inputs(doc, &dirs.staging);
+    for u in &unreachable {
+        println!("! {u} from here.");
+    }
+    if !unreachable.is_empty() {
+        println!("  If it runs on the machine you restore, point it elsewhere first and commit: a plugin at a copy (core.plugins.<id>.url = \"git+file:///path\"), a flake input with `nix flake lock --override-input <name> <url>`. docs/RESTORE.md → Restoring your edge.");
     }
     let main_disk = str_at(doc, &["disko", "mainDisk"])
         .unwrap_or("/dev/vda")
@@ -140,11 +239,25 @@ pub(super) fn preflight(
 
     // Every backup destination, in the order they are tried.
     let with_data = args.data == DataSource::Backup;
+    // A store reached over SSH (--from-store) goes in front of its HTTPS way.
     let sources: Vec<Source> = match (from_backup, with_data) {
         (_, false) => Vec::new(),
-        (Some(fb), true) => vec![fb.source.clone()],
-        (None, true) => Source::from_settings(doc)?,
+        (Some(fb), true) if fb.only => vec![fb.source.clone()],
+        (_, true) => apply_routes(Source::from_settings(doc)?, routes, &dirs.work)?,
     };
+    for r in routes {
+        let used = sources.iter().any(|s| {
+            s.store
+                .as_ref()
+                .is_some_and(|st| st.over_ssh && st.url == r.url)
+        });
+        if with_data && !used {
+            println!(
+                "! No backup destination of this config uses the store {} (storeUrl): --from-store does not change where the data comes from",
+                r.url
+            );
+        }
+    }
     if with_data && sources.is_empty() && args.data_from.is_none() {
         bail!("the backup is off in this config: restore without data (--data none), or point --data-from at a copy");
     }
@@ -155,9 +268,7 @@ pub(super) fn preflight(
     if unlocked.identity && unlocked.host_key.exists() {
         identities.push(unlocked.host_key.clone());
     }
-    if let Some(k) = admin_key {
-        identities.push(k.clone());
-    }
+    identities.extend(admin_keys.iter().cloned());
     let access = Access {
         identities,
         known_hosts: dirs.work.join("known_hosts"),
@@ -251,6 +362,36 @@ pub(super) fn preflight(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hosts_of_inputs() {
+        assert_eq!(
+            url_host("git+ssh://git@git.example.com:2222/me/p.git"),
+            Some(("git.example.com".into(), 2222))
+        );
+        assert_eq!(
+            url_host("git+https://gitea.dev.example.ch/a/b?ref=main"),
+            Some(("gitea.dev.example.ch".into(), 443))
+        );
+        assert_eq!(url_host("https://[::1]:8443/x"), Some(("::1".into(), 8443)));
+        assert_eq!(url_host("github:a/b"), None);
+        assert_eq!(url_host("git+file:///srv/p"), None);
+        let doc: DocumentMut =
+            "[core.plugins.tmr]\nurl = \"git+https://gitea.example.ch/syntelis/tmr\"\n"
+                .parse()
+                .unwrap();
+        let lock = r#"{"nodes":{"root":{},"neo":{"locked":{"type":"github","owner":"m","repo":"neo"}},
+            "plugin-tmr":{"locked":{"type":"git","url":"https://gitea.example.ch/syntelis/tmr"}},
+            "cache":{"locked":{"type":"tarball","url":"http://cache.lan:8080/x.tar.gz"}}}}"#;
+        let hosts: Vec<(String, u16)> = input_hosts(&doc, lock)
+            .into_iter()
+            .map(|(_, h, p)| (h, p))
+            .collect();
+        assert_eq!(
+            hosts,
+            [("gitea.example.ch".into(), 443), ("cache.lan".into(), 8080)]
+        );
+    }
 
     #[test]
     fn finds_missing_local_plugins() {

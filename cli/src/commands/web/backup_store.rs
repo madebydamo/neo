@@ -31,8 +31,8 @@ use super::ops::monitor::monitor_fragment;
 use super::ops::store::{append_log, log_path};
 use super::util::{self, alert_html, AlertKind};
 use crate::commands::backup_store::{
-    client_name_ok, now, rescue, ClientReport, KeyInfo, Report, StoreConfig, CURRENT_SECS,
-    RECENT_CONNECTION_SECS, STALE_SECS,
+    ago, client_name_ok, now, rescue, size, ClientReport, KeyInfo, Report, StoreConfig,
+    CURRENT_SECS, RECENT_CONNECTION_SECS, STALE_SECS,
 };
 use crate::utils::command::{get_timestamp, output_checked, sudo_command};
 use crate::utils::locks::OpInfo;
@@ -144,6 +144,7 @@ fn portal(site: OnStoreSite) -> Template {
             "clients": clients,
             "has_clients": !clients.is_empty(),
             "report_age": ago(t - report.generated),
+            "web_port": web_port(),
         }),
     )
 }
@@ -188,8 +189,95 @@ fn portal_client(name: &str, site: OnStoreSite) -> Option<Template> {
             } else { "" },
             "cmd_computer": command_computer(c, &url),
             "cmd_nixos": command_nixos(c, &url),
+            "cmd_ssh": command_ssh(c),
+            "server_names": server_names(),
+            "web_port": web_port(),
+            "tunnel_down": tunnel_down(),
         }),
     ))
+}
+
+/// The way in over this server's normal SSH (docs/design/backup-store-ssh.md §3).
+fn command_ssh(c: &ClientReport) -> String {
+    let repo = if c.format == "zfs" {
+        format!(
+            " {}",
+            shell_arg(c.git_remote.as_deref().unwrap_or("<your config repo>"))
+        )
+    } else {
+        String::new()
+    };
+    format!(
+        "nix run {NEO_FLAKE} -- restore{repo} \\\n  --from-store <your login to this server> --client {} \\\n  --host root@<new IP>",
+        c.name
+    )
+}
+
+/// Names people may reach this server by: its hostname, its addresses and its
+/// Tailscale name.
+fn server_names() -> Vec<String> {
+    let mut names: Vec<String> = fs::read_to_string("/proc/sys/kernel/hostname")
+        .ok()
+        .map(|h| h.trim().to_string())
+        .filter(|h| !h.is_empty())
+        .into_iter()
+        .collect();
+    let run = |cmd: &str, args: &[&str]| {
+        std::process::Command::new(cmd)
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+    };
+    if let Some(out) = run("ip", &["-o", "addr", "show", "scope", "global"]) {
+        names.extend(addresses(&out));
+    }
+    if let Some(out) = run("tailscale", &["status", "--json", "--peers=false"]) {
+        if let Some(n) = serde_json::from_str::<Value>(&out)
+            .ok()
+            .and_then(|v| {
+                v["Self"]["DNSName"]
+                    .as_str()
+                    .map(|s| s.trim_end_matches('.').to_string())
+            })
+            .filter(|n| !n.is_empty())
+        {
+            names.push(n);
+        }
+    }
+    names.dedup();
+    names
+}
+
+/// Addresses from `ip -o addr show scope global`, without Docker's bridges.
+fn addresses(ip_out: &str) -> Vec<String> {
+    ip_out
+        .lines()
+        .filter_map(|l| {
+            let w: Vec<&str> = l.split_whitespace().collect();
+            let dev = *w.get(1)?;
+            if dev.starts_with("docker") || dev.starts_with("br-") || dev.starts_with("veth") {
+                return None;
+            }
+            let i = w.iter().position(|x| *x == "inet" || *x == "inet6")?;
+            Some(w.get(i + 1)?.split('/').next()?.to_string())
+        })
+        .collect()
+}
+
+fn web_port() -> String {
+    std::env::var("ROCKET_PORT").unwrap_or_else(|_| "8091".into())
+}
+
+/// The store's HTTPS way (its WebSocket tunnel) is not running.
+fn tunnel_down() -> bool {
+    std::process::Command::new("systemctl")
+        .args(["is-active", "--quiet", "backup-store-tunnel"])
+        .status()
+        .is_ok_and(|s| !s.success())
 }
 
 /// Starting a rescue needs the portal's login on the store's address.
@@ -296,37 +384,6 @@ fn shell_arg(s: &str) -> String {
         s.to_string()
     } else {
         format!("'{}'", s.replace('\'', r"'\''"))
-    }
-}
-
-/// "5 minutes ago", "3 hours ago", "2 days ago".
-pub fn ago(secs: i64) -> String {
-    let secs = secs.max(0);
-    let (n, unit) = if secs < 120 {
-        return "just now".into();
-    } else if secs < 7200 {
-        (secs / 60, "minute")
-    } else if secs < 2 * 86400 {
-        (secs / 3600, "hour")
-    } else {
-        (secs / 86400, "day")
-    };
-    format!("{n} {unit}{} ago", if n == 1 { "" } else { "s" })
-}
-
-/// Bytes as people read them (powers of 1000).
-pub fn size(bytes: u64) -> String {
-    const UNITS: &[&str] = &["B", "kB", "MB", "GB", "TB", "PB"];
-    let mut v = bytes as f64;
-    let mut u = 0;
-    while v >= 1000.0 && u < UNITS.len() - 1 {
-        v /= 1000.0;
-        u += 1;
-    }
-    if u == 0 || v >= 100.0 {
-        format!("{:.0} {}", v, UNITS[u])
-    } else {
-        format!("{:.1} {}", v, UNITS[u])
     }
 }
 
@@ -692,6 +749,10 @@ mod tests {
                 "rescue_off_reason": "Turn on the login",
                 "cmd_computer": command_computer(&c, url),
                 "cmd_nixos": command_nixos(&c, url),
+                "cmd_ssh": command_ssh(&c),
+                "server_names": ["brugg", "192.168.1.20"],
+                "web_port": "8091",
+                "tunnel_down": !internet,
             })
         };
         let html = render("backup_store/client", &ctx(true, true));
@@ -700,6 +761,10 @@ mod tests {
             "From this server",
             "From your computer",
             "From a NixOS machine",
+            "Over SSH to this server",
+            "--from-store &lt;your login to this server&gt; --client brugg",
+            "brugg, 192.168.1.20",
+            "ssh -N -L 8091:127.0.0.1:8091",
             r#"hx-post="/backup-store/portal/client/brugg/rescue""#,
             "SHA256:abc",
             "connected 5 minutes ago",
@@ -714,5 +779,12 @@ mod tests {
         assert!(!html.contains(r#"hx-post="#));
         assert!(html.contains("Turn on the login"));
         assert!(html.contains("not open to the internet"));
+        assert!(html.contains("web address of this store is down"));
+    }
+
+    #[test]
+    fn addresses_skip_docker() {
+        let out = "2: enp1s0    inet 192.168.1.20/24 brd 192.168.1.255 scope global enp1s0\\       valid_lft forever\n3: docker0    inet 172.17.0.1/16 scope global docker0\n2: enp1s0    inet6 2001:db8::5/64 scope global\n";
+        assert_eq!(addresses(out), ["192.168.1.20", "2001:db8::5"]);
     }
 }

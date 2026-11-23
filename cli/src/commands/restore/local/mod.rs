@@ -8,8 +8,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use toml_edit::DocumentMut;
 
+use super::store::{self, Stores};
 use super::{access_tokens, int_setting, restore_identity, under, RestoreArgs};
 use crate::utils::backup::config_repo::{commit_uncommitted, git, remote_url};
+use crate::utils::backup::store_ssh::{self, StoreRoute};
 use crate::utils::backup::{self, default_key, mount_zfs, Access, RestoreInto, Source};
 use crate::utils::command::execute_command;
 use crate::utils::command::{confirm, is_root, stdout_checked};
@@ -33,10 +35,13 @@ struct Dirs {
 }
 
 /// `--from-backup`: the backup, and the config repo taken out of it when no
-/// repo was given.
+/// repo was given. Also the backup picked in a store (`--from-store`).
 struct FromBackup {
     source: Source,
     repo: Option<PathBuf>,
+    /// `--from-backup`: the data comes from this backup only. A store's pick:
+    /// the settings' destinations follow it.
+    only: bool,
 }
 
 /// The staged config repo's settings and how the target disk is handled.
@@ -118,8 +123,22 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     };
     // Opens neo-backup.age (age reads ~/.ssh/id_ed25519 only when told to).
     let admin_key = args.key.clone().or_else(default_key);
+    let stores = open_stores(args, admin_key.as_deref())?;
+    // The key that opens the store's pick goes first.
+    let admin_keys: Vec<PathBuf> =
+        stores
+            .key
+            .iter()
+            .chain(&admin_key)
+            .cloned()
+            .fold(Vec::new(), |mut v, k| {
+                if !v.contains(&k) {
+                    v.push(k);
+                }
+                v
+            });
 
-    let from_backup = open_from_backup(args, &dirs, admin_key.as_ref())?;
+    let from_backup = open_from_backup(args, &dirs, &admin_keys, &stores.routes)?;
     let (repo_url, origin) = repo_and_origin(args, from_backup.as_ref())?;
     let staged = stage_and_adapt(args, &dirs, &repo_url)?;
     let unlocked = unlock(&dirs, &staged.doc, args.key.as_deref())?;
@@ -129,7 +148,8 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
         &staged,
         &unlocked,
         from_backup.as_ref(),
-        admin_key.as_ref(),
+        &admin_keys,
+        &stores.routes,
     )?;
     plan.print(args, &staged.doc, unlocked.identity);
     if args.check {
@@ -156,22 +176,54 @@ pub fn run(args: &RestoreArgs) -> Result<()> {
     finish(args)
 }
 
-/// Step 0, `--from-backup`: the backup to restore from, and the config repo
-/// in it when no repo is given (the admin key opens an encrypted backup).
+/// Step 0, `--from-store` (asked here) and `--store-routes` (written by
+/// `--host`): the stores read over SSH.
+fn open_stores(args: &RestoreArgs, admin_key: Option<&Path>) -> Result<Stores> {
+    let pick = args.repo.is_none() && args.from_backup.is_none();
+    let mut stores = store::open_stores(
+        &args.from_store,
+        admin_key,
+        args.client.as_deref(),
+        pick,
+        !args.yes,
+    )?;
+    if let Some(f) = &args.store_routes {
+        stores.routes.extend(store_ssh::read_routes(f)?);
+    }
+    Ok(stores)
+}
+
+/// Step 0, `--from-backup` or a store's pick: the backup to restore from, and
+/// the config repo in it when no repo is given (the admin key opens an
+/// encrypted backup).
 fn open_from_backup(
     args: &RestoreArgs,
     dirs: &Dirs,
-    admin_key: Option<&PathBuf>,
+    admin_keys: &[PathBuf],
+    routes: &[StoreRoute],
 ) -> Result<Option<FromBackup>> {
-    let Some(spec) = &args.from_backup else {
-        return Ok(None);
-    };
     let access = Access {
-        identities: args.backup_key.iter().chain(admin_key).cloned().collect(),
+        identities: args.backup_key.iter().chain(admin_keys).cloned().collect(),
         known_hosts: dirs.work.join("known_hosts"),
         work: dirs.work.join("backup"),
     };
-    let source = backup::detect(&access, Source::from_location(spec)?)?;
+    let (source, only) = match &args.from_backup {
+        Some(spec) => (store::backup_source(spec, &dirs.work)?, true),
+        None => {
+            let mut picked = None;
+            for r in routes {
+                if let Some(s) = r.picked_source(&dirs.work)? {
+                    picked = Some(s);
+                    break;
+                }
+            }
+            match picked {
+                Some(s) => (s, false),
+                None => return Ok(None),
+            }
+        }
+    };
+    let source = backup::detect(&access, source)?;
     let repo = if args.repo.is_none() {
         let out = dirs.work.join("from-backup");
         let _ = fs::remove_dir_all(&out);
@@ -185,7 +237,7 @@ fn open_from_backup(
     } else {
         None
     };
-    Ok(Some(FromBackup { source, repo }))
+    Ok(Some(FromBackup { source, repo, only }))
 }
 
 /// The repo to clone and the remote of the installed copy (the backup's copy

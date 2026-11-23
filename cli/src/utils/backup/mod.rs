@@ -8,9 +8,10 @@ pub mod config_repo;
 pub mod encrypted;
 pub mod restore;
 pub mod source;
+pub mod store_ssh;
 
 pub(crate) use access::default_key;
 pub use access::Access;
 pub(crate) use restore::mount_zfs;
 pub use restore::{check, detect, extract_config, restore_into, RestoreInto};
-pub use source::{hostname, volumes_root, Format, Location, Source};
+pub use source::{hostname, volumes_root, Format, Location, Source, StoreRef};

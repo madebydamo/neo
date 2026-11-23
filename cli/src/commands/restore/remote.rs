@@ -13,11 +13,16 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use super::local::{default_origin, stage_repo, WORK_DIR};
+use super::remote_store::{self, ROUTES_FILE};
+use super::store;
 use super::{DataSource, RestoreArgs, DEFAULT_TARGET};
 use crate::utils::backup::config_repo::{commit_uncommitted, remote_url};
+use crate::utils::backup::store_ssh::StoreRoute;
 use crate::utils::backup::{self, default_key, Access, Source};
 use crate::utils::command::execute_command;
-use crate::utils::command::{confirm, nix_command, shell_quote, shell_words, stdout_checked};
+use crate::utils::command::{
+    confirm, nix_command, output_with_stdin, shell_quote, shell_words, stdout_checked,
+};
 use crate::utils::fsutil::TempDir;
 
 const UNIT: &str = "neo-restore";
@@ -35,8 +40,8 @@ pub(crate) fn split_port(host: &str) -> (String, Option<String>) {
 }
 const RESULT_MARK: &str = "NEO-RESTORE-RESULT=";
 /// The keys in the installer's work folder.
-const ADMIN_KEY: &str = "admin-key";
-const BACKUP_KEY: &str = "backup-key";
+pub(super) const ADMIN_KEY: &str = "admin-key";
+pub(super) const BACKUP_KEY: &str = "backup-key";
 
 impl RestoreArgs {
     /// `neo restore` arguments for the target (not yet shell-quoted), the same for
@@ -50,6 +55,10 @@ impl RestoreArgs {
             // Client-only.
             host: _,
             neo: _,
+            // Client-only: asked here and passed on as `store_routes`.
+            from_store: _,
+            client: _,
+            store_via: _,
             // Added per stage: --check for the preflight; --yes, --shred-key and
             // --reboot for the run.
             check: _,
@@ -59,6 +68,7 @@ impl RestoreArgs {
             // Passed on as the resolved `origin` argument.
             origin: _,
             from_backup,
+            store_routes,
             disk,
             data,
             data_from,
@@ -90,6 +100,12 @@ impl RestoreArgs {
         );
         opt("--from-backup", from_backup.clone());
         opt(
+            "--store-routes",
+            store_routes
+                .as_ref()
+                .map(|_| format!("{WORK_DIR}/{ROUTES_FILE}")),
+        );
+        opt(
             "--backup-key",
             backup_key
                 .as_ref()
@@ -116,8 +132,8 @@ impl RestoreArgs {
 pub(crate) const INSTALLER_TEST: &str = "test -e /etc/NIXOS && command -v nixos-install >/dev/null && case $(findmnt -no FSTYPE /) in tmpfs|overlay|rootfs) true;; *) false;; esac";
 
 /// The machine being restored and how to log in to it.
-struct Target {
-    host: String,
+pub(super) struct Target {
+    pub(super) host: String,
     port: Option<String>,
     /// The admin key also logs in (besides the agent and ssh's defaults).
     key: PathBuf,
@@ -169,13 +185,50 @@ impl Target {
         o
     }
 
-    fn ssh(&self, ephemeral: bool, script: &str) -> Command {
+    pub(super) fn ssh(&self, ephemeral: bool, script: &str) -> Command {
         let mut c = Command::new("ssh");
         c.args(self.ssh_opts(ephemeral)).arg(&self.host).arg(script);
         c
     }
 
-    fn ssh_ok(&self, ephemeral: bool, script: &str) -> bool {
+    /// ssh with the options, without the host (for `-N -R …`).
+    pub(super) fn ssh_command(&self, ephemeral: bool) -> Command {
+        let mut c = Command::new("ssh");
+        c.args(self.ssh_opts(ephemeral));
+        c
+    }
+
+    /// With your agent forwarded (`-A`): the new machine logs in to the store
+    /// server with it (store over SSH, direct).
+    pub(super) fn ssh_agent(&self, script: &str) -> Command {
+        let mut c = Command::new("ssh");
+        c.args(self.ssh_opts(true))
+            .args(["-A", "-o", "ForwardAgent=yes"])
+            .arg(&self.host)
+            .arg(script);
+        c
+    }
+
+    /// A private file `dir/name` on the new machine.
+    pub(super) fn write_file(&self, dir: &str, name: &str, content: &[u8]) -> Result<()> {
+        let out = output_with_stdin(
+            &mut self.ssh(
+                true,
+                &format!(
+                    "umask 077; mkdir -p {d} && cat > {d}/{name}",
+                    d = shell_quote(dir)
+                ),
+            ),
+            content,
+            "write a file on the new machine",
+        )?;
+        if !out.status.success() {
+            bail!("writing {dir}/{name} on {} failed", self.host);
+        }
+        Ok(())
+    }
+
+    pub(super) fn ssh_ok(&self, ephemeral: bool, script: &str) -> bool {
         self.ssh(ephemeral, script)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -413,8 +466,28 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
         .clone()
         .or_else(default_key)
         .context("pass --key with an admin ssh-ed25519 private key")?;
+    // What the new machine gets: the stores over SSH become routes it can use.
+    let mut fwd = args.clone();
+    let mut stores = store::open_stores(
+        &args.from_store,
+        Some(&key),
+        args.client.as_deref(),
+        args.repo.is_none() && args.from_backup.is_none(),
+        !args.yes,
+    )?;
+    if let Some(spec) = &args.from_backup {
+        // ssh+store:// works from here only: the new machine gets the way in.
+        if let Some(route) = store::spec_route(spec)? {
+            stores.routes.push(route);
+            fwd.from_backup = None;
+        }
+    }
+    if fwd.backup_key.is_none() {
+        // The key that opens the store's pick, when it is not --key.
+        fwd.backup_key = stores.key.clone().filter(|k| k != &key);
+    }
     // Unreadable keys must show now, not after the kexec stopped the running system.
-    for k in std::iter::once(&key).chain(&args.backup_key) {
+    for k in std::iter::once(&key).chain(&fwd.backup_key) {
         fs::File::open(k).with_context(|| format!("open {}", k.display()))?;
     }
     let target = Target::new(host, key.clone());
@@ -424,19 +497,28 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
     // a repo, take it out of the backup here (the admin key opens it).
     let tmp = TempDir::new("neo-restore")?;
     let local = tmp.join("config");
-    let from_backup = match &args.from_backup {
+    let from_backup = match &fwd.from_backup {
         Some(spec) => {
             if spec.starts_with('/') || spec.starts_with('.') {
                 bail!("with --host, --from-backup takes user@host:folder, ssh://… or https://…; for a disk attached to the new machine use --data-from or run neo restore on it");
             }
-            Some((spec, Source::from_location(spec)?))
+            Some(Source::from_location(spec)?)
         }
-        None => None,
+        None => {
+            let mut picked = None;
+            for r in &stores.routes {
+                if let Some(s) = r.picked_source(&tmp.join("backup"))? {
+                    picked = Some(s);
+                    break;
+                }
+            }
+            picked
+        }
     };
     let repo = args.repo.as_deref();
-    if let (None, Some((_, source))) = (repo, &from_backup) {
+    if let (None, Some(source)) = (repo, &from_backup) {
         let access = Access {
-            identities: args
+            identities: fwd
                 .backup_key
                 .iter()
                 .cloned()
@@ -462,20 +544,39 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
         (None, None) => remote_url(&local),
         (None, Some(r)) => default_origin(r),
     };
+    let store_clients = clients_per_store(&local, &stores.routes);
 
     target.ensure_installer(args.yes)?;
     target.copy_repo_and_key(tmp.path())?;
-    if let Some(k) = &args.backup_key {
+    if let Some(k) = &fwd.backup_key {
         target
             .copy_private_file(k, BACKUP_KEY)
-            .with_context(|| format!("copying --backup-key to {host} failed"))?;
+            .with_context(|| format!("copying the backup key to {host} failed"))?;
     }
+    let mut paths = None;
+    if !stores.routes.is_empty() && args.data == DataSource::Backup {
+        let (routes, p) = remote_store::open(
+            &target,
+            &stores.routes,
+            &store_clients,
+            args.store_via,
+            fwd.backup_key.is_some(),
+        )?;
+        target.write_file(WORK_DIR, ROUTES_FILE, &serde_json::to_vec_pretty(&routes)?)?;
+        fwd.store_routes = Some(PathBuf::from(format!("{WORK_DIR}/{ROUTES_FILE}")));
+        paths = Some(p);
+    }
+    let close = |paths: &mut Option<remote_store::StorePaths>| {
+        if let Some(p) = paths {
+            p.close(&target);
+        }
+    };
     let neo = target.neo(args, &local)?;
     target.copy_inputs(&local)?;
     // The clone holds the config: gone before the long part starts.
     drop(tmp);
 
-    let cmd = format!("{neo} {}", shell_words(args.forwarded_argv(&origin)));
+    let cmd = format!("{neo} {}", shell_words(fwd.forwarded_argv(&origin)));
 
     // Plan first (no changes), then the run after a yes here.
     let check = format!("{cmd} --check");
@@ -489,14 +590,26 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
         .success()
     {
         target.remove_keys();
+        close(&mut paths);
         bail!("the preflight on {host} failed (see above); nothing was changed");
+    }
+    if let Some(p) = &paths {
+        for l in &p.lines {
+            println!("  store     {l}");
+        }
+        println!();
     }
     if args.check {
         target.remove_keys();
+        close(&mut paths);
         return Ok(());
     }
     if !args.yes {
-        confirm("Restore with this plan?")?;
+        if let Err(e) = confirm("Restore with this plan?") {
+            target.remove_keys();
+            close(&mut paths);
+            return Err(e);
+        }
     }
     let reboot = if args.reboot { " --reboot" } else { "" };
     let start = format!(
@@ -504,7 +617,43 @@ pub fn run(args: &RestoreArgs, host: &str) -> Result<()> {
     );
     execute_command(&mut target.ssh(true, &start))?;
     println!("Restore runs on {host} as unit {UNIT}; it keeps going if this connection drops (ssh root@… journalctl -fu {UNIT}).");
-    target.follow(args.reboot)
+    if paths.as_ref().is_some_and(|p| p.has_relay()) {
+        println!("! The data comes through this computer: keep this terminal open until the data is copied (step 6).");
+    }
+    let result = target.follow(args.reboot);
+    let relay_dropped = paths
+        .as_mut()
+        .is_some_and(|p| p.has_relay() && !p.relays_alive());
+    close(&mut paths);
+    match result {
+        Err(e) if relay_dropped => Err(e.context(
+            "the relay through your computer stopped; run the same command again (it starts the copy over)",
+        )),
+        r => r,
+    }
+}
+
+/// The store accounts each route serves: the picked client and the
+/// `storeClient` of every destination in the config with that store.
+fn clients_per_store(repo: &Path, routes: &[StoreRoute]) -> Vec<Vec<String>> {
+    let sources = crate::utils::settings::load(&repo.join(crate::utils::settings::FILE))
+        .ok()
+        .and_then(|doc| Source::from_settings(&doc).ok())
+        .unwrap_or_default();
+    routes
+        .iter()
+        .map(|r| {
+            let mut clients: Vec<String> = r.picked.iter().map(|p| p.client.clone()).collect();
+            for s in &sources {
+                if let Some(st) = s.store.as_ref().filter(|st| st.url == r.url) {
+                    if !clients.contains(&st.client) {
+                        clients.push(st.client.clone());
+                    }
+                }
+            }
+            clients
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -527,6 +676,10 @@ mod tests {
         RestoreArgs {
             repo: Some("/home/me/config".into()),
             from_backup: Some("me@backup:it's here".into()),
+            from_store: vec!["homeserver@brugg".into()],
+            client: Some("meilen".into()),
+            store_via: super::super::StoreVia::Relay,
+            store_routes: Some("/tmp/routes.json".into()),
             host: Some("root@box".into()),
             disk: Some("/dev/disk/by-id/a b".into()),
             key: Some("/home/me/.ssh/admin".into()),
@@ -555,6 +708,12 @@ mod tests {
         assert_eq!(got.key, Some("/root/neo-restore/admin-key".into()));
         assert_eq!(got.backup_key, Some("/root/neo-restore/backup-key".into()));
         assert_eq!(got.from_backup, args.from_backup);
+        assert_eq!(
+            got.store_routes,
+            Some("/root/neo-restore/store-routes.json".into())
+        );
+        // The logins work from here only; the target gets the routes.
+        assert!(got.from_store.is_empty() && got.client.is_none());
         assert_eq!(got.disk, args.disk);
         assert_eq!(got.data, args.data);
         assert_eq!(got.data_from, args.data_from);
@@ -584,6 +743,7 @@ mod tests {
         use clap::Args;
         const FORWARDED: &[&str] = &[
             "from_backup",
+            "store_routes",
             "disk",
             "data",
             "data_from",
@@ -595,7 +755,7 @@ mod tests {
         ];
         const REPLACED: &[&str] = &["repo", "key", "origin"];
         const BY_STAGE: &[&str] = &["check", "yes", "reboot", "shred_key"];
-        const CLIENT_ONLY: &[&str] = &["host", "neo"];
+        const CLIENT_ONLY: &[&str] = &["host", "neo", "from_store", "client", "store_via"];
         let cmd = RestoreArgs::augment_args(clap::Command::new("neo"));
         for arg in cmd.get_arguments() {
             let id = arg.get_id().as_str();

@@ -12,7 +12,7 @@ pub mod answers;
 mod edge;
 mod finish;
 mod probe;
-mod prompt;
+pub(crate) mod prompt;
 
 use anyhow::{bail, Context, Result};
 use std::env;
@@ -564,6 +564,10 @@ pub fn bootstrap(
     let restore = RestoreArgs {
         repo: Some(dir_s.clone()),
         from_backup: None,
+        from_store: Vec::new(),
+        client: None,
+        store_via: Default::default(),
+        store_routes: None,
         host: Some(install_host.clone()),
         disk: None,
         key: Some(key.clone()),

@@ -3,6 +3,8 @@
 //!
 //! - `report`: what the store holds per client → [`REPORT_FILE`] (root, timer),
 //!   and the restore keys of encrypted clients → [`RECIPIENT_KEYS_DIR`].
+//! - `list`: what the store holds and how to reach it over SSH, for
+//!   `neo restore --from-store` (any user; docs/design/backup-store-ssh.md).
 //! - `rescue`: restore a client onto a new machine from here (root, started by
 //!   the web UI through systemd-run).
 //!
@@ -14,6 +16,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub mod list;
 pub mod recipients;
 pub mod report;
 pub mod rescue;
@@ -61,8 +64,18 @@ pub struct StoreConfig {
     pub login: bool,
     /// The forced command of the store's accounts (takes --read-only first).
     pub gate: String,
+    /// Port of the store's sshd on loopback (the way in over SSH).
+    #[serde(default = "default_ssh_port")]
+    pub ssh_port: u16,
+    /// Public half of the sshd's host key.
+    #[serde(default)]
+    pub host_key_file: String,
     #[serde(default)]
     pub clients: BTreeMap<String, StoreClient>,
+}
+
+fn default_ssh_port() -> u16 {
+    18023
 }
 
 impl StoreConfig {
@@ -199,6 +212,56 @@ pub fn parse_utc(s: &str) -> Option<i64> {
     Some(days_from_civil(y, m, day) * 86400 + h * 3600 + min * 60 + sec)
 }
 
+/// "5 minutes ago", "3 hours ago", "2 days ago".
+pub fn ago(secs: i64) -> String {
+    let secs = secs.max(0);
+    let (n, unit) = if secs < 120 {
+        return "just now".into();
+    } else if secs < 7200 {
+        (secs / 60, "minute")
+    } else if secs < 2 * 86400 {
+        (secs / 3600, "hour")
+    } else {
+        (secs / 86400, "day")
+    };
+    format!("{n} {unit}{} ago", if n == 1 { "" } else { "s" })
+}
+
+/// Bytes as people read them (powers of 1000).
+pub fn size(bytes: u64) -> String {
+    const UNITS: &[&str] = &["B", "kB", "MB", "GB", "TB", "PB"];
+    let mut v = bytes as f64;
+    let mut u = 0;
+    while v >= 1000.0 && u < UNITS.len() - 1 {
+        v /= 1000.0;
+        u += 1;
+    }
+    if u == 0 || v >= 100.0 {
+        format!("{:.0} {}", v, UNITS[u])
+    } else {
+        format!("{:.1} {}", v, UNITS[u])
+    }
+}
+
+/// Unix time → `YYYY-MM-DD HH:MM` (UTC).
+pub fn format_utc(t: i64) -> String {
+    let (days, secs) = (t.div_euclid(86400), t.rem_euclid(86400));
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!(
+        "{y:04}-{m:02}-{d:02} {:02}:{:02}",
+        secs / 3600,
+        secs % 3600 / 60
+    )
+}
+
 /// Days since 1970-01-01 (Howard Hinnant's algorithm).
 fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
     let y = if m <= 2 { y - 1 } else { y };
@@ -214,6 +277,7 @@ pub fn run(action: BackupStoreAction) -> Result<()> {
     match action {
         BackupStoreAction::Report { out } => report::run(&out),
         BackupStoreAction::Rescue(args) => rescue::run(&args),
+        BackupStoreAction::List { json } => list::run(json),
     }
 }
 
@@ -227,6 +291,12 @@ pub enum BackupStoreAction {
     /// Restore a client onto a new machine from this store (root; the web
     /// portal starts it).
     Rescue(rescue::RescueArgs),
+    /// What this store holds, who can restore it and how to reach the store
+    /// over this server's SSH (any user; `neo restore --from-store` reads --json).
+    List {
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[cfg(test)]
@@ -240,6 +310,9 @@ mod tests {
         assert_eq!(parse_utc("2000-02-29T12:00:00Z"), Some(951_825_600));
         assert_eq!(parse_utc("2026-11-19 02:15:03"), None);
         assert_eq!(parse_utc("2026-13-01T00:00:00Z"), None);
+        assert_eq!(format_utc(1_795_054_503), "2026-11-19 02:15");
+        assert_eq!(format_utc(951_825_600), "2000-02-29 12:00");
+        assert_eq!(format_utc(0), "1970-01-01 00:00");
     }
 
     #[test]

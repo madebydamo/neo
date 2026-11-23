@@ -23,6 +23,8 @@ use crate::utils::settings::{item_at, recorded_host_key};
 
 pub(crate) mod local;
 pub(crate) mod remote;
+mod remote_store;
+pub(crate) mod store;
 
 pub(crate) const DEFAULT_TARGET: &str = "/mnt";
 
@@ -34,18 +36,48 @@ pub enum DataSource {
     None,
 }
 
+/// `--host` with `--from-store`: how the new machine reaches the store
+/// (docs/design/backup-store-ssh.md §4.4).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum StoreVia {
+    /// Direct, and the relay when direct fails.
+    #[default]
+    Auto,
+    /// The new machine logs in to the store server itself, with your agent.
+    Direct,
+    /// Through this computer; keep it connected until the data is copied.
+    Relay,
+}
+
 #[derive(clap::Args, Debug, Clone)]
 pub struct RestoreArgs {
     /// Config repository (git URL or local checkout; HEAD is restored).
-    /// Leave it out with --from-backup to use the copy in the backup.
-    #[arg(required_unless_present = "from_backup")]
+    /// Leave it out with --from-backup or --from-store to use the copy in the backup.
+    #[arg(required_unless_present_any = ["from_backup", "from_store"])]
     pub repo: Option<String>,
     /// Restore from this backup instead of the one in the settings:
     /// user@host:folder (relative to the home folder),
-    /// ssh://user@host:port/folder, or a local folder (a mounted disk).
+    /// ssh://user@host:port/folder, https://name@store/folder,
+    /// ssh+store://name@<login>/folder, or a local folder (a mounted disk).
     /// An encrypted backup opens with --key.
     #[arg(long, value_name = "BACKUP")]
     pub from_backup: Option<String>,
+    /// A backup store, reached over your normal SSH login to its server
+    /// (user@host, ssh://user@host:port or an ssh_config alias): for when its
+    /// web address is down. Lists what it holds and picks the server to
+    /// restore; with a repo, its store destinations are read this way first.
+    /// Repeat it for several stores.
+    #[arg(long, value_name = "LOGIN")]
+    pub from_store: Vec<String>,
+    /// With --from-store: the server to restore (default: the one your keys open).
+    #[arg(long, requires = "from_store")]
+    pub client: Option<String>,
+    /// With --host and --from-store: how the new machine reaches the store.
+    #[arg(long, value_enum, default_value_t)]
+    pub store_via: StoreVia,
+    /// The ways to the stores, written by --host on the new machine.
+    #[arg(long, hide = true)]
+    pub store_routes: Option<PathBuf>,
     /// Restore that machine from here (root@IP[:PORT]). nixos-anywhere boots it
     /// into an installer first when it runs another system.
     #[arg(long)]

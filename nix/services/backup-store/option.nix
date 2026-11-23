@@ -11,7 +11,7 @@
         type = types.submodule {
           options =
             {
-              enabled = mkEnableOption "Backup store: other servers keep their backups here, reachable only over HTTPS" {rank = 0;};
+              enabled = mkEnableOption "Backup store: other servers keep their backups here" {rank = 0;};
 
               storage = mkOption {
                 type = types.enum ["dataset" "folder"];
@@ -151,6 +151,7 @@
                 ZFS snapshot backups: set that server's Backup dataset to <dataset>/<server name>/neo.
                 Backups live outside the data volume, so this server's own backup does not copy them. A dataset on this server's main disk is erased when this server is restored.
                 Removing a server stops its access but keeps its backups in <folder>/<server name>.
+                If the web address is down (for example when it runs through the server you need to restore): neo restore --from-store <your SSH login to this server>. Your normal SSH login is the way in; the store's own keys still decide what you can read.
               '';
             }
             // lib.neo.mkSkillOptions {};

@@ -28,9 +28,16 @@ pub struct Access {
 }
 
 impl Access {
-    /// `ssh` with the keys and the settings' extraOptions.
+    /// `ssh` with the keys and the settings' extraOptions. ssh takes the first
+    /// value of an option, so the destination's own options come first: a
+    /// store over SSH pins its host key (`StrictHostKeyChecking=yes`, its
+    /// own known_hosts) over the defaults here.
     fn ssh_args(&self, source: &Source) -> Vec<String> {
-        let mut args = vec![
+        let mut args: Vec<String> = match &source.location {
+            Location::Ssh { options, .. } => options.clone(),
+            Location::Disk => Vec::new(),
+        };
+        args.extend([
             "-o".into(),
             "BatchMode=yes".into(),
             "-o".into(),
@@ -39,13 +46,10 @@ impl Access {
             "StrictHostKeyChecking=accept-new".into(),
             "-o".into(),
             format!("UserKnownHostsFile={}", self.known_hosts.display()),
-        ];
+        ]);
         for k in &self.identities {
             args.push("-i".into());
             args.push(k.display().to_string());
-        }
-        if let Location::Ssh { options, .. } = &source.location {
-            args.extend(options.iter().cloned());
         }
         args
     }
@@ -100,7 +104,19 @@ impl Access {
                 if err.contains("not found") || err.contains("No such file") {
                     return Ok(false);
                 }
-                bail!("cannot reach the backup at {dest}: {}", err.trim())
+                // sftp says only "Connection closed": ask ssh itself why.
+                let why = self
+                    .command(source, &["true"])
+                    .stdin(std::process::Stdio::null())
+                    .output()
+                    .ok()
+                    .filter(|o| !o.status.success())
+                    .map(|o| String::from_utf8_lossy(&o.stderr).trim().to_string())
+                    .filter(|w| !w.is_empty());
+                match why {
+                    Some(w) => bail!("cannot reach the backup at {dest}: {w}"),
+                    None => bail!("cannot reach the backup at {dest}: {}", err.trim()),
+                }
             }
         }
     }

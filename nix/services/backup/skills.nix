@@ -33,6 +33,7 @@
         3. Confirm remote path contents
         4. New encryption key (after removing an admin key): `neo backup rotate-key` (every encrypted destination: full backup, then the old repository is deleted)
         5. Config repo lost: `neo backup extract-config user@host:folder --key <admin key>` on a computer with the admin key
+        6. A backup store's web address is down (for example it runs through the server being restored): restore over the user's normal SSH login to the store's server, `neo restore --from-store <login> --host root@<new machine>` on their computer (`neo backup list --from-store <login>` only looks)
 
         ## Pitfalls
         - Two destinations may share a host, not a folder or dataset (assertion)

@@ -23,8 +23,12 @@ pub fn detect(access: &Access, mut source: Source) -> Result<Source> {
     let header = access
         .exists(&source, &join_remote(&source.remote_path, HEADER))
         .map_err(|e| {
+            let e = format!("{e:#}");
+            if e.contains("Permission denied") || e.contains("Host key") {
+                return anyhow!(e);
+            }
             // A backup store's ZFS account has no files, so it refuses sftp.
-            anyhow!("{e:#}. A ZFS backup needs the config repo: neo restore <repo>")
+            anyhow!("{e}. A ZFS backup needs the config repo: neo restore <repo>")
         })?;
     if header {
         source.format = Format::Encrypted;

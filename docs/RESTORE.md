@@ -40,6 +40,43 @@ nix run github:madebydamo/neo#neo -- restore --from-backup user@backup.example.c
 
 A server that backs up to a [backup store](INSTALL.md#backup-store) is easiest to restore from the store's own page, `https://<subdomain>.<domain>` of the store: it lists every server with its last backup, the keys that may restore it, and the filled-in command for your computer or for a NixOS installer on the new machine. Its **From this server** tab runs the restore on the store itself: you give the new machine (`root@IP`) and paste your admin key, which is deleted after that job ([design](design/backup-store-rescue.md)).
 
+### When the store's web address is down: `--from-store`
+
+The store's HTTPS address can be down, for example when it runs through the streamproxy edge you need to restore. Then your normal SSH login to the store's server is the way in. Neo does not care how you reach it (LAN, Tailscale, a jump host, an ssh_config alias): whatever works for `ssh <login>` works here. The store's own keys still decide what you can read ([design](design/backup-store-ssh.md)).
+
+```bash
+neo backup list --from-store homeserver@brugg                    # only look: servers, last backup, which of your keys opens which
+neo restore --from-store homeserver@brugg --host root@203.0.113.7  # pick, take the repo out of the backup, restore
+neo restore --from-store homeserver@brugg --client meilen --host root@203.0.113.7
+neo restore <repo> --from-store homeserver@brugg --host …         # repo given: its store destinations are read over SSH first
+neo backup extract-config --from-store homeserver@brugg --client meilen --out meilen-config
+```
+
+- `<login>` is anything `ssh` takes: `user@host`, `ssh://user@host:port` or an alias. Repeat `--from-store` for several stores.
+- Neo compares the store's restore keys with yours (`--key`, `~/.ssh/*.pub`, your agent) and says per server "you can restore this with ~/.ssh/id_ed25519" or which keys it accepts. Without `--client` it takes the only server your keys open, or asks. An encrypted backup opens only with the key file, not with an agent key alone.
+- The store's host key comes through your authenticated login and is pinned; a wrong one stops the connection.
+- For scripts: `--from-backup ssh+store://meilen@homeserver@brugg/backup/meilen`.
+- A ZFS backup needs its config repo: `neo restore <repo> --from-store …`.
+
+With `--host`, the new machine needs a way to the store too. `--store-via auto` (default) tries two ways, in this order:
+
+| Way | Data path | Works when |
+|-----|-----------|------------|
+| `direct` | new machine → your login → store | the new machine can reach the store server (public IP, same LAN, a jump host it reaches). Neo resolves your login with `ssh -G`, copies your known_hosts lines for its hosts, and logs in once with your SSH agent (`ssh -A`); the restore reuses that connection, so it goes on when your connection drops. A route with a ProxyCommand (for example `tailscale nc`) cannot be carried: then the relay. |
+| `relay` | new machine → your computer → your login → store | `ssh <login>` works from your computer. **Keep the terminal open until the data is copied (step 6).** If the relay drops, the restore tries the next backup destination (for example the store's web address); otherwise run the same command again. It erases the disk again and copies from the start. |
+
+`--store-via direct` or `--store-via relay` forces one. The plan shows which way each store uses. On the store's page, the tab **Over SSH to this server** shows the command with the values filled in, and the server's names.
+
+### Restoring your edge
+
+Example: meilen is the streamproxy edge and backs up to brugg's store at `https://backup.dev1.syntelis.ch`, which goes through meilen. When meilen is lost, its backup sits behind its own front door.
+
+1. Check that `ssh homeserver@brugg` works from your computer (LAN, Tailscale, a port forward: your choice).
+2. `neo restore --from-store homeserver@brugg --client meilen --host root@<new meilen>`.
+3. After the restore, meilen's streamproxy runs again, so brugg's web address works again.
+
+Other inputs can sit behind the lost machine too. The restore's plan check warns about each plugin and `flake.lock` input whose host does not resolve or does not answer (for example your own Git server behind the edge). It does not route around them. Point them elsewhere in the repo first and commit: a plugin at a copy (`core.plugins.<id>.url = "git+file:///path"`), a flake input with `nix flake lock --override-input <name> <url>`. Nix caches are not checked.
+
 The repo argument can be a git URL, a checkout on this computer (its last commit; you get a warning about uncommitted changes), a bare repo, or a saved copy of the files without `.git`, which is restored as one new commit. With `--host`, it only has to exist on the computer you run this from.
 
 With `--host`, every other option reaches the target: `--key` and `--backup-key` are copied into the installer's RAM and deleted when the restore ends (or right after `--check`), and `--disk`, `--data`, `--from-backup`, `--target`, `--config`, `--keep-hardware` and `--no-install` apply there. `--data-from` and `--target` are paths on the target. A backup disk attached to the target is reached with `--data-from`, not `--from-backup`.

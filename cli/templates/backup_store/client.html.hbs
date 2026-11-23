@@ -73,13 +73,41 @@
             {{/if}}
           </ul>
           <p class="text-xs text-base-content/60">After the restore: point {{client.name}}'s web addresses (DNS, and the edge server if you use one) to the new machine's address.</p>
+          <p class="text-xs text-base-content/60">If this address is down: open this page through your SSH login to this server, with <code class="font-mono">ssh -N -L {{web_port}}:127.0.0.1:{{web_port}} homeserver@…</code>, then <code class="font-mono">http://127.0.0.1:{{web_port}}/backup-store/portal</code>.</p>
         </div>
       </section>
 
+      {{#if tunnel_down}}
+        <div role="alert" class="alert alert-warning text-sm">
+          <span><strong>The web address of this store is down</strong> (its tunnel does not run). New machines cannot read backups over it: use "Over SSH to this server".</span>
+        </div>
+      {{/if}}
+
       <div class="tabs tabs-lift">
-        <input type="radio" name="way" class="tab" aria-label="From this server" {{#if can_rescue}}checked{{/if}} />
+        <input type="radio" name="way" class="tab" aria-label="Over SSH to this server" {{#if tunnel_down}}checked{{/if}} />
+        <section class="tab-content bg-base-100 border-base-300 p-4 sm:p-5 text-sm space-y-3">
+          <p class="text-base-content/75">Your computer logs in to this server the way you always do, and reads the backup through that login. This works when the store's web address is down, for example when it runs through the server you restore.</p>
+          <h3 class="font-semibold">You need, in addition</h3>
+          <ul class="space-y-1.5 text-base-content/80">
+            {{#> need}}Nix with flakes on your computer.{{/need}}
+            {{#> need}}Your normal SSH login to this server works from your computer (<code class="font-mono text-xs">ssh homeserver@…</code>, an alias, Tailscale, your home network).{{/need}}
+            {{#> need}}Root SSH from your computer to the new machine with your admin key.{{/need}}
+          </ul>
+          <h3 class="font-semibold">Run</h3>
+          <div class="relative">
+            <pre id="cmd-ssh" class="bg-base-200 rounded-box p-3 pr-16 text-xs font-mono whitespace-pre-wrap break-all">{{cmd_ssh}}</pre>
+            <button type="button" class="btn btn-xs absolute top-2 right-2" data-neo-copy="cmd-ssh">Copy</button>
+          </div>
+          <p class="text-xs text-base-content/60">Your login to this server is how you normally reach it, for example <span class="font-mono">homeserver@{{#each server_names}}{{#if @first}}{{this}}{{/if}}{{/each}}</span>.{{#if server_names}} This server's names: <span class="font-mono">{{#each server_names}}{{#unless @first}}, {{/unless}}{{this}}{{/each}}</span>.{{/if}} It lists what this store holds, says which of your keys opens it, and asks before it erases the disk. The store's own keys still decide what you can read.</p>
+          <p class="text-xs text-base-content/60">The new machine first tries to reach this server itself with your SSH agent; if it cannot, the data goes through your computer (keep it connected until the copy is done).</p>
+        </section>
+
+        <input type="radio" name="way" class="tab" aria-label="From this server" {{#if can_rescue}}{{#unless tunnel_down}}checked{{/unless}}{{/if}} />
         <section class="tab-content bg-base-100 border-base-300 p-4 sm:p-5 text-sm space-y-3">
           <p class="text-base-content/75">This store does the restore: give it the new machine and your admin key.</p>
+          {{#if tunnel_down}}
+            <div class="alert alert-warning text-xs">The new machine reads the backup over this store's web address, which is down now. Use "Over SSH to this server" instead.</div>
+          {{/if}}
           <h3 class="font-semibold">You need, in addition</h3>
           <ul class="space-y-1.5 text-base-content/80">
             {{#> need}}Root SSH to the new machine with that admin key. Most hosters ask for a public key when you create the machine.{{/need}}
@@ -130,7 +158,7 @@
           {{/if}}
         </section>
 
-        <input type="radio" name="way" class="tab" aria-label="From your computer" {{#unless can_rescue}}checked{{/unless}} />
+        <input type="radio" name="way" class="tab" aria-label="From your computer" {{#unless can_rescue}}{{#unless tunnel_down}}checked{{/unless}}{{/unless}} />
         <section class="tab-content bg-base-100 border-base-300 p-4 sm:p-5 text-sm space-y-3">
           <p class="text-base-content/75">Your computer drives the restore over SSH.</p>
           <h3 class="font-semibold">You need, in addition</h3>

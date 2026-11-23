@@ -9,7 +9,7 @@ Every command takes `-h` (short help) and `--help` (long help, with the environm
 | Where | Commands |
 |-------|----------|
 | On the server, as `homeserver` | `activate`, `update`, `update-inputs`, `migrate`, `build`, `generation …`, `settings …`, `docker-update`, `secrets …`, `backup rotate-key`, `security …`, `web` (already runs as `neo-web`) |
-| On your computer | `bootstrap`, `restore --host`, `backup extract-config`, and `init` / `build` / `web` for a local config (`--profile local`, default `./build`) |
+| On your computer | `bootstrap`, `restore --host`, `backup extract-config`, `backup list --from-store`, and `init` / `build` / `web` for a local config (`--profile local`, default `./build`) |
 | On a NixOS installer, as root | `restore` without `--host` |
 | Interactive, needs a terminal | `edit` (vim), `git` / `lg` (lazygit), `bootstrap` without `--defaults` |
 
@@ -134,9 +134,13 @@ Run on the server. Each takes the system lock and rewrites files in the config r
 
 Encrypted backup, on the server: every encrypted destination gets a new key and a new full backup, then the old repository is deleted. Runs in the background as `backup-rotate-key.service`. Use it after you remove an admin key.
 
+### `neo backup list --from-store <LOGIN>… [--key KEY]`
+
+What a backup store holds, read over your normal SSH login to the store's server (`user@host`, `ssh://user@host:port` or an ssh_config alias): per server the format, versions, size, last backup, and which of your keys (`--key`, `~/.ssh/*.pub`, your agent) can restore it. Changes nothing. On the store's server the same comes from `neo backup-store list [--json]` (any user).
+
 ### `neo backup extract-config <BACKUP> [--out DIR] [--key KEY] [--backup-key KEY]`
 
-Copy the config repo out of a backup (encrypted or plain files), e.g. when the server and its repo are gone. `BACKUP`: `user@host:folder`, `ssh://user@host:port/folder`, `https://name@store/folder` (backup store) or a local folder. `--out` default `neo-config`. `--key`: admin ssh-ed25519 private key that opens the encrypted backup (default `~/.ssh/id_ed25519`). `--backup-key`: another key for the SSH login to the backup.
+Copy the config repo out of a backup (encrypted or plain files), e.g. when the server and its repo are gone. `BACKUP`: `user@host:folder`, `ssh://user@host:port/folder`, `https://name@store/folder` (backup store), `ssh+store://name@<login>/folder` (a backup store over SSH) or a local folder. Instead of `BACKUP`: `--from-store <LOGIN> [--client NAME]`. `--out` default `neo-config`. `--key`: admin ssh-ed25519 private key that opens the encrypted backup (default `~/.ssh/id_ed25519`). `--backup-key`: another key for the SSH login to the backup.
 
 ### `neo restore [REPO] [options]`
 
@@ -147,6 +151,9 @@ Rebuild a machine from its config repo and its backup. **It erases the target di
 | `REPO` | Git URL, a checkout (its last commit), a bare repo, or a plain copy without `.git`. Leave it out with `--from-backup` to take the repo from the backup |
 | `--host root@IP[:PORT]` | Restore that machine from here; nixos-anywhere boots it into an installer first when it runs another system |
 | `--from-backup <BACKUP>` | Use this backup instead of the configured one (same forms as `extract-config`). Encrypted: opens with `--key` |
+| `--from-store <LOGIN>` | A backup store over your SSH login to its server, for when its web address is down. Without `REPO`: lists its servers, picks one and takes the repo from its backup. With `REPO`: its store destinations are read over SSH first. Repeatable |
+| `--client <NAME>` | With `--from-store`: the server to restore (default: the only one your keys open, else it asks) |
+| `--store-via auto\|direct\|relay` | With `--host` and `--from-store`: the new machine logs in to the store server itself with your agent (`direct`), or the data goes through your computer (`relay`; keep the terminal open until the data is copied). `auto` (default): direct, then relay |
 | `--disk <DISK>` | Disk to install onto (sets `disko.mainDisk`), e.g. `/dev/disk/by-id/…` |
 | `--key <KEY>` | Admin ssh-ed25519 private key (default `~/.ssh/id_ed25519`) |
 | `--backup-key <KEY>` | Another key that may log in to the backup |
@@ -198,7 +205,7 @@ For a run on demand: `sudo systemctl start neo-security-scan`.
 |---------|------|
 | `neo web` | Starts the web UI against `configPath` (`ROCKET_ADDRESS` / `ROCKET_PORT`). On a server it already runs as `neo-web` on `127.0.0.1:8091` |
 | `neo completions bash\|zsh\|fish\|elvish\|powershell` | Prints the tab completion script. The Nix package installs them already |
-| `neo docker-ledger …`, `neo backup-store …` | Hidden, internal (root): the image ledger of the docker updater, the backup store's rescue portal |
+| `neo docker-ledger …`, `neo backup-store …` | Hidden, internal: the image ledger of the docker updater, the backup store's rescue portal (root). `neo backup-store list [--json]` runs as any user |
 
 ## On-server helpers (not `neo` subcommands)
 

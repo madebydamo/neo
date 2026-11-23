@@ -5,7 +5,9 @@ use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 use toml_edit::DocumentMut;
 
+use crate::commands::restore::store;
 use crate::utils::backup::config_repo::{commit_uncommitted, remote_url};
+use crate::utils::backup::store_ssh;
 use crate::utils::backup::{self, default_key, Access, Format, Source};
 use crate::utils::command::execute_command;
 use crate::utils::command::root_command;
@@ -38,14 +40,44 @@ pub fn rotate_key(doc: &DocumentMut, dry_run: bool, sudo_cmd: &str) -> Result<()
     Ok(())
 }
 
+/// `neo backup list --from-store <login>…`: what each store holds and which of
+/// your keys opens what (docs/design/backup-store-ssh.md §4).
+pub fn list(logins: &[String], key: Option<PathBuf>) -> Result<()> {
+    let extra: Vec<PathBuf> = key.into_iter().collect();
+    let mine = store_ssh::my_keys(&extra);
+    for login in logins {
+        let listing = store_ssh::fetch(login)?;
+        store_ssh::show(&listing, &mine);
+        println!("  Restore one: neo restore --from-store {login} --client <name> --host root@<new machine>");
+        println!();
+    }
+    Ok(())
+}
+
+/// Where `extract-config` reads from.
+pub enum ConfigFrom {
+    /// Any `--from-backup` form.
+    Backup(String),
+    /// A store over SSH: the client given, or the one your keys open.
+    Store {
+        login: String,
+        client: Option<String>,
+    },
+}
+
 /// Copy the config repo out of a backup into `out`.
 pub fn extract_config(
-    spec: &str,
+    from: &ConfigFrom,
     out: &Path,
     key: Option<PathBuf>,
     backup_key: Option<PathBuf>,
     dry_run: bool,
 ) -> Result<()> {
+    let spec = match from {
+        ConfigFrom::Backup(b) => b.clone(),
+        ConfigFrom::Store { login, .. } => format!("--from-store {login}"),
+    };
+    let spec = spec.as_str();
     if dry_run {
         println!(
             "DRY-RUN: would copy the config repo from {spec} to {}",
@@ -55,12 +87,28 @@ pub fn extract_config(
     }
     let key = key.or_else(default_key);
     let work = TempDir::new("neo-backup")?;
+    let (source, store_key) = match from {
+        ConfigFrom::Backup(b) => (store::backup_source(b, work.path())?, None),
+        ConfigFrom::Store { login, client } => {
+            let stores = store::open_stores(
+                std::slice::from_ref(login),
+                key.as_deref(),
+                client.as_deref(),
+                true,
+                true,
+            )?;
+            let source = stores.routes[0]
+                .picked_source(work.path())?
+                .context("no backup picked")?;
+            (source, stores.key)
+        }
+    };
     let access = Access {
-        identities: backup_key.into_iter().chain(key).collect(),
+        identities: backup_key.into_iter().chain(store_key).chain(key).collect(),
         known_hosts: work.join("known_hosts"),
         work: work.path().to_path_buf(),
     };
-    let source = backup::detect(&access, Source::from_location(spec)?)?;
+    let source = backup::detect(&access, source)?;
     println!("Reading the {} …", source.describe());
     let rel = backup::extract_config(&access, &source, out)?;
     commit_uncommitted(out)?;
@@ -72,7 +120,9 @@ pub fn extract_config(
         "" => println!("  It has no remote: push it somewhere safe (git remote add origin …)."),
         url => println!("  Its remote is {url}; push it if that copy is gone."),
     }
-    if spec.starts_with('/') || spec.starts_with('.') {
+    if let ConfigFrom::Store { login, .. } = from {
+        println!("  Restore a machine: neo restore --from-store {login} --host root@<new machine>");
+    } else if spec.starts_with('/') || spec.starts_with('.') {
         println!(
             "  Restore a machine (as root on it, with the disk attached): neo restore {} --from-backup {spec}",
             out.display()

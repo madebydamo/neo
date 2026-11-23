@@ -226,7 +226,14 @@ recipients). It needs `zroot/neo` encrypted **on the server**, which `encrypted`
 neo restore <repo> [--host root@IP] [--disk /dev/disk/by-id/…] [--key ~/.ssh/admin]
                    [--data backup|none] [--from-backup <backup>] [--keep-hardware] [--yes] [--reboot]
 neo restore --from-backup <backup> …          # the config repo from the backup (§3)
+neo restore [<repo>] --from-store <login> [--client <name>] [--store-via auto|direct|relay] …
 ```
+
+`--from-store <login>` reads a backup store over the operator's normal SSH login to the store's
+server, for when the store's HTTPS address is down (§6, [backup-store-ssh.md](backup-store-ssh.md)).
+Without a repo it lists the store's clients, picks one and takes its config repo out of the backup.
+Each store destination of the settings whose `storeUrl` is that store gets the SSH way in front of
+its HTTPS way; the order of the others stays.
 
 **Several destinations.** Without `--from-backup`, the preflight checks the destinations in
 `priority` order and takes the first one it can read; the unreadable ones are printed. The plan
@@ -282,8 +289,9 @@ their appdata when the folder still belongs to the old uid, so the copy does not
 
 ## 6. Backup store
 
-The **backup-store** service (`nix/services/backup-store`) keeps other servers' backups, and is
-reachable only over HTTPS. On the client it is a destination with `target = "store"`.
+The **backup-store** service (`nix/services/backup-store`) keeps other servers' backups. Clients
+back up to it over HTTPS only. On the client it is a destination with `target = "store"`. A
+restore can also come in over the store server's normal SSH (Restore below).
 
 ### SSH inside HTTPS
 
@@ -385,7 +393,16 @@ The store is a normal source: from the settings (a destination with `target = "s
 way (`user` is derived as `backup-<client>`). The admin key must be in System → SSH on the
 client at its last backup run (encrypted, see Restore keys) or in the client's `publicKeys`
 (files, zfs).
-`websocat` is in the `neo` package's restore tools. A store itself has no backup of what it holds.
+`websocat` is in the `neo` package's restore tools.
+
+When the HTTPS address is down (for example when it runs through the streamproxy edge that is being
+restored), the operator's own admin login to the store server is the way in:
+`neo restore --from-store <login>`, `neo backup list --from-store <login>`,
+`neo backup extract-config --from-store <login>` or `--from-backup ssh+store://<client>@<login>/<folder>`.
+ProxyJump over that login reaches the store's sshd on 127.0.0.1 (`sshPort` in `store.json`); the
+inner hop logs in to `backup-<client>` with a store key and pins the host key that
+`neo backup-store list --json` sent through the authenticated login. The gate does not change.
+Design: [backup-store-ssh.md](backup-store-ssh.md). A store itself has no backup of what it holds.
 
 The store's own address is also its **rescue portal** for browsers (WebSocket requests still go to
 the tunnel): the last backup per client, three ways to restore one, and a restore run from the store

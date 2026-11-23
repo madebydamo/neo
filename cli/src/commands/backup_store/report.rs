@@ -366,7 +366,7 @@ fn size(store: &StoreConfig, name: &str) -> Option<u64> {
 }
 
 /// Comment and fingerprint of an authorized key line.
-fn key_info(line: &str) -> Option<KeyInfo> {
+pub(crate) fn key_info(line: &str) -> Option<KeyInfo> {
     let mut child = Command::new("ssh-keygen")
         .args(["-l", "-f", "-"])
         .stdin(Stdio::piped())
