@@ -12,10 +12,8 @@
       cfg = config.neo.services.authentik;
       appdata = cfg.appdata;
       # Public origin for absolute links (emails, embedded outpost, OIDC issuer hints).
-      publicUrl =
-        if cfg.customDomains != []
-        then "https://${builtins.head cfg.customDomains}"
-        else lib.neo.publicUrl config cfg;
+      # Always the app's own address: custom domains are extra or old names.
+      publicUrl = lib.neo.publicUrl config cfg;
       dbUser = "authentik";
       dbName = "authentik";
       dbPassword = cfg.dbPassword;

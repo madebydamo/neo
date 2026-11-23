@@ -8,10 +8,9 @@
     with lib; let
       cfg = config.neo.services.vaultwarden;
       # Public origin: WebAuthn/FIDO2, attachments and email links all derive from DOMAIN.
-      publicUrl =
-        if cfg.customDomains != []
-        then "https://${builtins.head cfg.customDomains}"
-        else lib.neo.publicUrl config cfg;
+      # Always the app's own address: custom domains are extra or old names and,
+      # with login on, redirect here (lib.neo.customDomainRedirects).
+      publicUrl = lib.neo.publicUrl config cfg;
 
       tinyauth = config.neo.services.tinyauth;
       sso = cfg.sso;

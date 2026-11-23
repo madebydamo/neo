@@ -10,12 +10,9 @@
     with lib;
     with {inherit (lib.neo) mkOption mkEnableOption;}; let
       g = config.neo.services.gitea;
-      # ROOT_URL: first customDomains entry as https://…, else
-      # https://<subdomain>.<swag.domain>, else localhost.
-      autoRootUrl =
-        if g.customDomains != []
-        then "https://${builtins.head g.customDomains}"
-        else lib.defaultTo "http://localhost:${toString g.port}" (lib.neo.publicUrl config g);
+      # ROOT_URL: https://<subdomain>.<swag.domain>, else localhost. Custom
+      # domains are extra or old names; set Web address to use one of them.
+      autoRootUrl = lib.defaultTo "http://localhost:${toString g.port}" (lib.neo.publicUrl config g);
       hostOf = url: builtins.head (lib.splitString "/" (lib.removePrefix "https://" (lib.removePrefix "http://" url)));
     in {
       options.neo.services.gitea = mkOption {
@@ -34,7 +31,7 @@
                 from = "services.gitea.subdomain";
                 default = autoRootUrl;
                 rank = 10;
-                description = "The web address people use to reach Gitea, for example https://git.example.com. It follows the subdomain or the first custom domain.";
+                description = "The web address people use to reach Gitea, for example https://git.example.com. It follows the subdomain. Set it to use one of the custom domains instead.";
                 ui = lib.neo.ui.mkUi {
                   label = "Web address";
                 };
