@@ -37,10 +37,16 @@
       (rule {
         uid = "neo-app-down";
         title = "App does not answer";
-        expr = "1 - probe_success";
+        # host = the machine that runs the app (app_host), not the one that
+        # checks it: the Monitoring server checks the other machines' apps
+        # too, and its host label read as "this server is down". probe_from
+        # keeps the checker, so the two checks of one app stay two series;
+        # the notification policy groups by host, so per app machine.
+        # Probes without app_host keep their host.
+        expr = ''label_replace(1 - probe_success, "host", "$1", "app_host", "(.+)")'';
         for = "5m";
         severity = "critical";
-        summary = "{{ $labels.target }} has not answered for 5 minutes (checked from {{ $labels.host }}).";
+        summary = "{{ with $labels.app }}{{ . }} on {{ $labels.host }} ({{ $labels.target }}){{ else }}{{ $labels.target }}{{ end }} has not answered for 5 minutes (checked from {{ or $labels.probe_from $labels.host }}).";
       })
       (rule {
         uid = "neo-server-silent";

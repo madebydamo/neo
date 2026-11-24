@@ -41,7 +41,8 @@
         - App metrics: apps declare endpoints in `neo.monitoring.apps.<service>.metrics`; the agent on the machine running
           the app scrapes them, labels `service`, `scrape`, `host`, `job="app/<service>"`.
         - Every agent sends `${cfg.appdata}/agents/<source>.json` (its host label and public app addresses). The agent here checks
-          those addresses as well (`probe_success{probe_from="<this server>", app_host="<their machine>"}`), and
+          those addresses as well (`probe_success{probe_from="<this server>", app_host="<their machine>"}`; the alert
+          "App does not answer" sets its `host` to `app_host`, the machine that runs the app, and says where it was checked from), and
           `monitoring-expected-hosts` turns the files into `neo_monitoring_expected_host{expected_host}`: "Server stopped reporting"
           stays until that machine reports again. To retire a machine, turn its agent off and delete its file in `agents/`.
         - Backups: `neo_backup_last_success_timestamp_seconds{destination}`, `neo_backup_last_run_failed{destination}` per machine
