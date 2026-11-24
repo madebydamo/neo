@@ -460,6 +460,10 @@
     # summaries read $values.B) → C (B above `above`, or below `below`). Each
     # series A returns is one alert instance, so return one series per thing
     # that is wrong and keep its labels (host, …) for the summary.
+    # `recover`: a firing instance goes back to normal only when B is below it
+    # (an `above` rule) or above it (a `below` rule), Grafana's recovery
+    # threshold, so a value around the threshold does not flap Normal/Alerting
+    # every minute (an increase() count of 10 real events reads 9.3 or 10.3).
     alertRule = {
       uid,
       title,
@@ -473,6 +477,7 @@
       noData ? "ok",
       labels ? {},
       range ? 600,
+      recover ? null,
     }: let
       lt = below != null;
       threshold =
@@ -481,6 +486,11 @@
         else if above == null
         then 0
         else above;
+      # recover must lie on the normal side of the threshold.
+      recoverOk =
+        if lt
+        then recover >= threshold
+        else recover <= threshold;
     in {
       inherit uid title for;
       condition = "C";
@@ -535,15 +545,25 @@
             type = "threshold";
             expression = "B";
             conditions = [
-              {
-                evaluator = {
-                  type =
-                    if lt
-                    then "lt"
-                    else "gt";
-                  params = [threshold];
-                };
-              }
+              ({
+                  evaluator = {
+                    type =
+                      if lt
+                      then "lt"
+                      else "gt";
+                    params = [threshold];
+                  };
+                }
+                // lib.optionalAttrs (recover != null) {
+                  # Grafana inverts it: the instance recovers while this is true.
+                  unloadEvaluator = {
+                    type =
+                      if lt
+                      then "gt"
+                      else "lt";
+                    params = [(lib.throwIfNot recoverOk "alert rule ${uid}: recover (${toString recover}) must be on the normal side of the threshold (${toString threshold})" recover)];
+                  };
+                })
             ];
           };
         }

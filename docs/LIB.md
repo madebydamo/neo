@@ -247,6 +247,7 @@ Every scraped series gets `service`, `scrape` (the endpoint's name), `host` and 
 | `expr` | | Query evaluated every minute: PromQL, or a LogQL metric query with `datasource = "loki"`. Each series is one alert; keep `host` and the labels the summary uses. Filter with `alertSelector "<service>"` (no `$host` in rules) |
 | `datasource` | `"prometheus"` | `"prometheus"` or `"loki"` |
 | `above` / `below` | fire above 0 | Threshold on the last value; set one of them |
+| `recover` | `null` | A firing alert ends only below this (with `above`) or above it (with `below`): Grafana's recovery threshold, against counts that hover around the threshold and fire/resolve every minute. Must lie on the normal side of the threshold |
 | `for` | `"5m"` | How long the condition holds before it fires (`"0s"` at once) |
 | `severity` | `"warning"` | `info`, `warning`, `critical` |
 | `summary` | | Plain message for the owner; Go template with `{{ $labels.host }}`, `{{ $values.B.Value }}` |
@@ -294,7 +295,7 @@ Neo sets the uid (`app-<service>-<id>`), tags and the `host` variable. Filter ev
 | `queryVar` | `{ name, label, query, datasource ? prom, multi ? true, includeAll ? true }` | Template variable |
 | `appSelector` | `service` | `service="<service>", host=~"$host"` |
 | `alertSelector` | `service` | `service="<service>"` (alert rules have no `$host`) |
-| `alertRule` | `{ uid, title, expr, summary, datasource, above, below, for, severity, noData, labels }` | One Grafana alert rule (provisioning format); apps use `neo.monitoring.apps.<service>.alerts` |
+| `alertRule` | `{ uid, title, expr, summary, datasource, above, below, recover, for, severity, noData, labels }` | One Grafana alert rule (provisioning format); apps use `neo.monitoring.apps.<service>.alerts` |
 | `thresholdsGreenRed` | `steps` | Thresholds starting green; `steps = [{ color; value; }]` |
 | `upDown` | | Value mapping 0 = Down, 1 = Up |
 | `prom`, `loki`, `pos x y w h`, `layout`, `hostVar` | | Datasource refs, a fixed gridPos, the layout pass, a server variable |

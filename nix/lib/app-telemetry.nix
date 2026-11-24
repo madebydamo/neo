@@ -489,6 +489,8 @@ in {
           title = "${label}: many failed sign-ins";
           expr = ''sum by (host) (increase(neo_app_logins_total{${s}, result="failure"}[15m]))'';
           above = 10;
+          # Ends below 5, not at once: increase() reads 10 events as 9.3 or 10.3.
+          recover = 5;
           for = "0s";
           summary = "{{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}Many{{ end }} failed sign-ins to ${label} in the last 15 minutes.";
         };

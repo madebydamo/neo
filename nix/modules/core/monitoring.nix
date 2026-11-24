@@ -201,6 +201,11 @@
             default = null;
             description = "Fire when the value is below this instead.";
           };
+          recover = mkOption {
+            type = types.nullOr types.number;
+            default = null;
+            description = "A firing alert ends only when the value is below this (with above) or above it (with below), so a value around the threshold does not fire and end every minute. Default: it ends as soon as the condition is false.";
+          };
           for = mkOption {
             type = types.str;
             default = "5m";
@@ -416,7 +421,7 @@
             rules = mapAttrsToList (id: a:
               lib.neo.grafana.alertRule {
                 uid = uidFor service id;
-                inherit (a) title expr datasource above below for severity summary noData;
+                inherit (a) title expr datasource above below recover for severity summary noData;
                 labels = a.labels // {inherit service;};
               }
               // {
