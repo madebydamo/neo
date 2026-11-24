@@ -42,7 +42,7 @@ Machine access (the seed unit, Hermes) runs `docker exec grafana curl -H 'Remote
 |--------|-------------|---------|
 | journald (minus dockerd's `CONTAINER_NAME` copies: oci-containers already logs each container on `docker-<c>.service`) | `job=journal`, `unit`, `level` | |
 | tinyauth audit stream (`TINYAUTH_LOG_JSON`, `…_AUDIT_ENABLED` while the agent runs) | `event`, `result`, `provider`; `username`, `ip`, `reason` as structured metadata | `neo_auth_events_total` |
-| sshd `Accepted …` / `Failed …` / `Invalid user …` | same, `provider=ssh` | same |
+| sshd `Accepted …` / `Failed …` / `Invalid user …` | same, `provider=ssh`; `attempt=scan` on a failure with a user name that does not exist (`Invalid user …`, `Failed … for invalid user …`) when sshd accepts keys only | same |
 | SWAG `log/nginx/neo-access.log` (JSON, `conf.d/neo-access-log.conf` written while the agent runs) | `job=swag`, `service` (host → Neo service, else `other`), `status_class`; method, path, status, ip, vhost as structured metadata | `neo_http_requests_total`, `neo_http_request_duration_seconds` (without WebSockets: a 101 logs how long the connection stayed open) |
 | node exporter (+ systemd, + textfile) | | `node_*`, `node_systemd_unit_state`, `neo_service_unit{service,name,kind}`, `neo_backup_*{destination}`, `neo_monitoring_expected_host{expected_host}` |
 | cAdvisor | | `container_*` (label `name`), filtered to CPU, memory, network |
@@ -74,7 +74,9 @@ Datasources and the `Assistant` contact point are provided too. The notification
 
 App alert rules (`neo.monitoring.apps.*.alerts`) are provided too, in folder **Apps**, but through Grafana's provisioning API instead of files (see below), with provenance `api`: equally read-only.
 
-Alert rules (folder Neo): app does not answer (5 min), server stopped reporting, disk over 90 %, systemd unit failed, systemd unit keeps restarting (more than 3 in 15 min), many failed sign-ins (10 in 15 min), more than 20 % server errors, certificate expires in less than 10 days. ISO 27001: clock not synchronised, backup overdue (26 h since the last success), backup failed, logs dropped, no logs from a server.
+Alert rules (folder Neo): app does not answer (5 min), server stopped reporting, disk over 90 %, systemd unit failed, systemd unit keeps restarting (more than 3 in 15 min), many failed sign-ins (more than 10 in 15 min per server and method, ends below 5), more than 20 % server errors, certificate expires in less than 10 days. ISO 27001: clock not synchronised, backup overdue (26 h since the last success), backup failed, logs dropped, no logs from a server.
+
+**Failed sign-ins.** sshd on a server with SSH keys (`neo.core.ssh.authorizedKeys`) accepts keys only, so an attempt with a user name that does not exist cannot succeed: Internet scanners try `ubuntu`, `admin`, `ethereum`, … all day (24 Nov 2026: 319 such lines on three servers, the alert fired 14 times). The agent labels those `attempt="scan"` (only when sshd is keys-only); "Many failed sign-ins" leaves them out (`attempt!="scan"`), the Sign-ins panels show them as result `scan` (`label_replace` of `attempt` into `result`), the Failed logins stats leave them out and the ISO 27001 table of failed sign-ins has them with Kind `scan`. Failures of existing users (`Failed publickey for alice`) and of tinyauth count as before. The rule uses `recover = 5`: `increase()` extrapolates, so 10 real events read 9.3 or 10.3 and the alert went Normal/Alerting every minute.
 
 **Recovery threshold.** `recover` on a rule (`lib.neo.grafana.alertRule`, `neo.monitoring.apps.*.alerts.*`) is Grafana's recovery threshold (`unloadEvaluator` of the threshold expression): a firing instance ends only when the value is below it (an `above` rule) or above it (a `below` rule). Use it for counts over a window that hover around the threshold; `appAlerts` sets it on `login-failures`.
 

@@ -11,7 +11,9 @@ in
       (bars {
         title = "Sign-ins";
         gridPos = pos 0 0 24 7;
-        targets = [(pq ''sum by (result, provider, host) (increase(neo_auth_events_total{event="login"}[$__interval]))'' "{{host}} {{provider}} {{result}}")];
+        description = "Sign-ins by server, method and result. scan: SSH attempts with a user name that does not exist on a server that accepts keys only (Internet scanners); they cannot succeed and raise no alert.";
+        # attempt="scan" (monitoring-agent/_alloy.nix) shown as its own result.
+        targets = [(pq ''sum by (result, provider, host) (label_replace(increase(neo_auth_events_total{event="login"}[$__interval]), "result", "scan", "attempt", "scan"))'' "{{host}} {{provider}} {{result}}")];
       })
       (bargauge {
         title = "Failed sign-ins per user name";

@@ -16,6 +16,9 @@
   # The Monitoring server runs here: also check the addresses of the other
   # machines' agents (their files in /etc/neo-agents, monitoring/default.nix).
   central ? false,
+  # sshd here accepts keys only (no password, no keyboard-interactive): a
+  # sign-in with a user name that does not exist cannot succeed.
+  sshKeysOnly ? false,
 }: let
   inherit (lib) concatMapStrings concatStringsSep optionalString;
   str = builtins.toJSON;
@@ -286,6 +289,18 @@ in ''
         values = { username = "", ip = "" }
       }
     }
+    ${optionalString sshKeysOnly ''
+    // A user name sshd does not know, on a keys-only sshd: an Internet
+    // scanner trying common names (ubuntu, admin, …), which cannot succeed.
+    // Still counted and shown, kept apart with attempt="scan" so "Many
+    // failed sign-ins" leaves it out. Failures of existing users stay as they are.
+    stage.match {
+      selector = `{unit="sshd.service", result="failure"} |~ "^(Invalid user |Failed [^ ]+ for invalid user )"`
+      stage.static_labels {
+        values = { attempt = "scan" }
+      }
+    }
+  ''}
 
     // sudo: "alice : TTY=pts/0 ; PWD=/ ; USER=root ; COMMAND=/bin/ls".
     stage.match {

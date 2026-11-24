@@ -5,10 +5,11 @@
 # Metric and label names come from the agent (monitoring-agent/_alloy.nix):
 #   node_* (job=node), container_* (job=containers, label name),
 #   probe_* (job=uptime, label target), neo_service_unit{service,name,kind},
-#   neo_auth_events_total{event,result,provider}, neo_http_requests_total{service,status_class},
+#   neo_auth_events_total{event,result,provider,attempt}, neo_http_requests_total{service,status_class},
 #   neo_http_request_duration_seconds; every series carries host.
 # Loki streams: job=journal {unit, level}, job=swag {service, status_class},
-#   login events {event, result, provider} with username/ip as structured metadata.
+#   login events {event, result, provider} with username/ip as structured metadata;
+#   attempt="scan" on sshd failures with an unknown user name on a keys-only sshd.
 {lib}: let
   # Panel helpers: nix/lib/grafana.nix.
   inherit (lib.neo.grafana) prom loki pq pqInstant lq lqLegend pos thresholdsGreenRed panel stat timeseries bars bargauge logs upDown stateTimeline table text row queryVar hostVar dashboard;
@@ -92,8 +93,12 @@
       (rule {
         uid = "neo-failed-logins";
         title = "Many failed sign-ins";
-        expr = ''sum by (host, provider) (increase(neo_auth_events_total{event="login",result="failure"}[15m]))'';
+        # Without attempt="scan" (unknown sshd user names on a keys-only
+        # sshd, monitoring-agent/_alloy.nix): they cannot succeed. Ends below
+        # 5: increase() reads 10 events as 9.3 or 10.3, which flapped.
+        expr = ''sum by (host, provider) (increase(neo_auth_events_total{event="login",result="failure",attempt!="scan"}[15m]))'';
         above = 10;
+        recover = 5;
         for = "0s";
         summary = "{{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}Many{{ end }} failed {{ $labels.provider }} sign-ins on {{ $labels.host }} in the last 15 minutes.";
       })

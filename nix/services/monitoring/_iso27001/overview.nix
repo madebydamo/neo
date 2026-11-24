@@ -89,7 +89,8 @@ in
       (stat {
         title = "A.8.5 Failed sign-ins";
         gridPos = pos 0 11 4 4;
-        targets = [(pq ''round(sum(increase(neo_auth_events_total{event="login",result="failure"}[$__range]))) or vector(0)'' "")];
+        description = "Failed sign-ins of existing users and to the homeserver login. SSH scans (user names that do not exist, keys-only server) are counted apart on the Access page.";
+        targets = [(pq ''round(sum(increase(neo_auth_events_total{event="login",result="failure",attempt!="scan"}[$__range]))) or vector(0)'' "")];
         thresholds = thresholdsGreenRed [(orange 20) (red 100)];
       })
       (stat {

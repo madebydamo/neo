@@ -148,6 +148,10 @@
       in "NEO_SCRAPE_${ident t.service}_${ident t.scrape}";
       alloyText = import ./_alloy.nix {
         inherit lib hostName vhosts uptimeTargets swagLogsOn scrapeEnv central;
+        sshKeysOnly = let
+          ssh = config.services.openssh;
+        in
+          ssh.enable && !(ssh.settings.PasswordAuthentication or true) && !(ssh.settings.KbdInteractiveAuthentication or true);
         appTargets = config.neo.monitoring.scrapeTargets;
         tokenSet = remote && tokenSet;
         lokiUrl =

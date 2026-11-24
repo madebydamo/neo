@@ -18,7 +18,8 @@ in
       (bars {
         title = "Sign-ins";
         gridPos = pos 0 3 24 7;
-        targets = [(pq ''sum by (provider, result) (increase(neo_auth_events_total{event="login"}[$__interval]))'' "{{provider}} {{result}}")];
+        description = "ssh scan: attempts with a user name that does not exist on a server that accepts keys only (Internet scanners); they cannot succeed.";
+        targets = [(pq ''sum by (provider, result) (label_replace(increase(neo_auth_events_total{event="login"}[$__interval]), "result", "scan", "attempt", "scan"))'' "{{provider}} {{result}}")];
       })
       (table {
         title = "Who signed in";
@@ -45,7 +46,8 @@ in
         title = "Failed sign-ins";
         gridPos = pos 12 10 12 9;
         datasource = loki;
-        targets = [((instantLoki ''sum by (username, ip, reason, provider) (count_over_time({event="login", result="failure"} [$__range]))'' "") // {format = "table";})];
+        description = "Every failed attempt. Kind scan: an SSH user name that does not exist on a server that accepts keys only (Internet scanners).";
+        targets = [((instantLoki ''sum by (username, ip, reason, provider, attempt) (count_over_time({event="login", result="failure"} [$__range]))'' "") // {format = "table";})];
         transformations = [
           {
             id = "organize";
@@ -56,6 +58,7 @@ in
                 ip = "Address";
                 reason = "Reason";
                 provider = "Method";
+                attempt = "Kind";
                 Value = "Attempts";
               };
             };

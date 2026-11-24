@@ -21,7 +21,8 @@
         - Containers `grafana`, `prometheus`, `loki`; data under `${cfg.appdata}`.
         - Every server runs `monitoring-agent` (Grafana Alloy). It sends:
           - journald (Loki `{job="journal", host, unit, level}`), SWAG access logs (`{job="swag", service, status_class}`),
-            sign-ins from tinyauth and sshd (`{event="login"|"logout", result, provider}`, username/ip as structured metadata);
+            sign-ins from tinyauth and sshd (`{event="login"|"logout", result, provider}`, username/ip as structured metadata;
+            `attempt="scan"`: sshd user name that does not exist on a keys-only sshd, left out of "Many failed sign-ins");
           - host numbers `node_*`, containers `container_*` (label `name`), uptime checks `probe_success{target}`,
             `neo_service_unit{service,name,kind}` (which units belong to which app), `neo_auth_events_total`,
             `neo_http_requests_total{service,status_class}`. Every series has `host`.

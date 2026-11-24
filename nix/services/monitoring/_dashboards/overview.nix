@@ -69,8 +69,8 @@ in
       (stat {
         title = "Failed logins";
         gridPos = pos 16 0 4 4;
-        description = "Failed sign-ins (homeserver login and SSH) in the selected time range.";
-        targets = [(pq ''round(sum(increase(neo_auth_events_total{event="login",result="failure"}[$__range]))) or vector(0)'' "")];
+        description = "Failed sign-ins (homeserver login and SSH) in the selected time range. Without SSH scans (user names that do not exist, keys-only server): those are under Logins.";
+        targets = [(pq ''round(sum(increase(neo_auth_events_total{event="login",result="failure",attempt!="scan"}[$__range]))) or vector(0)'' "")];
         thresholds = thresholdsGreenRed [
           {
             color = "orange";
@@ -233,8 +233,9 @@ in
       (bars {
         title = "Sign-ins";
         gridPos = pos 0 31 12 8;
-        description = "Homeserver login (tinyauth) and SSH sign-ins.";
-        targets = [(pq ''sum by (result, provider) (increase(neo_auth_events_total{event="login"}[$__interval]))'' "{{provider}} {{result}}")];
+        description = "Homeserver login (tinyauth) and SSH sign-ins. ssh scan: attempts with a user name that does not exist on a server that accepts keys only (Internet scanners); they cannot succeed.";
+        # attempt="scan" (monitoring-agent/_alloy.nix) shown as its own result.
+        targets = [(pq ''sum by (result, provider) (label_replace(increase(neo_auth_events_total{event="login"}[$__interval]), "result", "scan", "attempt", "scan"))'' "{{provider}} {{result}}")];
         overrides = [
           {
             matcher = {
@@ -247,6 +248,21 @@ in
                 value = {
                   mode = "fixed";
                   fixedColor = "red";
+                };
+              }
+            ];
+          }
+          {
+            matcher = {
+              id = "byRegexp";
+              options = ".*scan";
+            };
+            properties = [
+              {
+                id = "color";
+                value = {
+                  mode = "fixed";
+                  fixedColor = "orange";
                 };
               }
             ];
