@@ -2,6 +2,12 @@
      Params (each optional): htmx, htmx_ext (sse + ws extensions, needs htmx), alpine. --}}
 {{#if htmx}}
 <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+{{!-- htmx "settles" an element that has the same id before and after a swap:
+     it gives the new element the old one's class and style, then puts its own
+     back after ~20 ms. Alpine sets class and style (x-show, :class) in between,
+     so that restore wiped them (a closed option section showed its fields until
+     it was clicked twice). Alpine owns class and style; htmx settles only these. --}}
+<script>htmx.config.attributesToSettle = ['width', 'height'];</script>
 {{#if htmx_ext}}
 <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/sse.js"></script>
 <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
