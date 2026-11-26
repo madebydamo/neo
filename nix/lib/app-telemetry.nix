@@ -12,6 +12,7 @@
 #   neo_app_errors_total{component, kind}
 #   neo_app_job_runs_total{job, status}                              success|failure
 #   neo_app_job_last_success_timestamp_seconds{job}
+#   neo_app_job_last_run_timestamp_seconds{job}                      every run, also a failed one
 #   neo_app_data_updated_timestamp_seconds{source}
 #
 # Logs: one JSON object per line with `level` (debug|info|warning|error|critical)
@@ -431,6 +432,8 @@ in {
       llm ? false,
       logins ? false,
       # job name → seconds since the last success before `job-<name>` fires.
+      # The same limit counts for `job-<name>-not-run` (apps that report
+      # neo_app_job_last_run_timestamp_seconds) and `job-<name>-missing`.
       jobs ? {},
       # source → seconds since the last update before `data-<source>` fires.
       data ? {},
@@ -438,8 +441,10 @@ in {
       s = alertSelector service;
       # How long a job's (or data source's) metric may be missing on every
       # server before `*-missing` fires: its own limit, at least 6 hours, so
-      # a restart or a move to another server never trips it.
-      # A PromQL duration that also reads well in the summary (6h, 2d, 90m).
+      # a restart or a move to another server never trips it. It is the `for`
+      # of that rule, not the window of absent_over_time: one sample must not
+      # clear the alert for the whole window (see below).
+      # A duration that also reads well in the summary (6h, 2d, 90m).
       missingWindow = maxAge: let
         sec = lib.max maxAge 21600;
       in
@@ -450,16 +455,23 @@ in {
         else if lib.mod sec 60 == 0
         then "${toString (sec / 60)}m"
         else "${toString sec}s";
+      # Nothing arrived in the last 15 minutes (a gap of a few scrapes is not
+      # silence). How long that must hold is the rule's `for`.
+      silent = sel: "absent_over_time(${sel}[15m])";
     in
       lib.optionalAttrs (errorThreshold != null && (containers != [] || units != [])) {
         errors = {
           title = "${label}: errors in the log";
           datasource = "loki";
+          # `or on () vector(0)` keeps one series when there is no error line
+          # at all: without it the rule has no data and flips between NoData
+          # and Normal all day (VBSG KPI, 47 times in 24 h on 25 Nov 2026).
+          # That series has no host label, and 0 never reaches the threshold.
           expr = "sum by (host) (count_over_time(${errorLines {
             inherit containers units;
             hostSel = "";
             filter = errorFilter;
-          }} [15m]))";
+          }} [15m])) or on () vector(0)";
           above = errorThreshold;
           for = "0s";
           summary = "${label} on {{ $labels.host }} logged {{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}many{{ end }} errors in the last 15 minutes.";
@@ -497,24 +509,46 @@ in {
       }
       // lib.concatMapAttrs (job: maxAge: let
         sel = ''neo_app_job_last_success_timestamp_seconds{${s}, job="${job}"}'';
+        runSel = ''neo_app_job_last_run_timestamp_seconds{${s}, job="${job}"}'';
+        age = m: "max by (host) (time() - ${m})";
       in {
         # A restart, a deploy or a move to another server leaves no series
         # for a while (the app reports again after its next run): no data
         # is OK here, and the age must stay too high for 15 minutes.
+        #
+        # "It ran and did not finish well": when the app also reports
+        # neo_app_job_last_run_timestamp_seconds and did not run either, only
+        # the rule below fires, so one stopped job is one alert. Apps without
+        # that metric keep the whole case: the `unless` side is then empty and
+        # takes nothing away.
         "job-${job}" = {
           title = "${label}: ${job} did not succeed";
-          expr = "max by (host) (time() - ${sel})";
+          expr = "${age sel} unless on (host) (${age runSel} > ${toString maxAge})";
           above = maxAge;
           for = "15m";
           summary = "${label}: ${job} on {{ $labels.host }} {{ with $values.B }}last succeeded {{ humanizeDuration .Value }} ago{{ else }}is late{{ end }}.";
         };
+        # "It did not run at all", for apps that report every run (also a
+        # failed one). No data for apps that do not: they only have the rule
+        # above, which covers both cases.
+        "job-${job}-not-run" = {
+          title = "${label}: ${job} did not run";
+          expr = age runSel;
+          above = maxAge;
+          for = "15m";
+          summary = "${label}: ${job} on {{ $labels.host }} {{ with $values.B }}last ran {{ humanizeDuration .Value }} ago{{ else }}is late{{ end }}: it is not started any more, or it stops before it reports.";
+        };
         # The job reported no success on any server for a long time (never
-        # ran, its metric is gone): the rule above sees no data then.
+        # ran, its metric is gone): the rules above see no data then. The
+        # query asks only about the last 15 minutes and the `for` carries the
+        # tolerance, so a single success does not clear the alert for the
+        # whole window: "Kanban: digest reports nothing" was cleared by one
+        # run and then blind for four days (26 Nov 2026).
         "job-${job}-missing" = {
           title = "${label}: ${job} reports nothing";
-          expr = "absent_over_time(${sel}[${missingWindow maxAge}])";
+          expr = silent sel;
           above = 0;
-          for = "15m";
+          for = missingWindow maxAge;
           summary = "${label}: ${job} has reported no success on any server for ${missingWindow maxAge} (it never ran, or its numbers no longer arrive).";
         };
       })
@@ -532,9 +566,9 @@ in {
         };
         "data-${source}-missing" = {
           title = "${label}: ${source} data reports nothing";
-          expr = "absent_over_time(${sel}[${missingWindow maxAge}])";
+          expr = silent sel;
           above = 0;
-          for = "15m";
+          for = missingWindow maxAge;
           summary = "${label}: ${source} has reported no update on any server for ${missingWindow maxAge} (it never ran, or its numbers no longer arrive).";
         };
       })

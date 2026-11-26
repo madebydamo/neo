@@ -29,6 +29,7 @@ export const FEATURES = C("neo_app_feature_used_total", "Uses of a feature.", ["
 export const ERRORS = C("neo_app_errors_total", "Errors by component and kind.", ["component", "kind"]);
 export const JOB_RUNS = C("neo_app_job_runs_total", "Background job runs.", ["job", "status"]);
 export const JOB_LAST_SUCCESS = G("neo_app_job_last_success_timestamp_seconds", "Last successful run.", ["job"]);
+export const JOB_LAST_RUN = G("neo_app_job_last_run_timestamp_seconds", "Last run, whether it succeeded or not.", ["job"]);
 export const JOB_DURATION = H("neo_app_job_duration_seconds", "Background job run time.", ["job"], [1, 5, 15, 60, 300, 900, 3600, 14400]);
 export const DATA_UPDATED = G("neo_app_data_updated_timestamp_seconds", "Last update of a data source.", ["source"]);
 export const BUILD_INFO = G("neo_app_build_info", "App version.", ["version"]);
@@ -177,17 +178,19 @@ export function login(method, ok, user, reason) {
   if (ok) seenUser(user);
 }
 
-/** Run a background job: counted, timed, last success, failures logged and rethrown. */
+/** Run a background job: counted, timed, last run and last success, failures logged and rethrown. */
 export async function job(name, fn) {
   const end = JOB_DURATION.labels(name).startTimer();
   try {
     const r = await fn();
     JOB_RUNS.labels(name, "success").inc();
+    JOB_LAST_RUN.labels(name).set(Date.now() / 1000);
     JOB_LAST_SUCCESS.labels(name).set(Date.now() / 1000);
     log("info", `job ${name} done`, { event: "job_done", job: name }, "jobs");
     return r;
   } catch (err) {
     JOB_RUNS.labels(name, "failure").inc();
+    JOB_LAST_RUN.labels(name).set(Date.now() / 1000);
     log("error", `job ${name} failed`, { event: "job_failed", job: name, err }, "jobs");
     throw err;
   } finally {
