@@ -18,63 +18,6 @@
       comment = "homeserver@${cfg.hostname}";
       requireDir = "/home/homeserver";
     };
-    # Parse per-builder SSH CLI flags (e.g. -p 2222, -o Key=Value) into
-    # ssh_config directives so each remote builder keeps its own SSH settings
-    # without colliding in a global NIX_SSHOPTS.
-    parseSshOpts = args: let
-      step = acc: rest:
-        if rest == []
-        then acc
-        else let
-          head = builtins.head rest;
-          tail = builtins.tail rest;
-          takeArg = directive:
-            if tail == []
-            then acc // {errors = acc.errors ++ ["${head} is missing its value"];}
-            else
-              step (acc
-                // {
-                  lines =
-                    acc.lines
-                    ++ [
-                      (
-                        if directive == ""
-                        then builtins.head tail
-                        else "${directive} ${builtins.head tail}"
-                      )
-                    ];
-                }) (builtins.tail tail);
-        in
-          if head == "-p"
-          then takeArg "Port"
-          else if head == "-o"
-          then takeArg ""
-          else if head == "-i"
-          then takeArg "IdentityFile"
-          else if head == "-J"
-          then takeArg "ProxyJump"
-          else if head == "-4"
-          then step (acc // {lines = acc.lines ++ ["AddressFamily inet"];}) tail
-          else if head == "-6"
-          then step (acc // {lines = acc.lines ++ ["AddressFamily inet6"];}) tail
-          else if head == "-C"
-          then step (acc // {lines = acc.lines ++ ["Compression yes"];}) tail
-          else if lib.hasPrefix "-p" head && builtins.stringLength head > 2
-          then step (acc // {lines = acc.lines ++ ["Port ${lib.removePrefix "-p" head}"];}) tail
-          else if lib.hasPrefix "-o" head && builtins.stringLength head > 2
-          then step (acc // {lines = acc.lines ++ [(lib.removePrefix "-o" head)];}) tail
-          else if lib.hasPrefix "-i" head && builtins.stringLength head > 2
-          then step (acc // {lines = acc.lines ++ ["IdentityFile ${lib.removePrefix "-i" head}"];}) tail
-          else if lib.hasPrefix "-J" head && builtins.stringLength head > 2
-          then step (acc // {lines = acc.lines ++ ["ProxyJump ${lib.removePrefix "-J" head}"];}) tail
-          else step (acc // {errors = acc.errors ++ ["unsupported SSH flag '${head}'"];}) tail;
-    in
-      step {
-        lines = [];
-        errors = [];
-      }
-      args;
-
     # Active remote builders ordered by weight (highest speedFactor first,
     # tie-breaking by name) so /etc/nix/machines is deterministic and prefers
     # higher-weight machines.
@@ -87,11 +30,11 @@
         (lib.mapAttrsToList (name: value: {
             inherit name value;
             alias = "neo-builder-${lib.strings.sanitizeDerivationName name}";
-            ssh = parseSshOpts value.extraOptions;
+            needsSshConfig = value.port != null || value.sshOptions != {};
           })
           cfg.nix.builders));
 
-    buildersWithSshConfig = lib.filter (b: b.value.extraOptions != []) activeBuilders;
+    buildersWithSshConfig = lib.filter (b: b.needsSshConfig) activeBuilders;
   in {
     # The lib.neo.mkSudoCommand rules glob /nix/store/*-<pname>-*/bin/… With
     # glob(3) sudo lists the whole store for each such rule on every call
@@ -192,10 +135,6 @@
           assertion = b.value.systems != [];
           message = "core.nix.builders.${b.name}: systems must not be empty when enabled.";
         }
-        {
-          assertion = b.ssh.errors == [];
-          message = "core.nix.builders.${b.name}.extraOptions: ${lib.concatStringsSep "; " b.ssh.errors} (use -p <port>, -o <Option=Value>, -i <key>, -J <jump>, -4, -6 or -C).";
-        }
       ])
       activeBuilders;
 
@@ -228,7 +167,7 @@
         buildMachines = map (b:
           {
             hostName =
-              if b.value.extraOptions != []
+              if b.needsSshConfig
               then b.alias
               else b.value.host;
             sshUser = b.value.user;
@@ -254,7 +193,7 @@
       lib.concatMapStrings (b: ''
         Host ${b.alias}
           HostName ${b.value.host}
-        ${lib.optionalString (b.value.publicHostKey != null) "  HostKeyAlias ${b.alias}\n"}${lib.concatMapStrings (line: "  ${line}\n") b.ssh.lines}
+        ${lib.optionalString (b.value.port != null) "  Port ${toString b.value.port}\n"}${lib.optionalString (b.value.publicHostKey != null) "  HostKeyAlias ${b.alias}\n"}${lib.concatStrings (lib.mapAttrsToList (k: v: "  ${k} ${v}\n") b.value.sshOptions)}
       '')
       buildersWithSshConfig
       + "Match all\n"

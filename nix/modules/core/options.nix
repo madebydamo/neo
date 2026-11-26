@@ -264,6 +264,26 @@
                 rank = 0;
               };
 
+              port = mkOption {
+                type = types.nullOr types.port;
+                default = null;
+                description = "SSH port on the build computer. Leave empty for the standard port.";
+                rank = 15;
+                ui = ui.mkUi {
+                  label = "SSH port";
+                  emptyMeans = "22";
+                };
+              };
+
+              sshOptions = mkOption {
+                type = types.attrsOf types.str;
+                default = {};
+                example = {StrictHostKeyChecking = "accept-new";};
+                description = "Extra SSH config options for this computer (option name and value, e.g. StrictHostKeyChecking = accept-new). Usually empty.";
+                rank = 40;
+                ui = ui.mkUi {label = "SSH options";};
+              };
+
               maxJobs = mkOption {
                 type = types.ints.positive;
                 default = 8;
@@ -327,13 +347,11 @@
                 userDescription = "User account on the build computer. It must be allowed to run builds there.";
                 # The nix-daemon (root) uses this key.
                 sshKeyDescription = "Key the server logs in with. Leave as is to use the server's own homeserver key.";
-                # Applied per builder in ssh_config (e.g. -p 2222, -o Key=Value).
-                extraOptionsDescription = "Extra SSH settings for this computer, e.g. -p 2222 or -o StrictHostKeyChecking=accept-new. Usually empty.";
               };
             in {
               host = ssh.host // {default = "";};
               user = ssh.user // {default = "homeserver";};
-              inherit (ssh) sshKey extraOptions;
+              inherit (ssh) sshKey;
             });
         });
         default = {};

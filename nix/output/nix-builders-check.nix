@@ -42,7 +42,10 @@
       maxJobs = 16;
       speedFactor = 5;
       systems = ["x86_64-linux" "aarch64-linux"];
-      extraOptions = ["-p" "2222" "-o" "StrictHostKeyChecking=accept-new"];
+      port = 2222;
+      sshOptions = {
+        StrictHostKeyChecking = "accept-new";
+      };
       publicHostKey = "c3NoLWVkMjU1MTkgQUFBQQ==";
     };
     paused = {
@@ -76,8 +79,8 @@
     ++ lib.optional (!(lib.hasInfix "HostName 10.0.0.20" sshCfg)) "ssh config missing HostName 10.0.0.20"
     ++ lib.optional (!(lib.hasInfix "HostKeyAlias neo-builder-fast" sshCfg)) "ssh config missing HostKeyAlias for publicHostKey"
     ++ lib.optional (!(lib.hasInfix "Port 2222" sshCfg)) "ssh config missing Port 2222"
-    ++ lib.optional (!(lib.hasInfix "StrictHostKeyChecking=accept-new" sshCfg)) "ssh config missing StrictHostKeyChecking=accept-new"
-    ++ lib.optional (lib.hasInfix "neo-builder-slow" sshCfg) "builder without extraOptions must not get ssh_config block"
+    ++ lib.optional (!(lib.hasInfix "StrictHostKeyChecking accept-new" sshCfg)) "ssh config missing StrictHostKeyChecking accept-new"
+    ++ lib.optional (lib.hasInfix "neo-builder-slow" sshCfg) "builder without port/sshOptions must not get ssh_config block"
     ++ lib.optional (lib.hasInfix "10.0.0.30" sshCfg) "paused builder must not appear in ssh_config";
 in {
   perSystem = {pkgs, ...}: {
