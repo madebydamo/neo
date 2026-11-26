@@ -4,9 +4,9 @@
 use std::process::Stdio;
 
 use tokio::io::{AsyncBufReadExt, BufReader, Lines};
-use tokio::process::{Child, ChildStdout};
+use tokio::process::{Child, ChildStdout, Command};
 
-use crate::commands::web::util::proc;
+use crate::utils::bins;
 
 pub struct JournalFollow {
     _child: Child,
@@ -14,13 +14,12 @@ pub struct JournalFollow {
 }
 
 impl JournalFollow {
-    /// `journalctl -u <unit> -n 100 -f` through sudo. The unit name must be
-    /// checked by the caller (`unit_name_valid`). `Err` is a message for the
-    /// dialog.
+    /// `journalctl -u <unit> -n 100 -f` (neo-web's user is in `systemd-journal`).
+    /// The unit name must be checked by the caller (`unit_name_valid`). `Err` is
+    /// a message for the dialog.
     pub fn start(unit: &str) -> Result<Self, String> {
-        let mut child = proc::sudo()
+        let mut child = Command::new(bins::journalctl())
             .args([
-                "journalctl",
                 "-u",
                 unit,
                 "-n",

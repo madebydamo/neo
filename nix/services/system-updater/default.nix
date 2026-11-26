@@ -117,7 +117,7 @@
       };
 
       # homeserver runs neo update/activate and optional GC as this user.
-      # (web UI store repair / journalctl / systemd-run / rm live on neo.services.neo)
+      # (web UI store repair / systemd-run / rm live on neo.services.neo)
       security.sudo.extraRules = lib.neo.mkSudoExtraRules {
         users = ["homeserver"];
         commands = [

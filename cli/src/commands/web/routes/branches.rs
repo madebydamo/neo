@@ -17,9 +17,7 @@ use crate::commands::web::trigger::{
     is_activation_in_progress, trigger_activation, trigger_generation_switch,
 };
 use crate::commands::web::types::AppConfig;
-use crate::commands::web::util::{
-    branch_ok, err_div, err_span, generation_ok, proc, rev_ok, sudo_cmd,
-};
+use crate::commands::web::util::{branch_ok, err_div, err_span, generation_ok, proc, rev_ok};
 use crate::commands::web::version_tree;
 use crate::commands::web::version_tree::notes::NoteTarget;
 use crate::utils::command::git_cmd;
@@ -41,8 +39,7 @@ pub async fn versioning_tree(
     let dir = config.config_dir();
     let dir_str = dir.to_str().unwrap_or(".").to_string();
     let limit = limit.unwrap_or(version_tree::PAGE);
-    let sudo = sudo_cmd();
-    let view = proc::blocking(move || version_tree::load(&dir_str, limit, &sudo)).await;
+    let view = proc::blocking(move || version_tree::load(&dir_str, limit)).await;
     match view {
         Ok(v) => RawJson(
             serde_json::to_string(&v)

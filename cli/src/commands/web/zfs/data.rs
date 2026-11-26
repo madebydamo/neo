@@ -12,7 +12,7 @@
 //! to the image versions that ran then ([`super::apps`]).
 use super::super::locks::{system_lock_attr, LockMode};
 use super::super::power::{self, PowerAction};
-use super::super::util::{escape_attr, escape_html, sudo_cmd};
+use super::super::util::{escape_attr, escape_html};
 use super::apps;
 use super::render::{self, ManageCtx, BTN_SECONDARY};
 use super::{
@@ -166,10 +166,9 @@ pub async fn render_card(notice: Option<(&'static str, String)>) -> String {
         banners.push(result_banner(&r, apps_at));
     }
 
-    let sudo = sudo_cmd();
     let (timeline, running_gen, boot_gen) = tokio::task::spawn_blocking(move || {
         (
-            GenerationTimeline::load(&sudo),
+            GenerationTimeline::load(),
             running_generation_number(),
             current_generation_number(),
         )

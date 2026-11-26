@@ -39,7 +39,7 @@ const EVENTS_TTL: Duration = Duration::from_secs(600);
 type Events = Vec<(i64, Option<u64>)>;
 static EVENTS_CACHE: Mutex<Option<(String, Instant, Events)>> = Mutex::new(None);
 
-fn activation_events(sudo_cmd: &str, links_key: &str) -> Events {
+fn activation_events(links_key: &str) -> Events {
     let log_key = std::fs::metadata(ACTIVATION_LOG)
         .ok()
         .map(|m| format!("{}:{}", m.len(), mtime_secs(&m)))
@@ -52,7 +52,7 @@ fn activation_events(sudo_cmd: &str, links_key: &str) -> Events {
             }
         }
     }
-    let events = GenerationTimeline::load(sudo_cmd).events().to_vec();
+    let events = GenerationTimeline::load().events().to_vec();
     if let Ok(mut guard) = EVENTS_CACHE.lock() {
         *guard = Some((key, Instant::now(), events.clone()));
     }
@@ -175,7 +175,7 @@ fn gather_git(dir: &Path, limit: usize) -> GitInputs {
 }
 
 /// Gather everything and build the view (`limit` rows, newest first).
-pub fn load(config_path: &str, limit: usize, sudo_cmd: &str) -> TreeView {
+pub fn load(config_path: &str, limit: usize) -> TreeView {
     let dir = Path::new(config_path);
     let limit = limit.clamp(1, MAX_LIMIT);
     let GitInputs {
@@ -210,7 +210,7 @@ pub fn load(config_path: &str, limit: usize, sudo_cmd: &str) -> TreeView {
             .iter()
             .map(|l| format!("{}@{}", l.number, l.created))
             .collect();
-        activation_events(sudo_cmd, &key.join(","))
+        activation_events(&key.join(","))
     };
     let running_commit_fallback = running
         .filter(|r| !commits.iter().any(|c| c.generation == Some(*r)))

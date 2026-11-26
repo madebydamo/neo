@@ -47,6 +47,10 @@ pub fn zfs() -> String {
     system_tool("ZFS_BINARY_PATH", "zfs")
 }
 
+pub fn journalctl() -> String {
+    system_tool("JOURNALCTL_BINARY_PATH", "journalctl")
+}
+
 /// nix for long-running services (the web UI); the CLI uses [`NIX_CLI`].
 pub fn nix() -> String {
     system_tool("NIX_BINARY_PATH", "nix")

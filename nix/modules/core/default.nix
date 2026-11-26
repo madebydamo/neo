@@ -49,7 +49,7 @@
       isNormalUser = true;
       home = "/home/homeserver";
       createHome = true;
-      extraGroups = ["docker" "wheel"];
+      extraGroups = ["docker" "wheel" "systemd-journal"];
       # Machine keys log in here only (docs/design/ssh-key-roles.md).
       openssh.authorizedKeys.keys = config.neo.core.ssh.authorizedKeys ++ config.neo.core.ssh.machineKeys;
       # Empty means locked (no password login). SSH keys are the intended login.

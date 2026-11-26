@@ -93,6 +93,7 @@
       extraGroups = [
         "wheel"
         "docker"
+        "systemd-journal"
       ];
       openssh.authorizedKeys.keys = config.neo.core.ssh.authorizedKeys;
       # Same hash as homeserver. Empty hashedLinuxPassword locks password login (`!`).

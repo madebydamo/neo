@@ -3,6 +3,8 @@
 
 use std::process::Command;
 
+use crate::utils::bins;
+
 use super::profiles::{generation_for_path, generation_links, GenerationLink};
 use super::ACTIVATION_LOG;
 
@@ -20,10 +22,10 @@ pub struct GenerationTimeline {
 }
 
 impl GenerationTimeline {
-    pub fn load(sudo_cmd: &str) -> Self {
+    pub fn load() -> Self {
         let links = generation_links();
         let mut records = read_activation_log();
-        records.extend(journal_activations(sudo_cmd));
+        records.extend(journal_activations());
         Self::from_records(links, records)
     }
 
@@ -73,9 +75,9 @@ fn parse_activation_log_line(line: &str) -> Option<(i64, String)> {
         .then(|| Some((t.parse().ok()?, path.to_string())))?
 }
 
-fn journal_lines(sudo_cmd: &str, args: &[&str]) -> Vec<String> {
-    let out = Command::new(sudo_cmd)
-        .args(["-n", "journalctl", "--no-pager", "-q", "-o", "short-unix"])
+fn journal_lines(args: &[&str]) -> Vec<String> {
+    let out = Command::new(bins::journalctl())
+        .args(["--no-pager", "-q", "-o", "short-unix"])
         .args(args)
         .output();
     match out {
@@ -88,22 +90,16 @@ fn journal_lines(sudo_cmd: &str, args: &[&str]) -> Vec<String> {
 }
 
 /// Switches and boots recorded in the journal (as far back as it reaches).
-fn journal_activations(sudo_cmd: &str) -> Vec<(i64, String)> {
+fn journal_activations() -> Vec<(i64, String)> {
     let mut out = Vec::new();
-    for line in journal_lines(
-        sudo_cmd,
-        &[
-            "SYSLOG_IDENTIFIER=nixos",
-            "-g",
-            "^switching to system configuration ",
-        ],
-    ) {
+    for line in journal_lines(&[
+        "SYSLOG_IDENTIFIER=nixos",
+        "-g",
+        "^switching to system configuration ",
+    ]) {
         out.extend(parse_journal_switch(&line));
     }
-    for line in journal_lines(
-        sudo_cmd,
-        &["_TRANSPORT=kernel", "-g", "^Command line: .*init="],
-    ) {
+    for line in journal_lines(&["_TRANSPORT=kernel", "-g", "^Command line: .*init="]) {
         out.extend(parse_journal_boot(&line));
     }
     out

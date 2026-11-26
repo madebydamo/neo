@@ -132,6 +132,7 @@
           environment = {
             NIX_BINARY_PATH = "${pkgs.nix}/bin/nix";
             SUDO_BINARY_PATH = "/run/wrappers/bin/sudo";
+            JOURNALCTL_BINARY_PATH = "${pkgs.systemd}/bin/journalctl";
             # neo-web PATH is a closed list (no /run/current-system/sw/bin).
             # Container pull/inspect must not PATH-search a bare `docker`.
             DOCKER_BINARY_PATH = "${config.virtualisation.docker.package}/bin/docker";
@@ -195,11 +196,6 @@
               {
                 package = pkgs.systemd;
                 name = "systemctl";
-              }
-              # live logs dialog (journalctl -f)
-              {
-                package = pkgs.systemd;
-                name = "journalctl";
               }
               # web apply/update: spawn neo-activate@ / neo-update@ oneshots
               {

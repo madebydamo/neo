@@ -16,8 +16,8 @@ The full command reference is [references/cli.md](references/cli.md). Read it be
 - Log in as **`homeserver@<host>`**. `neo` runs as this user. It owns the config repo and `/etc/neo/settings.toml`. An ssh_config alias works: `ssh homeserver@hattori` keeps the alias's host name and ports, and `homeserver@` replaces its `User`.
 - `admin@<host>` uses the same keys, but `neo` there re-runs itself with `sudo -u homeserver`, which asks for a password. Use `homeserver@`.
 - Run each command non-interactively: `ssh homeserver@HOST 'cmd'`, or `ssh homeserver@HOST bash -s < script.sh` for a longer read-only script. Do not start `neo edit`, `neo git`, `neo lg` or a foreground `neo web`: they need a terminal.
-- `homeserver` is in the groups `wheel`, `docker` and `neo-git`. `docker …` and `journalctl …` work without sudo.
-- Passwordless sudo is limited to: `systemctl`, `journalctl`, `systemd-run`, `nixos-rebuild`, `switch-to-configuration`, `nix-store`, `nix-env`, `nix-collect-garbage`, `rm`, `neo-docker-rollback` (newer servers), `neo-git-ssh-key`, `neo-secrets-root`, and on a ZFS machine also `zfs` and `rsync` (`sudo -n -l` lists them). Every other `sudo` (`zpool`, `cat` of a root file, …) asks for a password. Then stop and ask the user to run it. Never send a password over SSH yourself.
+- `homeserver` is in the groups `wheel`, `docker`, `systemd-journal` and `neo-git`. `docker …` and `journalctl …` work without sudo.
+- Passwordless sudo is limited to: `systemctl`, `systemd-run`, `nixos-rebuild`, `switch-to-configuration`, `nix-store`, `nix-env`, `nix-collect-garbage`, `rm`, `neo-docker-rollback` (newer servers), `neo-git-ssh-key`, `neo-secrets-root`, and on a ZFS machine also `zfs` and `rsync` (`sudo -n -l` lists them). Every other `sudo` (`zpool`, `cat` of a root file, …) asks for a password. Then stop and ask the user to run it. Never send a password over SSH yourself.
 - These rules exist for the web UI and the updaters, and they accept any arguments. Use `sudo` only for the commands this skill names, and only after the user agrees when the command changes something.
 
 ## 2. Match the server's version
