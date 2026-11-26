@@ -49,6 +49,19 @@
                 ui = lib.neo.ui.mkUi {label = "Alerts through the assistant";};
               };
 
+              # Second Grafana contact point, type telegram, routed on
+              # severity=critical (monitoring/default.nix).
+              criticalAlertsDirect = mkOption {
+                type = types.bool;
+                default = true;
+                description = "Send the worst alerts (a server or app down, a failed backup) to Telegram from the monitoring itself as well. You get those twice, and they still reach you when the assistant is the thing that broke. Needs the assistant's Telegram bot.";
+                rank = 42;
+                ui = lib.neo.ui.mkUi {
+                  label = "Critical alerts straight to Telegram too";
+                  visibleWhen = "assistantAlerts";
+                };
+              };
+
               assistantInvestigates = mkOption {
                 type = types.bool;
                 default = false;

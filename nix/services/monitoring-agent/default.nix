@@ -53,32 +53,52 @@
           service = "proxy";
         }) (attrNames (swag.proxyPass or {}));
 
-      # Apps reachable from the Internet, checked at their public address.
+      # Where an app is checked: / of its web address, or its uptimePath.
       # Behind the login, / answers with the redirect to the login page even
       # when the app is down (issue #31): an app with an uptimePath (a path it
       # answers itself, in auth.publicPaths) is checked there, 2xx only.
-      appTargets = optionals (domain != null && domain != "") (mapAttrsToList (name: svc: let
-          path = config.neo.monitoring.apps.${name}.uptimePath or null;
-        in {
+      appPath = name: config.neo.monitoring.apps.${name}.uptimePath or null;
+      appUrl = name: svc: "https://${svc.subdomain}.${domain}${lib.defaultTo "/" (appPath name)}";
+      appModule = name:
+        if appPath name == null
+        then "http_app"
+        else "http_health";
+      haveDomain = domain != null && domain != "";
+
+      # Apps reachable from the Internet, checked at their public address: the
+      # check takes the same path as a visitor.
+      appTargets = optionals haveDomain (mapAttrsToList (name: svc: {
           inherit name;
-          address = "https://${svc.subdomain}.${domain}${
-            if path == null
-            then "/"
-            else path
-          }";
-          module =
-            if path == null
-            then "http_app"
-            else "http_health";
+          address = appUrl name svc;
+          module = appModule name;
         })
         (filterAttrs (_: svc: elem "web" (svc.ingress or [])) proxied));
+
+      # Apps that are not published to the Internet: their public address
+      # cannot be checked from here, because the request arrives on the
+      # PROXY-protocol listener and counts as ingress class `web`, which the
+      # vhost denies (SWAG answers with the Neo 404 page). They are checked at
+      # SWAG's own TLS listener instead, with the app's host name as SNI and
+      # Host header, which makes the request class `local`. An app that is not
+      # open to the home network either (NetBird or Tailscale only) is not
+      # checked: nothing on this machine may open it.
+      selfTargets = optionals (haveDomain && swag.enabled) (mapAttrsToList (name: svc: {
+          inherit name;
+          address = "https://127.0.0.1:${toString swag.localHttpsPort}${lib.defaultTo "/" (appPath name)}";
+          module = appModule name;
+          # The blackbox module gets Host and SNI from it, and the `target`
+          # label of the series stays the app's real address.
+          vhost = "${svc.subdomain}.${domain}";
+          url = appUrl name svc;
+        })
+        (filterAttrs (_: svc: !(elem "web" (svc.ingress or [])) && elem "local" (svc.ingress or [])) proxied));
       extraTargets =
         map (url: {
           name = url;
           address = url;
         })
         cfg.extraUptimeTargets;
-      uptimeTargets = optionals cfg.uptimeChecks (appTargets ++ extraTargets);
+      uptimeTargets = optionals cfg.uptimeChecks (appTargets ++ selfTargets ++ extraTargets);
 
       # neo_service_unit{service, name, kind}: which units make up which app.
       unitName = u:

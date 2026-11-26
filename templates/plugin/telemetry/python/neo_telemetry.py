@@ -17,7 +17,7 @@ Needs `prometheus_client`.
     tel.feature("export_pdf")
     tel.login("password", ok=True, user="alice")
     tel.seen_user("alice")         # active users 1h / 24h / 7d
-    with tel.job("nightly_sync"):
+    with tel.job("nightly_sync"):  # last run and, when it works, last success
         sync()
     tel.data_updated("simap")
 """
@@ -52,6 +52,7 @@ FEATURES = Counter("neo_app_feature_used", "Uses of a feature.", ["feature"])
 ERRORS = Counter("neo_app_errors", "Errors by component and kind.", ["component", "kind"])
 JOB_RUNS = Counter("neo_app_job_runs", "Background job runs.", ["job", "status"])
 JOB_LAST_SUCCESS = Gauge("neo_app_job_last_success_timestamp_seconds", "Last successful run.", ["job"])
+JOB_LAST_RUN = Gauge("neo_app_job_last_run_timestamp_seconds", "Last run, whether it succeeded or not.", ["job"])
 JOB_DURATION = Histogram(
     "neo_app_job_duration_seconds",
     "Background job run time.",
@@ -322,7 +323,11 @@ def login(method: str, ok: bool, user: str | None = None, reason: str | None = N
 
 @contextmanager
 def job(name: str):
-    """A background job run: counted, timed, last success, failures logged."""
+    """A background job run: counted, timed, last run and last success, failures logged.
+
+    Both times are set, so the alert rules can tell "it did not run at all" from
+    "it ran and did not finish well" (docs/APP-TELEMETRY.md).
+    """
     start = time.monotonic()
     try:
         yield
@@ -330,11 +335,13 @@ def job(name: str):
         raise
     except BaseException:
         JOB_RUNS.labels(name, "failure").inc()
+        JOB_LAST_RUN.labels(name).set(time.time())
         JOB_DURATION.labels(name).observe(time.monotonic() - start)
         log.error("job %s failed", name, exc_info=True, extra={"event": "job_failed", "job": name})
         raise
     else:
         JOB_RUNS.labels(name, "success").inc()
+        JOB_LAST_RUN.labels(name).set(time.time())
         JOB_LAST_SUCCESS.labels(name).set(time.time())
         JOB_DURATION.labels(name).observe(time.monotonic() - start)
         log.info("job %s done", name, extra={"event": "job_done", "job": name, "seconds": round(time.monotonic() - start, 3)})

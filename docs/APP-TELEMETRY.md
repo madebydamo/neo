@@ -43,6 +43,7 @@ Served on **`$NEO_METRICS_PORT` (9464)**, which the Nix module sets only while m
 | `neo_app_errors_total` | `component, kind` | Errors (the helpers count every error log line) |
 | `neo_app_job_runs_total` | `job, status` | Background job runs, `success\|failure` |
 | `neo_app_job_last_success_timestamp_seconds` | `job` | Unix time of the last success |
+| `neo_app_job_last_run_timestamp_seconds` | `job` | Unix time of the last run, successful or not; it tells "did not run at all" from "ran and did not finish well" |
 | `neo_app_job_duration_seconds` | `job` | Histogram |
 | `neo_app_data_updated_timestamp_seconds` | `source` | Unix time the app last got fresh data from an outside source |
 | `neo_app_build_info` | `version` | 1 |
@@ -128,5 +129,7 @@ in {
 Sections (`lib.neo.grafana.app.*`, each a list of panels starting with a row): `web`, `beacon`, `logins`, `features`, `llm`, `jobs`, `errors {containers; filter?}`. Only add the sections whose metrics the app exports; an empty panel is noise.
 
 `appAlerts` (`service`, `label`, `containers`, `units` (host units such as a timer's service; also for the `errors` section), `errorFilter`, `errorThreshold` = 10 error lines in 15 min or null, `llm`, `logins`, `jobs`, `data`) returns an attrset for `alerts`. Severity `critical` for things that stop the app from working for users (AI provider failing, key rejected), `warning` otherwise. Every summary says what is wrong in plain words.
+
+Each entry of `jobs` makes three rules with the same limit: `job-<name>` (the last success is too old), `job-<name>-not-run` (it was not started at all — only for apps that report `neo_app_job_last_run_timestamp_seconds`; the first rule steps back then, so one stopped job is one alert) and `job-<name>-missing` (the app reports nothing about that job any more). `data` makes the pair without the "did not run" rule. A job whose run can end "half done" (some work failed) should report the run time and keep the success time for a run that really worked: then "it did not run" and "it ran and did not finish well" are two different alerts.
 
 A Python app's image needs `prometheus_client` (Node: `prom-client`) in its dependencies; an image the plugin builds with Nix adds it there.

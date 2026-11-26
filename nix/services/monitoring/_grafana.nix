@@ -70,6 +70,19 @@
         summary = "The HTTPS certificate of {{ $labels.target }} expires in less than 10 days and was not renewed.";
       })
       (rule {
+        uid = "neo-cert-name";
+        title = "Certificate does not fit the address";
+        # The agent checks every address twice: once normally and once with
+        # certificate verification off (monitoring-agent/_alloy.nix, job
+        # uptime-tls). The second one working while the first does not means
+        # the server answers and only its certificate is wrong: a name it does
+        # not cover, an expired one or a chain that does not verify.
+        # "App does not answer" fires as well, with the same cause.
+        expr = ''probe_success{job="uptime-tls"} == 1 unless on (host, target) probe_success{job="uptime"} == 1'';
+        for = "15m";
+        summary = "The HTTPS certificate of {{ $labels.target }} is not valid for that address (wrong name, expired or an incomplete chain). The app itself answers, checked from {{ $labels.probe_from }}.";
+      })
+      (rule {
         uid = "neo-disk-full";
         title = "Disk almost full";
         expr = "100 * (1 - node_filesystem_avail_bytes{${fsFilter}} / node_filesystem_size_bytes{${fsFilter}})";
@@ -115,6 +128,51 @@
         above = 0.2;
         for = "10m";
         summary = "{{ with $values.B }}{{ humanizePercentage .Value }}{{ else }}Many{{ end }} of requests to {{ $labels.service }} on {{ $labels.host }} end in a server error.";
+      })
+      (rule {
+        uid = "neo-log-errors";
+        title = "Many errors in the log";
+        # Error lines of the whole server, whatever wrote them: the per-app
+        # rules only see the units an app declares. Journal priority err and
+        # worse (`level`, from the priority keyword). The threshold is far
+        # above a normal day (25 Nov 2026: at most 157 lines an hour, on the
+        # busiest of five servers).
+        # `or on () vector(0)` keeps a series when there is no error line at
+        # all; without it the rule flips between NoData and Normal.
+        datasource = "loki";
+        expr = ''sum by (host) (count_over_time({job="journal", level=~"err|error|crit|alert|emerg"} [1h])) or on () vector(0)'';
+        above = 500;
+        for = "15m";
+        summary = "{{ $labels.host }} wrote {{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}many{{ end }} error lines in the last hour. The Logs dashboard shows which units.";
+      })
+      (rule {
+        uid = "neo-log-flood";
+        title = "A service floods the log";
+        # One unit writing so much that the journal grows and real errors
+        # drown in it (uster, 26 Nov 2026: 3.9 GB journal, 47 000 lines a day
+        # from two containers). Per unit, not per server: the server total is
+        # the sum of all its apps and says nothing.
+        # 6 000 lines in 15 minutes is more than twice the loudest unit today.
+        # A 15-minute window, not an hour: this query reads every journal
+        # stream, and it runs every minute.
+        datasource = "loki";
+        expr = ''sum by (host, unit) (count_over_time({job="journal"} [15m]))'';
+        above = 6000;
+        for = "15m";
+        summary = "{{ $labels.unit }} on {{ $labels.host }} wrote {{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}very many{{ end }} log lines in 15 minutes: it fills the journal and hides real errors.";
+      })
+      (rule {
+        uid = "neo-coredump";
+        title = "A program crashed";
+        # systemd-coredump saved a core dump: "Process 524301 (chromium) of
+        # user 61102 dumped core." (brugg, 26 Nov 2026). The program name
+        # comes out of the line, the unit label does not have it (one unit
+        # instance per dump).
+        datasource = "loki";
+        expr = ''sum by (host, program) (count_over_time({job="journal", unit=~"systemd-coredump.*"} |= "dumped core" | regexp "Process [0-9]+ [(](?P<program>[^)]+)[)]" [1h])) or on () vector(0)'';
+        above = 0;
+        for = "0s";
+        summary = "{{ $labels.program }} on {{ $labels.host }} crashed and wrote a core dump ({{ with $values.B }}{{ printf \"%.0f\" .Value }}{{ else }}one or more{{ end }} in the last hour). `coredumpctl` on that server shows the dumps.";
       })
     ]
     ++ iso.alertRules;

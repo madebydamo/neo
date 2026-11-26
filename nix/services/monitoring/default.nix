@@ -31,11 +31,16 @@
 
       alertsOn = cfg.assistantAlerts && hermes.enabled;
       hermesSecretPath = "/etc/grafana/neo/hermes-webhook.secret";
+      telegramTokenPath = "/etc/grafana/neo/telegram-bot.token";
       # Hermes delivers to Telegram when a bot is set up, else only logs.
       deliver =
         if lib.neo.isSet hermes.telegramBotToken && hermes.telegramAllowedUserId != []
         then "telegram"
         else "log";
+      # Critical alerts go to Grafana's own Telegram contact point as well
+      # (contactPoints below): needs the same bot the assistant delivers with.
+      criticalOn = alertsOn && cfg.criticalAlertsDirect && deliver == "telegram";
+      criticalReceiver = "Assistant and Telegram";
 
       grafanaLib = import ./_grafana.nix {inherit lib;};
       yaml = pkgs.formats.yaml {};
@@ -179,6 +184,12 @@
         group_wait = "30s";
         group_interval = "5m";
         repeat_interval = "12h";
+        # Critical alerts take the contact point that also writes to Telegram
+        # itself, so one dead path does not swallow them.
+        routes = optional criticalOn {
+          receiver = criticalReceiver;
+          object_matchers = [["severity" "=" "critical"]];
+        };
       });
 
       seedScript = let
@@ -239,31 +250,55 @@
       # title/message are what Hermes forwards to Telegram (route prompt): the
       # alert name and one line per alert, no link (Telegram would show a
       # preview of Grafana's home page under every alert).
+      alertTitle = ''{{ if eq .Status "firing" }}🔴 {{ .CommonLabels.alertname }}{{ else }}✅ Resolved: {{ .CommonLabels.alertname }}{{ end }}'';
+      alertBody = ''{{ range .Alerts }}{{ if eq .Status "resolved" }}(resolved) {{ end }}{{ or .Annotations.summary .Labels.alertname }}{{ "\n" }}{{ end }}'';
+      hermesReceiver = uid: {
+        inherit uid;
+        type = "webhook";
+        disableResolveMessage = false;
+        settings = {
+          url = "http://host.docker.internal:${toString hermes.webhook.port}/webhooks/grafana";
+          httpMethod = "POST";
+          hmacConfig = {
+            secret = "$__file{${hermesSecretPath}}";
+            header = "X-Webhook-Signature";
+          };
+          title = alertTitle;
+          message = alertBody;
+        };
+      };
+      # Second path for critical alerts: Grafana writes to the Telegram bot
+      # API itself, so a critical alert still arrives when the assistant's
+      # webhook does not answer (it, or the machine, being the problem). Same
+      # bot and same chat as the assistant uses, so there is nothing new to
+      # set up. Plain text: a summary may contain < or &, which Telegram
+      # rejects in HTML mode.
+      telegramReceiver = {
+        uid = "neo-telegram";
+        type = "telegram";
+        disableResolveMessage = false;
+        settings = {
+          bottoken = "$__file{${telegramTokenPath}}";
+          chatid = toString (head hermes.telegramAllowedUserId);
+          parse_mode = "None";
+          message = "${alertTitle}\n${alertBody}";
+        };
+      };
       contactPoints = yaml.generate "contact-points.yaml" {
         apiVersion = 1;
-        contactPoints = [
-          {
+        contactPoints =
+          [
+            {
+              orgId = 1;
+              name = "Assistant";
+              receivers = [(hermesReceiver "neo-hermes")];
+            }
+          ]
+          ++ optional criticalOn {
             orgId = 1;
-            name = "Assistant";
-            receivers = [
-              {
-                uid = "neo-hermes";
-                type = "webhook";
-                disableResolveMessage = false;
-                settings = {
-                  url = "http://host.docker.internal:${toString hermes.webhook.port}/webhooks/grafana";
-                  httpMethod = "POST";
-                  hmacConfig = {
-                    secret = "$__file{${hermesSecretPath}}";
-                    header = "X-Webhook-Signature";
-                  };
-                  title = ''{{ if eq .Status "firing" }}🔴 {{ .CommonLabels.alertname }}{{ else }}✅ Resolved: {{ .CommonLabels.alertname }}{{ end }}'';
-                  message = ''{{ range .Alerts }}{{ if eq .Status "resolved" }}(resolved) {{ end }}{{ or .Annotations.summary .Labels.alertname }}{{ "\n" }}{{ end }}'';
-                };
-              }
-            ];
-          }
-        ];
+            name = criticalReceiver;
+            receivers = [(hermesReceiver "neo-hermes-critical") telegramReceiver];
+          };
       };
 
       provisioning = pkgs.runCommand "neo-grafana-provisioning" {} ''
@@ -343,6 +378,16 @@
         neo.core.containerDirs.prometheus = [cfg.appdata prometheusDir];
         neo.core.containerDirs.loki = [cfg.appdata lokiDir];
 
+        # Grafana reads the bot token from the file ($__file{…} in the contact
+        # point), so it never enters the store or the provisioning YAML.
+        neo.core.secrets.templates."grafana-telegram-token" = mkIf criticalOn {
+          content = hermes.telegramBotToken;
+          owner = "homeserver";
+          group = "homeserver";
+          mode = "0400";
+          restartUnits = ["docker-grafana.service"];
+        };
+
         virtualisation.oci-containers.containers = {
           grafana = {
             image = cfg.containers.grafana;
@@ -354,7 +399,8 @@
                 "${dashboardDirs}:/var/lib/neo-dashboards:ro"
                 "${appsDir}:/var/lib/neo-apps:ro"
               ]
-              ++ optional alertsOn "${hermes.webhook.secretFile}:${hermesSecretPath}:ro";
+              ++ optional alertsOn "${hermes.webhook.secretFile}:${hermesSecretPath}:ro"
+              ++ optional criticalOn "${config.neo.core.secrets.templates."grafana-telegram-token".path}:${telegramTokenPath}:ro";
             environment = {
               TZ = config.neo.core.timeZone;
               GF_SERVER_ROOT_URL = lib.neo.publicUrl config cfg;
