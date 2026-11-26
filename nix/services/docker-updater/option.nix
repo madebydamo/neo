@@ -19,10 +19,13 @@
               # systemd OnCalendar expression.
               schedule = mkOption {
                 type = types.str;
-                # An hour after the system updater (daily 04:00), so the two do not
-                # start together; the system lock also makes them wait for each other.
-                default = "Sun *-*-* 05:00:00";
-                description = "When to check for and install app updates (default: Sundays at 5 AM, after the system update). Accepts daily, weekly or a systemd calendar time such as Sun 05:00.";
+                # An hour before the backup (22:00) and two before the system updater
+                # (daily 23:00), so the three do not start together and the restarted
+                # containers are in that night's backup; the system lock also makes them
+                # wait for each other. The old default, Sundays 05:00, restarted containers
+                # while the browser testers were testing them.
+                default = "Sun *-*-* 21:00:00";
+                description = "When to check for and install app updates (default: Sundays at 9 PM, before the backup and the system update). Accepts daily, weekly or a systemd calendar time such as Sun 21:00.";
                 rank = 10;
                 ui = lib.neo.ui.mkUi {
                   label = "Update time";

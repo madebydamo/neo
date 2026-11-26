@@ -201,11 +201,12 @@
                 };
               };
 
-              # systemd OnCalendar expression.
+              # systemd OnCalendar expression. First step of the night: back up, then update
+              # (23:00), then let the apps' own nightly jobs and the browser testers run.
               schedule = mkOption {
                 type = types.str;
-                default = "00:00:00";
-                description = "Time of day the backup runs, e.g. 03:00:00 for 3 AM (default: midnight). Also accepts systemd calendar times such as Sun 02:00.";
+                default = "22:00:00";
+                description = "Time of day the backup runs, e.g. 03:00:00 for 3 AM (default: 10 PM, before the nightly update). Also accepts systemd calendar times such as Sun 02:00.";
                 rank = 70;
                 ui = lib.neo.ui.mkUi {label = "Backup time";};
               };

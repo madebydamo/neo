@@ -35,13 +35,15 @@
                 description = "Internal port of the security report page.";
               };
 
-              # systemd OnCalendar expression.
+              # systemd OnCalendar expression. Monday evening, not systemd's `weekly`
+              # (Monday 00:00): with a one-hour random delay that ran into the apps'
+              # nightly jobs and the browser testers, which start at midnight.
               schedule = mkOption {
                 type = types.str;
-                default = "weekly";
+                default = "Mon *-*-* 21:00:00";
                 example = "daily";
                 rank = 10;
-                description = "How often the check runs, for example daily or weekly. A check takes a while and downloads the vulnerability databases.";
+                description = "How often the check runs, for example daily, weekly or Mon 21:00 (default: Monday evening). A check takes a while and downloads the vulnerability databases.";
                 ui = lib.neo.ui.mkUi {label = "How often";};
               };
 

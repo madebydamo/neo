@@ -18,9 +18,11 @@
               };
               schedule = mkOption {
                 type = types.str;
-                default = "*-*-* 04:00:00";
-                # systemd OnCalendar expression
-                description = "When automatic updates run. The default is 04:00 every day (systemd calendar time, e.g. daily or *-*-* 04:00:00).";
+                default = "*-*-* 23:00:00";
+                # systemd OnCalendar expression. 23:00 so the night runs in one order: backup
+                # (22:00), update, then the apps' own nightly jobs and the browser testers, which
+                # then test the version that was activated the same night.
+                description = "When automatic updates run. The default is 23:00 every day (systemd calendar time, e.g. daily or *-*-* 23:00:00).";
                 rank = 10;
                 ui = lib.neo.ui.mkUi {label = "Update time";};
               };
