@@ -32,12 +32,12 @@
           icon = ui.icons.folder;
           rank = 30;
         };
-        # Expert settings: user/group IDs, Nix build limits and the remote
-        # builder, git host key options.
+        # Expert settings: user/group IDs, Nix build limits and remote
+        # builders, git host key options.
         advanced = ui.mkGroup {
           id = "advanced";
           label = "Advanced";
-          description = "Build limits, remote builder, user IDs and other expert settings";
+          description = "Build limits, remote builders, user IDs and other expert settings";
           icon = ui.icons.wrench;
           rank = 90;
         };
@@ -250,74 +250,112 @@
         };
       };
 
-      # Remote Nix builder: heavy builds (including nixosConfigurations) are
+      # Remote Nix builders: heavy builds (including nixosConfigurations) are
       # delegated over SSH so a weak local machine only evaluates and fetches results.
-      # Local ranks inside remoteBuild.* only (parent rank places the group under core.nix).
-      options.neo.core.nix.remoteBuild = mkOption {
-        type = types.submodule {
+      # Multiple machines can be configured; speedFactor sets priority weight.
+      options.neo.core.nix.builders = mkOption {
+        type = types.attrsOf (types.submodule {
           options =
             {
-              enabled = mkEnableOption "building updates on another computer over SSH, using the server's homeserver key by default" {
+              enabled = mkOption {
+                type = types.bool;
+                default = true;
+                description = "Use this computer for remote builds. Turn off to pause it without removing its settings.";
                 rank = 0;
-                ui = ui.mkUi {
-                  group = group.advanced;
-                  label = "Build on another computer";
-                  summary = true;
-                };
               };
 
               maxJobs = mkOption {
-                type = types.int;
+                type = types.ints.positive;
                 default = 8;
-                description = "How many builds the other computer runs at once, roughly its number of processor cores.";
+                description = "How many builds this computer runs at once, roughly its number of processor cores.";
                 rank = 50;
+                ui = ui.mkUi {label = "Parallel builds";};
               };
 
+              # Nix buildMachines.speedFactor: higher weight is preferred when
+              # several build computers are enabled.
               speedFactor = mkOption {
-                type = types.int;
+                type = types.ints.positive;
                 default = 1;
-                description = "How fast the other computer is; higher is preferred when there are several build computers.";
+                description = "Weight for prioritizing this computer over other build computers; higher numbers are preferred.";
                 rank = 60;
+                ui = ui.mkUi {label = "Weight";};
               };
 
-              system = mkOption {
-                type = types.str;
-                default = "x86_64-linux";
-                description = "Processor type of the other computer, e.g. x86_64-linux or aarch64-linux.";
+              systems = mkOption {
+                type = types.listOf types.str;
+                default = ["x86_64-linux"];
+                description = "Processor types this computer can build for, e.g. x86_64-linux or aarch64-linux.";
                 rank = 70;
+                ui = ui.mkUi {label = "Systems";};
               };
 
               supportedFeatures = mkOption {
                 type = types.listOf types.str;
                 default = ["nixos-test" "benchmark" "big-parallel" "kvm"];
-                description = "Special build features the other computer offers. Leave as is unless you know it differs.";
+                description = "Special build features this computer offers. Leave as is unless you know it differs.";
                 rank = 80;
+                ui = ui.mkUi {label = "Supported features";};
+              };
+
+              mandatoryFeatures = mkOption {
+                type = types.listOf types.str;
+                default = [];
+                description = "Only send builds that require all of these features to this computer. Usually empty.";
+                rank = 85;
+                ui = ui.mkUi {label = "Mandatory features";};
               };
 
               # Base64 of the key type and key fields of an ssh-keyscan line.
               publicHostKey = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Optional SSH host key of the other computer (base64), so the server can trust it without asking.";
+                description = "Optional SSH host key of this computer (base64), so the server can trust it without asking.";
                 rank = 90;
+                ui = ui.mkUi {
+                  label = "SSH host key";
+                  emptyMeans = "System known hosts";
+                };
               };
             }
-            // lib.neo.mkSshConnectionOptions {
-              # After enabled (0): host/user/sshKey/extra = 10–40, then maxJobs…
-              rankBase = 10;
-              hostDescription = "Name or IP address of the other computer.";
-              # Must be in nix.trusted-users there.
-              userDescription = "User account on the other computer. It must be allowed to run builds there.";
-              # The nix-daemon (root) uses this key.
-              sshKeyDescription = "Key the server logs in with. Leave as is to use the server's own homeserver key.";
-              # Passed to the nix-daemon SSH client via NIX_SSHOPTS.
-              extraOptionsDescription = "Extra SSH settings, e.g. -o StrictHostKeyChecking=accept-new. Usually empty.";
-            };
-        };
+            // (let
+              ssh = lib.neo.mkSshConnectionOptions {
+                # After enabled (0): host/user/sshKey/extra = 10–40, then maxJobs…
+                rankBase = 10;
+                hostDescription = "Name or IP address of the build computer.";
+                # Must be in nix.trusted-users there.
+                userDescription = "User account on the build computer. It must be allowed to run builds there.";
+                # The nix-daemon (root) uses this key.
+                sshKeyDescription = "Key the server logs in with. Leave as is to use the server's own homeserver key.";
+                # Applied per builder in ssh_config (e.g. -p 2222, -o Key=Value).
+                extraOptionsDescription = "Extra SSH settings for this computer, e.g. -p 2222 or -o StrictHostKeyChecking=accept-new. Usually empty.";
+              };
+            in {
+              host = ssh.host // {default = "";};
+              user = ssh.user // {default = "homeserver";};
+              inherit (ssh) sshKey extraOptions;
+            });
+        });
         default = {};
-        description = "Let another computer do the heavy building for updates, so a small server only downloads the results.";
+        example = literalExpression ''
+          {
+            workstation = {
+              host = "192.168.1.10";
+              user = "homeserver";
+              maxJobs = 16;
+              speedFactor = 4;
+            };
+            nas = {
+              host = "192.168.1.20";
+              user = "homeserver";
+              maxJobs = 4;
+              speedFactor = 1;
+            };
+          }
+        '';
+        description = "Other computers that do the heavy building for updates over SSH, so a small server only downloads the results. Add more than one and raise a computer's weight to prefer it.";
         rank = 81;
-        ui = inGroup group.advanced;
+        ui = labelled group.advanced "Remote build computers";
       };
 
       # Changing a volume path only changes where services look; activation

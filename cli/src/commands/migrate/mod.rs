@@ -21,6 +21,7 @@ mod m012_neo_two_themes;
 mod m013_backup_keeps_ssh_key;
 mod m014_plugin_tables;
 mod m015_backup_destinations;
+mod m016_nix_builders;
 
 pub fn migrate(config_path: &str, source_settings: &Path, dry_run: bool) -> Result<()> {
     let live = PathBuf::from(config_path).join(settings::FILE);
@@ -180,6 +181,7 @@ const MIGRATIONS: &[(&str, Step)] = &[
         "015-backup-destinations",
         Step::Custom(m015_backup_destinations::migrate),
     ),
+    ("016-nix-builders", Step::Custom(m016_nix_builders::migrate)),
 ];
 
 fn profile_has_key(doc: &DocumentMut, profile: &str, key: &str) -> bool {

@@ -18,6 +18,80 @@
       comment = "homeserver@${cfg.hostname}";
       requireDir = "/home/homeserver";
     };
+    # Parse per-builder SSH CLI flags (e.g. -p 2222, -o Key=Value) into
+    # ssh_config directives so each remote builder keeps its own SSH settings
+    # without colliding in a global NIX_SSHOPTS.
+    parseSshOpts = args: let
+      step = acc: rest:
+        if rest == []
+        then acc
+        else let
+          head = builtins.head rest;
+          tail = builtins.tail rest;
+          takeArg = directive:
+            if tail == []
+            then acc // {errors = acc.errors ++ ["${head} is missing its value"];}
+            else
+              step (acc
+                // {
+                  lines =
+                    acc.lines
+                    ++ [
+                      (
+                        if directive == ""
+                        then builtins.head tail
+                        else "${directive} ${builtins.head tail}"
+                      )
+                    ];
+                }) (builtins.tail tail);
+        in
+          if head == "-p"
+          then takeArg "Port"
+          else if head == "-o"
+          then takeArg ""
+          else if head == "-i"
+          then takeArg "IdentityFile"
+          else if head == "-J"
+          then takeArg "ProxyJump"
+          else if head == "-4"
+          then step (acc // {lines = acc.lines ++ ["AddressFamily inet"];}) tail
+          else if head == "-6"
+          then step (acc // {lines = acc.lines ++ ["AddressFamily inet6"];}) tail
+          else if head == "-C"
+          then step (acc // {lines = acc.lines ++ ["Compression yes"];}) tail
+          else if lib.hasPrefix "-p" head && builtins.stringLength head > 2
+          then step (acc // {lines = acc.lines ++ ["Port ${lib.removePrefix "-p" head}"];}) tail
+          else if lib.hasPrefix "-o" head && builtins.stringLength head > 2
+          then step (acc // {lines = acc.lines ++ [(lib.removePrefix "-o" head)];}) tail
+          else if lib.hasPrefix "-i" head && builtins.stringLength head > 2
+          then step (acc // {lines = acc.lines ++ ["IdentityFile ${lib.removePrefix "-i" head}"];}) tail
+          else if lib.hasPrefix "-J" head && builtins.stringLength head > 2
+          then step (acc // {lines = acc.lines ++ ["ProxyJump ${lib.removePrefix "-J" head}"];}) tail
+          else step (acc // {errors = acc.errors ++ ["unsupported SSH flag '${head}'"];}) tail;
+    in
+      step {
+        lines = [];
+        errors = [];
+      }
+      args;
+
+    # Active remote builders ordered by weight (highest speedFactor first,
+    # tie-breaking by name) so /etc/nix/machines is deterministic and prefers
+    # higher-weight machines.
+    activeBuilders =
+      lib.sort (a: b:
+        if a.value.speedFactor != b.value.speedFactor
+        then a.value.speedFactor > b.value.speedFactor
+        else a.name < b.name)
+      (lib.filter (entry: entry.value.enabled)
+        (lib.mapAttrsToList (name: value: {
+            inherit name value;
+            alias = "neo-builder-${lib.strings.sanitizeDerivationName name}";
+            ssh = parseSshOpts value.extraOptions;
+          })
+          cfg.nix.builders));
+
+    buildersWithSshConfig = lib.filter (b: b.value.extraOptions != []) activeBuilders;
   in {
     # The lib.neo.mkSudoCommand rules glob /nix/store/*-<pname>-*/bin/… With
     # glob(3) sudo lists the whole store for each such rule on every call
@@ -104,59 +178,86 @@
       fi
     '';
 
-    nix = let
-      rb = cfg.nix.remoteBuild;
-    in
-      lib.mkMerge [
+    assertions =
+      lib.concatMap (b: [
         {
-          settings = lib.mkMerge [
-            (lib.optionalAttrs (cfg.nix.maxJobs != null) {
-              max-jobs = cfg.nix.maxJobs;
-            })
-            (lib.optionalAttrs (cfg.nix.cores != null) {
-              cores = cfg.nix.cores;
-            })
-            (lib.optionalAttrs rb.enabled {
-              # Let remotes fetch from binary caches themselves instead of the weak local box
-              # uploading every source/input (see nix.conf "builders-use-substitutes").
-              builders-use-substitutes = true;
-            })
-            {
-              # admin is defined in this module; allow it as a remote-build SSH user.
-              trusted-users = ["admin"];
-              experimental-features = [
-                "nix-command"
-                "flakes"
-              ];
-            }
-          ];
+          assertion = b.value.host != "";
+          message = "core.nix.builders.${b.name}: host must not be empty when enabled.";
         }
-        (lib.mkIf rb.enabled {
-          distributedBuilds = true;
-          buildMachines = [
-            (
-              {
-                hostName = rb.host;
-                sshUser = rb.user;
-                sshKey = rb.sshKey;
-                system = rb.system;
-                protocol = "ssh-ng";
-                maxJobs = rb.maxJobs;
-                speedFactor = rb.speedFactor;
-                supportedFeatures = rb.supportedFeatures;
-                mandatoryFeatures = [];
-              }
-              // lib.optionalAttrs (rb.publicHostKey != null) {
-                publicHostKey = rb.publicHostKey;
-              }
-            )
-          ];
-        })
-      ];
+        {
+          assertion = b.value.user != "";
+          message = "core.nix.builders.${b.name}: user must not be empty when enabled.";
+        }
+        {
+          assertion = b.value.systems != [];
+          message = "core.nix.builders.${b.name}: systems must not be empty when enabled.";
+        }
+        {
+          assertion = b.ssh.errors == [];
+          message = "core.nix.builders.${b.name}.extraOptions: ${lib.concatStringsSep "; " b.ssh.errors} (use -p <port>, -o <Option=Value>, -i <key>, -J <jump>, -4, -6 or -C).";
+        }
+      ])
+      activeBuilders;
 
-    # nix-daemon invokes ssh for remote builders; forward extra SSH flags.
-    systemd.services.nix-daemon = lib.mkIf (cfg.nix.remoteBuild.enabled && cfg.nix.remoteBuild.extraOptions != []) {
-      environment.NIX_SSHOPTS = lib.concatStringsSep " " cfg.nix.remoteBuild.extraOptions;
-    };
+    nix = lib.mkMerge [
+      {
+        settings = lib.mkMerge [
+          (lib.optionalAttrs (cfg.nix.maxJobs != null) {
+            max-jobs = cfg.nix.maxJobs;
+          })
+          (lib.optionalAttrs (cfg.nix.cores != null) {
+            cores = cfg.nix.cores;
+          })
+          (lib.optionalAttrs (activeBuilders != []) {
+            # Let remotes fetch from binary caches themselves instead of the weak local box
+            # uploading every source/input (see nix.conf "builders-use-substitutes").
+            builders-use-substitutes = true;
+          })
+          {
+            # admin is defined in this module; allow it as a remote-build SSH user.
+            trusted-users = ["admin"];
+            experimental-features = [
+              "nix-command"
+              "flakes"
+            ];
+          }
+        ];
+      }
+      (lib.mkIf (activeBuilders != []) {
+        distributedBuilds = true;
+        buildMachines = map (b:
+          {
+            hostName =
+              if b.value.extraOptions != []
+              then b.alias
+              else b.value.host;
+            sshUser = b.value.user;
+            sshKey = b.value.sshKey;
+            systems = b.value.systems;
+            protocol = "ssh-ng";
+            maxJobs = b.value.maxJobs;
+            speedFactor = b.value.speedFactor;
+            supportedFeatures = b.value.supportedFeatures;
+            mandatoryFeatures = b.value.mandatoryFeatures;
+          }
+          // lib.optionalAttrs (b.value.publicHostKey != null) {
+            publicHostKey = b.value.publicHostKey;
+          })
+        activeBuilders;
+      })
+    ];
+
+    # Per-builder SSH options live in /etc/ssh/ssh_config under a dedicated
+    # Host alias so multiple builders never collide in NIX_SSHOPTS.
+    # `Match all` closes the block so later ssh_config lines stay global.
+    programs.ssh.extraConfig = lib.mkIf (buildersWithSshConfig != []) (
+      lib.concatMapStrings (b: ''
+        Host ${b.alias}
+          HostName ${b.value.host}
+        ${lib.optionalString (b.value.publicHostKey != null) "  HostKeyAlias ${b.alias}\n"}${lib.concatMapStrings (line: "  ${line}\n") b.ssh.lines}
+      '')
+      buildersWithSshConfig
+      + "Match all\n"
+    );
   };
 }
