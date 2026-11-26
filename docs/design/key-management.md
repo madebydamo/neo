@@ -78,6 +78,10 @@ addition to daily keys.
 
 ## 2. SSH keys and backup and restore keys
 
+> Superseded by [ssh-key-roles.md](ssh-key-roles.md) (2026-11-26): every `authorizedKeys` key
+> stays a decryptor; other computers go into `core.ssh.machineKeys` (homeserver login, never a
+> decryptor). There is no `core.secrets.recipients`.
+
 The page presents two jobs: **log in to this server**, and **get everything back**. A backup and restore key opens
 encrypted backups (`neo-backup.age`) and rebuilds the machine (`identity.sops.yaml`, `secrets.sops.yaml`). That's what
 people need these keys for, so the page leads with it; decrypting the secrets file is how it works underneath.

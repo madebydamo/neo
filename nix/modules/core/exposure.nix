@@ -216,6 +216,7 @@
     apps = lib.mapAttrsToList appRow (removeAttrs proxied ["swag"]);
 
     keys = neo.core.ssh.authorizedKeys;
+    machineKeys = neo.core.ssh.machineKeys;
   in {
     options.neo.exposure = {
       ports = mkOption {
@@ -279,7 +280,7 @@
           ssh = {
             ports = config.services.openssh.ports;
             users = ["admin" "homeserver"];
-            inherit keys;
+            inherit keys machineKeys;
             passwordLogin = keys == [];
             consolePassword = neo.core.hashedLinuxPassword != "";
             netbirdSsh = (services.netbird.enabled or false) && (services.netbird.ssh or false);

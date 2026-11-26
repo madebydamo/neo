@@ -19,6 +19,7 @@ const REFUSED: &[&str] = &[
     "core.plugins",
     "core.secrets",
     "core.ssh.authorizedKeys",
+    "core.ssh.machineKeys",
     "core.hashedLinuxPassword",
     "core.uid",
     "core.gid",

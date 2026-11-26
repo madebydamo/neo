@@ -341,6 +341,9 @@ sops (nixpkgs 26.05: 3.13.3), which takes `ssh-ed25519` public keys as age recip
 and decrypts with `SOPS_AGE_SSH_PRIVATE_KEY_FILE` (default `~/.ssh/id_ed25519`). No `ssh-to-age`
 step and no extra key files. The Phase 3 VM test confirms both directions.
 
+`core.ssh.machineKeys` (other computers, homeserver login) are never recipients
+([ssh-key-roles.md](ssh-key-roles.md)).
+
 **Re-keying is automatic.** Whenever a save changes `core.ssh.authorizedKeys`, the save handler
 regenerates `.sops.yaml` and runs `sops updatekeys -y` on both files through the root helper,
 inside the same `system` lock and the same commit. The machine can always do this because it's

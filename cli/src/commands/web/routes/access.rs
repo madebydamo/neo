@@ -161,6 +161,9 @@ pub struct ReportSsh {
     pub users: Vec<String>,
     #[serde(default)]
     pub keys: Vec<String>,
+    /// Keys of other computers: homeserver only, never a decryptor.
+    #[serde(default, alias = "machineKeys")]
+    pub machine_keys: Vec<String>,
     #[serde(default, alias = "passwordLogin")]
     pub password_login: bool,
     #[serde(default, alias = "consolePassword")]
@@ -333,6 +336,8 @@ struct KeyRow {
     kind: String,
     comment: String,
     tail: String,
+    /// A machine key (core.ssh.machineKeys).
+    machine: bool,
 }
 
 #[derive(Serialize, Default)]
@@ -425,7 +430,7 @@ fn defaults_of(doc: &DocumentMut) -> Effective {
 }
 
 /// `ssh-ed25519 AAAA… comment` → type, comment and the key's last characters.
-fn key_row(key: &str) -> KeyRow {
+fn key_row(key: &str, machine: bool) -> KeyRow {
     let mut parts = key.split_whitespace();
     let kind = parts.next().unwrap_or_default().to_string();
     let blob = parts.next().unwrap_or_default();
@@ -442,6 +447,7 @@ fn key_row(key: &str) -> KeyRow {
         kind: kind.trim_start_matches("ssh-").to_string(),
         comment,
         tail,
+        machine,
     }
 }
 
@@ -710,7 +716,13 @@ fn build(report: &AccessReport, doc: &DocumentMut) -> AccessContext {
         ports,
         filters,
         map,
-        ssh_keys: report.ssh.keys.iter().map(|k| key_row(k)).collect(),
+        ssh_keys: report
+            .ssh
+            .keys
+            .iter()
+            .map(|k| key_row(k, false))
+            .chain(report.ssh.machine_keys.iter().map(|k| key_row(k, true)))
+            .collect(),
         ssh: report.ssh.clone(),
         ssh_keys_url: option_url("core.ssh.authorizedKeys"),
         console_password_url: option_url("core.hashedLinuxPassword"),

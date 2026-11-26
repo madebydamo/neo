@@ -50,7 +50,8 @@
       home = "/home/homeserver";
       createHome = true;
       extraGroups = ["docker" "wheel"];
-      openssh.authorizedKeys.keys = config.neo.core.ssh.authorizedKeys;
+      # Machine keys log in here only (docs/design/ssh-key-roles.md).
+      openssh.authorizedKeys.keys = config.neo.core.ssh.authorizedKeys ++ config.neo.core.ssh.machineKeys;
       # Empty means locked (no password login). SSH keys are the intended login.
       # A set hash is for local console / sudo, not a shipped default password.
       hashedPassword =
@@ -61,6 +62,22 @@
 
     # Allow other neo hosts to use this machine as a remote Nix builder over SSH as homeserver.
     nix.settings.trusted-users = ["homeserver"];
+
+    # A key is a person's (logs in, decrypts) or a machine's (homeserver only,
+    # never decrypts), not both: compare type and key, not the comment.
+    assertions = let
+      norm = k: let
+        p = lib.filter (x: x != "") (lib.splitString " " (lib.replaceStrings ["\t" "\n" "\r"] [" " " " " "] k));
+      in
+        lib.concatStringsSep " " (lib.take 2 p);
+      people = map norm config.neo.core.ssh.authorizedKeys;
+      both = lib.filter (k: lib.elem (norm k) people) config.neo.core.ssh.machineKeys;
+    in [
+      {
+        assertion = both == [];
+        message = "core.ssh.machineKeys: these keys are also in core.ssh.authorizedKeys; keep each key in one list (people: authorizedKeys, machines: machineKeys): ${lib.concatStringsSep ", " both}";
+      }
+    ];
 
     system.activationScripts.create-volumes = lib.neo.mkEnsureDirs config [
       config.neo.core.volumes.root

@@ -432,7 +432,7 @@ Passwords, tokens and API keys (settings marked as secret, shown masked in the w
 
 Editing doesn't change: the web UI shows and saves secrets the same way in all three modes. **Activate** after switching.
 
-**Who can decrypt.** The machine itself (its SSH host key, `/etc/ssh/ssh_host_ed25519_key`) and every `ssh-ed25519` key in **System → SSH** (`core.ssh.authorizedKeys`). If you can log in with an ed25519 key, you can decrypt. RSA and other key types can still log in but can't decrypt. Encrypting refuses to start without at least one ed25519 key.
+**Who can decrypt.** The machine itself (its SSH host key, `/etc/ssh/ssh_host_ed25519_key`) and every `ssh-ed25519` key in **System → SSH** (`core.ssh.authorizedKeys`). If you can log in with an ed25519 key, you can decrypt. RSA and other key types can still log in but can't decrypt. Encrypting refuses to start without at least one ed25519 key. Keys of other computers (a server that builds updates here) go into **Machine SSH keys** (`core.ssh.machineKeys`): they log in as `homeserver` but never decrypt.
 
 **Escrow.** When you encrypt on the machine, Neo also writes `identity.sops.yaml`: the machine's SSH host key, encrypted to your SSH keys only (not to the machine). With it, a reinstalled machine gets its old identity back and can decrypt its secrets again ([rebuild from the config repo](#rebuild-a-machine-from-its-config-repo)).
 

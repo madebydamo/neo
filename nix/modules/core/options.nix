@@ -67,6 +67,21 @@
         ui = labelled group.ssh "Authorized SSH keys";
       };
 
+      # Login as homeserver only (docs/design/ssh-key-roles.md). Never a
+      # recipient of secrets.sops.yaml, identity.sops.yaml or neo-backup.age,
+      # and never in root's or admin's authorized_keys. Password login follows
+      # authorizedKeys alone.
+      options.neo.core.ssh.machineKeys = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        description = ''
+          Public SSH keys of other computers, such as a server that builds updates here. They can log in and manage this server, but they can't open your backups or encrypted settings.
+          Put the keys of people in Authorized SSH keys instead, so they can always restore.
+        '';
+        rank = 10;
+        ui = labelled group.ssh "Machine SSH keys";
+      };
+
       # Machine git identity (modules/core/git.nix): homeserver builds/fetches
       # with it (private plugins), Hermes commits and clones with it.
       # userName/userEmail = system gitconfig user.name/user.email.

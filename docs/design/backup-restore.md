@@ -94,7 +94,7 @@ opens `secrets.sops.yaml` opens the backup, and the config repo is inside it.
    authenticates everything (AES-256-CTR + Poly1305-AES), deduplicates and keeps versions.
 2. **Header `neo-backup.age`.** The data key, encrypted with [age](https://age-encryption.org) to
    the same recipients as `secrets.sops.yaml`: the SSH host key (`core.secrets.identityFile`)
-   and every ssh-ed25519 key in `core.ssh.authorizedKeys`. Plain text inside:
+   and every ssh-ed25519 key in `core.ssh.authorizedKeys` (never `core.ssh.machineKeys`). Plain text inside:
 
    ```
    version=1
