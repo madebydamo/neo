@@ -237,9 +237,15 @@
         ''
         + optionalString alertsOn ''
           # Point the default policy at the assistant unless someone changed it.
-          root=$(get ${api}/api/v1/provisioning/policies | jq -r .receiver)
+          current=$(get ${api}/api/v1/provisioning/policies)
+          root=$(jq -r .receiver <<<"$current")
+          routes=$(jq '.routes // [] | length' <<<"$current")
           # Untouched default: "empty" (Grafana 12+) or "grafana-default-email".
-          if [ "$root" = empty ] || [ "$root" = grafana-default-email ]; then
+          # A policy Neo seeded before the critical route existed (receiver
+          # Assistant, no child routes) gets that route too; a policy with
+          # routes of its own is left alone.
+          if [ "$root" = empty ] || [ "$root" = grafana-default-email ] ||
+            { ${lib.boolToString criticalOn} && [ "$root" = Assistant ] && [ "$routes" = 0 ]; }; then
             code=$(docker exec -i grafana curl -sS -o /dev/null -w '%{http_code}' -H 'Remote-User: neo' -H 'Content-Type: application/json' \
               -H 'X-Disable-Provenance: true' -X PUT --data-binary @- ${api}/api/v1/provisioning/policies < ${policy})
             case "$code" in 2*) echo "notification policy set" ;; *) echo "policy failed: HTTP $code" >&2; exit 1 ;; esac
