@@ -17,7 +17,7 @@
         ## Architecture notes
         - Chain: https://<subdomain>.<domain> → SWAG → backup-store-tunnel (websocat) → backup-store-sshd on 127.0.0.1 → neo-store-gate
         - The same address is the rescue portal for browsers: SWAG sends WebSocket requests to the tunnel (no login) and everything else to the Neo web UI (login), which serves only the portal there
-        - backup-store-report (timer, 15 min) writes /var/lib/neo-backup-store/report.json: last backup, versions, size, last connection per client
+        - backup-store-report (timer, 15 min) writes /var/lib/neo-backup-store/report.json: store total & disk space, plus per-client last backup, versions, size, last connection and full per-backup list (timestamp, ID, size, delta)
         - Each client is one account backup-<client>, home <path>/<client> (0700), one format; the gate refuses every other command
         - Storage is outside the Neo data volume, so this server's own backup never includes it
         - Dataset storage: <dataset>/<client>; ZFS backups go to <dataset>/<client>/<name>

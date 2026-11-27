@@ -127,6 +127,30 @@ pub struct KeyInfo {
     pub role: String,
 }
 
+/// One stored backup (a snapshot, or a plain-files folder).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupEntry {
+    /// Unix time of this backup.
+    pub time: i64,
+    /// Short identifier (restic short ID, ZFS snapshot name, or folder label).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub id: String,
+    /// Backup folder (files/encrypted) or relative dataset (zfs).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub folder: String,
+    /// Full logical/referenced size of this backup in bytes, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size_bytes: Option<u64>,
+    /// Unique / added bytes held by this backup, when known
+    /// (restic data_added_packed, ZFS snapshot `used`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delta_bytes: Option<u64>,
+    /// Time comes from file mtime rather than snapshot metadata or neo-backup.last.
+    #[serde(default)]
+    pub estimated: bool,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClientReport {
@@ -138,6 +162,9 @@ pub struct ClientReport {
     pub keys: Vec<KeyInfo>,
     /// Unix time of the newest backup.
     pub last_backup: Option<i64>,
+    /// Unix time of the oldest known backup.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oldest_backup: Option<i64>,
     /// last_backup comes from file times, not from neo-backup.last or a snapshot.
     pub estimated: bool,
     pub versions: Option<u64>,
@@ -150,6 +177,9 @@ pub struct ClientReport {
     pub git_remote: Option<String>,
     /// Hostname from neo-backup.last.
     pub host: Option<String>,
+    /// Individual backups stored for this client, newest first.
+    #[serde(default)]
+    pub backups: Vec<BackupEntry>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -158,6 +188,21 @@ pub struct StoreSummary {
     pub url: String,
     pub internet: bool,
     pub login: bool,
+    /// Total bytes stored across all clients in this store.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_size_bytes: Option<u64>,
+    /// Storage backend: "dataset" or "folder".
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub storage: String,
+    /// Total capacity of the store's dataset/filesystem, in bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disk_total_bytes: Option<u64>,
+    /// Bytes used on the store's dataset/filesystem.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disk_used_bytes: Option<u64>,
+    /// Bytes available on the store's dataset/filesystem.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disk_available_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -178,6 +223,21 @@ impl Report {
 
     pub fn client(&self, name: &str) -> Option<&ClientReport> {
         self.clients.iter().find(|c| c.name == name)
+    }
+
+    /// Total bytes stored across all clients: from `store.total_size_bytes`, or
+    /// summed from the clients for reports written before that field existed.
+    pub fn total_size_bytes(&self) -> Option<u64> {
+        if let Some(total) = self.store.total_size_bytes {
+            return Some(total);
+        }
+        if self.clients.is_empty() {
+            return Some(0);
+        }
+        self.clients
+            .iter()
+            .any(|c| c.size_bytes.is_some())
+            .then(|| self.clients.iter().filter_map(|c| c.size_bytes).sum())
     }
 }
 
@@ -201,6 +261,34 @@ pub fn now() -> i64 {
 /// `YYYY-MM-DDTHH:MM:SSZ` → Unix time.
 pub fn parse_utc(s: &str) -> Option<i64> {
     let s = s.trim().strip_suffix('Z')?;
+    parse_ymd_hms(s)
+}
+
+/// RFC 3339 timestamp (`YYYY-MM-DDTHH:MM:SS[.frac](Z|+HH:MM|-HH:MM)`) → Unix time.
+pub fn parse_rfc3339(s: &str) -> Option<i64> {
+    let s = s.trim();
+    let (body, offset_secs) = if let Some(b) = s.strip_suffix('Z').or_else(|| s.strip_suffix('z')) {
+        (b, 0i64)
+    } else {
+        let idx = s.rfind(['+', '-'])?;
+        // The sign must be after `T`, not one of the date dashes.
+        if idx <= s.find('T')? {
+            return None;
+        }
+        let sign = if s.as_bytes()[idx] == b'-' { -1 } else { 1 };
+        let (oh, om) = s[idx + 1..].split_once(':')?;
+        let oh = oh.parse::<i64>().ok()?;
+        let om = om.parse::<i64>().ok()?;
+        if !(0..=23).contains(&oh) || !(0..=59).contains(&om) {
+            return None;
+        }
+        (&s[..idx], sign * (oh * 3600 + om * 60))
+    };
+    let main = body.split('.').next()?;
+    Some(parse_ymd_hms(main)? - offset_secs)
+}
+
+fn parse_ymd_hms(s: &str) -> Option<i64> {
     let (date, time) = s.split_once('T')?;
     let mut d = date.split('-').map(|p| p.parse::<i64>().ok());
     let (y, m, day) = (d.next()??, d.next()??, d.next()??);
@@ -245,6 +333,21 @@ pub fn size(bytes: u64) -> String {
 
 /// Unix time → `YYYY-MM-DD HH:MM` (UTC).
 pub fn format_utc(t: i64) -> String {
+    let (y, m, d, secs) = civil_from_unix(t);
+    format!(
+        "{y:04}-{m:02}-{d:02} {:02}:{:02}",
+        secs / 3600,
+        secs % 3600 / 60
+    )
+}
+
+/// Unix time → `YYYY-MM-DD` (UTC).
+pub fn format_date_utc(t: i64) -> String {
+    let (y, m, d, _) = civil_from_unix(t);
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+fn civil_from_unix(t: i64) -> (i64, i64, i64, i64) {
     let (days, secs) = (t.div_euclid(86400), t.rem_euclid(86400));
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
@@ -255,11 +358,7 @@ pub fn format_utc(t: i64) -> String {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = yoe + era * 400 + i64::from(m <= 2);
-    format!(
-        "{y:04}-{m:02}-{d:02} {:02}:{:02}",
-        secs / 3600,
-        secs % 3600 / 60
-    )
+    (y, m, d, secs)
 }
 
 /// Days since 1970-01-01 (Howard Hinnant's algorithm).
@@ -310,7 +409,21 @@ mod tests {
         assert_eq!(parse_utc("2000-02-29T12:00:00Z"), Some(951_825_600));
         assert_eq!(parse_utc("2026-11-19 02:15:03"), None);
         assert_eq!(parse_utc("2026-13-01T00:00:00Z"), None);
+        assert_eq!(
+            parse_rfc3339("2026-11-19T03:15:03.987654321+01:00"),
+            Some(1_795_054_503)
+        );
+        assert_eq!(
+            parse_rfc3339("2026-11-18T21:15:03-05:00"),
+            Some(1_795_054_503)
+        );
+        assert_eq!(
+            parse_rfc3339("2026-11-19T02:15:03.123Z"),
+            Some(1_795_054_503)
+        );
+        assert_eq!(parse_rfc3339("2026-11-19T02:15:03"), None);
         assert_eq!(format_utc(1_795_054_503), "2026-11-19 02:15");
+        assert_eq!(format_date_utc(1_795_054_503), "2026-11-19");
         assert_eq!(format_utc(951_825_600), "2000-02-29 12:00");
         assert_eq!(format_utc(0), "1970-01-01 00:00");
     }

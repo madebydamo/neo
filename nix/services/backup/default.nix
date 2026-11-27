@@ -100,7 +100,7 @@
 
       backup = pkgs.writeShellApplication {
         name = "neo-backup";
-        runtimeInputs = with pkgs; [coreutils findutils gnugrep gnused rsync openssh util-linux restic age config.boot.zfs.package];
+        runtimeInputs = with pkgs; [coreutils findutils gnugrep gnused jq rsync openssh util-linux restic age config.boot.zfs.package];
         bashOptions = ["errexit" "nounset" "pipefail"];
         text = builtins.readFile ./backup.sh;
       };

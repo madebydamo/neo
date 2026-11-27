@@ -12,17 +12,25 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 use super::recipients::{self, Role, Unlock};
-use super::{now, parse_utc, ClientReport, KeyInfo, Report, StoreConfig, StoreSummary};
+use super::{
+    now, parse_rfc3339, parse_utc, BackupEntry, ClientReport, KeyInfo, Report, StoreConfig,
+    StoreSummary,
+};
 use crate::utils::fsutil::write_atomic;
 use crate::utils::profile::DEFAULT_CONFIG_REL;
 
 /// The marker backup.sh writes after a good run to a store.
 pub const MARKER: &str = "neo-backup.last";
+/// Plain-text snapshot list backup.sh writes next to an encrypted backup
+/// (short ID, timestamp, logical size, packed delta — no secrets or paths).
+pub const SNAPSHOTS_FILE: &str = "neo-backup.snapshots";
 const HEADER: &str = "neo-backup.age";
 /// Basename of the backed-up folder in a files backup (`/var/neo` → `neo`).
 const FILES_FOLDER: &str = "neo";
 /// Folders searched below a home for backup folders.
 const MAX_DEPTH: usize = 3;
+/// Bound snapshot metadata lines read from an untrusted client file.
+const MAX_SNAPSHOTS: usize = 2000;
 
 pub fn run(out: &Path) -> Result<()> {
     let store = StoreConfig::load()?;
@@ -133,12 +141,25 @@ fn build(
             clients.push(r);
         }
     }
+    let total_size_bytes = if clients.is_empty() {
+        Some(0)
+    } else if clients.iter().any(|c| c.size_bytes.is_some()) {
+        Some(clients.iter().filter_map(|c| c.size_bytes).sum())
+    } else {
+        None
+    };
+    let (disk_total_bytes, disk_used_bytes, disk_available_bytes) = store_space(store);
     Report {
         generated: now(),
         store: StoreSummary {
             url: store.url.clone(),
             internet: store.internet,
             login: store.login,
+            total_size_bytes,
+            storage: store.storage.clone(),
+            disk_total_bytes,
+            disk_used_bytes,
+            disk_available_bytes,
         },
         clients,
     }
@@ -155,29 +176,64 @@ fn client(store: &StoreConfig, name: &str, format: &str) -> ClientReport {
     match format {
         "zfs" => {
             if let Some(ds) = store.client_dataset(name) {
-                let (last, versions) = zfs_backups(&ds);
+                let (last, versions, backups) = zfs_backups(&ds);
                 r.last_backup = last;
                 r.versions = versions;
+                r.backups = backups;
             }
         }
         "files" | "encrypted" => {
             r.folders = backup_folders(&home, format);
+            let single_home = r.folders.len() == 1 && r.folders[0] == ".";
             for folder in &r.folders {
                 let dir = home.join(folder);
-                let (last, estimated, host) = match read_marker(&dir) {
-                    Some((t, h)) => (Some(t), false, h),
-                    None => (estimate(&dir, format), true, None),
-                };
-                if last > r.last_backup {
-                    r.last_backup = last;
-                    r.estimated = estimated;
-                    r.host = host.or(r.host.take());
-                }
                 if format == "encrypted" {
-                    r.versions =
-                        Some(r.versions.unwrap_or(0) + restic_snapshots(&dir).len() as u64);
+                    let entries = encrypted_backups(&dir, folder);
+                    let newest = entries.first().map(|b| (b.time, b.estimated));
+                    let (last, estimated, host) = match read_marker(&dir) {
+                        Some((t, h)) => (Some(t), false, h),
+                        None => match newest {
+                            Some((t, est)) => (Some(t), est, None),
+                            None => (None, true, None),
+                        },
+                    };
+                    if last > r.last_backup {
+                        r.last_backup = last;
+                        r.estimated = estimated;
+                        r.host = host.or(r.host.take());
+                    }
+                    r.versions = Some(r.versions.unwrap_or(0) + entries.len() as u64);
+                    r.backups.extend(entries);
                 } else {
-                    r.versions = Some(1);
+                    let (last, estimated, host) = match read_marker(&dir) {
+                        Some((t, h)) => (Some(t), false, h),
+                        None => (mtime(&dir.join(FILES_FOLDER)), true, None),
+                    };
+                    if last > r.last_backup {
+                        r.last_backup = last;
+                        r.estimated = estimated;
+                        r.host = host.or(r.host.take());
+                    }
+                    let folder_size = if single_home {
+                        r.size_bytes
+                    } else {
+                        dir_size(&dir)
+                    };
+                    if let Some(time) = last {
+                        r.backups.push(BackupEntry {
+                            time,
+                            id: if folder == "." {
+                                "files".into()
+                            } else {
+                                folder.clone()
+                            },
+                            folder: folder.clone(),
+                            size_bytes: folder_size,
+                            delta_bytes: None,
+                            estimated,
+                        });
+                    }
+                    r.versions = Some(r.folders.len() as u64);
                     if r.git_remote.is_none() {
                         r.git_remote = files_git_remote(&dir);
                     }
@@ -186,6 +242,9 @@ fn client(store: &StoreConfig, name: &str, format: &str) -> ClientReport {
         }
         _ => {}
     }
+    r.backups
+        .sort_by(|a, b| b.time.cmp(&a.time).then_with(|| b.id.cmp(&a.id)));
+    r.oldest_backup = r.backups.iter().map(|b| b.time).min();
     r
 }
 
@@ -259,18 +318,92 @@ fn parse_marker(text: &str) -> Option<(i64, Option<String>)> {
     Some((time, host))
 }
 
-/// Without a marker (clients from before it): newest snapshot file of the
-/// restic repositories, or the time of the files backup's folder.
-fn estimate(dir: &Path, format: &str) -> Option<i64> {
-    if format == "encrypted" {
-        restic_snapshots(dir).into_iter().max()
-    } else {
-        mtime(&dir.join(FILES_FOLDER))
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SnapshotMeta {
+    time: i64,
+    size_bytes: Option<u64>,
+    delta_bytes: Option<u64>,
 }
 
-/// Modification times of the snapshot files of every restic-* repository.
-fn restic_snapshots(dir: &Path) -> Vec<i64> {
+/// Snapshot entries of an encrypted backup folder: every file in
+/// `restic-*/snapshots/`, enriched with exact time and sizes from
+/// `neo-backup.snapshots` when the client uploaded it.
+fn encrypted_backups(dir: &Path, folder: &str) -> Vec<BackupEntry> {
+    let meta = fs::read_to_string(dir.join(SNAPSHOTS_FILE))
+        .map(|text| parse_snapshots_file(&text))
+        .unwrap_or_default();
+    let mut entries: Vec<BackupEntry> = restic_snapshot_files(dir)
+        .into_iter()
+        .map(|(short_id, file_mtime)| {
+            if let Some(m) = meta.get(&short_id) {
+                BackupEntry {
+                    time: m.time,
+                    id: short_id,
+                    folder: folder.to_string(),
+                    size_bytes: m.size_bytes,
+                    delta_bytes: m.delta_bytes,
+                    estimated: false,
+                }
+            } else {
+                BackupEntry {
+                    time: file_mtime,
+                    id: short_id,
+                    folder: folder.to_string(),
+                    size_bytes: None,
+                    delta_bytes: None,
+                    estimated: true,
+                }
+            }
+        })
+        .collect();
+    entries.sort_by(|a, b| b.time.cmp(&a.time).then_with(|| b.id.cmp(&a.id)));
+    entries
+}
+
+/// Parse `neo-backup.snapshots`: `<short_id>\t<rfc3339>\t<size>\t<delta>`.
+fn parse_snapshots_file(text: &str) -> BTreeMap<String, SnapshotMeta> {
+    let mut map = BTreeMap::new();
+    for line in text.lines() {
+        if map.len() >= MAX_SNAPSHOTS {
+            break;
+        }
+        let l = line.trim();
+        if l.is_empty() || l.starts_with('#') {
+            continue;
+        }
+        let parts: Vec<&str> = l.split_whitespace().collect();
+        let (Some(&raw_id), Some(&raw_time)) = (parts.first(), parts.get(1)) else {
+            continue;
+        };
+        if !(6..=64).contains(&raw_id.len()) || !raw_id.bytes().all(|b| b.is_ascii_hexdigit()) {
+            continue;
+        }
+        let Some(time) = parse_rfc3339(raw_time) else {
+            continue;
+        };
+        let opt_u64 = |idx: usize| -> Option<u64> {
+            let s = *parts.get(idx)?;
+            if s == "-" {
+                None
+            } else {
+                s.parse().ok()
+            }
+        };
+        let short_id = raw_id[..raw_id.len().min(8)].to_ascii_lowercase();
+        map.insert(
+            short_id,
+            SnapshotMeta {
+                time,
+                size_bytes: opt_u64(2),
+                delta_bytes: opt_u64(3),
+            },
+        );
+    }
+    map
+}
+
+/// `(short_id, mtime)` of every snapshot file across `restic-*` repositories.
+fn restic_snapshot_files(dir: &Path) -> Vec<(String, i64)> {
     let Ok(entries) = fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -278,7 +411,18 @@ fn restic_snapshots(dir: &Path) -> Vec<i64> {
         .flatten()
         .filter(|e| e.file_name().to_string_lossy().starts_with("restic-"))
         .filter_map(|e| fs::read_dir(e.path().join("snapshots")).ok())
-        .flat_map(|snaps| snaps.flatten().filter_map(|s| mtime(&s.path())))
+        .flat_map(|snaps| {
+            snaps.flatten().filter_map(|s| {
+                let name = s.file_name().to_string_lossy().into_owned();
+                let time = mtime(&s.path())?;
+                let short_id = name
+                    .chars()
+                    .take(8)
+                    .collect::<String>()
+                    .to_ascii_lowercase();
+                Some((short_id, time))
+            })
+        })
         .collect()
 }
 
@@ -316,9 +460,9 @@ fn origin_url(git_config: &str) -> Option<String> {
     None
 }
 
-/// Newest `@neo-backup-*` snapshot below the client's dataset, and how many
-/// the most recent backup dataset holds.
-fn zfs_backups(dataset: &str) -> (Option<i64>, Option<u64>) {
+/// All `@neo-backup-*` snapshots below the client's dataset, with creation
+/// time, unique `used` delta and full `referenced` size.
+fn zfs_backups(dataset: &str) -> (Option<i64>, Option<u64>, Vec<BackupEntry>) {
     let Some(out) = output(Command::new("zfs").args([
         "list",
         "-H",
@@ -327,14 +471,20 @@ fn zfs_backups(dataset: &str) -> (Option<i64>, Option<u64>) {
         "-t",
         "snapshot",
         "-o",
-        "name,creation",
+        "name,creation,used,referenced",
         dataset,
     ])) else {
-        return (None, None);
+        return (None, None, Vec::new());
     };
-    let mut per_dataset: BTreeMap<String, (i64, u64)> = BTreeMap::new();
+    parse_zfs_backups(dataset, &out)
+}
+
+fn parse_zfs_backups(dataset: &str, out: &str) -> (Option<i64>, Option<u64>, Vec<BackupEntry>) {
+    let prefix = format!("{dataset}/");
+    let mut backups = Vec::new();
     for line in out.lines() {
-        let Some((name, created)) = line.split_once('\t') else {
+        let mut cols = line.split('\t');
+        let (Some(name), Some(created)) = (cols.next(), cols.next()) else {
             continue;
         };
         let Some((ds, snap)) = name.split_once('@') else {
@@ -346,14 +496,25 @@ fn zfs_backups(dataset: &str) -> (Option<i64>, Option<u64>) {
         let Ok(created) = created.trim().parse::<i64>() else {
             continue;
         };
-        let e = per_dataset.entry(ds.to_string()).or_insert((0, 0));
-        e.0 = e.0.max(created);
-        e.1 += 1;
+        let used = cols.next().and_then(|s| s.trim().parse::<u64>().ok());
+        let referenced = cols.next().and_then(|s| s.trim().parse::<u64>().ok());
+        let folder = ds
+            .strip_prefix(&prefix)
+            .map(String::from)
+            .unwrap_or_default();
+        backups.push(BackupEntry {
+            time: created,
+            id: snap.to_string(),
+            folder,
+            size_bytes: referenced,
+            delta_bytes: used,
+            estimated: false,
+        });
     }
-    match per_dataset.values().max_by_key(|(t, _)| *t) {
-        Some((t, n)) => (Some(*t), Some(*n)),
-        None => (None, Some(0)),
-    }
+    backups.sort_by(|a, b| b.time.cmp(&a.time).then_with(|| b.id.cmp(&a.id)));
+    let last = backups.first().map(|b| b.time);
+    let versions = Some(backups.len() as u64);
+    (last, versions, backups)
 }
 
 fn size(store: &StoreConfig, name: &str) -> Option<u64> {
@@ -361,8 +522,55 @@ fn size(store: &StoreConfig, name: &str) -> Option<u64> {
         let used = output(Command::new("zfs").args(["list", "-H", "-p", "-o", "used", &ds]))?;
         return used.trim().parse().ok();
     }
-    let out = output(Command::new("du").arg("-sb").arg(store.home(name)))?;
+    dir_size(&store.home(name))
+}
+
+fn dir_size(path: &Path) -> Option<u64> {
+    let out = output(Command::new("du").arg("-sb").arg(path))?;
     out.split_whitespace().next()?.parse().ok()
+}
+
+/// `(total, used, available)` bytes of the store's dataset or filesystem.
+fn store_space(store: &StoreConfig) -> (Option<u64>, Option<u64>, Option<u64>) {
+    if store.storage == "dataset" && !store.dataset.is_empty() {
+        if let Some(out) = output(Command::new("zfs").args([
+            "list",
+            "-H",
+            "-p",
+            "-o",
+            "used,available",
+            &store.dataset,
+        ])) {
+            if let Some((total, used, avail)) = parse_zfs_space(&out) {
+                return (Some(total), Some(used), Some(avail));
+            }
+        }
+    }
+    if let Some(out) =
+        output(Command::new("df").args(["-B1", "--output=size,used,avail", &store.path]))
+    {
+        if let Some((total, used, avail)) = parse_df_space(&out) {
+            return (Some(total), Some(used), Some(avail));
+        }
+    }
+    (None, None, None)
+}
+
+fn parse_zfs_space(out: &str) -> Option<(u64, u64, u64)> {
+    let line = out.lines().next()?.trim();
+    let mut parts = line.split_whitespace();
+    let used: u64 = parts.next()?.parse().ok()?;
+    let avail: u64 = parts.next()?.parse().ok()?;
+    Some((used.saturating_add(avail), used, avail))
+}
+
+fn parse_df_space(out: &str) -> Option<(u64, u64, u64)> {
+    let line = out.lines().rev().find(|l| !l.trim().is_empty())?;
+    let mut parts = line.split_whitespace();
+    let total: u64 = parts.next()?.parse().ok()?;
+    let used: u64 = parts.next()?.parse().ok()?;
+    let avail: u64 = parts.next()?.parse().ok()?;
+    Some((total, used, avail))
 }
 
 /// Comment and fingerprint of an authorized key line.
@@ -497,12 +705,57 @@ mod tests {
         fs::create_dir_all(home.join("backups/neo/DATA")).unwrap();
         fs::create_dir_all(home.join("enc/restic-1/snapshots")).unwrap();
         fs::write(home.join("enc/neo-backup.age"), "x").unwrap();
-        fs::write(home.join("enc/restic-1/snapshots/a"), "x").unwrap();
-        fs::write(home.join("enc/restic-1/snapshots/b"), "x").unwrap();
+        fs::write(home.join("enc/restic-1/snapshots/a1b2c3d400000000"), "x").unwrap();
+        fs::write(home.join("enc/restic-1/snapshots/deadbeef11111111"), "x").unwrap();
         assert_eq!(backup_folders(home, "files"), ["backups"]);
         assert_eq!(backup_folders(home, "encrypted"), ["enc"]);
-        assert_eq!(restic_snapshots(&home.join("enc")).len(), 2);
+        assert_eq!(restic_snapshot_files(&home.join("enc")).len(), 2);
+
+        // Snapshot metadata enriches matching files and ignores vanished IDs.
+        fs::write(
+            home.join("enc").join(SNAPSHOTS_FILE),
+            "# neo-backup.snapshots version=1\n\
+             a1b2c3d4\t2026-11-26T03:00:00Z\t50000000000\t120000000\n\
+             ffffffff\t2026-11-20T03:00:00Z\t1000\t10\n",
+        )
+        .unwrap();
+        let entries = encrypted_backups(&home.join("enc"), "enc");
+        assert_eq!(entries.len(), 2);
+        let enriched = entries.iter().find(|e| e.id == "a1b2c3d4").unwrap();
+        assert_eq!(enriched.size_bytes, Some(50_000_000_000));
+        assert_eq!(enriched.delta_bytes, Some(120_000_000));
+        assert!(!enriched.estimated);
+        let fallback = entries.iter().find(|e| e.id == "deadbeef").unwrap();
+        assert_eq!(fallback.size_bytes, None);
+        assert!(fallback.estimated);
+
         fs::write(home.join(HEADER), "x").unwrap();
         assert_eq!(backup_folders(home, "encrypted"), ["."]);
+    }
+
+    #[test]
+    fn parses_zfs_backups_and_store_space() {
+        let out = "\
+tank/backup-store/gossau/neo@neo-backup-20261125-030000\t1795489200\t15000000\t48000000000\n\
+tank/backup-store/gossau/neo@neo-backup-20261126-030000\t1795575600\t22000000\t48500000000\n\
+tank/backup-store/gossau/neo@manual-keep\t1795600000\t100\t48500000000\n";
+        let (last, versions, backups) = parse_zfs_backups("tank/backup-store/gossau", out);
+        assert_eq!(last, Some(1_795_575_600));
+        assert_eq!(versions, Some(2));
+        assert_eq!(backups.len(), 2);
+        assert_eq!(backups[0].id, "neo-backup-20261126-030000");
+        assert_eq!(backups[0].folder, "neo");
+        assert_eq!(backups[0].size_bytes, Some(48_500_000_000));
+        assert_eq!(backups[0].delta_bytes, Some(22_000_000));
+        assert_eq!(backups[1].id, "neo-backup-20261125-030000");
+
+        assert_eq!(
+            parse_zfs_space("400000000000\t1600000000000\n"),
+            Some((2_000_000_000_000, 400_000_000_000, 1_600_000_000_000))
+        );
+        assert_eq!(
+            parse_df_space("   1B-blocks         Used        Avail\n2000000000000 400000000000 1600000000000\n"),
+            Some((2_000_000_000_000, 400_000_000_000, 1_600_000_000_000))
+        );
     }
 }

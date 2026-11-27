@@ -30,9 +30,52 @@
           <span class="badge gap-1.5 {{#if client.state_ok}}badge-success{{/if}}{{#if client.state_late}}badge-warning{{/if}}{{#if client.state_bad}}badge-error{{/if}}">{{client.state_label}}{{#if client.estimated}} (estimated){{/if}}</span>
         </div>
         <p class="text-sm text-base-content/70">
-          {{client.format}}{{#if client.versions}} · {{client.versions}} versions{{/if}}{{#if client.size}} · {{client.size}}{{/if}}{{#if client.last_connection}} · last connection {{client.last_connection}}{{/if}}
+          {{client.format}}{{#if client.version_label}} · {{client.version_label}}{{/if}}{{#if client.size}} · {{client.size}}{{/if}}{{#if client.last_backup_utc}} · last {{client.last_backup_utc}} UTC{{/if}}{{#if client.last_connection}} · last connection {{client.last_connection}}{{/if}}
         </p>
+        {{#if client.history_span}}
+          <p class="text-xs text-base-content/55 font-mono">History: {{client.history_span}}{{#if client.show_folders}} · folders: {{client.show_folders}}{{/if}}</p>
+        {{/if}}
       </header>
+
+      {{#if client.has_backups}}
+        <details class="card bg-base-100 shadow-sm">
+          <summary class="card-body p-4 sm:p-5 cursor-pointer text-sm font-semibold flex-row items-center justify-between">
+            <span>Stored backups ({{client.backup_count}})</span>
+            {{#if client.size}}<span class="font-mono text-xs font-normal text-base-content/60">{{client.size}} on disk</span>{{/if}}
+          </summary>
+          <div class="px-4 sm:px-5 pb-4 sm:pb-5 space-y-2">
+            <div class="max-h-72 overflow-y-auto rounded-box border border-base-content/10">
+              <table class="table table-xs table-pin-rows">
+                <thead>
+                  <tr class="bg-base-200/80 text-base-content/70">
+                    <th>Time (UTC)</th>
+                    <th>Age</th>
+                    <th>Backup</th>
+                    {{#if client.show_backup_folder}}<th>Folder</th>{{/if}}
+                    <th class="text-right">{{client.size_heading}}</th>
+                    {{#if client.has_backup_deltas}}<th class="text-right">{{client.delta_heading}}</th>{{/if}}
+                  </tr>
+                </thead>
+                <tbody>
+                  {{#each client.backups}}
+                    <tr class="hover:bg-base-200/40">
+                      <td class="font-mono tabular-nums whitespace-nowrap">{{time_utc}}{{#if estimated}} <span class="text-base-content/50 font-sans" title="Estimated from file time">(est.)</span>{{/if}}</td>
+                      <td class="text-base-content/70 whitespace-nowrap">{{age}}</td>
+                      <td class="font-mono text-xs text-base-content/80">{{id}}</td>
+                      {{#if ../client.show_backup_folder}}<td class="font-mono text-xs text-base-content/70">{{folder}}</td>{{/if}}
+                      <td class="text-right font-mono tabular-nums whitespace-nowrap">{{#if size}}{{size}}{{else}}<span class="text-base-content/40">—</span>{{/if}}</td>
+                      {{#if ../client.has_backup_deltas}}<td class="text-right font-mono tabular-nums whitespace-nowrap text-base-content/70">{{#if delta}}{{delta}}{{else}}<span class="text-base-content/40">—</span>{{/if}}</td>{{/if}}
+                    </tr>
+                  {{/each}}
+                </tbody>
+              </table>
+            </div>
+            {{#if client.missing_encrypted_sizes}}
+              <p class="text-xs text-base-content/55">Per-backup sizes appear after this server's next backup; total space on disk is shown above.</p>
+            {{/if}}
+          </div>
+        </details>
+      {{/if}}
 
       {{#if recent_connection}}
         <div role="alert" class="alert alert-warning text-sm">

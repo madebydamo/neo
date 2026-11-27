@@ -31,8 +31,8 @@ use super::ops::monitor::monitor_fragment;
 use super::ops::store::{append_log, log_path};
 use super::util::{self, alert_html, AlertKind};
 use crate::commands::backup_store::{
-    ago, client_name_ok, now, rescue, size, ClientReport, KeyInfo, Report, StoreConfig,
-    CURRENT_SECS, RECENT_CONNECTION_SECS, STALE_SECS,
+    ago, client_name_ok, format_date_utc, format_utc, now, rescue, size, ClientReport, KeyInfo,
+    Report, StoreConfig, CURRENT_SECS, RECENT_CONNECTION_SECS, STALE_SECS,
 };
 use crate::utils::command::{get_timestamp, output_checked, sudo_command};
 use crate::utils::locks::OpInfo;
@@ -131,15 +131,20 @@ fn portal(site: OnStoreSite) -> Template {
     };
     let private = private_ok(&site, &report);
     let t = now();
+    let store_total = report.total_size_bytes();
     let clients: Vec<Value> = if private {
-        report.clients.iter().map(|c| client_card(c, t)).collect()
+        report
+            .clients
+            .iter()
+            .map(|c| client_card(c, t, store_total))
+            .collect()
     } else {
         Vec::new()
     };
     Template::render(
         "backup_store/portal",
         json!({
-            "store": store_view(&report),
+            "store": store_view(&report, t, private),
             "private": private,
             "clients": clients,
             "has_clients": !clients.is_empty(),
@@ -157,6 +162,7 @@ fn portal_client(name: &str, site: OnStoreSite) -> Option<Template> {
     }
     let c = report.client(name)?;
     let t = now();
+    let store_total = report.total_size_bytes();
     let can_rescue = c.configured && rescue_allowed(&site, &report);
     let folder = c.folders.first().cloned().unwrap_or_else(|| ".".into());
     let store = StoreConfig::load().ok();
@@ -190,8 +196,8 @@ fn portal_client(name: &str, site: OnStoreSite) -> Option<Template> {
         "backup_store/client",
         json!({
             "title": format!("Restore {}", c.name),
-            "store": store_view(&report),
-            "client": client_card(c, t),
+            "store": store_view(&report, t, true),
+            "client": client_card(c, t, store_total),
             "zfs": c.format == "zfs",
             "encrypted": c.format == "encrypted",
             "backup_url": url,
@@ -342,23 +348,8 @@ fn rescue_allowed(site: &OnStoreSite, report: &Report) -> bool {
     !site.0 || report.store.login
 }
 
-fn store_view(report: &Report) -> Value {
-    let host = report
-        .store
-        .url
-        .trim_start_matches("https://")
-        .trim_end_matches('/')
-        .to_string();
-    json!({
-        "url": report.store.url,
-        "host": host,
-        "internet": report.store.internet,
-        "login": report.store.login,
-    })
-}
-
-fn client_card(c: &ClientReport, t: i64) -> Value {
-    let (state, label) = match c.last_backup {
+fn client_state(c: &ClientReport, t: i64) -> (&'static str, String) {
+    match c.last_backup {
         None if c.versions == Some(0) || c.folders.is_empty() => {
             ("none", "No backup yet".to_string())
         }
@@ -374,13 +365,158 @@ fn client_card(c: &ClientReport, t: i64) -> Value {
             };
             (state, format!("Backed up {}", ago(age)))
         }
+    }
+}
+
+fn store_view(report: &Report, t: i64, private: bool) -> Value {
+    let host = report
+        .store
+        .url
+        .trim_start_matches("https://")
+        .trim_end_matches('/')
+        .to_string();
+    if !private {
+        return json!({
+            "url": report.store.url,
+            "host": host,
+            "internet": report.store.internet,
+            "login": report.store.login,
+        });
+    }
+    let storage_label = match report.store.storage.as_str() {
+        "dataset" => "ZFS dataset",
+        "folder" => "Folder",
+        _ => "",
     };
+    let disk_percent = match (
+        report.store.disk_used_bytes,
+        report.store.disk_total_bytes.filter(|&tot| tot > 0),
+    ) {
+        (Some(used), Some(tot)) => {
+            Some(((used as f64 / tot as f64) * 100.0).round().min(100.0) as u64)
+        }
+        _ => None,
+    };
+    let mut configured = 0usize;
+    let mut removed = 0usize;
+    let mut ok_count = 0usize;
+    let mut late_count = 0usize;
+    let mut bad_count = 0usize;
+    let mut total_backups = 0u64;
+    for c in &report.clients {
+        let count = if !c.backups.is_empty() {
+            c.backups.len() as u64
+        } else {
+            c.versions.unwrap_or(0)
+        };
+        total_backups += count;
+        if c.configured {
+            configured += 1;
+            match client_state(c, t).0 {
+                "ok" => ok_count += 1,
+                "late" => late_count += 1,
+                _ => bad_count += 1,
+            }
+        } else {
+            removed += 1;
+        }
+    }
+    json!({
+        "url": report.store.url,
+        "host": host,
+        "internet": report.store.internet,
+        "login": report.store.login,
+        "total_size": report.total_size_bytes().map(size),
+        "storage_label": storage_label,
+        "disk_total": report.store.disk_total_bytes.map(size),
+        "disk_used": report.store.disk_used_bytes.map(size),
+        "disk_available": report.store.disk_available_bytes.map(size),
+        "disk_percent": disk_percent,
+        "disk_high": disk_percent.is_some_and(|p| (85..95).contains(&p)),
+        "disk_critical": disk_percent.is_some_and(|p| p >= 95),
+        "server_count": configured,
+        "removed_count": removed,
+        "ok_count": ok_count,
+        "late_count": late_count,
+        "bad_count": bad_count,
+        "total_backups": total_backups,
+        "generated_utc": format_utc(report.generated),
+    })
+}
+
+fn client_card(c: &ClientReport, t: i64, store_total: Option<u64>) -> Value {
+    let (state, label) = client_state(c, t);
     let format = match c.format.as_str() {
         "files" => "Plain files",
         "encrypted" => "Encrypted",
         "zfs" => "ZFS snapshots",
         _ => "Unknown format",
     };
+    let version_count = c
+        .versions
+        .or_else(|| (!c.backups.is_empty()).then_some(c.backups.len() as u64));
+    let version_label =
+        version_count.map(|n| format!("{n} backup{}", if n == 1 { "" } else { "s" }));
+    let history_span = match (c.oldest_backup, c.last_backup) {
+        (Some(oldest), Some(newest)) => {
+            let a = format_date_utc(oldest);
+            let b = format_date_utc(newest);
+            (a != b).then(|| format!("{a} – {b}"))
+        }
+        _ => None,
+    };
+    let size_share = match (c.size_bytes, store_total.filter(|&tot| tot > 0)) {
+        (Some(bytes), Some(tot)) if bytes > 0 => {
+            let pct = (bytes as f64 / tot as f64) * 100.0;
+            if pct < 1.0 {
+                Some("<1%".to_string())
+            } else {
+                Some(format!("{:.0}%", pct))
+            }
+        }
+        _ => None,
+    };
+    let show_host = c
+        .host
+        .as_deref()
+        .filter(|h| !h.is_empty() && *h != c.name)
+        .map(String::from);
+    let show_folders = if c.folders.len() > 1 || c.folders.first().is_some_and(|f| f != ".") {
+        Some(c.folders.join(", "))
+    } else {
+        None
+    };
+    let distinct_folders: std::collections::BTreeSet<&str> = c
+        .backups
+        .iter()
+        .map(|b| b.folder.as_str())
+        .filter(|f| !f.is_empty() && *f != ".")
+        .collect();
+    let show_backup_folder = distinct_folders.len() > 1;
+    let has_backup_deltas = c.backups.iter().any(|b| b.delta_bytes.is_some());
+    let missing_encrypted_sizes = c.format == "encrypted"
+        && !c.backups.is_empty()
+        && c.backups.iter().any(|b| b.size_bytes.is_none());
+    let (size_heading, delta_heading) = match c.format.as_str() {
+        "zfs" => ("Snapshot size", "Unique"),
+        "encrypted" => ("Backup size", "Added"),
+        _ => ("Size", "Delta"),
+    };
+    let backups: Vec<Value> = c
+        .backups
+        .iter()
+        .map(|b| {
+            json!({
+                "time_utc": format_utc(b.time),
+                "age": ago(t - b.time),
+                "id": b.id,
+                "folder": b.folder,
+                "size": b.size_bytes.map(size),
+                "delta": b.delta_bytes.map(size),
+                "estimated": b.estimated,
+            })
+        })
+        .collect();
     json!({
         "name": c.name,
         "configured": c.configured,
@@ -391,9 +527,15 @@ fn client_card(c: &ClientReport, t: i64) -> Value {
         "state_bad": state == "stale" || state == "none",
         "state_label": label,
         "estimated": c.estimated && c.last_backup.is_some(),
+        "last_backup_utc": c.last_backup.map(format_utc),
+        "history_span": history_span,
         "versions": c.versions.filter(|v| *v > 1),
+        "version_count": version_count,
+        "version_label": version_label,
         "size": c.size_bytes.map(size),
+        "size_share": size_share,
         "last_connection": c.last_connection.map(|l| ago(t - l)),
+        "last_connection_utc": c.last_connection.map(format_utc),
         "keys": c.keys,
         // Encrypted clients: what each key may do (recipients.rs).
         "roles_known": c.keys.iter().any(|k| !k.role.is_empty()),
@@ -401,6 +543,16 @@ fn client_card(c: &ClientReport, t: i64) -> Value {
         "server_keys": keys_with(c, "server"),
         "access_keys": keys_with(c, "access"),
         "host": c.host,
+        "show_host": show_host,
+        "show_folders": show_folders,
+        "backups": backups,
+        "has_backups": !c.backups.is_empty(),
+        "backup_count": c.backups.len(),
+        "show_backup_folder": show_backup_folder,
+        "has_backup_deltas": has_backup_deltas,
+        "missing_encrypted_sizes": missing_encrypted_sizes,
+        "size_heading": size_heading,
+        "delta_heading": delta_heading,
     })
 }
 
@@ -757,44 +909,95 @@ mod tests {
                 fingerprint: "SHA256:abc".into(),
                 role: String::new(),
             }],
-            last_backup: Some(1000),
+            last_backup: Some(1_795_575_600),
+            oldest_backup: Some(1_794_366_000),
             versions: Some(14),
             size_bytes: Some(182_000_000_000),
             folders: vec!["backups".into()],
+            backups: vec![
+                crate::commands::backup_store::BackupEntry {
+                    time: 1_795_575_600,
+                    id: "a1b2c3d4".into(),
+                    folder: "backups".into(),
+                    size_bytes: Some(210_000_000_000),
+                    delta_bytes: Some(450_000_000),
+                    estimated: false,
+                },
+                crate::commands::backup_store::BackupEntry {
+                    time: 1_795_489_200,
+                    id: "deadbeef".into(),
+                    folder: "backups".into(),
+                    size_bytes: Some(209_000_000_000),
+                    delta_bytes: Some(320_000_000),
+                    estimated: false,
+                },
+            ],
             ..Default::default()
         }
     }
 
     #[test]
     fn portal_lists_the_clients() {
+        let c = report();
+        let now_t = 1_795_575_600 + 5 * 3600;
+        let full = Report {
+            generated: now_t - 60,
+            store: crate::commands::backup_store::StoreSummary {
+                url: "https://backup.example.com".into(),
+                internet: true,
+                login: true,
+                total_size_bytes: Some(182_000_000_000),
+                storage: "dataset".into(),
+                disk_total_bytes: Some(2_000_000_000_000),
+                disk_used_bytes: Some(400_000_000_000),
+                disk_available_bytes: Some(1_600_000_000_000),
+            },
+            clients: vec![c.clone()],
+        };
         let html = render(
             "backup_store/portal",
             &json!({
-                "store": {"host": "backup.example.com", "internet": true, "login": true},
+                "store": store_view(&full, now_t, true),
                 "private": true,
                 "has_clients": true,
-                "clients": [client_card(&report(), 1000 + 5 * 3600)],
+                "clients": [client_card(&c, now_t, full.total_size_bytes())],
                 "report_age": "just now",
             }),
         );
-        assert!(html.contains("Backed up 5 hours ago"));
-        assert!(html.contains("badge-success"));
-        assert!(html.contains("14 versions · 182 GB"));
-        assert!(html.contains(r#"href="/backup-store/portal/client/brugg""#));
-        assert!(html.contains("damian@laptop"));
+        for want in [
+            "Backed up 5 hours ago",
+            "badge-success",
+            "14 backups",
+            "182 GB",
+            "1.6 TB free of 2.0 TB",
+            "a1b2c3d4",
+            "210 GB",
+            "450 MB",
+            "deadbeef",
+            r#"href="/backup-store/portal/client/brugg""#,
+            "damian@laptop",
+        ] {
+            assert!(html.contains(want), "missing {want} in portal html");
+        }
         let public = render(
             "backup_store/portal",
-            &json!({"store": {"host": "b"}, "private": false}),
+            &json!({"store": store_view(&full, now_t, false), "private": false}),
         );
-        assert!(!public.contains("brugg") && public.contains("Require login"));
+        assert!(
+            !public.contains("brugg")
+                && !public.contains("182 GB")
+                && !public.contains("a1b2c3d4")
+                && public.contains("Require login")
+        );
     }
 
     #[test]
     fn client_page_is_a_wizard() {
         let c = report();
+        let now_t = 1_795_575_600 + 3600;
         let url = "https://brugg@backup.example.com/backups";
         let r: Report = serde_json::from_value(json!({
-            "generated": 1000,
+            "generated": now_t,
             "store": {"url": "https://backup.example.com", "internet": true, "login": true},
             "clients": [],
         }))
@@ -803,7 +1006,7 @@ mod tests {
             json!({
                 "title": "Restore brugg",
                 "store": {"url": "https://backup.example.com", "host": "backup.example.com", "internet": internet, "login": true},
-                "client": client_card(&c, 1000 + 3600),
+                "client": client_card(&c, now_t, Some(182_000_000_000)),
                 "encrypted": true,
                 "backup_url": url,
                 "folders": c.folders,
@@ -842,6 +1045,9 @@ mod tests {
             "SHA256:abc",
             "connected 5 minutes ago",
             "System → SSH on brugg",
+            "Stored backups (2)",
+            "a1b2c3d4",
+            "210 GB",
             "--from-backup https://brugg@backup.example.com/backups",
         ] {
             assert!(html.contains(want), "{want}");

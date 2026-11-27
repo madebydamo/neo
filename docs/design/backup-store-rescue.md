@@ -67,11 +67,13 @@ change.
 The store sees each client's home folder (`<path>/<client>`) or dataset. It can read only what
 is not encrypted by the client.
 
-| Format | Last backup | Versions | Size | Config repo readable by the store |
-|--------|-------------|----------|------|-----------------------------------|
-| `files` | marker (below), else newest mtime of the top folders | 1 | `du` | yes (plain files) |
-| `encrypted` | marker, else newest file in `restic-*/snapshots/` | files in `restic-*/snapshots/` | `du` | no: needs a recipient key of `neo-backup.age` |
-| `zfs` | newest snapshot `@neo-backup-<UTC>` | number of those snapshots | `zfs list -o used` | yes (read-only mount of a snapshot) |
+| Format | Last backup | Versions | Per-backup list (`backups`) | Size | Config repo readable by the store |
+|--------|-------------|----------|-----------------------------|------|-----------------------------------|
+| `files` | marker (below), else newest mtime of the top folders | 1 per folder | one entry per backup folder (time, folder size) | `du` | yes (plain files) |
+| `encrypted` | marker, else newest file in `restic-*/snapshots/` | files in `restic-*/snapshots/` | each snapshot in `restic-*/snapshots/` (ID, time; logical size & packed delta from `neo-backup.snapshots` when uploaded) | `du` | no: needs a recipient key of `neo-backup.age` |
+| `zfs` | newest snapshot `@neo-backup-<UTC>` | number of those snapshots | each `@neo-backup-*` snapshot (name, creation time, `referenced` size, `used` unique delta) | `zfs list -o used` | yes (read-only mount of a snapshot) |
+
+Store-level totals in `report.json` (`store`): `totalSizeBytes` (sum of all clients' stored bytes), `storage` (`dataset` or `folder`), and `diskTotalBytes` / `diskUsedBytes` / `diskAvailableBytes` from `zfs list -o used,available` or `df -B1`.
 
 Also from the store's own data:
 
@@ -115,6 +117,12 @@ It holds no secret. It gives the store an exact "last good backup". Uploaded wit
 rename, like the header; the gate allows sftp for both formats already. ZFS needs no marker: the
 snapshot name is the time. Clients without the change fall back to the mtimes above; the portal
 marks those times "estimated".
+
+For encrypted backups, `backup.sh` also uploads `neo-backup.snapshots` next to `neo-backup.last`
+after `restic forget --prune`: one tab-separated line per snapshot (`short_id`, timestamp,
+`total_bytes_processed`, `data_added_packed`). It holds no secrets, paths or filenames, and is
+cross-checked against the actual files in `restic-*/snapshots/`. Clients that have not run with it
+yet still list every snapshot from its file mtime, with `—` for per-snapshot sizes.
 
 ## 3. The portal
 

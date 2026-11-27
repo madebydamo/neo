@@ -29,6 +29,15 @@ pub struct StoreListing {
     pub host_key: String,
     /// When report.json was written (None: not yet).
     pub generated: Option<i64>,
+    /// Total bytes stored across all clients in this store.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_size_bytes: Option<u64>,
+    /// Total capacity of the store's dataset/filesystem, in bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disk_total_bytes: Option<u64>,
+    /// Bytes available on the store's dataset/filesystem.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disk_available_bytes: Option<u64>,
     pub clients: Vec<ClientReport>,
 }
 
@@ -56,24 +65,37 @@ pub fn run(json: bool) -> Result<()> {
 }
 
 fn build(store: &StoreConfig, report: Option<Report>, host_key: &str, host: &str) -> StoreListing {
-    let (generated, clients) = match report {
-        Some(r) => (Some(r.generated), r.clients),
-        // Before the first report: the clients of the settings, without data.
-        None => (
-            None,
-            store
-                .clients
-                .iter()
-                .map(|(name, c)| ClientReport {
-                    name: name.clone(),
-                    format: c.format.clone(),
-                    configured: true,
-                    keys: c.public_keys.iter().filter_map(|k| key_info(k)).collect(),
-                    ..Default::default()
-                })
-                .collect(),
-        ),
-    };
+    let (generated, total_size_bytes, disk_total_bytes, disk_available_bytes, clients) =
+        match report {
+            Some(r) => {
+                let total = r.total_size_bytes();
+                (
+                    Some(r.generated),
+                    total,
+                    r.store.disk_total_bytes,
+                    r.store.disk_available_bytes,
+                    r.clients,
+                )
+            }
+            // Before the first report: the clients of the settings, without data.
+            None => (
+                None,
+                None,
+                None,
+                None,
+                store
+                    .clients
+                    .iter()
+                    .map(|(name, c)| ClientReport {
+                        name: name.clone(),
+                        format: c.format.clone(),
+                        configured: true,
+                        keys: c.public_keys.iter().filter_map(|k| key_info(k)).collect(),
+                        ..Default::default()
+                    })
+                    .collect(),
+            ),
+        };
     StoreListing {
         host: host.to_string(),
         url: store.url.clone(),
@@ -84,6 +106,9 @@ fn build(store: &StoreConfig, report: Option<Report>, host_key: &str, host: &str
             .collect::<Vec<_>>()
             .join(" "),
         generated,
+        total_size_bytes,
+        disk_total_bytes,
+        disk_available_bytes,
         clients,
     }
 }
@@ -96,6 +121,13 @@ pub fn text(l: &StoreListing, t: i64) -> String {
         l.ssh_port,
         short_key(&l.host_key)
     ));
+    if let Some(total) = l.total_size_bytes {
+        out.push_str(&format!("Total stored: {}", size(total)));
+        if let (Some(avail), Some(disk)) = (l.disk_available_bytes, l.disk_total_bytes) {
+            out.push_str(&format!(" ({} free of {})", size(avail), size(disk)));
+        }
+        out.push('\n');
+    }
     if l.generated.is_none() {
         out.push_str(&format!(
             "! No report yet ({REPORT_FILE}): sizes and times come after the first run of backup-store-report.\n"
@@ -233,6 +265,7 @@ mod tests {
             "{t}"
         );
         assert!(t.contains("127.0.0.1:18023"), "{t}");
+        assert!(t.contains("Total stored: 182 GB"), "{t}");
         assert!(t.contains("14 versions"), "{t}");
         assert!(t.contains("182 GB"), "{t}");
         assert!(t.contains("(5 hours ago)"), "{t}");

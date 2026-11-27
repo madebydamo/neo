@@ -210,6 +210,8 @@ NEXT_HEADER=neo-backup.next.age
 # Public keys the header is encrypted to, for a backup store: its admin keys
 # get read access there (docs/design/backup-restore.md §6, Restore keys).
 RECIPIENTS_FILE=neo-backup.recipients
+# Snapshot times and sizes (no secrets or paths), for a backup store's portal.
+SNAPSHOTS_FILE=neo-backup.snapshots
 run_dir=${RUNTIME_DIRECTORY:-/run/backup}
 
 # The backup folder, as sftp and restic see it ("." = the SSH user's home).
@@ -387,6 +389,24 @@ put_main_header() {
   rm -f "$run_dir/recipients.list"
 }
 
+# Plain-text snapshot list (short ID, timestamp, logical size, packed delta —
+# no secrets or paths) for a backup store's portal. Failure is logged only.
+put_snapshots_list() {
+  [ "${NEO_STORE:-false}" = true ] || return 0
+  local out="$run_dir/snapshots.list"
+  if {
+    echo "# neo-backup.snapshots version=1"
+    restic_cmd snapshots --json --tag neo 2>>"$NEO_LOG" |
+      jq -r '(. // [])[] | [.short_id, .time, (.summary.total_bytes_processed // "-"), (.summary.data_added_packed // "-")] | @tsv'
+  } >"$out"; then
+    (put_header "$out" "$SNAPSHOTS_FILE") ||
+      log "could not write $SNAPSHOTS_FILE at the store"
+  else
+    log "could not collect snapshot sizes for $SNAPSHOTS_FILE"
+  fi
+  rm -f "$out"
+}
+
 write_header() {
   local out=$1
   recipients >"$run_dir/recipients"
@@ -485,6 +505,7 @@ backup_encrypted() {
 
   restic_cmd forget --tag neo --group-by "" --keep-last "$NEO_KEEP" --prune >>"$NEO_LOG" 2>&1 ||
     log "removing old backups failed (see $NEO_LOG); the new one is complete"
+  put_snapshots_list
 
   # Old key (rotation), abandoned rotations and leftovers of first runs from
   # before the header went up at the start.

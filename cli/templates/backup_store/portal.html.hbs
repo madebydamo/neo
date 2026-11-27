@@ -7,12 +7,12 @@
     <link rel="stylesheet" href="/static/neo-ui.css" />
   </head>
   <body class="neo-config bg-base-300 text-base-content min-h-dvh" data-theme="light">
-    <main class="max-w-4xl mx-auto px-4 py-6 sm:py-10 space-y-6">
+    <main class="max-w-5xl mx-auto px-4 py-6 sm:py-10 space-y-6">
       <header class="space-y-1">
         <p class="text-xs uppercase tracking-wide text-base-content/50">Backup store{{#if store.host}} · {{store.host}}{{/if}}</p>
-        <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">Restore a lost server</h1>
+        <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight">Backups &amp; restore</h1>
         {{#if private}}
-          <p class="text-base-content/70">If a server is lost, pick it below and choose how to restore it.</p>
+          <p class="text-base-content/70">Overview of every server stored here, its backups and sizes. Pick a server to restore it.</p>
         {{/if}}
       </header>
 
@@ -20,40 +20,178 @@
         <div class="alert alert-warning text-sm">{{error}}</div>
       {{else}}
         {{#if private}}
+          <section class="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-label="Store summary">
+            <div class="card bg-base-100 shadow-sm border border-base-content/5">
+              <div class="card-body p-4 gap-1">
+                <span class="text-xs uppercase tracking-wide text-base-content/50">Total backup data</span>
+                <span class="text-2xl font-semibold tabular-nums">{{#if store.total_size}}{{store.total_size}}{{else}}—{{/if}}</span>
+                {{#if store.disk_available}}
+                  <span class="text-xs text-base-content/60">{{store.disk_available}} free of {{store.disk_total}}</span>
+                  {{#if store.disk_percent}}
+                    <progress class="progress w-full h-1.5 mt-1 {{#if store.disk_critical}}progress-error{{else}}{{#if store.disk_high}}progress-warning{{else}}progress-primary{{/if}}{{/if}}" value="{{store.disk_percent}}" max="100"></progress>
+                  {{/if}}
+                {{else}}
+                  {{#if store.storage_label}}<span class="text-xs text-base-content/60">{{store.storage_label}}</span>{{/if}}
+                {{/if}}
+              </div>
+            </div>
+
+            <div class="card bg-base-100 shadow-sm border border-base-content/5">
+              <div class="card-body p-4 gap-1">
+                <span class="text-xs uppercase tracking-wide text-base-content/50">Servers</span>
+                <span class="text-2xl font-semibold tabular-nums">{{store.server_count}}</span>
+                <span class="text-xs text-base-content/60 flex flex-wrap gap-x-2">
+                  {{#if store.ok_count}}<span class="text-success">{{store.ok_count}} current</span>{{/if}}
+                  {{#if store.late_count}}<span class="text-warning">{{store.late_count}} late</span>{{/if}}
+                  {{#if store.bad_count}}<span class="text-error">{{store.bad_count}} overdue</span>{{/if}}
+                  {{#if store.removed_count}}<span>{{store.removed_count}} removed</span>{{/if}}
+                </span>
+              </div>
+            </div>
+
+            <div class="card bg-base-100 shadow-sm border border-base-content/5">
+              <div class="card-body p-4 gap-1">
+                <span class="text-xs uppercase tracking-wide text-base-content/50">Stored backups</span>
+                <span class="text-2xl font-semibold tabular-nums">{{store.total_backups}}</span>
+                <span class="text-xs text-base-content/60">{{#if store.storage_label}}{{store.storage_label}}{{else}}Across all servers{{/if}}</span>
+              </div>
+            </div>
+
+            <div class="card bg-base-100 shadow-sm border border-base-content/5">
+              <div class="card-body p-4 gap-1">
+                <span class="text-xs uppercase tracking-wide text-base-content/50">Report updated</span>
+                <span class="text-lg font-semibold leading-tight mt-0.5">{{report_age}}</span>
+                {{#if store.generated_utc}}<span class="text-xs font-mono text-base-content/60">{{store.generated_utc}} UTC</span>{{/if}}
+              </div>
+            </div>
+          </section>
+
           {{#if has_clients}}
-            <section class="space-y-3" aria-label="Servers">
+            <section class="space-y-4" aria-label="Servers">
               {{#each clients}}
                 <article class="card bg-base-100 shadow-sm border border-base-content/5">
-                  <div class="card-body p-4 sm:p-5 gap-2">
-                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <h2 class="text-lg font-semibold font-mono">{{name}}</h2>
-                      <span class="badge badge-sm gap-1.5 {{#if state_ok}}badge-success{{/if}}{{#if state_late}}badge-warning{{/if}}{{#if state_bad}}badge-error{{/if}}">
-                        {{state_label}}{{#if estimated}} (estimated){{/if}}
-                      </span>
-                      {{#unless configured}}<span class="badge badge-sm badge-ghost">Removed</span>{{/unless}}
-                    </div>
-                    <p class="text-sm text-base-content/70">
-                      {{format}}{{#if versions}} · {{versions}} versions{{/if}}{{#if size}} · {{size}}{{/if}}{{#if last_connection}} · last connection {{last_connection}}{{/if}}
-                    </p>
-                    {{#if roles_known}}
-                      <p class="text-xs text-base-content/60">
-                        Can unlock and restore: {{#each unlock_keys}}{{#unless @first}} · {{/unless}}<span title="{{fingerprint}}">{{label}}</span>{{else}}<span class="text-error">no admin key</span>{{/each}}{{#if server_keys}} · server key: {{#each server_keys}}{{#unless @first}}, {{/unless}}<span title="{{fingerprint}}">{{label}}</span>{{/each}}{{/if}}
-                      </p>
-                      {{#if access_keys}}
-                        <p class="text-xs text-warning">Can connect but cannot unlock: {{#each access_keys}}{{#unless @first}} · {{/unless}}<span title="{{fingerprint}}">{{label}}</span>{{/each}}</p>
-                      {{/if}}
-                    {{else}}
-                      {{#if keys}}
-                        <p class="text-xs text-base-content/60">Keys: {{#each keys}}{{#unless @first}} · {{/unless}}<span title="{{fingerprint}}">{{label}}</span>{{/each}}</p>
-                      {{/if}}
-                    {{/if}}
-                    {{#if configured}}
-                      <div class="card-actions mt-1">
-                        <a class="btn btn-sm btn-primary" href="/backup-store/portal/client/{{name}}">Restore {{name}}</a>
+                  <div class="card-body p-4 sm:p-5 gap-3">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                      <div class="space-y-1">
+                        <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                          <h2 class="text-lg font-semibold font-mono">{{name}}</h2>
+                          <span class="badge badge-sm gap-1.5 {{#if state_ok}}badge-success{{/if}}{{#if state_late}}badge-warning{{/if}}{{#if state_bad}}badge-error{{/if}}">
+                            {{state_label}}{{#if estimated}} (estimated){{/if}}
+                          </span>
+                          <span class="badge badge-sm badge-ghost">{{format}}</span>
+                          {{#unless configured}}<span class="badge badge-sm badge-ghost">Removed</span>{{/unless}}
+                        </div>
+                        {{#if show_host}}
+                          <p class="text-xs text-base-content/60">Host: <span class="font-mono">{{show_host}}</span></p>
+                        {{/if}}
                       </div>
-                    {{else}}
-                      <p class="text-xs text-base-content/60">Its backups stay here{{#if size}} ({{size}}){{/if}}. Add it to the store's servers again to restore it.</p>
+
+                      <div class="flex items-center gap-3">
+                        {{#if size}}
+                          <div class="text-right">
+                            <div class="text-base font-semibold font-mono tabular-nums">{{size}}</div>
+                            {{#if size_share}}<div class="text-xs text-base-content/55">{{size_share}} of store</div>{{/if}}
+                          </div>
+                        {{/if}}
+                        {{#if configured}}
+                          <a class="btn btn-sm btn-primary" href="/backup-store/portal/client/{{name}}">Restore {{name}}</a>
+                        {{/if}}
+                      </div>
+                    </div>
+
+                    <dl class="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 py-2.5 border-y border-base-content/10 text-xs">
+                      <div>
+                        <dt class="text-base-content/50">Last backup</dt>
+                        <dd class="font-medium mt-0.5">
+                          {{#if last_backup_utc}}
+                            <span class="font-mono tabular-nums">{{last_backup_utc}} UTC</span>
+                          {{else}}
+                            <span>Never</span>
+                          {{/if}}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="text-base-content/50">Versions</dt>
+                        <dd class="font-medium mt-0.5">
+                          {{#if version_label}}{{version_label}}{{else}}—{{/if}}
+                          {{#if history_span}}<div class="text-base-content/55 font-normal font-mono">{{history_span}}</div>{{/if}}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="text-base-content/50">Stored on disk</dt>
+                        <dd class="font-medium mt-0.5">
+                          {{#if size}}<span class="font-mono tabular-nums">{{size}}</span>{{else}}—{{/if}}
+                          {{#if show_folders}}<div class="text-base-content/55 font-normal font-mono truncate" title="{{show_folders}}">{{show_folders}}</div>{{/if}}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="text-base-content/50">Last connection</dt>
+                        <dd class="font-medium mt-0.5">
+                          {{#if last_connection}}
+                            <span>{{last_connection}}</span>
+                            {{#if last_connection_utc}}<div class="text-base-content/55 font-normal font-mono">{{last_connection_utc}} UTC</div>{{/if}}
+                          {{else}}
+                            <span class="text-base-content/55 font-normal">None in 30 days</span>
+                          {{/if}}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    {{#if has_backups}}
+                      <details open class="group">
+                        <summary class="cursor-pointer text-xs font-semibold text-base-content/75 select-none list-none flex items-center gap-1.5 py-0.5">
+                          <span class="transition-transform group-open:rotate-90 text-[10px]">▸</span>
+                          <span>Stored backups ({{backup_count}})</span>
+                        </summary>
+                        <div class="mt-2 max-h-64 overflow-y-auto rounded-box border border-base-content/10">
+                          <table class="table table-xs table-pin-rows">
+                            <thead>
+                              <tr class="bg-base-200/80 text-base-content/70">
+                                <th>Time (UTC)</th>
+                                <th>Age</th>
+                                <th>Backup</th>
+                                {{#if show_backup_folder}}<th>Folder</th>{{/if}}
+                                <th class="text-right">{{size_heading}}</th>
+                                {{#if has_backup_deltas}}<th class="text-right">{{delta_heading}}</th>{{/if}}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {{#each backups}}
+                                <tr class="hover:bg-base-200/40">
+                                  <td class="font-mono tabular-nums whitespace-nowrap">{{time_utc}}{{#if estimated}} <span class="text-base-content/50 font-sans" title="Estimated from file time">(est.)</span>{{/if}}</td>
+                                  <td class="text-base-content/70 whitespace-nowrap">{{age}}</td>
+                                  <td class="font-mono text-xs text-base-content/80">{{id}}</td>
+                                  {{#if ../show_backup_folder}}<td class="font-mono text-xs text-base-content/70">{{folder}}</td>{{/if}}
+                                  <td class="text-right font-mono tabular-nums whitespace-nowrap">{{#if size}}{{size}}{{else}}<span class="text-base-content/40">—</span>{{/if}}</td>
+                                  {{#if ../has_backup_deltas}}<td class="text-right font-mono tabular-nums whitespace-nowrap text-base-content/70">{{#if delta}}{{delta}}{{else}}<span class="text-base-content/40">—</span>{{/if}}</td>{{/if}}
+                                </tr>
+                              {{/each}}
+                            </tbody>
+                          </table>
+                        </div>
+                        {{#if missing_encrypted_sizes}}
+                          <p class="text-xs text-base-content/55 mt-1.5">Per-backup sizes appear after this server's next backup; total space on disk is shown above.</p>
+                        {{/if}}
+                      </details>
                     {{/if}}
+
+                    <div class="space-y-1">
+                      {{#if roles_known}}
+                        <p class="text-xs text-base-content/60">
+                          Can unlock and restore: {{#each unlock_keys}}{{#unless @first}} · {{/unless}}<span title="{{fingerprint}}">{{label}}</span>{{else}}<span class="text-error">no admin key</span>{{/each}}{{#if server_keys}} · server key: {{#each server_keys}}{{#unless @first}}, {{/unless}}<span title="{{fingerprint}}">{{label}}</span>{{/each}}{{/if}}
+                        </p>
+                        {{#if access_keys}}
+                          <p class="text-xs text-warning">Can connect but cannot unlock: {{#each access_keys}}{{#unless @first}} · {{/unless}}<span title="{{fingerprint}}">{{label}}</span>{{/each}}</p>
+                        {{/if}}
+                      {{else}}
+                        {{#if keys}}
+                          <p class="text-xs text-base-content/60">Keys: {{#each keys}}{{#unless @first}} · {{/unless}}<span title="{{fingerprint}}">{{label}}</span>{{/each}}</p>
+                        {{/if}}
+                      {{/if}}
+                      {{#unless configured}}
+                        <p class="text-xs text-base-content/60">Its backups stay here{{#if size}} ({{size}}){{/if}}. Add it to the store's servers again to restore it.</p>
+                      {{/unless}}
+                    </div>
                   </div>
                 </article>
               {{/each}}
