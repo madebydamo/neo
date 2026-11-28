@@ -86,6 +86,39 @@ in {
       # webSocket = true (implies proxyConf = false): the WebSocket upgrade and
       # forwarded headers proxy.conf would set, written out once, so `timeout`
       # can set proxy_read/send_timeout (proxy.conf's 240 s cannot be set twice).
+      # Request headers SWAG's /config/nginx/proxy.conf sets. A location that
+      # includes proxy.conf must not set them again: nginx appends, so the
+      # upstream gets the header twice (Home Assistant / aiohttp: 400
+      # "Duplicate 'Host' header", hattori 2026-11-28; Upgrade twice: 426).
+      # Flake check swag-proxy-conf-duplicates reads this list.
+      proxyConfHeaders = [
+        "Connection"
+        "Early-Data"
+        "Host"
+        "Proxy"
+        "Upgrade"
+        "X-Forwarded-For"
+        "X-Forwarded-Host"
+        "X-Forwarded-Method"
+        # Not X-Forwarded-Port: proxy.conf sets it to $request_port, the port
+        # in the Host header. Browsers on 443 send none, so nginx drops the
+        # empty header and an app that needs a port (rustical) sets it.
+        "X-Forwarded-Proto"
+        "X-Forwarded-Server"
+        "X-Forwarded-Ssl"
+        "X-Forwarded-Uri"
+        "X-Original-Method"
+        "X-Original-URL"
+        "X-Real-IP"
+      ];
+
+      # The proxy.conf headers `extra` sets again (case-insensitive, as nginx).
+      proxyConfRepeats = extra:
+        lib.filter (
+          h: builtins.match "(.*[[:space:]])?proxy_set_header[[:space:]]+${lib.toLower h}[[:space:]].*" (lib.toLower (lib.replaceStrings ["\n"] [" "] extra)) != null
+        )
+        proxyConfHeaders;
+
       swagUpstream = {
         app,
         port,
@@ -97,6 +130,7 @@ in {
       }:
         assert lib.assertMsg (!(webSocket && proxyConf)) "swagUpstream ${app}: webSocket = true needs proxyConf = false (proxy.conf already sets Upgrade/Connection)";
         assert lib.assertMsg (timeout == null || !proxyConf) "swagUpstream ${app}: timeout needs proxyConf = false (proxy.conf already sets the proxy timeouts)";
+        assert lib.assertMsg (!proxyConf || proxyConfRepeats extra == []) "swagUpstream ${app}: extra sets ${lib.concatStringsSep ", " (proxyConfRepeats extra)} again, which proxy.conf already sets (the upstream gets the header twice). Drop it, or use proxyConf = false and set all headers yourself";
           lib.optionalString proxyConf "include /config/nginx/proxy.conf;\n"
           + "include /config/nginx/resolver.conf;\n"
           + "set $upstream_app ${app};\n"

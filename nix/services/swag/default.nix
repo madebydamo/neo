@@ -150,12 +150,10 @@
                       # (missing hostname → 502 this vhost, not a crash loop).
                       set $neo_upstream "${upstream}";
                       proxy_pass $neo_upstream;
-
-                      proxy_set_header Host $host;
-                      proxy_set_header X-Real-IP $remote_addr;
-                      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                      proxy_set_header X-Forwarded-Proto $scheme;
-                      proxy_set_header X-Forwarded-Host $host;
+                      # proxy.conf sets Host, X-Real-IP and X-Forwarded-*.
+                      # Never repeat them: nginx sends a header twice, and
+                      # strict upstreams (aiohttp, Home Assistant 2026.11)
+                      # answer 400 "Duplicate 'Host' header".
                     }
                   }
                 '';

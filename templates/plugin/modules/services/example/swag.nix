@@ -1,6 +1,7 @@
 # Example reverse proxy for SWAG: https://<subdomain>.<domain> → http://<name>:<port>.
 # mkSubdomainProxyConf adds tinyauth, publicPaths bypasses, ingress and geo rules.
-# proxy.conf already sets Upgrade/Connection and proxy timeouts. Do not re-set them.
+# proxy.conf already sets Host, X-Real-IP, X-Forwarded-*, Upgrade/Connection and
+# the proxy timeouts. Do not re-set them: nginx would send each header twice.
 {...}: {
   neoPlugin.modules.example-swag = {
     config,

@@ -94,5 +94,5 @@ Done means: units active, internal OK, public health 200, UI 302 to tinyauth, no
 | `The option 'neo.services.<x>.<y>' does not exist` | Option renamed/removed, or the file declaring it is not `git add`ed |
 | `does not support a prefix` / `still has modules that cannot take a prefix` (on the host) | The plugin has no `neoPlugin`, or still has `flake.modules.nixos.*` modules: port them to `neoPlugin.modules` |
 | `attribute 'neo' missing` in the outer `{inputs, ...}:` function | `lib.neo` exists only inside NixOS modules; use `inputs.neo.lib.neo` outside |
-| SWAG `emerg` / every site 502 or 426 | A hand-written vhost re-sets a header or timeout from `proxy.conf`; remove it |
+| SWAG `emerg` / every site 502 or 426 / app 400 `Duplicate 'Host' header` | A hand-written vhost re-sets a header or timeout from `proxy.conf` (`lib.neo.proxyConfHeaders`); remove it |
 | UI 200 instead of 302 | `auth.enabled = false` or the path matches a too-broad `publicPaths` regex |

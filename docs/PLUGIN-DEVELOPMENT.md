@@ -445,7 +445,7 @@ config.neo.services.${name}.proxyConf = lib.mkDefault ''
 | `resolver.conf` | Needed when `proxy_pass` uses a variable (container names resolve at request time, so SWAG starts even if the container is down) |
 | `authBlock` / `authLocations` | tinyauth gate; both render empty when `auth.enabled` is false or tinyauth is off |
 
-**SWAG traps.** `proxy.conf` already sets `Upgrade`, `Connection` and the `proxy_*_timeout`s. Setting them again breaks WebSockets (426) or produces duplicate directives, which makes nginx refuse **all** vhosts. Do not add `host.docker.internal` to SWAG; it is already there.
+**SWAG traps.** `proxy.conf` already sets `Host`, `X-Real-IP`, the `X-Forwarded-*` headers, `Upgrade`, `Connection` and the `proxy_*_timeout`s (list: `lib.neo.proxyConfHeaders`). nginx does not replace a header that you set again: it sends it twice. Strict apps then refuse the request (Home Assistant: 400 `Duplicate 'Host' header`), WebSockets break (426), and a duplicate timeout makes nginx refuse **all** vhosts. Do not add `host.docker.internal` to SWAG; it is already there.
 
 **tinyauth.** With auth on, the UI answers `302` to the tinyauth login. Anything a client calls without a browser session (health checks, mobile apps, API tokens, share links, CalDAV, webhooks) needs a regex in `auth.publicPaths`. Those paths are then protected only by the app's own auth.
 

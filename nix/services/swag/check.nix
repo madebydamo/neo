@@ -4,7 +4,11 @@
 # variables (request-time DNS via resolver.conf). IPs and host.docker.internal
 # (/etc/hosts extra_hosts; resolver does not read hosts) may stay literal.
 {...}: {
-  perSystem = {pkgs, ...}: {
+  perSystem = {
+    pkgs,
+    lib,
+    ...
+  }: {
     checks.swag-deferred-proxy-pass = pkgs.runCommand "swag-deferred-proxy-pass" {} ''
       set -euo pipefail
       services=${../.}
@@ -57,6 +61,48 @@
 
       touch "$out"
     '';
+
+    # Regression: a location that includes proxy.conf sets none of its headers
+    # again. nginx appends, so the upstream gets the header twice; Home
+    # Assistant 2026.11 (aiohttp) answers 400 "Duplicate 'Host' header"
+    # (hattori 2026-11-28, swag.proxyPass vhosts). Scans the sources from the
+    # include line to the end of its block; swagUpstream asserts the same for
+    # its `extra`.
+    checks.swag-proxy-conf-duplicates = let
+      authz = (import ../../lib/reverseProxy/authorization.nix {inherit lib;}).libExtensions.authorization.neo;
+      headers = lib.concatStringsSep "|" (map lib.toLower authz.proxyConfHeaders);
+      repeats = authz.proxyConfRepeats;
+    in
+      assert repeats "proxy_set_header Host $host;" == ["Host"];
+      assert repeats "add_header X-Real-IP 1;\nproxy_set_header   x-forwarded-for $x;" == ["X-Forwarded-For"];
+      assert repeats "proxy_set_header Remote-User $user;\nproxy_set_header X-Hosted 1;" == [];
+        pkgs.runCommand "swag-proxy-conf-duplicates" {nativeBuildInputs = [pkgs.gawk];} ''
+          set -euo pipefail
+          hits="$(
+            find ${../.} ${../../lib} ${../../../templates} -type f \( -name '*.nix' -o -name '*.conf' \) -print0 \
+            | xargs -0 awk -v headers='^(${headers})$' '
+                FNR == 1 { depth = -1 }
+                /^[[:space:]]*#/ { next }
+                /^[[:space:]]*include[[:space:]]+\/config\/nginx\/proxy\.conf;[[:space:]]*$/ { depth = 0; next }
+                depth >= 0 {
+                  if (match(tolower($0), /proxy_set_header[[:space:]]+[^[:space:]]+/)) {
+                    h = substr(tolower($0), RSTART, RLENGTH)
+                    sub(/proxy_set_header[[:space:]]+/, "", h)
+                    if (h ~ headers) print FILENAME ":" FNR ": " $0
+                  }
+                  depth += gsub(/\{/, "{") - gsub(/\}/, "}")
+                  if (depth < 0) depth = -1
+                }
+              ' || true
+          )"
+          if [ -n "$hits" ]; then
+            echo "ERROR: these locations include /config/nginx/proxy.conf and set its headers again." >&2
+            echo "nginx then sends the header twice (strict upstreams answer 400). Drop the line." >&2
+            printf '%s\n' "$hits" >&2
+            exit 1
+          fi
+          touch "$out"
+        '';
 
     # Regression: the PROXY-protocol port stays on loopback and out of the firewall.
     # nginx takes the visitor address from the PROXY header of any private peer, so
